@@ -6,8 +6,8 @@ import os
 TOTAL_POPULATION = 7700000000.0
 TOTAL_ENG_POPULATION = 510000000.0
 
-population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/populations.tsv"
-all_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/populations.tsv"
+population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/mt_populations_with_noneng.tsv"
+#all_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/populations.tsv"
 
 mt_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_mt_populations.tsv"
 mtL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_mt_L1_populations.tsv"
@@ -123,14 +123,15 @@ def read_sig_populations(L1only=False):
 	return d
 
 def read_noneng_populations():
-	# Reads the population file and returns a dictionary
+	# Reads the population file and returns a dictionary	
 	with open(population_file, 'r') as inp:
 		lines = inp.readlines()
 	disc = {}
 	for l in lines[1:]:
 		if l.strip():
 			l = l.strip().split('\t')
-			d[l[0]] = float(l[5])
+			disc[l[0]] = float(l[5])
+
 	# Reads the population file and returns a dictionary
 	with open(mt_population_file, 'r') as inp:
 		lines = inp.readlines()
@@ -187,14 +188,14 @@ def read_all_populations():
 			if l[0] not in d:
 				d[l[0]] = float(l[1])/1000000
 
-	# Main pop file
-	#with open(population_file, 'r') as inp:
-	#	lines = inp.readlines()
-	#for l in lines[1:]:
-	#	if l.strip():
-	#		l = l.strip().split('\t')
-	#		if l[0] not in d:
-	#			d[l[0]] = float(l[2])/1000000
+	# MT with non-eng file
+	with open(population_file, 'r') as inp:
+		lines = inp.readlines()
+	for l in lines[1:]:
+		if l.strip():
+			l = l.strip().split('\t')
+			if l[0] not in d:
+				d[l[0]] = float(l[2])/1000000
 
 	return d
 
