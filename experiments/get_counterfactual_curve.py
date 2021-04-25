@@ -36,13 +36,9 @@ languages = constants.get_all_languages()
 
 languages = [l for l in languages if l in all_populations]
 populations = [all_populations[l] for l in languages]
-counterfactual_accuracy_eng = [0 for l in languages if l != 'eng' else 1]
 
 print(len(languages))
 print(len(populations))
-print(len(counterfactual_accuracy_eng))
-print(sum(counterfactual_accuracy_eng))
-
 
 def include_diversity(l, T=1):
     acc_arr = np.array(l)
@@ -52,27 +48,41 @@ def include_diversity(l, T=1):
     return list(acc_arr)
 
 
-accuracy = counterfactual_accuracy_eng
-
-N = sum(populations)
-metric1 = np.average([a for a,p in zip(accuracy,populations)])
-metric2 = sum([a*p/N for a,p in zip(accuracy,populations)])
 
 N = np.sum(populations)
 old_populations = [p/N for p in populations]
 
-#for temperature in [1, 0.5, 0.1]:
-for temperature in [1,0.5,0.1]:
+NUM_LANGUAGES = len(languages)
+# Sort demand from largest to smallest
+inds = np.flip(np.argsort(old_populations))
+old_populations = [old_populations[i] for i in inds]
 
-    populations = include_diversity(old_populations, T=temperature)
-
-    print(f"Simple macro-averaged accuracy: {np.average(accuracy)}")
-    gini_coeff = gini(np.array(populations)*N, accuracy)
-    print(f"Gini Coefficient: {gini_coeff}")
-    M = 0
-    for p,u in zip(populations,accuracy):
-        M += p*u
-    print(f"Mu score: {M}")
+# pre-compute adjusted demand
+populations1 = np.array(include_diversity(old_populations, T=1))
+populations01 = np.array(include_diversity(old_populations, T=0.1))
+Npopulations1 = np.array(populations1)*N
+Npopulations01 = np.array(populations01)*N
 
 
+for counterfactual_accuracy in [1,0.9,0.8,0.7]:
+    cum1 = np.cumsum(populations1*counterfactual_accuracy)
+    cum01 = np.cumsum(populations01*counterfactual_accuracy)
+    print(cum1[:3])
+    print('***')
+    print(cum01[:3])
+    plt.plot(cum1,cum01)
     
+    with open(f"figs/counterfactual_curve_{counterfactual_accuracy}.tsv", 'w') as op:
+        prev = ""
+        for x,y in zip(cum1,cum01):
+            towrite = f"{x:.2f} & {y:.2f} \\\\ \n" 
+            if towrite != prev:
+                prev = towrite
+                op.write(towrite)
+plt.show()
+
+
+
+
+
+            
