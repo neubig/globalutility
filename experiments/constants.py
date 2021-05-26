@@ -15,12 +15,14 @@ dep_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutil
 depL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_dep_L1_populations.tsv"
 xnli_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_xnli_populations.tsv"
 xnliL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_xnli_L1_populations.tsv"
+qa_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_qa_populations.tsv"
 synthesis_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_synthesis_populations.tsv"
 sig_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sig_populations.tsv"
 sigL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sig_L1_populations.tsv"
 index_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/MT_index.tsv"
 triangulation_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/triangulated_BLEUS.tsv"
 xnli_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/XNLI.tsv"
+qa_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/QA.tsv"
 dep_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/DEP.tsv"
 sig_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON.tsv"
 sig20_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2020.tsv"
@@ -86,6 +88,18 @@ def read_xnli_populations(L1only=False):
 	else:
 		with open(xnli_population_file, 'r') as inp:
 			lines = inp.readlines()
+
+	d = {}
+	for l in lines:
+		if l.strip():
+			l = l.strip().split('\t')
+			d[l[0]] = float(l[1])/1000000
+	return d
+
+def read_qa_populations(L1only=False):
+	# Reads the population file and returns a dictionary
+	with open(qa_population_file, 'r') as inp:
+		lines = inp.readlines()
 
 	d = {}
 	for l in lines:
@@ -275,6 +289,16 @@ def get_xnli_languages():
 		languages.add(l[0])
 	return sorted(list(languages))
 
+def get_qa_languages():
+	with open(qa_file, 'r') as inp:
+		lines = inp.readlines()
+
+	languages = set()
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		languages.add(l[0])
+	return sorted(list(languages))
+
 def get_dep_languages():
 	with open(dep_file, 'r') as inp:
 		lines = inp.readlines()
@@ -330,6 +354,13 @@ def get_all_languages():
 
 	# XNLI
 	with open(xnli_file, 'r') as inp:
+		lines = inp.readlines()
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		languages.add(l[0])
+
+	# QA
+	with open(qa_file, 'r') as inp:
 		lines = inp.readlines()
 	for l in lines[1:]:
 		l = l.strip().split('\t')
@@ -470,6 +501,35 @@ def read_BLEUs(domains=None):
 	return d
 
 
+def read_BLEUs_by_year(year=2019):
+	year = f"{int(year)}"
+	shortyear = year[-2:]
+	with open(index_file, 'r') as inp:
+		lines = inp.readlines()
+
+	d = defaultdict(lambda:0)
+	for l in lines[1:]:
+		if l.strip() and l.strip()[0] != '#':
+			l = l.strip().split('\t')
+			if (year in l[4]) or (year in l[5]) or (year in l[6]):
+				d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
+			elif year == '2019' and l[6].strip() == 'internal':
+				d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
+			elif 'arxiv' in l[4]:
+				temp = l[4].split('/')[-1][:2]
+				if temp == shortyear:
+					d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
+			elif 'anthology' in l[4]:
+				temp = l[4].split('/')[-1][1:3]
+				if temp == shortyear:
+					d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
+				if '2020.acl-main' in l[4] and year == '2020':
+					d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
+
+
+	return d
+
+
 def read_triangulated_BLEUs():
 	with open(triangulation_file, 'r') as inp:
 		lines = inp.readlines()
@@ -573,6 +633,18 @@ def read_xnli_acc():
 	return d
 
 read_XNLI_acc = read_xnli_acc
+
+def read_qa_acc():
+	with open(qa_file, 'r') as inp:
+		lines = inp.readlines()
+
+	d = defaultdict(lambda:0)
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		d[l[0]] = float(l[1])
+	#print(d)
+	return d
+read_QA_acc = read_qa_acc
 
 def read_number_of_papers(domains=None):
 	with open(index_file, 'r') as inp:

@@ -34,17 +34,17 @@ def METRIC(populations,accuracy):
         area_missing.append(p*(1-a))
     return mu, area_covered, area_missing 
 
-task='dep'
-total_lang = -1
+task='qa'
+total_lang = 1000
 
 
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
 
-all_populations = constants.read_dep_populations()
-languages = constants.get_dep_languages()
-languageso = constants.get_dep_languages()
+all_populations = constants.read_qa_populations()
+languages = constants.get_qa_languages()
+languageso = constants.get_qa_languages()
 pop_denom = constants.TOTAL_POPULATION /1000000
-all_bleus = constants.read_dep(metric='las', system='udf')
+all_bleus = constants.read_qa_acc()
 
 populationso = [all_populations[l] for l in languages]
 accuracyo = [all_bleus[l] for l in languages]
@@ -109,7 +109,7 @@ for temperature in temperatures:
     for i in inds[:10]:
         print(f"{i}\t{languages[i]}\t{area_covered[i]}\t{area_missing[i]}")
     '''
-
+    print(f"Score with tau = {temperature} is {MU}")
     inds = np.flip(np.argsort(area_missing))
     print(f"Top 3 Missing with tau = {temperature}")
     for i in inds[:3]:
