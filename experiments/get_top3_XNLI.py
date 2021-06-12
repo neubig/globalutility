@@ -40,11 +40,11 @@ total_lang = 6500
 
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
 
-all_populations = constants.read_qa_populations()
-languages = constants.get_qa_languages()
-languageso = constants.get_qa_languages()
+all_populations = constants.read_xnli_populations()
+languages = constants.get_xnli_languages()
+languageso = constants.get_xnli_languages()
 pop_denom = constants.TOTAL_POPULATION /1000000
-all_bleus = constants.read_qa_acc()
+all_bleus = constants.read_xnli_acc()
 
 populationso = [all_populations[l] for l in languages]
 accuracyo = [all_bleus[l] for l in languages]
@@ -66,7 +66,7 @@ def include_diversity(l, T=1):
 langs_to_show = set()
 
 #temperatures = list(np.flip(np.arange(1,11)/10)) + [0.01]
-temperatures = [1]
+temperatures = [0.01]
 
 for temperature in temperatures:
     remaining = TOTAL_LANGS - len(languages)    

@@ -101,7 +101,8 @@ for year in range(2014, 2021):
 '''
 
 prev_all_bleus = {}
-for year in range(2014, 2021):
+print(f"year\tx (tau=1)\ty (tau->0)")
+for year in range(2014, 2022):
     all_bleus = constants.read_BLEUs_by_year(year=year)
     if prev_all_bleus:
         for key in prev_all_bleus:
@@ -115,18 +116,19 @@ for year in range(2014, 2021):
     languages2 = constants.get_mt_languages()
     languageso = constants.get_mt_languages()
 
+    #populationso = [all_populations[l] for l in languages2 if l !='eng' ]
     populationso = [all_populations[l] for l in languages2]
-    accuracyo = [np.average([all_bleus[l2, l1] for l1 in languages1 if l1!=l2]) for l2 in languages2]
-
+    #accuracyo = [all_bleus[l1,'eng'] for l1 in languages2 if l1!='eng']
+    accuracyo = [np.average([all_bleus[l1, l2] for l1 in languages1 if l1!=l2]) for l2 in languages2]
     languages = list(languageso)
-    #accuracyo = [all_bleus[l1, 'eng'] for l1 in languages if l1!='eng']
+    
 
-    print(f"Year: {year}")
-    print(f"Pairs: {len(accuracyo)}")
+    #print(f"Year: {year}")
+    #print(f"Pairs: {len(accuracyo)}")
     langs_to_show = set()
 
-    TOTAL_LANGS = 1000
-
+    TOTAL_LANGS = 6500
+    answers = []
     for temperature in [1,0.01]:
         if temperature == 1:
             remaining = 1
@@ -154,5 +156,8 @@ for year in range(2014, 2021):
         gini_coeff = gini(np.array(populations)*N, accuracy)
 
         M_score = np.sum(np.array(populations)*np.array(accuracy))
-        print(f"temperature {temperature}: {M_score} ({len(languageso)} languages)")
+        #print(f"temperature {temperature}: {M_score} ({len(languageso)} languages)")
+        answers.append(M_score)
+
+    print(f"{year}\t{answers[0]}\t{answers[1]}")
 

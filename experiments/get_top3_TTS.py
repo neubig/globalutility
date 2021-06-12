@@ -34,20 +34,29 @@ def METRIC(populations,accuracy):
         area_missing.append(p*(1-a))
     return mu, area_covered, area_missing 
 
-task='qa'
+task='tts'
 total_lang = 6500
 
 
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
 
-all_populations = constants.read_qa_populations()
-languages = constants.get_qa_languages()
-languageso = constants.get_qa_languages()
+all_populations = constants.read_synthesis_populations()
+languages = constants.get_wilderness_languages()
+languageso = constants.get_wilderness_languages()
 pop_denom = constants.TOTAL_POPULATION /1000000
-all_bleus = constants.read_qa_acc()
+all_bleus = constants.read_wilderness()
 
+languages.remove('alb')
+languages.remove('khi')
+languages.remove('may')
+languages.remove('nah')
 populationso = [all_populations[l] for l in languages]
 accuracyo = [all_bleus[l] for l in languages]
+# Needed because lower is better
+max_accuracy = max(accuracyo)
+min_accuracy = min(accuracyo)
+spread = max_accuracy-min_accuracy
+accuracyo = [(max_accuracy - a)/spread for a in accuracyo]
 
 if total_lang == -1:
     TOTAL_LANGS = len(languages)

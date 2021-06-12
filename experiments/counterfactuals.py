@@ -36,12 +36,59 @@ languages = constants.get_all_languages()
 
 languages = [l for l in languages if l in all_populations]
 populations = [all_populations[l] for l in languages]
-counterfactual_accuracy_eng = [0 for l in languages if l != 'eng' else 1]
+counterfactual_accuracy_eng = [0 if (l != 'eng') else 1 for l in languages]
+counterfactual_accuracy_cmn = [0 if (l != 'cmn') else 1 for l in languages]
+counterfactual_accuracy_spa = [0 if (l != 'spa') else 1 for l in languages]
+counterfactual_accuracy_fra = [0 if (l != 'fra') else 1 for l in languages]
 
+'''
 print(len(languages))
 print(len(populations))
 print(len(counterfactual_accuracy_eng))
 print(sum(counterfactual_accuracy_eng))
+print(len(counterfactual_accuracy_cmn))
+print(sum(counterfactual_accuracy_cmn))
+print(len(counterfactual_accuracy_spa))
+print(sum(counterfactual_accuracy_spa))
+print(len(counterfactual_accuracy_fra))
+print(sum(counterfactual_accuracy_fra))
+'''
+
+inds = np.argsort(populations)
+ordered_populations = [populations[i] for i in inds]
+
+counterfactual_accuracy_linpop = np.linspace(0, 1, num=len(languages))
+
+
+N = np.sum(populations)
+counterfactual_accuracy_largepop = []
+counterfactual_accuracy_smallpop = []
+tempsum = 0
+for i in inds:
+    if tempsum < 0.5*N:
+        counterfactual_accuracy_largepop.append(0)
+        counterfactual_accuracy_smallpop.append(1)
+    else:
+        counterfactual_accuracy_largepop.append(1)
+        counterfactual_accuracy_smallpop.append(0)
+    tempsum += populations[i]
+
+print(inds[:10])
+print(ordered_populations[:10])
+print(counterfactual_accuracy_linpop[:10])
+print(counterfactual_accuracy_smallpop[:10])
+print(counterfactual_accuracy_largepop[:10])
+
+print(inds[-10:])
+print(ordered_populations[-10:])
+print(counterfactual_accuracy_linpop[-10:])
+print(counterfactual_accuracy_smallpop[-10:])
+print(counterfactual_accuracy_largepop[-10:])
+print(len(counterfactual_accuracy_smallpop))
+print(sum(counterfactual_accuracy_smallpop))
+print(len(counterfactual_accuracy_largepop))
+print(sum(counterfactual_accuracy_largepop))
+print(N)
 
 
 def include_diversity(l, T=1):
@@ -51,28 +98,112 @@ def include_diversity(l, T=1):
     acc_arr = [f/N for f in acc_arr]
     return list(acc_arr)
 
-
-accuracy = counterfactual_accuracy_eng
-
-N = sum(populations)
-metric1 = np.average([a for a,p in zip(accuracy,populations)])
-metric2 = sum([a*p/N for a,p in zip(accuracy,populations)])
-
 N = np.sum(populations)
 old_populations = [p/N for p in populations]
+old_ordered_populations = [p/N for p in ordered_populations]
 
-#for temperature in [1, 0.5, 0.1]:
-for temperature in [1,0.5,0.1]:
 
+print("counterfactual_accuracy_eng")
+accuracy = counterfactual_accuracy_eng
+for temperature in [1,0.1]:
     populations = include_diversity(old_populations, T=temperature)
-
-    print(f"Simple macro-averaged accuracy: {np.average(accuracy)}")
-    gini_coeff = gini(np.array(populations)*N, accuracy)
-    print(f"Gini Coefficient: {gini_coeff}")
+    print(f"  Tau = {temperature}")
     M = 0
     for p,u in zip(populations,accuracy):
         M += p*u
-    print(f"Mu score: {M}")
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
 
-
+print("counterfactual_accuracy_cmn")
+accuracy = counterfactual_accuracy_cmn
+for temperature in [1,0.1]:
+    populations = include_diversity(old_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
     
+
+
+print("counterfactual_accuracy_fra")
+accuracy = counterfactual_accuracy_fra
+for temperature in [1,0.1]:
+    populations = include_diversity(old_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
+    
+
+
+print("counterfactual_accuracy_spa")
+accuracy = counterfactual_accuracy_spa
+for temperature in [1,0.1]:
+    populations = include_diversity(old_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
+    
+
+
+print("counterfactual_accuracy_linear")
+accuracy = counterfactual_accuracy_linpop
+for temperature in [1,0.1]:
+    populations = include_diversity(old_ordered_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
+    
+
+print("counterfactual_accuracy_largepop")
+accuracy = counterfactual_accuracy_largepop
+for temperature in [1,0.1]:
+    populations = include_diversity(old_ordered_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
+    
+
+print("counterfactual_accuracy_smallpop")
+accuracy = counterfactual_accuracy_smallpop
+for temperature in [1,0.1]:
+    populations = include_diversity(old_ordered_populations, T=temperature)
+    print(f"  Tau = {temperature}")
+    M = 0
+    for p,u in zip(populations,accuracy):
+        M += p*u
+    print(f"\tMu score: {M}")
+    print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
+    gini_coeff = gini(np.array(populations)*N, accuracy)
+    print(f"\tGini Coefficient: {gini_coeff}")
+    
+
+
+
+
+

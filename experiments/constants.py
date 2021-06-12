@@ -3,12 +3,13 @@ import economic_indicators
 import os
 
 # As of 2020
-TOTAL_POPULATION = 7700000000.0
+TOTAL_POPULATION = 7900000000.0
 TOTAL_ENG_POPULATION = 510000000.0
 
 population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/mt_populations_with_noneng.tsv"
 #all_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/populations.tsv"
 
+all_population_file ="/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_all_populations.tsv" 
 mt_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_mt_populations.tsv"
 mtL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_mt_L1_populations.tsv"
 dep_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_dep_populations.tsv"
@@ -18,13 +19,16 @@ xnliL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalu
 qa_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_qa_populations.tsv"
 synthesis_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_synthesis_populations.tsv"
 sig_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sig_populations.tsv"
+sig_isolating_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_isolating_populations.tsv"
 sigL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sig_L1_populations.tsv"
 index_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/MT_index.tsv"
+flores_index_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/flores_index.tsv"
 triangulation_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/triangulated_BLEUS.tsv"
 xnli_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/XNLI.tsv"
 qa_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/QA.tsv"
 dep_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/DEP.tsv"
 sig_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON.tsv"
+sig_isolating_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON_isolating.tsv"
 sig20_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2020.tsv"
 sig19_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2019.tsv"
 sig18_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2018.tsv"
@@ -120,7 +124,7 @@ def read_synthesis_populations():
 			d[l[0]] = float(l[1])/1000000
 	return d
 
-def read_sig_populations(L1only=False):
+def read_sig_populations(L1only=False, include_isolating=True):
 	# Reads the population file and returns a dictionary
 	if L1only:	
 		with open(sigL1_population_file, 'r') as inp:
@@ -128,6 +132,9 @@ def read_sig_populations(L1only=False):
 	else:
 		with open(sig_population_file, 'r') as inp:
 			lines = inp.readlines()
+	if include_isolating:
+		with open(sig_isolating_population_file) as inp:
+			lines += inp.readlines()
 
 	d = {}
 	for l in lines:
@@ -269,6 +276,8 @@ def read_usage_stats():
 def get_languages_to_Eng(domains=None):
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 
 	languages = set()
 	for l in lines[1:]:
@@ -309,7 +318,7 @@ def get_dep_languages():
 		languages.add(l[0])
 	return sorted(list(languages))
 
-def get_sig_languages():
+def get_sig_languages(include_isolating=True):
 	with open(sig_file, 'r') as inp:
 		lines = inp.readlines()
 	with open(sig16_file , 'r') as inp:
@@ -320,6 +329,9 @@ def get_sig_languages():
 		lines2 += inp.readlines()
 	with open(sig19_file , 'r') as inp:
 		lines2 += inp.readlines()
+	if include_isolating:
+		with open(sig_isolating_file , 'r') as inp:
+			lines2 += inp.readlines()
 
 	languages = set()
 	for l in lines[1:]+lines2:
@@ -338,6 +350,8 @@ def get_all_languages():
 	with open(sig18_file , 'r') as inp:
 		lines2 += inp.readlines()
 	with open(sig19_file , 'r') as inp:
+		lines2 += inp.readlines()
+	with open(sig_isolating_file , 'r') as inp:
 		lines2 += inp.readlines()
 
 	languages = set()
@@ -369,6 +383,8 @@ def get_all_languages():
 	# MT2Eng
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 	for l in lines[1:]:
 		if l.strip()[0] != '#':
 			l = l.strip().split('\t')
@@ -378,6 +394,8 @@ def get_all_languages():
 	# MTfrom Eng
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 	for l in lines[1:]:
 		if l.strip()[0] != '#':
 			l = l.strip().split('\t')
@@ -397,6 +415,8 @@ def get_all_languages():
 def get_languages_from_Eng(domains=None):
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 
 	languages = set()
 	for l in lines[1:]:
@@ -411,6 +431,8 @@ def get_languages_from_Eng(domains=None):
 def get_mt_languages(domains=None):
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 
 	languages = set()
 	for l in lines[1:]:
@@ -425,6 +447,8 @@ def get_mt_languages(domains=None):
 def get_all_language_pairs(domains=None):
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 
 	languages = set()
 	for l in lines[1:]:
@@ -488,6 +512,8 @@ def read_iliteracy_pop():
 def read_BLEUs(domains=None):
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	with open(flores_index_file, 'r') as inp:
+		lines += inp.readlines()[1:]
 
 	d = defaultdict(lambda:0)
 	for l in lines[1:]:
@@ -506,6 +532,10 @@ def read_BLEUs_by_year(year=2019):
 	shortyear = year[-2:]
 	with open(index_file, 'r') as inp:
 		lines = inp.readlines()
+	if year == '2021':
+		with open(flores_index_file, 'r') as inp:
+			lines = inp.readlines()
+
 
 	d = defaultdict(lambda:0)
 	for l in lines[1:]:
@@ -525,7 +555,8 @@ def read_BLEUs_by_year(year=2019):
 					d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
 				if '2020.acl-main' in l[4] and year == '2020':
 					d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
-
+			elif year=='2021' and ('FLORES' in l[3]):
+				d[l[0],l[1]] = max(float(l[2]), d[l[0],l[1]])
 
 	return d
 
@@ -561,7 +592,7 @@ def read_dep(metric='uas', system='udp'):
 					d[l[0]] = float(l[4])
 	return d
 
-def read_sig(year='all',system='CULing-01-0'):
+def read_sig(year='all',system='CULing-01-0',include_isolating=True):
 	d = defaultdict(lambda:0)
 	if year == '20' or year=='all':
 		with open(sig_file, 'r') as inp:
@@ -609,7 +640,14 @@ def read_sig(year='all',system='CULing-01-0'):
 				l = l.strip().split('\t')
 				if float(l[1])/100 > d[l[0]]:
 					d[l[0]] = float(l[1])/100
-
+	if include_isolating:
+		with open(sig_isolating_file, 'r') as inp:
+			lines = inp.readlines()
+		for l in lines:
+			if l.strip():
+				l = l.strip().split('\t')
+				if float(l[1]) > d[l[0]]:
+					d[l[0]] = float(l[1])
 
 	return d
 
@@ -629,7 +667,6 @@ def read_xnli_acc():
 	for l in lines[1:]:
 		l = l.strip().split('\t')
 		d[l[0]] = float(l[1])
-	print(d)
 	return d
 
 read_XNLI_acc = read_xnli_acc

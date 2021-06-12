@@ -35,7 +35,7 @@ def METRIC(populations,accuracy):
     return mu, area_covered, area_missing 
 
 task='dep'
-total_lang = -1
+total_lang = 1
 
 
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
@@ -52,7 +52,7 @@ accuracyo = [all_bleus[l] for l in languages]
 if total_lang == -1:
     TOTAL_LANGS = len(languages)
 else:
-    TOTAL_LANGS = 1000
+    TOTAL_LANGS = 6500
 
 
 def include_diversity(l, T=1):
@@ -65,12 +65,12 @@ def include_diversity(l, T=1):
 
 langs_to_show = set()
 
-temperatures = list(np.flip(np.arange(1,11)/10)) + [0.01]
-#temperatures = [1,0.1]
+#temperatures = list(np.flip(np.arange(1,11)/10)) + [0.01]
+temperatures = [1]
 
 for temperature in temperatures:
     remaining = TOTAL_LANGS - len(languages)    
-    # remaining = 28
+    print(remaining)
     accuracy = accuracyo + [0]*remaining
     languages = languageso + ['rest']*remaining
     if remaining:
@@ -80,6 +80,7 @@ for temperature in temperatures:
         populations = list(populationso)
 
     populations = include_diversity(populations, T=temperature)
+    print(len(populations), sum(populations))
 
     
     inds = np.flip(np.argsort(accuracy))
@@ -109,6 +110,8 @@ for temperature in temperatures:
     for i in inds[:10]:
         print(f"{i}\t{languages[i]}\t{area_covered[i]}\t{area_missing[i]}")
     '''
+
+    print(f"Mu Score: {MU}")
 
     inds = np.flip(np.argsort(area_missing))
     print(f"Top 3 Missing with tau = {temperature}")
