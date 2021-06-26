@@ -110,16 +110,22 @@ for year in range(2014, 2022):
                 all_bleus[key] = prev_all_bleus[key]
             elif prev_all_bleus[key] > all_bleus[key]:
                 all_bleus[key] = prev_all_bleus[key]
-    prev_all_bleus = copy.deepcopy(all_bleus)
-
     languages1 = constants.get_mt_languages()
     languages2 = constants.get_mt_languages()
     languageso = constants.get_mt_languages()
+    #print(all_bleus)
+    
+    for l in languages1:
+        all_bleus[l,l] = 100
 
+    prev_all_bleus = copy.deepcopy(all_bleus)
+
+    #languages1 = constants.get_mt_languages()
+    
     #populationso = [all_populations[l] for l in languages2 if l !='eng' ]
     populationso = [all_populations[l] for l in languages2]
-    #accuracyo = [all_bleus[l1,'eng'] for l1 in languages2 if l1!='eng']
-    accuracyo = [np.average([all_bleus[l1, l2] for l1 in languages1 if l1!=l2]) for l2 in languages2]
+    #accuracyo = [all_bleus['eng',l1] for l1 in languages2]
+    accuracyo = [np.average([all_bleus[l2, l1] for l1 in languages1]) for l2 in languages2]
     languages = list(languageso)
     
 
