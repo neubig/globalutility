@@ -54,9 +54,10 @@ print(len(counterfactual_accuracy_fra))
 print(sum(counterfactual_accuracy_fra))
 '''
 
-inds = np.argsort(populations)
+inds = np.flip(np.argsort(populations))
 ordered_populations = [populations[i] for i in inds]
 
+'''
 counterfactual_accuracy_linpop = np.linspace(0, 1, num=len(languages))
 
 
@@ -201,8 +202,28 @@ for temperature in [1,0.1]:
     print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
     gini_coeff = gini(np.array(populations)*N, accuracy)
     print(f"\tGini Coefficient: {gini_coeff}")
-    
+'''
 
+N = np.sum(ordered_populations)
+TOTAL_LANGS = 6500
+TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
+remaining_langs = TOTAL_LANGS - len(languages)
+remaining_pop =  TOTAL_POPULATION - N
+print(remaining_langs, remaining_pop)
+old_ordered_populations = [0] + [p/N for p in ordered_populations]
+xs = np.cumsum(old_ordered_populations)
+ys = np.linspace(0, 1, num=len(languages)+1, endpoint=True)
+print(len(xs), len(ys))
+with open("curve1.tsv", 'w') as op:
+    for i in range(len(xs)):
+        op.write(f"{xs[i]}\t{ys[i]}\n")
+with open("curve2.tsv", 'w') as op:
+    for i in range(len(xs)):
+        op.write(f"{ys[i]}\t{xs[i]}\n")
+
+plt.plot(xs,ys)
+plt.plot(ys,xs)
+plt.show()
 
 
 

@@ -35,7 +35,7 @@ def METRIC(populations,accuracy):
     return mu, area_covered, area_missing 
 
 task='tts'
-total_lang = 6500
+total_lang = -1
 
 
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
@@ -45,18 +45,31 @@ languages = constants.get_wilderness_languages()
 languageso = constants.get_wilderness_languages()
 pop_denom = constants.TOTAL_POPULATION /1000000
 all_bleus = constants.read_wilderness()
-
+#languageso.append('eng')
 languages.remove('alb')
 languages.remove('khi')
 languages.remove('may')
 languages.remove('nah')
+languageso.remove('alb')
+languageso.remove('khi')
+languageso.remove('may')
+languageso.remove('nah')
+
+#all_bleus['eng'] = 1
+
+
 populationso = [all_populations[l] for l in languages]
+sumpop = np.sum(populationso)
+
 accuracyo = [all_bleus[l] for l in languages]
 # Needed because lower is better
 max_accuracy = max(accuracyo)
 min_accuracy = min(accuracyo)
+
 spread = max_accuracy-min_accuracy
+print(min_accuracy, max_accuracy, spread)
 accuracyo = [(max_accuracy - a)/spread for a in accuracyo]
+
 
 if total_lang == -1:
     TOTAL_LANGS = len(languages)
@@ -74,12 +87,12 @@ def include_diversity(l, T=1):
 
 langs_to_show = set()
 
-#temperatures = list(np.flip(np.arange(1,11)/10)) + [0.01]
-temperatures = [1]
+temperatures = list(np.flip(np.arange(1,11)/10)) + [0.01]
+#temperatures = [1]
 
 for temperature in temperatures:
     remaining = TOTAL_LANGS - len(languages)    
-    # remaining = 28
+    print(remaining)
     accuracy = accuracyo + [0]*remaining
     languages = languageso + ['rest']*remaining
     if remaining:
@@ -89,6 +102,8 @@ for temperature in temperatures:
         populations = list(populationso)
 
     populations = include_diversity(populations, T=temperature)
+    print(len(populations), sum(populations))
+
     
     inds = np.flip(np.argsort(accuracy))
     populations = [populations[i] for i in inds]
@@ -117,7 +132,9 @@ for temperature in temperatures:
     for i in inds[:10]:
         print(f"{i}\t{languages[i]}\t{area_covered[i]}\t{area_missing[i]}")
     '''
-    print(f"Score with tau = {temperature} is {MU}")
+
+    print(f"Mu Score: {MU}")
+
     inds = np.flip(np.argsort(area_missing))
     print(f"Top 3 Missing with tau = {temperature}")
     for i in inds[:3]:

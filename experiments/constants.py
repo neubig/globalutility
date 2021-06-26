@@ -29,6 +29,7 @@ qa_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experime
 dep_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/DEP.tsv"
 sig_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON.tsv"
 sig_isolating_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON_isolating.tsv"
+sig21_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2021.tsv"
 sig20_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2020.tsv"
 sig19_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2019.tsv"
 sig18_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON2018.tsv"
@@ -329,6 +330,8 @@ def get_sig_languages(include_isolating=True):
 		lines2 += inp.readlines()
 	with open(sig19_file , 'r') as inp:
 		lines2 += inp.readlines()
+	with open(sig21_file , 'r') as inp:
+		lines2 += inp.readlines()
 	if include_isolating:
 		with open(sig_isolating_file , 'r') as inp:
 			lines2 += inp.readlines()
@@ -350,6 +353,8 @@ def get_all_languages():
 	with open(sig18_file , 'r') as inp:
 		lines2 += inp.readlines()
 	with open(sig19_file , 'r') as inp:
+		lines2 += inp.readlines()
+	with open(sig21_file , 'r') as inp:
 		lines2 += inp.readlines()
 	with open(sig_isolating_file , 'r') as inp:
 		lines2 += inp.readlines()
@@ -478,7 +483,9 @@ def read_wilderness():
 		iso = l[1]
 		val = float(l[9])
 		if iso == "eng":
-			val -= 3
+			val = 3.5
+		if iso == "cmn":
+			val -= 1
 		d[iso] = val
 	return d
 
@@ -594,6 +601,15 @@ def read_dep(metric='uas', system='udp'):
 
 def read_sig(year='all',system='CULing-01-0',include_isolating=True):
 	d = defaultdict(lambda:0)
+	if year == '21' or year=='all':
+		with open(sig21_file, 'r') as inp:
+			lines = inp.readlines()
+		for l in lines:
+			if l.strip():
+				l = l.strip().split('\t')
+				#print(l)
+				if float(l[1])/100 > d[l[0]]:
+					d[l[0]] = float(l[1])/100
 	if year == '20' or year=='all':
 		with open(sig_file, 'r') as inp:
 			lines = inp.readlines()
@@ -607,6 +623,8 @@ def read_sig(year='all',system='CULing-01-0',include_isolating=True):
 					d[l[0]] = float(l[2])
 				elif system == 'uiuc-01-0':
 					d[l[0]] = float(l[3])
+				elif system == 'any':
+					d[l[0]] = max(float(l[3]), float(l[2]), float(l[1]))
 	if year == '19'  or year=='all':
 		with open(sig19_file, 'r') as inp:
 			lines = inp.readlines()
