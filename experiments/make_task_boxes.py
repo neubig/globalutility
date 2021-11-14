@@ -90,6 +90,30 @@ elif task == 'qa':
     all_bleus = constants.read_qa_acc()
     populationso = [all_populations[l] for l in languages]
     accuracyo = [all_bleus[l] for l in languages]
+elif task == 'sdqa_arabic':
+    all_populations = constants.read_sdqa_arabic_populations()
+    languages = constants.get_sdqa_arabic_languages()
+    languageso = constants.get_sdqa_arabic_languages()
+    all_bleus = constants.read_sdqa_arabic_acc()
+    MSA_pop = all_populations['ara']
+    MSA_acc = all_bleus['ara']
+    languages.remove('ara')
+    languageso.remove('ara')
+    populationso = [all_populations[l]/1000000 for l in languages]
+    #accuracyo = [all_bleus[l]/MSA_acc for l in languages]
+    accuracyo = [all_bleus[l] for l in languages]
+elif task == 'sdqa_swahili':
+    all_populations = constants.read_sdqa_swahili_populations()
+    languages = constants.get_sdqa_swahili_languages()
+    languageso = constants.get_sdqa_swahili_languages()
+    all_bleus = constants.read_sdqa_swahili_acc()
+    SWA_pop = all_populations['swa']
+    SWA_acc = all_bleus['swa']
+    languages.remove('swa')
+    languageso.remove('swa')
+    populationso = [all_populations[l]/1000000 for l in languages]
+    #accuracyo = [all_bleus[l]/SWA_acc for l in languages]
+    accuracyo = [all_bleus[l] for l in languages]
 elif task == 'mttoall':
     all_populations = constants.read_mt_populations()
     languages1 = constants.get_mt_languages()
@@ -139,19 +163,34 @@ elif task == 'mttolang':
 TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
 pop_denom = constants.TOTAL_POPULATION /1000000
 
+if task=='sdqa_arabic':
+    TOTAL_POPULATION = MSA_pop/1000000
+    pop_denom = TOTAL_POPULATION/1000000
+    TOTAL_LANGS = len(languages)+2
+elif task=='sdqa_swahili':
+    TOTAL_POPULATION = SWA_pop/1000000
+    pop_denom = TOTAL_POPULATION/1000000
+    TOTAL_LANGS = len(languages)+2
+
 populationso2 = list(populationso)
 languageso2 = list(languageso)
 accuracyo2 = list(accuracyo)
 
 sumpop = np.sum(populationso)
 others = TOTAL_POPULATION - sumpop
+print(others)
 if task == 'mttolang' or task == 'mtfromlang':
     #others -= all_populations[target_lang]
     task2 = task+f"_{target_lang}"
 populationso.append(others)
 #languages.append('other')
 languageso.append('other')
-accuracyo.append(0)
+if task == 'sdqa_arabic':
+    accuracyo.append(0.55)
+elif task == 'sdqa_swahili':
+    accuracyo.append(0.2)
+else:
+    accuracyo.append(0)
 
 remaining_langs = TOTAL_LANGS - len(languageso)+1
 pop_portion = others/float(remaining_langs)
@@ -172,7 +211,7 @@ def include_diversity(l, T=1):
 langs_to_show = set()
 
 #temperatures = list(np.flip(np.arange(1,10)/10)) + [0.01]
-temperatures = [1,0.01]
+temperatures = [1]
  
 for temperature in temperatures:  
     if temperature == 1:  
@@ -266,84 +305,6 @@ for temperature in temperatures:
                     #ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
                     #ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
                     ax.text(x0, -0.15, lang[i], props, fontsize=ded_font, rotation=90)
-                '''
-                if lang[i] == 'pol':
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'slv':
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'deu':
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'mya':
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'ind':
-                    ax.text(x0, y1-0.05, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'jpn':
-                    ax.text(x0, y1-0.065, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3+0.005, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'hin':
-                    ddd = 0.01
-                    if temperature < 0.2:
-                        ddd = 0
-                    ax.text(x0, y1-0.05, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3+ddd, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'vie':
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'spa':
-                    ddd = 0
-                    if temperature < 0.2:
-                        ddd = -0.1
-                    ax.text(x0, y1+ddd, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                elif lang[i] == 'rus':
-                    ddd = -0.05
-                    if temperature < 0.2:
-                        ddd = -0.01
-                    ax.text(x0, y1+ddd, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3+0.01, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'swa':
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'msa':
-                    ax.text(x0, y1-0.02, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'mar':
-                    ax.text(x0, y1-0.01, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3-0.01, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'tam':
-                    ddd = 0
-                    if temperature<0.2:
-                        ddd = +0.01
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3+ddd, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif lang[i] == 'ben':
-                    ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                    ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                    langs_to_show.add(lang[i])
-                elif ((x1-x0) > 0.01 or (i>1 and i < 1)) and lang[i] not in ["ind","ukr","aze","orm"]:
-                    if addlangs:
-                        ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                        ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                        langs_to_show.add(lang[i])
-                    else:
-                        if lang[i] in langs_to_show:
-                            ax.text(x0, y1, f"{y1:.2f}"[1:], props, fontsize=ded_font, rotation=rot)
-                            ax.text(x0+(x1-x0)/3, -0.12, lang[i], props, fontsize=ded_font, rotation=90)
-                '''
         return area_covered, area_missing
 
 
@@ -356,6 +317,12 @@ for temperature in temperatures:
     listlangs = "deu,cmn,eng,ell,spa,hin,tam,ben,lin,kor,por,other"
     if task == 'qa':
         listlangs = "deu,cmn,eng,ell,spa,hin,tam,tgl,ben,lin,other"
+    elif task == 'sdqa_arabic':
+        temp = list(languages)
+        temp.remove('afb')
+        listlangs = ','.join(temp)
+    elif task == 'sdqa_swahili':
+        listlangs = 'KN,TZ,other'
     elif task=='xnli':
         listlangs = "deu,cmn,eng,fin,spa,hin,tam,tgl,ben,lin,other"
     elif task == 'tts':
@@ -371,9 +338,19 @@ for temperature in temperatures:
     if task == 'mttolang' or task == 'mtfromlang':
         langs_to_show.add(target_lang)
 
+    if task == "sdqa_arabic":
+        #ax.hlines(1,0,1,color='k',linestyles='dashed')
+        ax.plot([0,1],[MSA_acc,MSA_acc],'k--',linewidth=0.5)
+        ax.text(0.1, MSA_acc, '(Written) Modern Standard Arabic', {'ha': 'left', 'va': 'bottom',}, fontsize=7, rotation=0)
+    elif task == "sdqa_swahili":
+        #ax.hlines(1,0,1,color='k',linestyles='dashed')
+        ax.plot([0,1],[SWA_acc,SWA_acc],'k--',linewidth=0.5)
+        ax.text(0.1, SWA_acc, '(Written) Coastal Swahili', {'ha': 'left', 'va': 'bottom',}, fontsize=7, rotation=0)
+    
     area_covered, area_missing = make_error_boxes(ax, x, y, languages, langs_to_show)
 
-    #ax.text(0.5,0.75, f"τ={temperature}\nRoom for Improvement = {np.sum(area_missing):.2f}", fontsize=9,)
+
+    
 
     plt.tick_params(
         axis='both',          # changes apply to the x-axis
@@ -387,7 +364,13 @@ for temperature in temperatures:
 
     ax.set_yticks([0,0.2,0.4,0.6,0.8,1])
     ax.set_xticks([])
-    ax.set_xlabel("Number of Speakers", fontsize=9, labelpad=20)
+    ax.set_xlim(0,1)
+    if task == 'sdqa_arabic':
+        ax.set_xlabel("Number of Arabic Speakers", fontsize=9, labelpad=20)
+    elif task == 'sdqa_swahili':
+        ax.set_xlabel("Number of Swahili Speakers", fontsize=9, labelpad=20)
+    else:
+        ax.set_xlabel("Number of Speakers", fontsize=9, labelpad=20)
     ax.set_ylabel("Relative Quality", fontsize=9)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)

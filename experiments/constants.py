@@ -17,6 +17,8 @@ depL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalut
 xnli_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_xnli_populations.tsv"
 xnliL1_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_xnli_L1_populations.tsv"
 qa_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_qa_populations.tsv"
+sdqa_arabic_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sdqa_arabic_populations.tsv"
+sdqa_swahili_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sdqa_swahili_populations.tsv"
 synthesis_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_synthesis_populations.tsv"
 sig_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_sig_populations.tsv"
 sig_isolating_population_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/populations/ethnologue_isolating_populations.tsv"
@@ -26,6 +28,8 @@ flores_index_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutilit
 triangulation_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/triangulated_BLEUS.tsv"
 xnli_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/XNLI.tsv"
 qa_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/QA.tsv"
+sdqa_arabic_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SDQA_ARABIC.tsv"
+sdqa_swahili_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SDQA_SWAHILI.tsv"
 dep_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/DEP.tsv"
 sig_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON.tsv"
 sig_isolating_file = "/Users/antonios/desktop/research/PNAS_Fairness/globalutility/experiments/task_results/SIGMORPHON_isolating.tsv"
@@ -106,6 +110,29 @@ def read_qa_populations(L1only=False):
 	with open(qa_population_file, 'r') as inp:
 		lines = inp.readlines()
 
+	d = {}
+	for l in lines:
+		if l.strip():
+			l = l.strip().split('\t')
+			d[l[0]] = float(l[1])/1000000
+	return d
+
+def read_sdqa_arabic_populations(L1only=False):
+	# Reads the population file and returns a dictionary
+	with open(sdqa_arabic_population_file, 'r') as inp:
+		lines = inp.readlines()
+
+	d = {}
+	for l in lines:
+		if l.strip():
+			l = l.strip().split('\t')
+			d[l[0]] = float(l[1])/1000000
+	return d
+
+def read_sdqa_swahili_populations(L1only=False):
+	# Reads the population file and returns a dictionary
+	with open(sdqa_swahili_population_file, 'r') as inp:
+		lines = inp.readlines()
 	d = {}
 	for l in lines:
 		if l.strip():
@@ -308,6 +335,27 @@ def get_qa_languages():
 		l = l.strip().split('\t')
 		languages.add(l[0])
 	return sorted(list(languages))
+
+def get_sdqa_arabic_languages():
+	with open(sdqa_arabic_file, 'r') as inp:
+		lines = inp.readlines()
+
+	languages = set()
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		languages.add(l[0])
+	return sorted(list(languages))
+
+def get_sdqa_swahili_languages():
+	with open(sdqa_swahili_file, 'r') as inp:
+		lines = inp.readlines()
+
+	languages = set()
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		languages.add(l[0])
+	return sorted(list(languages))
+
 
 def get_dep_languages():
 	with open(dep_file, 'r') as inp:
@@ -700,6 +748,29 @@ def read_qa_acc():
 	#print(d)
 	return d
 read_QA_acc = read_qa_acc
+
+def read_sdqa_arabic_acc():
+	with open(sdqa_arabic_file, 'r') as inp:
+		lines = inp.readlines()
+
+	d = defaultdict(lambda:0)
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		d[l[0]] = float(l[1])
+	return d
+read_SDQA_arabic_acc = read_sdqa_arabic_acc
+
+def read_sdqa_swahili_acc():
+	with open(sdqa_swahili_file, 'r') as inp:
+		lines = inp.readlines()
+
+	d = defaultdict(lambda:0)
+	for l in lines[1:]:
+		l = l.strip().split('\t')
+		d[l[0]] = float(l[1])
+	return d
+read_SDQA_swahili_acc = read_sdqa_swahili_acc
+
 
 def read_number_of_papers(domains=None):
 	with open(index_file, 'r') as inp:
