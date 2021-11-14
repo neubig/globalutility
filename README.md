@@ -1,4 +1,8 @@
-# File Structure
+# Measuring the Global Utility of Language Technologies
+
+This is supplementary data and code to help reproduce the results of a paper of the same name. It is currently available in somewhat unpolished form, but will be fully documented in the near future.
+
+## File Structure
 
 * `populations`: contains .tsv files with language-population data and other population-relevant data
 
@@ -9,6 +13,8 @@
 	- `bilingual_indicators.tsv` for bilingual mapping of languages to associated bilingual indicators (Imports, Exports) estimations.	Also includes the triangulated BLEU scores for the language pair.
 
 * `figs`: contains correlation figures, created with the `plot_*_correlations.py` scripts.
+
+* `area-classifier`: contains data and code for a classifier of areas
 
 ## Other files:
 * `counterfactuals.py`: computes the counterfactual scenarios presented in the paper
