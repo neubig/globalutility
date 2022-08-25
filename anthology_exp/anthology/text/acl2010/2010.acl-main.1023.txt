@@ -1,0 +1,693 @@
+      BabelNet: Building a Very Large Multilingual Semantic Network
+
+                  Roberto Navigli                                 Simone Paolo Ponzetto
+             Dipartimento di Informatica                   Department of Computational Linguistics
+            Sapienza Università di Roma                           Heidelberg University
+           navigli@di.uniroma1.it                         ponzetto@cl.uni-heidelberg.de
+
+
+
+                      Abstract                                 (Atserias et al., 2004), and many others. How-
+                                                               ever, manual construction methods inherently suf-
+    In this paper we present BabelNet – a                      fer from a number of drawbacks. First, maintain-
+    very large, wide-coverage multilingual se-                 ing and updating lexical knowledge resources is
+    mantic network. The resource is automat-                   expensive and time-consuming. Second, such re-
+    ically constructed by means of a method-                   sources are typically lexicographic, and thus con-
+    ology that integrates lexicographic and en-                tain mainly concepts and only a few named enti-
+    cyclopedic knowledge from WordNet and                      ties. Third, resources for non-English languages
+    Wikipedia. In addition Machine Transla-                    often have a much poorer coverage since the con-
+    tion is also applied to enrich the resource                struction effort must be repeated for every lan-
+    with lexical information for all languages.                guage of interest. As a result, an obvious bias ex-
+    We conduct experiments on new and ex-                      ists towards conducting research in resource-rich
+    isting gold-standard datasets to show the                  languages, such as English.
+    high quality and coverage of the resource.                    A solution to these issues is to draw upon
+                                                               a large-scale collaborative resource, namely
+1   Introduction
+                                                               Wikipedia1 . Wikipedia represents the perfect com-
+In many research areas of Natural Language Pro-                plement to WordNet, as it provides multilingual
+cessing (NLP) lexical knowledge is exploited to                lexical knowledge of a mostly encyclopedic na-
+perform tasks effectively. These include, among                ture. While the contribution of any individual user
+others, text summarization (Nastase, 2008),                    might be imprecise or inaccurate, the continual in-
+Named Entity Recognition (Bunescu and Paşca,                  tervention of expert contributors in all domains re-
+2006), Question Answering (Harabagiu et al.,                   sults in a resource of the highest quality (Giles,
+2000) and text categorization (Gabrilovich and                 2005). But while a great deal of work has been re-
+Markovitch, 2006). Recent studies in the diffi-                cently devoted to the automatic extraction of struc-
+cult task of Word Sense Disambiguation (Nav-                   tured information from Wikipedia (Wu and Weld,
+igli, 2009b, WSD) have shown the impact of the                 2007; Ponzetto and Strube, 2007; Suchanek et
+amount and quality of lexical knowledge (Cuadros               al., 2008; Medelyan et al., 2009, inter alia), the
+and Rigau, 2006): richer knowledge sources can                 knowledge extracted is organized in a looser way
+be of great benefit to both knowledge-lean systems             than in a computational lexicon such as WordNet.
+(Navigli and Lapata, 2010) and supervised classi-                 In this paper, we make a major step towards the
+fiers (Ng and Lee, 1996; Yarowsky and Florian,                 vision of a wide-coverage multilingual knowledge
+2002).                                                         resource. We present a novel methodology that
+   Various projects have been undertaken to make               produces a very large multilingual semantic net-
+lexical knowledge available in a machine read-                 work: BabelNet. This resource is created by link-
+able format. A pioneering endeavor was Word-                   ing Wikipedia to WordNet via an automatic map-
+Net (Fellbaum, 1998), a computational lexicon of               ping and by integrating lexical gaps in resource-
+English based on psycholinguistic theories. Sub-
+sequent projects have also tackled the significant                1
+                                                                   http://download.wikipedia.org. We use the
+problem of multilinguality. These include Eu-                  English Wikipedia database dump from November 3, 2009,
+                                                               which includes 3,083,466 articles. Throughout this paper, we
+roWordNet (Vossen, 1998), MultiWordNet (Pianta                 use Sans Serif for words, S MALL C APS for Wikipedia pages
+et al., 2002), the Multilingual Central Repository             and CAPITALS for Wikipedia categories.
+
+
+                                                         216
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 216–225,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+     W IKIPEDIA SENTENCES
+                                                                                                                      BABEL S YNSET
+    ...world’s first hydrogen balloon flight.                                                                        balloonEN , BallonDE ,
+     ...an interim balloon altitude record...
+    ...from a British balloon near Bécourt...                                              has-part                 aerostatoES , globusCA ,
+                                                       cluster            balloon                       gasbag       pallone aerostaticoIT ,
+                        +                              ballooning
+
+
+
+
+                                                                          a
+                                                                                                                     ballonFR , montgolfièreFR
+
+
+
+
+                                                                         is-
+     S EM C OR SENTENCES                                                                         is-a
+                                                    Montgolfier     hot-air          wind
+         ...look at the balloon and the...                                                               high wind
+     ...suspended like a huge balloon, in...        brothers        balloon
+           ...the balloon would go up...                                       gas              blow gas
+                                                            Fermi gas                   is-a
+
+     Machine Translation system                      Wikipedia                                   WordNet
+
+                                                 Figure 1: An illustrative overview of BabelNet.
+
+
+poor languages with the aid of Machine Transla-                                using (a) the human-generated translations pro-
+tion. The result is an “encyclopedic dictionary”,                              vided in Wikipedia (the so-called inter-language
+that provides concepts and named entities lexical-                             links), as well as (b) a machine translation sys-
+ized in many languages and connected with large                                tem to translate occurrences of the concepts within
+amounts of semantic relations.                                                 sense-tagged corpora, namely SemCor (Miller et
+                                                                               al., 1993) – a corpus annotated with WordNet
+2        BabelNet                                                              senses – and Wikipedia itself (Section 3.3). We
+We encode knowledge as a labeled directed graph                                call the resulting set of multilingual lexicalizations
+G = (V, E) where V is the set of vertices – i.e.                               of a given concept a babel synset. An overview of
+concepts2 such as balloon – and E ⊆ V ×R×V is                                  BabelNet is given in Figure 1 (we label vertices
+the set of edges connecting pairs of concepts. Each                            with English lexicalizations): unlabeled edges are
+edge is labeled with a semantic relation from R,                               obtained from links in the Wikipedia pages (e.g.
+e.g. {is-a, part-of , . . . , }, where  denotes an un-                       BALLOON ( AIRCRAFT ) links to W IND), whereas
+specified semantic relation. Importantly, each ver-                            labeled ones from WordNet3 (e.g. balloon1n has-
+tex v ∈ V contains a set of lexicalizations of the                             part gasbag1n ). In this paper we restrict ourselves
+concept for different languages, e.g. { balloonEN ,                            to concepts lexicalized as nouns. Nonetheless, our
+BallonDE , aerostatoES , . . . , montgolfièreFR }.                            methodology can be applied to all parts of speech,
+    Concepts and relations in BabelNet are har-                                but in that case Wikipedia cannot be exploited,
+vested from the largest available semantic lexi-                               since it mainly contains nominal entities.
+con of English, WordNet, and a wide-coverage
+collaboratively edited encyclopedia, the English                               3      Methodology
+Wikipedia (Section 3.1). We collect (a) from                                   3.1     Knowledge Resources
+WordNet, all available word senses (as concepts)
+and all the semantic pointers between synsets (as                              WordNet. The most popular lexical knowledge
+relations); (b) from Wikipedia, all encyclopedic                               resource in the field of NLP is certainly WordNet,
+entries (i.e. pages, as concepts) and semantically                             a computational lexicon of the English language.
+unspecified relations from hyperlinked text.                                   A concept in WordNet is represented as a synonym
+    In order to provide a unified resource, we merge                           set (called synset), i.e. the set of words that share
+the intersection of these two knowledge sources                                the same meaning. For instance, the concept wind
+(i.e. their concepts in common) by establishing a                              is expressed by the following synset:
+mapping between Wikipedia pages and WordNet                                           { wind1n , air current1n , current of air1n },
+senses (Section 3.2). This avoids duplicate con-
+                                                                               where each word’s subscripts and superscripts in-
+cepts and allows their inventories of concepts to
+                                                                               dicate their parts of speech (e.g. n stands for noun)
+complement each other. Finally, to enable mul-
+tilinguality, we collect the lexical realizations of                              3
+                                                                                    We use in the following WordNet version 3.0. We de-
+the available concepts in different languages by                               note with wpi the i-th sense of a word w with part of speech
+                                                                               p. We use word senses to unambiguously denote the corre-
+     2
+    Throughout the paper, unless otherwise stated, we use                      sponding synsets (e.g. plane1n for { airplane1n , aeroplane1n ,
+the general term concept to denote either a concept or a                       plane1n }). Hereafter, we use word sense and synset inter-
+named entity.                                                                  changeably.
+
+
+                                                                        217
+
+
+and sense number, respectively. For each synset,            • Sense labels: e.g. given the page BALLOON
+WordNet provides a textual definition, or gloss.              ( AIRCRAFT ), the word aircraft is added to the
+For example, the gloss of the above synset is: “air           disambiguation context.
+moving from an area of high pressure to an area of          • Links: the titles’ lemmas of the pages linked
+low pressure”.                                                from the target Wikipage (i.e., outgoing links).
+Wikipedia. Our second resource, Wikipedia,                    For instance, the links in the Wikipage BAL -
+                                                              LOON ( AIRCRAFT ) include wind, gas, etc.
+is a Web-based collaborative encyclopedia. A
+Wikipedia page (henceforth, Wikipage) presents              • Categories: Wikipages are typically classi-
+the knowledge about a specific concept (e.g. BAL -            fied according to one or more categories.
+LOON ( AIRCRAFT )) or named entity (e.g. M ONT-               For example, the Wikipage BALLOON ( AIR -
+GOLFIER BROTHERS ). The page typically con-                   CRAFT ) is categorized as BALLOONS, BAL-
+tains hypertext linked to other relevant Wikipages.           LOONING, etc. While many categories are
+For instance, BALLOON ( AIRCRAFT ) is linked to               very specific and do not appear in Word-
+W IND, G AS, and so on. The title of a Wikipage               Net (e.g., SWEDISH WRITERS or SCIEN-
+(e.g. BALLOON ( AIRCRAFT )) is composed of                    TISTS WHO COMMITTED SUICIDE), we
+the lemma of the concept defined (e.g. balloon)               use their syntactic heads as disambiguation con-
+plus an optional label in parentheses which speci-            text (i.e. writer and scientist, respectively).
+fies its meaning if the lemma is ambiguous (e.g.
+                                                            Given a Wikipage w, we define its disambiguation
+AIRCRAFT vs. TOY ). Wikipages also provide
+                                                            context Ctx(w) as the set of words obtained from
+inter-language links to their counterparts in other
+                                                            all of the three sources above.
+languages (e.g. BALLOON ( AIRCRAFT ) links to
+the Spanish page A EROSTATO). Finally, some                 3.2.2   Disambiguation Context of a WordNet
+Wikipages are redirections to other pages, e.g.                     Sense
+the Spanish BAL ÓN AEROST ÁTICO redirects to              Given a WordNet sense s and its synset S, we col-
+A EROSTATO.                                                 lect the following information:
+3.2   Mapping Wikipedia to WordNet
+                                                            • Synonymy: all synonyms of s in S. For in-
+The first phase of our methodology aims to estab-             stance, given the sense airplane1n and its cor-
+lish links between Wikipages and WordNet senses.              responding synset { airplane1n , aeroplane1n ,
+We aim to acquire a mapping µ such that, for each             plane1n }, the words contained therein are in-
+Wikipage w, we have:                                          cluded in the context.
+                                                           • Hypernymy/Hyponymy: all synonyms in the
+          s ∈ SensesWN (w) if a link can be
+                                                              synsets H such that H is either a hypernym
+µ(w) =                         established,
+                                                              (i.e., a generalization) or a hyponym (i.e., a
+                              otherwise,
+          
+                                                              specialization) of S. For example, given bal-
+where SensesWN (w) is the set of senses of the                loon1n , we include the words from its hypernym
+lemma of w in WordNet. For example, if our map-               { lighter-than-air craft1n } and all its hyponyms
+ping methodology linked BALLOON ( AIRCRAFT )                  (e.g. { hot-air balloon1n }).
+to the corresponding WordNet sense balloon1n ,              • Sisterhood: words from the sisters of S. A sis-
+we would have µ(BALLOON ( AIRCRAFT )) = bal-                  ter synset S 0 is such that S and S 0 have a com-
+loon1n .                                                      mon direct hypernym. For example, given bal-
+   In order to establish a mapping between the                loon1n , it can be found that { balloon1n } and
+two resources, we first identify the disambigua-              { airship1n , dirigible1n } are sisters. Thus air-
+tion contexts for Wikipages (Section 3.2.1) and               ship and dirigible are included in the disam-
+WordNet senses (Section 3.2.2). Next, we inter-               biguation context of s.
+sect these contexts to perform the mapping (see             • Gloss: the set of lemmas of the content words
+Section 3.2.3).                                               occurring within the WordNet gloss of S.
+3.2.1 Disambiguation Context of a Wikipage                  We thus define the disambiguation context Ctx(s)
+Given a Wikipage w, we use the following infor-             of sense s as the set of words obtained from all of
+mation as disambiguation context:                           the four sources above.
+
+
+                                                      218
+
+
+3.2.3    Mapping Algorithm                                   (i) w; (ii) all its inter-language links (that is, trans-
+In order to link each Wikipedia page to a WordNet            lations of the Wikipage to other languages); (iii)
+sense, we perform the following steps:                       the redirections to the inter-language links found
+                                                             in the Wikipedia of the target language. For in-
+• Initially, our mapping µ is empty, i.e. it links           stance, given that µ(BALLOON) = balloon1n , the
+  each Wikipage w to .                                      corresponding babel synset is { balloonEN , Bal-
+• For each Wikipage w whose lemma is monose-                 lonDE , aerostatoES , balón aerostáticoES , . . . ,
+  mous both in Wikipedia and WordNet we map                  pallone aerostaticoIT }. However, two issues
+  w to its only WordNet sense.                               arise: first, a concept might be covered only in
+• For each remaining Wikipage w for which no                 one of the two resources (either WordNet or
+  mapping was previously found (i.e., µ(w) = ),             Wikipedia), meaning that no link can be estab-
+  we assign the most likely sense to w based on              lished (e.g., F ERMI GAS or gasbag1n in Figure
+  the maximization of the conditional probabili-             1); second, even if covered in both resources, the
+  ties p(s|w) over the senses s ∈ SensesWN (w)               Wikipage for the concept might not provide any
+  (no mapping is established if a tie occurs).               translation for the language of interest (e.g., the
+                                                             Catalan for BALLOON is missing in Wikipedia).
+   To find the mapping of a Wikipage w, we need                 In order to address the above issues and thus
+to compute the conditional probability p(s|w) of             guarantee high coverage for all languages we de-
+selecting the WordNet sense s given w. The sense             veloped a methodology for translating senses in
+s which maximizes this probability is determined             the babel synset to missing languages. Given a
+as follows:                                                  WordNet word sense in our babel synset of interest
+                                             p(s, w)
+                                                             (e.g. balloon1n ) we collect its occurrences in Sem-
+µ(w) =       argmax        p(s|w) = argmax                   Cor (Miller et al., 1993), a corpus of more than
+          s∈SensesWN (w)                 s    p(w)
+                                                             200,000 words annotated with WordNet senses.
+                                   = argmax p(s, w)
+                                         s                   We do the same for Wikipages by retrieving sen-
+                                                             tences in Wikipedia with links to the Wikipage of
+   The latter formula is obtained by observing that          interest. By repeating this step for each English
+p(w) does not influence our maximization, as it is           lexicalization in a babel synset, we obtain a col-
+a constant independent of s. As a result, determin-          lection of sentences for the babel synset (see left
+ing the most appropriate sense s consists of find-           part of Figure 1). Next, we apply state-of-the-art
+ing the sense s that maximizes the joint probability         Machine Translation4 and translate the set of sen-
+p(s, w). We estimate p(s, w) as:                             tences in all the languages of interest. Given a spe-
+                         score(s, w)                         cific term in the initial babel synset, we collect the
+      p(s, w) =         X                      ,             set of its translations. We then identify the most
+                               score(s0 , w0 )
+                                                             frequent translation in each language and add it to
+                  s0 ∈SensesWN (w),
+                  w0 ∈SensesWiki (w)                         the babel synset. Note that translations are sense-
+                                                             specific, as the context in which a term occurs is
+where score(s, w) = |Ctx(s) ∩ Ctx(w)| + 1 (we                provided to the translation system.
+add 1 as a smoothing factor). Thus, in our al-
+gorithm we determine the best sense s by com-                3.4   Example
+puting the intersection of the disambiguation con-           We now illustrate the execution of our method-
+texts of s and w, and normalizing by the scores              ology by way of an example. Let us focus on
+summed over all senses of w in Wikipedia and                 the Wikipage BALLOON ( AIRCRAFT ). The word
+WordNet. More details on the mapping algorithm               is polysemous both in Wikipedia and WordNet.
+can be found in Ponzetto and Navigli (2010).                 In the first phase of our methodology we aim
+                                                             to find a mapping µ(BALLOON ( AIRCRAFT )) to
+3.3     Translating Babel Synsets                            an appropriate WordNet sense of the word. To
+So far we have linked English Wikipages to Word-                 4
+                                                                   We use the Google Translate API. An initial prototype
+Net senses. Given a Wikipage w, and provided it              used a statistical machine translation system based on Moses
+is mapped to a sense s (i.e., µ(w) = s), we cre-             (Koehn et al., 2007) and trained on Europarl (Koehn, 2005).
+                                                             However, we found such system unable to cope with many
+ate a babel synset S ∪ W , where S is the WordNet            technical names, such as in the domains of sciences, litera-
+synset to which sense s belongs, and W includes:             ture, history, etc.
+
+
+                                                       219
+
+
+this end we construct the disambiguation context                                      P       R      F1      A
+for the Wikipage by including words from its la-              Mapping algorithm      81.9    77.5   79.6    84.4
+bel, links and categories (cf. Section 3.2.1). The            MFS BL                 24.3    47.8   32.2    24.3
+context thus includes, among others, the follow-              Random BL              23.8    46.8   31.6    23.9
+ing words: aircraft, wind, airship, lighter-than-
+air. We now construct the disambiguation context             Table 1: Performance of the mapping algorithm.
+for the two WordNet senses of balloon (cf. Sec-
+tion 3.2.2), namely the aircraft (#1) and the toy
+(#2) senses. To do so, we include words from                 tion to provide the correct WordNet sense for each
+their synsets, hypernyms, hyponyms, sisters, and             page (an empty sense label was given, if no correct
+glosses. The context for balloon1n includes: air-            mapping was possible). The gold-standard dataset
+craft, craft, airship, lighter-than-air. The con-            includes 505 non-empty mappings, i.e. Wikipages
+text for balloon2n contains: toy, doll, hobby. The           with a corresponding WordNet sense. In order to
+sense with the largest intersection is #1, so the            quantify the quality of the annotations and the dif-
+following mapping is established: µ(BALLOON                  ficulty of the task, a second annotator sense tagged
+( AIRCRAFT )) = balloon1n . After the first phase,           a subset of 200 pages from the original sample.
+our babel synset includes the following English              Our annotators achieved a κ inter-annotator agree-
+words from WordNet plus the Wikipedia inter-                 ment (Carletta, 1996) of 0.9, indicating almost
+language links to other languages (we report Ger-            perfect agreement.
+man, Spanish and Italian): { balloonEN , BallonDE ,
+aerostatoES , balón aerostáticoES , pallone aero-          Results and discussion. Table 1 summarizes the
+staticoIT }.                                                 performance of our mapping algorithm against
+                                                             the manually annotated dataset. Evaluation is per-
+   In the second phase (see Section 3.3), we col-
+                                                             formed in terms of standard measures of preci-
+lect all the sentences in SemCor and Wikipedia in
+                                                             sion, recall, and F1 -measure. In addition we calcu-
+which the above English word sense occurs. We
+                                                             late accuracy, which also takes into account empty
+translate these sentences with the Google Trans-
+                                                             sense labels. As baselines we use the most fre-
+late API and select the most frequent transla-
+                                                             quent WordNet sense (MFS), and a random sense
+tion in each language. As a result, we can en-
+                                                             assignment.
+rich the initial babel synset with the following
+words: mongolfièreFR , globusCA , globoES , mon-               The results show that our method achieves al-
+golfieraIT . Note that we had no translation for             most 80% F1 and it improves over the baselines by
+Catalan and French in the first phase, because the           a large margin. The final mapping contains 81,533
+inter-language link was not available, and we also           pairs of Wikipages and word senses they map to,
+obtain new lexicalizations for the Spanish and Ital-         covering 55.7% of the noun senses in WordNet.
+ian languages.                                               As for the baselines, the most frequent sense is
+                                                             just 0.6% and 0.4% above the random baseline in
+4   Experiment 1: Mapping Evaluation                         terms of F1 and accuracy, respectively. A χ2 test
+                                                             reveals in fact no statistical significant difference
+Experimental setting. We first performed an                  at p < 0.05. This is related to the random distri-
+evaluation of the quality of our mapping from                bution of senses in our dataset and the Wikipedia
+Wikipedia to WordNet. To create a gold stan-                 unbiased coverage of WordNet senses. So select-
+dard for evaluation we considered all lemmas                 ing the first WordNet sense rather than any other
+whose senses are contained both in WordNet and               sense for each target page represents a choice as
+Wikipedia: the intersection between the two re-              arbitrary as picking a sense at random.
+sources contains 80,295 lemmas which corre-
+spond to 105,797 WordNet senses and 199,735                  5   Experiment 2: Translation Evaluation
+Wikipedia pages. The average polysemy is 1.3
+and 2.5 for WordNet senses and Wikipages, re-                We perform a second set of experiments concern-
+spectively (2.8 and 4.7 when excluding monose-               ing the quality of the acquired concepts. This is as-
+mous words). We then selected a random sam-                  sessed in terms of coverage against gold-standard
+ple of 1,000 Wikipages and asked an annotator                resources (Section 5.1) and against a manually-
+with previous experience in lexicographic annota-            validated dataset of translations (Section 5.2).
+
+
+                                                       220
+
+
+       Language      Word senses     Synsets                    However, our gold-standard resources cover
+        German         15,762          9,877                  only a portion of the English WordNet, whereas
+        Spanish        83,114         55,365                  the overall coverage of BabelNet is much higher.
+        Catalan        64,171         40,466                  We calculate extra coverage for synsets as follows:
+         Italian       57,255         32,156                                             P
+                                                                                            SE ∈E\F δ(SB , SE )
+        French         44,265         31,742                   SynsetExtraCov(B, F) =                           .
+                                                                                              |{SF ∈ F}|
+   Table 2: Size of the gold-standard wordnets.
+                                                                Similarly, we calculate extra coverage for word
+                                                              senses in BabelNet corresponding to WordNet
+5.1   Automatic Evaluation                                    synsets not covered by the reference resource F.
+Datasets. We compare BabelNet against gold-                   Results and discussion. We evaluate the cov-
+standard resources for 5 languages, namely: the               erage and extra coverage of word senses and
+subset of GermaNet (Lemnitzer and Kunze, 2002)                synsets at different stages: (a) using only the inter-
+included in EuroWordNet for German, Multi-                    language links from Wikipedia (W IKI Links); (b)
+WordNet (Pianta et al., 2002) for Italian, the Mul-           and (c) using only the automatic translations of the
+tilingual Central Repository for Spanish and Cata-            sentences from Wikipedia (W IKI Transl.) or Sem-
+lan (Atserias et al., 2004), and WOrdnet Libre                Cor (WN Transl.); (d) using all available transla-
+du Français (Benoı̂t and Fišer, 2008, WOLF) for             tions, i.e. BABEL N ET.
+French. In Table 2 we report the number of synsets               Coverage results are reported in Table 3. The
+and word senses available in the gold-standard re-            percentage of word senses covered by BabelNet
+sources for the 5 languages.                                  ranges from 52.9% (Italian) to 66.4 (Spanish)
+Measures. Let B be BabelNet, F our gold-                      and 86.0% (French). Synset coverage ranges from
+standard non-English wordnet (e.g. GermaNet),                 73.3% (Catalan) to 76.6% (Spanish) and 92.9%
+and let E be the English WordNet. All the gold-               (French). As expected, synset coverage is higher,
+standard non-English resources, as well as Babel-             because a synset in the reference resource is con-
+Net, are linked to the English WordNet: given a               sidered to be covered if it shares at least one word
+synset SF ∈ F, we denote its corresponding babel              with the corresponding synset in BabelNet.
+synset as SB and its synset in the English Word-                 Numbers for the extra coverage, which pro-
+Net as SE . We assess the coverage of BabelNet                vides information about the percentage of word
+against our gold-standard wordnets both in terms              senses and synsets in BabelNet but not in the gold-
+of synsets and word senses. For synsets, we calcu-            standard resources, are given in Figure 2. The re-
+late coverage as follows:                                     sults show that we provide for all languages a high
+                          P                                   extra coverage for both word senses – between
+                            SF ∈F δ(SB , SF )                 340.1% (Catalan) and 2,298% (German) – and
+     SynsetCov(B, F) =                        ,
+                             |{SF ∈ F}|                       synsets – between 102.8% (Spanish) and 902.6%
+                                                              (German).
+where δ(SB , SF ) = 1 if the two synsets SB and                  Table 3 and Figure 2 show that the best results
+SF have a synonym in common, 0 otherwise. That                are obtained when combining all available trans-
+is, synset coverage is determined as the percentage           lations, i.e. both from Wikipedia and the machine
+of synsets of F that share a term with the corre-             translation system. The performance figures suf-
+sponding babel synsets. For word senses we cal-               fer from the errors of the mapping phase (see Sec-
+culate a similar measure of coverage:                         tion 4). Nonetheless, the results are generally high,
+                     P        P          0                    with a peak for French, since WOLF has been cre-
+                        SF ∈F   sF ∈SF δ (sF , SB )
+WordCov(B, F) =                                     ,         ated semi-automatically by combining several re-
+                        |{sF ∈ SF : SF ∈ F}|
+                                                              sources, including Wikipedia. The relatively low
+where sF is a word sense in synset SF and                     word sense coverage for Italian (55.4%) is, in-
+δ 0 (sF , SB ) = 1 if sF ∈ SB , 0 otherwise. That             stead, due to the lack of many common words in
+is we calculate the ratio of word senses in our               the Italian gold-standard synsets. Examples in-
+gold-standard resource F that also occur in the               clude whipEN translated as staffileIT but not as the
+corresponding synset SB to the overall number of              more common frustaIT , playboyEN translated as
+senses in F.                                                  vitaioloIT but not gigolòIT , etc.
+
+
+                                                        221
+
+
+           2500%	                                                                                                  1000%	  
+                                                                                    Wiki	  Links	                                                                                          Wiki	  Links	  
+                                                                                                                     900%	  
+                                                                                    Wiki	  Transl.	                                                                                        Wiki	  Transl.	  
+           2000%	                                                                                                   800%	  
+                                                                                    WN	  	  Transl.	              700%	                                                                  WN	  	  Transl.	  
+           1500%	                                                                  BabelNet	                       600%	                                                                  BabelNet	  
+                                                                                                                     500%	  
+           1000%	                                                                                                   400%	  
+                                                                                                                     300%	  
+            500%	                                                                                                   200%	  
+                                                                                                                     100%	  
+               0%	                                                                                                     0%	  
+                        German	   Spanish	   Catalan	   Italian	   French	                                                  German	   Spanish	   Catalan	   Italian	   French	  
+
+
+                                             (a) word senses                                                                                              (b) synsets
+
+                 Figure 2: Extra coverage against gold-standard wordnets: word senses (a) and synsets (b).
+
+               Resource                          Method                S ENSES         S YNSETS                   selected a random set of 600 babel synsets com-
+                                        n        Links                   39.6               50.7                  posed as follows: 200 synsets whose senses ex-
+               W IKI
+ German
+
+
+
+
+                                                 Transl.                 42.6               58.2                  ist in WordNet only, 200 synsets in the intersec-
+               WN                                Transl.                 21.0               28.6                  tion between WordNet and Wikipedia (i.e. those
+               BABEL N ET                        All                     57.6               73.4                  mapped with our method illustrated in Section
+                        n                        Links                   34.4               40.7                  3.2), 200 synsets whose lexicalizations exist in
+               W IKI
+ Spanish
+
+
+
+
+                                                 Transl.                 47.9               56.1                  Wikipedia only. Therefore, our dataset included
+               WN                                Transl.                 25.2               30.0                  600 × 5 = 3,000 babel synsets. None of the synsets
+               BABEL N ET                        All                     66.4               76.6                  was covered by any of the five reference wordnets.
+                                                                                                                  The babel synsets were manually validated by ex-
+                        n                        Links                   20.3               25.2
+               W IKI                                                                                              pert annotators who decided which senses (i.e.
+ Catalan
+
+
+
+
+                                                 Transl.                 46.9               54.1
+                                                                                                                  lexicalizations) were appropriate given the corre-
+               WN                                Transl.                 25.0               29.6
+                                                                                                                  sponding WordNet gloss and/or Wikipage.
+               BABEL N ET                        All                     64.0               73.3
+                        n                        Links                   28.1               40.0
+               W IKI                                                                                              Results and discussion. We report the results in
+                                                 Transl.                 39.9               58.0
+ Italian
+
+
+
+
+                                                                                                                  Table 4. For each language (rows) and for each
+               WN                                Transl.                 19.7               28.7
+                                                                                                                  of the three regions of BabelNet (columns), we
+               BABEL N ET                        All                     52.9               73.7
+                                                                                                                  report precision (i.e. the percentage of synonyms
+                        n                        Links                   70.0               72.4                  deemed correct) and, in parentheses, the over-
+               W IKI
+                                                 Transl.                 69.6               79.6
+ French
+
+
+
+
+                                                                                                                  all number of synonyms evaluated. The results
+               WN                                Transl.                 16.3               19.4                  show that the different regions of BabelNet con-
+               BABEL N ET                        All                     86.0               92.9                  tain translations of different quality: while on av-
+                                                                                                                  erage translations for WordNet-only synsets have
+Table 3: Coverage against gold-standard wordnets
+                                                                                                                  a precision around 72%, when Wikipedia comes
+(we report percentages).
+                                                                                                                  into play the performance increases considerably
+                                                                                                                  (around 80% in the intersection and 95% with
+5.2           Manual Evaluation                                                                                   Wikipedia-only translations). As can be seen from
+                                                                                                                  the figures in parentheses, the number of trans-
+Experimental setup. The automatic evaluation                                                                      lations available in the presence of Wikipedia is
+quantifies how much of the gold-standard re-                                                                      higher. This quantitative difference is due to our
+sources is covered by BabelNet. However, it                                                                       method collecting many translations from the redi-
+does not say anything about the precision of the                                                                  rections in the Wikipedia of the target language
+additional lexicalizations provided by BabelNet.                                                                  (Section 3.3), as well as to the paucity of examples
+Given that our resource has displayed a remark-                                                                   in SemCor for many synsets. In addition, some of
+ably high extra coverage – ranging from 340%                                                                      the synsets in WordNet with no Wikipedia coun-
+to 2,298% of the national wordnets (see Figure                                                                    terpart are very difficult to translate. Examples
+2) – we performed a second evaluation to assess                                                                   include terms like stammel, crape fern, base-
+its precision. For each of our 5 languages, we                                                                    ball clinic, and many others for which we could
+
+
+                                                                                                            222
+
+
+Language       WN         WN ∩ Wiki        Wiki                 The research closest to ours is presented by de
+German      73.76 (282)   78.37 (777)   97.74 (709)          Melo and Weikum (2009), who developed a Uni-
+Spanish     69.45 (275)   78.53 (643)   92.46 (703)          versal WordNet (UWN) by automatically acquir-
+Catalan     75.58 (258)   82.98 (517)   92.71 (398)          ing a semantic network for languages other than
+Italian     72.32 (271)   80.83 (574)   99.09 (552)          English. UWN is bootstrapped from WordNet and
+French      67.16 (268)   77.43 (709)   96.44 (758)          is built by collecting evidence extracted from ex-
+                                                             isting wordnets, translation dictionaries, and par-
+Table 4: Precision of BabelNet on synonyms in                allel corpora. The result is a graph containing
+WordNet (WN), Wikipedia (Wiki) and their inter-              800,000 words from over 200 languages in a hier-
+section (WN ∩ Wiki): percentage and total num-               archically structured semantic network with over
+ber of words (in parentheses) are reported.                  1.5 million links from words to word senses. Our
+                                                             work goes one step further by (1) developing an
+                                                             even larger multilingual resource including both
+not find translations in major editions of bilingual
+                                                             lexical semantic and encyclopedic knowledge, (2)
+dictionaries. In contrast, good translations were
+                                                             enriching the structure of the ‘core’ semantic net-
+produced using our machine translation method
+                                                             work (i.e. the semantic pointers from WordNet)
+when enough sentences were available. Examples
+                                                             with topical, semantically unspecified relations
+are: chaudrée de poissonFR for fish chowderEN ,
+                                                             from the link structure of Wikipedia. This result
+grano de caféES for coffee beanEN , etc.
+                                                             is essentially achieved by complementing Word-
+                                                             Net with Wikipedia, as well as by leveraging the
+6   Related Work                                             multilingual structure of the latter. Previous at-
+                                                             tempts at linking the two resources have been pro-
+Previous attempts to manually build multilingual             posed. These include associating Wikipedia pages
+resources have led to the creation of a multi-               with the most frequent WordNet sense (Suchanek
+tude of wordnets such as EuroWordNet (Vossen,                et al., 2008), extracting domain information from
+1998), MultiWordNet (Pianta et al., 2002), Balka-            Wikipedia and providing a manual mapping to
+Net (Tufiş et al., 2004), Arabic WordNet (Black             WordNet concepts (Auer et al., 2007), a model
+et al., 2006), the Multilingual Central Repository           based on vector spaces (Ruiz-Casado et al., 2005),
+(Atserias et al., 2004), bilingual electronic dic-           a supervised approach using keyword extraction
+tionaries such as EDR (Yokoi, 1995), and fully-              (Reiter et al., 2008), as well as automatically
+fledged frameworks for the development of multi-             linking Wikipedia categories to WordNet based
+lingual lexicons (Lenci et al., 2000). As it is of-          on structural information (Ponzetto and Navigli,
+ten the case with manually assembled resources,              2009). In contrast to previous work, BabelNet
+these lexical knowledge repositories are hindered            is the first proposal that integrates the relational
+by high development costs and an insufficient cov-           structure of WordNet with the semi-structured in-
+erage. This barrier has led to proposals that ac-            formation from Wikipedia into a unified, wide-
+quire multilingual lexicons from either parallel             coverage, multilingual semantic network.
+text (Gale and Church, 1993; Fung, 1995, inter
+alia) or monolingual corpora (Sammer and Soder-              7   Conclusions
+land, 2007; Haghighi et al., 2008). The disam-
+biguation of bilingual dictionary glosses has also           In this paper we have presented a novel methodol-
+been proposed to create a bilingual semantic net-            ogy for the automatic construction of a large multi-
+work from a machine readable dictionary (Nav-                lingual lexical knowledge resource. Key to our ap-
+igli, 2009a). Recently, Etzioni et al. (2007) and            proach is the establishment of a mapping between
+Mausam et al. (2009) presented methods to pro-               a multilingual encyclopedic knowledge repository
+duce massive multilingual translation dictionaries           (Wikipedia) and a computational lexicon of En-
+from Web resources such as online lexicons and               glish (WordNet). This integration process has
+Wiktionaries. However, while providing lexical               several advantages. Firstly, the two resources
+resources on a very large scale for hundreds of              contribute different kinds of lexical knowledge,
+thousands of language pairs, these do not encode             one is concerned mostly with named entities, the
+semantic relations between concepts denoted by               other with concepts. Secondly, while Wikipedia
+their lexical entries.                                       is less structured than WordNet, it provides large
+
+
+                                                       223
+
+
+amounts of semantic relations and can be lever-                  References
+aged to enable multilinguality. Thus, even when
+                                                                 Jordi Atserias, Luis Villarejo, German Rigau, Eneko
+they overlap, the two resources provide comple-                     Agirre, John Carroll, Bernardo Magnini, and Piek
+mentary information about the same named enti-                      Vossen. 2004. The MEANING multilingual central
+ties or concepts. Further, we contribute a large                    repository. In Proc. of GWC-04, pages 80–210.
+set of sense occurrences harvested from Wikipedia                Sören Auer, Christian Bizer, Georgi Kobilarov, Jens
+and SemCor, a corpus that we input to a state-of-                   Lehmann, Richard Cyganiak, and Zachary Ive.
+                                                                    2007. Dbpedia: A nucleus for a web of open data.
+the-art machine translation system to fill in the gap               In Proceedings of 6th International Semantic Web
+between resource-rich languages – such as English                   Conference joint with 2nd Asian Semantic Web Con-
+– and resource-poorer ones. Our hope is that the                    ference (ISWC+ASWC 2007), pages 722–735.
+availability of such a language-rich resource5 will              Sagot Benoı̂t and Darja Fišer. 2008. Building a free
+enable many non-English and multilingual NLP                        French WordNet from multilingual resources. In
+applications to be developed.                                       Proceedings of the Ontolex 2008 Workshop.
+   Our experiments show that our fully-automated                 William Black, Sabri Elkateb Horacio Rodriguez,
+                                                                    Musa Alkhalifa, Piek Vossen, and Adam Pease.
+approach produces a large-scale lexical resource                    2006. Introducing the Arabic WordNet project. In
+with high accuracy. The resource includes millions                  Proc. of GWC-06, pages 295–299.
+of semantic relations, mainly from Wikipedia                     Razvan Bunescu and Marius Paşca. 2006. Using en-
+(however, WordNet relations are labeled), and                       cyclopedic knowledge for named entity disambigua-
+contains almost 3 million concepts (6.7 labels per                  tion. In Proc. of EACL-06, pages 9–16.
+concept on average). As pointed out in Section                   Chris Callison-Burch. 2009. Fast, cheap, and creative:
+5, such coverage is much wider than that of ex-                     Evaluating translation quality using Amazon’s Me-
+                                                                    chanical Turk. In Proc. of EMNLP-09, pages 286–
+isting wordnets in non-English languages. While
+                                                                    295.
+BabelNet currently includes 6 languages, links to
+                                                                 Jean Carletta. 1996. Assessing agreement on classi-
+freely-available wordnets6 can immediately be es-                   fication tasks: The kappa statistic. Computational
+tablished by utilizing the English WordNet as an                    Linguistics, 22(2):249–254.
+interlanguage index. Indeed, BabelNet can be ex-                 Montse Cuadros and German Rigau. 2006. Quality
+tended to virtually any language of interest. In                    assessment of large scale knowledge resources. In
+fact, our translation method allows it to cope with                 Proc. of EMNLP-06, pages 534–541.
+any resource-poor language.                                      Gerard de Melo and Gerhard Weikum. 2009. Towards
+   As future work, we plan to apply our method                      a universal wordnet by learning from combined evi-
+                                                                    dence. In Proc. of CIKM-09, pages 513–522.
+to other languages, including Eastern European,
+                                                                 Oren Etzioni, Kobi Reiter, Stephen Soderland, and
+Arabic, and Asian languages. We also intend to
+                                                                    Marcus Sammer. 2007. Lexical translation with ap-
+link missing concepts in WordNet, by establish-                     plication to image search on the Web. In Proceed-
+ing their most likely hypernyms – e.g., à la Snow                  ings of Machine Translation Summit XI.
+et al. (2006). We will perform a semi-automatic                  Christiane Fellbaum, editor. 1998. WordNet: An Elec-
+validation of BabelNet, e.g. by exploiting Ama-                     tronic Database. MIT Press, Cambridge, MA.
+zon’s Mechanical Turk (Callison-Burch, 2009) or                  Pascale Fung. 1995. A pattern matching method
+designing a collaborative game (von Ahn, 2006)                      for finding noun and proper noun translations from
+                                                                    noisy parallel corpora. In Proc. of ACL-95, pages
+to validate low-ranking mappings and translations.
+                                                                    236–243.
+Finally, we aim to apply BabelNet to a variety of
+                                                                 Evgeniy Gabrilovich and Shaul Markovitch. 2006.
+applications which are known to benefit from a                      Overcoming the brittleness bottleneck using
+wide-coverage knowledge resource. We have al-                       Wikipedia: Enhancing text categorization with
+ready shown that the English-only subset of Ba-                     encyclopedic knowledge. In Proc. of AAAI-06,
+belNet allows simple knowledge-based algorithms                     pages 1301–1306.
+to compete with supervised systems in standard                   William A. Gale and Kenneth W. Church. 1993. A
+coarse-grained and domain-specific WSD settings                     program for aligning sentences in bilingual corpora.
+                                                                    Computational Linguistics, 19(1):75–102.
+(Ponzetto and Navigli, 2010). We plan in the near
+                                                                 Jim Giles. 2005. Internet encyclopedias go head to
+future to apply BabelNet to the challenging task of                 head. Nature, 438:900–901.
+cross-lingual WSD (Lefever and Hoste, 2009).
+                                                                 Aria Haghighi, Percy Liang, Taylor Berg-Kirkpatrick,
+   5                                                                and Dan Klein. 2008. Learning bilingual lexicons
+     BabelNet can be freely downloaded for research pur-
+poses at http://lcl.uniroma1.it/babelnet.                           from monolingual corpora. In Proc. of ACL-08,
+   6
+     http://www.globalwordnet.org.                                  pages 771–779.
+
+
+                                                           224
+
+
+Sanda M. Harabagiu, Dan Moldovan, Marius Paşca,                     senses: An exemplar-based approach. In Proc. of
+   Rada Mihalcea, Mihai Surdeanu, Razvan Bunescu,                    ACL-96, pages 40–47.
+   Roxana Girju, Vasile Rus, and Paul Morarescu.                  Emanuele Pianta, Luisa Bentivogli, and Christian Gi-
+   2000. FALCON: Boosting knowledge for answer                       rardi. 2002. MultiWordNet: Developing an aligned
+   engines. In Proc. of TREC-9, pages 479–488.                       multilingual database. In Proc. of GWC-02, pages
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris                    21–25.
+   Callison-Burch, Marcello Federico, Nicola Bertoldi,            Simone Paolo Ponzetto and Roberto Navigli. 2009.
+   Brooke Cowan, Wade Shen, Christine Moran,                         Large-scale taxonomy mapping for restructuring
+   Richard Zens, Chris Dyer, Ondřej Bojar, Alexandra                and integrating Wikipedia. In Proc. of IJCAI-09,
+   Constantin, and Evan Herbst. 2007. Moses: open                    pages 2083–2088.
+   source toolkit for statistical machine translation. In         Simone Paolo Ponzetto and Roberto Navigli. 2010.
+   Comp. Vol. to Proc. of ACL-07, pages 177–180.                     Knowledge-rich Word Sense Disambiguation rival-
+Philipp Koehn. 2005. Europarl: A parallel corpus                     ing supervised system. In Proc. of ACL-10.
+   for statistical machine translation. In Proceedings            Simone Paolo Ponzetto and Michael Strube. 2007. De-
+   of Machine Translation Summit X.                                  riving a large scale taxonomy from Wikipedia. In
+Els Lefever and Veronique Hoste. 2009. Semeval-                      Proc. of AAAI-07, pages 1440–1445.
+   2010 task 3: Cross-lingual Word Sense Disambigua-              Nils Reiter, Matthias Hartung, and Anette Frank.
+   tion. In Proc. of the Workshop on Semantic Evalu-                 2008. A resource-poor approach for linking ontol-
+   ations: Recent Achievements and Future Directions                 ogy classes to Wikipedia articles. In Johan Bos and
+   (SEW-2009), pages 82–87, Boulder, Colorado.                       Rodolfo Delmonte, editors, Semantics in Text Pro-
+Lothar Lemnitzer and Claudia Kunze. 2002. Ger-                       cessing, volume 1 of Research in Computational Se-
+   maNet – representation, visualization, application.               mantics, pages 381–387. College Publications, Lon-
+   In Proc. of LREC ’02, pages 1485–1491.                            don, England.
+Alessandro Lenci, Nuria Bel, Federica Busa, Nico-                 Maria Ruiz-Casado, Enrique Alfonseca, and Pablo
+   letta Calzolari, Elisabetta Gola, Monica Monachini,               Castells. 2005. Automatic assignment of Wikipedia
+   Antoine Ogonowski, Ivonne Peters, Wim Peters,                     encyclopedic entries to WordNet synsets. In Ad-
+   Nilda Ruimy, Marta Villegas, and Antonio Zam-                     vances in Web Intelligence, volume 3528 of Lecture
+   polli. 2000. SIMPLE: A general framework for the                  Notes in Computer Science. Springer Verlag.
+   development of multilingual lexicons. International            Marcus Sammer and Stephen Soderland. 2007. Build-
+   Journal of Lexicography, 13(4):249–263.                           ing a sense-distinguished multilingual lexicon from
+Mausam, Stephen Soderland, Oren Etzioni, Daniel                      monolingual corpora and bilingual lexicons. In Pro-
+   Weld, Michael Skinner, and Jeff Bilmes. 2009.                     ceedings of Machine Translation Summit XI.
+   Compiling a massive, multilingual dictionary via               Rion Snow, Dan Jurafsky, and Andrew Ng. 2006. Se-
+   probabilistic inference. In Proc. of ACL-IJCNLP-                  mantic taxonomy induction from heterogeneous ev-
+   09, pages 262–270.                                                idence. In Proc. of COLING-ACL-06, pages 801–
+Olena Medelyan, David Milne, Catherine Legg, and                     808.
+   Ian H. Witten. 2009. Mining meaning from                       Fabian M. Suchanek, Gjergji Kasneci, and Gerhard
+   Wikipedia. Int. J. Hum.-Comput. Stud., 67(9):716–                 Weikum. 2008. Yago: A large ontology from
+   754.                                                              Wikipedia and WordNet. Journal of Web Semantics,
+George A. Miller, Claudia Leacock, Randee Tengi, and                 6(3):203–217.
+   Ross Bunker. 1993. A semantic concordance. In                  Dan Tufiş, Dan Cristea, and Sofia Stamou. 2004.
+   Proceedings of the 3rd DARPA Workshop on Human                    BalkaNet: Aims, methods, results and perspectives.
+   Language Technology, pages 303–308, Plainsboro,                   a general overview. Romanian Journal on Science
+   N.J.                                                              and Technology of Information, 7(1-2):9–43.
+Vivi Nastase. 2008. Topic-driven multi-document                   Luis von Ahn. 2006. Games with a purpose. IEEE
+   summarization with encyclopedic knowledge and                     Computer, 6(39):92–94.
+   activation spreading. In Proc. of EMNLP-08, pages              Piek Vossen, editor. 1998. EuroWordNet: A Multi-
+   763–772.                                                          lingual Database with Lexical Semantic Networks.
+Roberto Navigli and Mirella Lapata. 2010. An ex-                     Kluwer, Dordrecht, The Netherlands.
+   perimental study on graph connectivity for unsuper-            Fei Wu and Daniel Weld. 2007. Automatically se-
+   vised Word Sense Disambiguation. IEEE Transac-                    mantifying Wikipedia. In Proc. of CIKM-07, pages
+   tions on Pattern Anaylsis and Machine Intelligence,               41–50.
+   32(4):678–692.                                                 David Yarowsky and Radu Florian. 2002. Evaluat-
+Roberto Navigli. 2009a. Using cycles and quasi-                      ing sense disambiguation across diverse parameter
+   cycles to disambiguate dictionary glosses. In Proc.               spaces. Natural Language Engineering, 9(4):293–
+   of EACL-09, pages 594–602.                                        310.
+Roberto Navigli. 2009b. Word Sense Disambiguation:                Toshio Yokoi. 1995. The EDR electronic dictionary.
+   A survey. ACM Computing Surveys, 41(2):1–69.                      Communications of the ACM, 38(11):42–44.
+Hwee Tou Ng and Hian Beng Lee. 1996. Integrating
+   multiple knowledge sources to disambiguate word
+
+
+                                                            225
+

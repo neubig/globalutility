@@ -1,0 +1,731 @@
+ Fine-grained Genre Classification using Structural Learning Algorithms
+
+           Zhili Wu                            Katja Markert                           Serge Sharoff
+ Centre for Translation Studies             School of Computing                Centre for Translation Studies
+   University of Leeds, UK                 University of Leeds, UK               University of Leeds, UK
+   z.wu@leeds.ac.uk                        scskm@leeds.ac.uk                   s.sharoff@leeds.ac.uk
+
+
+
+                      Abstract                                 newspaper texts drops down to 85.7% on forums
+                                                               (Giesbrecht and Evert, 2009), i.e., every seventh
+    Prior use of machine learning in genre                     word in forums is tagged incorrectly.
+    classification used a list of labels as clas-                 This interest in genres resulted in a prolifer-
+    sification categories.      However, genre                 ation of studies on corpus development of web
+    classes are often organised into hierar-                   genres and comparison of methods for AGI. The
+    chies, e.g., covering the subgenres of fic-                two corpora commonly used for this task are KI-
+    tion. In this paper we present a method                    04 (Meyer zu Eissen and Stein, 2004) and San-
+    of using the hierarchy of labels to improve                tinis (Santini, 2007). The best results reported for
+    the classification accuracy. As a testbed                  these corpora (with 10-fold cross-validation) reach
+    for this approach we use the Brown Cor-                    84.1% on KI-04 and 96.5% accuracy on Santinis
+    pus as well as a range of other corpora, in-               (Kanaris and Stamatatos, 2009). In our research
+    cluding the BNC, HGC and Syracuse. The                     (Sharoff et al., 2010) we produced even better re-
+    results are not encouraging: apart from the                sults on these two benchmarks (85.8% and 97.1%,
+    Brown corpus, the improvements of our                      respectively). However, this impressive accuracy
+    structural classifier over the flat one are                is not realistic in vivo, i.e., in classifying web
+    not statistically significant. We discuss the              pages retrieved as a result of actual queries. One
+    relation between structural learning per-                  reason comes from the limited number of genres
+    formance and the visual and distributional                 present in these two collections (eight genres in
+    balance of the label hierarchy, suggesting                 KI-04 and seven in Santinis). As an example, only
+    that only balanced hierarchies might profit                front pages of online newspapers are listed in San-
+    from structural learning.                                  tinis, but not actual newspaper articles, so once an
+                                                               article is retrieved, it cannot be assigned to any
+1   Introduction
+                                                               class at all. Another reason why the high accu-
+Automatic genre identification (AGI) can be                    racy is not useful concerns the limited number of
+traced to the mid-1990s (Karlgren and Cutting,                 sources in each collection, e.g., all FAQs in Santi-
+1994; Kessler et al., 1997), but this research be-             nis come from either a website with FAQs on hur-
+came much more active in recent years, partly be-              ricanes or another one with tax advice. In the end,
+cause of the explosive growth of the Web, and                  a classifier built for FAQs on this training data re-
+partly because of the importance of making genre               lies on a high topic-genre correlation in this par-
+distinctions in NLP applications. In Information               ticular collection and fails to spot any other FAQs.
+Retrieval, given the large number of web pages on                 There are other corpora, which are more diverse
+any given topic, it is often difficult for the users           in the range of their genres, such as the fifteen
+to find relevant pages that are in the right genre             genres of the Brown Corpus (Kučera and Fran-
+(Vidulin et al., 2007). As for other applications,             cis, 1967) or the seventy genres of the BNC (Lee,
+the accuracy of many tasks, such as machine trans-             2001), but because of the number of genres in
+lation, POS tagging (Giesbrecht and Evert, 2009)               them and the diversity of documents within each
+or identification of discourse relations (Webber,              genre, the accuracy of prior work on these collec-
+2009) relies of defining the language model suit-              tions is much less impressive. For example, Karl-
+able for the genre of a given text. For example,               gren and Cutting (1994) using linear discriminant
+the accuracy of POS tagging reaching 96.9% on                  analysis achieve an accuracy of 52% without us-
+
+
+                                                         749
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 749–759,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ing cross-validation (the entire Brown Corpus was             investigate potential reasons for this, including
+used as both the test set and training set), with the         the (im)balance of different genre hierarchies and
+accuracy improving to 65% when the 15 genres                  problems with our distance measures.
+are collapsed into 10, and to 73% with only 4 gen-
+res (Figure 1). This result suggests the importance           2   Structural SVMs
+of the hierarchy of genres. Firstly, making a deci-           Discriminative methods are often used for clas-
+sion on higher levels might be easier than on lower           sification, with SVMs being a well-performing
+levels (fiction or non-fiction rather than science            method in many tasks (Boser et al., 1992;
+fiction or mystery). Secondly, we might be able               Joachims, 1999). Linear SVMs on a flat list of
+to improve the accuracy on lower levels, by taking            labels achieve high efficiency and accuracy in text
+into account the relevant position of each node in            classification when compared to nonlinear SVMs
+the hierarchy (distinguishing between reportage               or other state-of-the-art methods. As for structural
+or editorial becomes easier when we know they                 output learning, a few SVM-based objective func-
+are safely under the category of press).                      tions have been proposed, including margin for-
+                                                              mulation for hierarchical learning (Dekel et al.,
+                                                              2004) or general structural learning (Joachims
+                                                              et al., 2009; Tsochantaridis et al., 2005). But many
+                                                              implementations are not publicly available, and
+                                                              their scalability to real-life text classification tasks
+                                                              is unknown. Also they have not been applied to
+                                                              genre classification.
+                                                                 Our formulation can be taken as a special in-
+                                                              stance of the structural learning framework in
+                                                              (Tsochantaridis et al., 2005). However, they con-
+                                                              centrate on more complicated label structures as
+                                                              for sequence alignment or parsing. They proposed
+                                                              two formulations, slack-rescaling and margin-
+                                                              rescaling, claiming that margin-rescaling has two
+                                                              disadvantages. First, it potentially gives signifi-
+                                                              cant weight to output values that might not be eas-
+                                                              ily confused with the target values, because every
+      Figure 1: Hierarchy of Brown corpus.                    increase in the loss increases the required margin.
+                                                              However, they did not provide empirical evidence
+This paper explores a way of using information on
+                                                              for this claim. Second, margin rescaling is not
+the hierarchy of labels for improving fine-grained
+                                                              necessarily invariant to the scaling of the distance
+genre classification. To the best of our knowl-
+                                                              matrix. We still used margin-rescaling because it
+edge, this is the first work presenting structural
+                                                              allows us to use the sequential dual method for
+genre classification and distance measures for gen-
+                                                              large-scale implementation (Keerthi et al., 2008),
+res. In Section 2 we present a structural reformula-
+                                                              which is not applicable to the slack-rescaling for-
+tion of Support Vector Machines (SVMs) that can
+                                                              mulation. For web page classification we will
+take similarities between different genres into ac-
+                                                              need fast processing. In addition, we performed
+count. This formulation necessitates the develop-
+                                                              model calibration to address the second disadvan-
+ment of distance measures between different gen-
+                                                              tage (distance matrix invariance).
+res in a hierarchy, of which we present three dif-
+                                                                 Let x be a document and wm a weight vector
+ferent types in Section 3, along with possible esti-
+                                                              associated with the genre class m in a corpus with
+mation procedures for these distances. We present
+                                                              k genres at the most fine-grained level. The pre-
+experiments with these novel structural SVMs and
+                                                              dicted class is the class achieving the maximum
+distance measures on three different corpora in
+                                                              inner product between x and the weight vector for
+Section 4. Our experiments show that structural
+                                                              the class, denoted as,
+SVMs can outperform the non-structural standard.
+However, the improvement is only statistically sig-                                    T
+                                                                              arg max wm x, ∀m.                   (1)
+nificant on the Brown corpus. In Section 5 we                                       m
+
+
+
+                                                        750
+
+
+Accurate prediction requires that when a docu-                information-based measures for similarity. How-
+ment vector is multiplied with the weight vector              ever, information-based measures are based on
+associated with its own class, the resulting inner            the information content of a node in a hierarchy.
+product should be larger than its inner products              Whereas the information content of a word or con-
+with a weight vector for any other genre class m.             cept in a lexical hierarchy has been well-defined
+This helps us to define criteria for weight vectors.          (Resnik, 1995), it is less clear how to estimate
+Let xi be the i−th training document, and yi its              the information content of a genre label. We will
+genre label. For its weight vector wyi , the inner            therefore discuss several different ways of estimat-
+product wyTi xi should be larger than all other prod-         ing information content of nodes in a genre hierar-
+ucts wmT x , that is,                                         chy.
+          i
+
+              wyTi xi − wm
+                         T
+                           xi ≥ 0, ∀m.            (2)         3.1   Distance Measures based on Path Length
+                                                              If genre labels are organised into a tree (Figure 1),
+To strengthen the constraints, the zero value on the          one of the simplest ways to measure distance be-
+right hand side of the inequality for the flat SVM            tween two genre labels (= tree nodes) is path
+can be replaced by a positive value, corresponding            length (h(a, b)plen ):
+to a distance measure h(yi , m) between two genre
+classes, leading to the following constraint:
+                                                                    f (a, LCS(a, b)) + f (b, LCS(a, b)),        (6)
+         wyTi xi   −    T
+                       wm xi   ≥ h(yi , m), ∀m.   (3)         where a and b are two nodes in the tree,
+To allow feasible models, in real scenarios such              LCS(a, b) is their Least Common Subsumer, and
+constraints can be violated, but the degree of vio-           f (a, LCS(a, b)) is the number of levels passed
+lation is expected to be small. For each document,            through when traversing from a to the ancestral
+the maximum violation in the k constraints is of              node LCS(a, b). In other words, the distance
+interest, as given by the following loss term:                counts the number of edges traversed from nodes a
+                                                              to b in the tree. For example, the distance between
+                                                              Learned and Misc in Figure 1 would be 3.
+ Lossi = max{h(yi , m) − wyTi xi + wm
+                                    T
+                                      xi }. (4)                  As an alternative, the maximum path length
+              m
+                                                              h(a, b)pmax to their least common subsumer can
+Adding up all loss terms over all training docu-              be used to reduce the range of possible values:
+ments, and further introducing a term to penalize
+large values in the weight vectors, we have the
+                                                                max{f (a, LCS(a, b)), f (b, LCS(a, b))}.        (7)
+following objective function (C is a user-specified
+nonnegative parameter).                                       The Leacock & Chodorow similarity measure
+                                                              (Leacock and Chodorow, 1998) normalizes the
+                k           p
+              1X T          X                                 path length measure (6) by the maximum number
+      min :       wm wm + C   Lossi .             (5)         of nodes D when traversing down from the root.
+       m,i    2
+                   m=1                 i=1
+                                                                s(a, b)plsk = −log((h(a, b)plen + 1)/2D). (8)
+Efficient methods can be derived by borrowing the
+sequential dual methods in (Keerthi et al., 2008)                To convert it into a distance measure, we can
+or other optimization techniques (Crammer and                 invert it h(a, b)plsk = 1/s(a, b)plsk .
+Singer, 2002).                                                   Other path-length based measures include the
+                                                              Wu & Palmer Similarity (Wu and Palmer, 1994).
+3   Genre Distance Measures
+The structural SVM (Section 2) requires a dis-                                         2f (R, LCS(a, b))
+                                                                    s(a, b)pwupal =                         ,   (9)
+tance measure h between two genres. We can                                            (f (R, a) + f (R, b))
+derive such distance measures from the genre                  where R describes the hierarchy’s root node. Here
+hierarchy in a way similar to word similarity                 similarity is proportional to the shared path from
+measures that were invented for lexical hierar-               the root to the least common subsumer of two
+chies such as WordNet (see (Pedersen et al.,                  nodes. Since the Wu & Palmer similarity is always
+2007) for an overview).      In the following,                between [0 1), we can convert it into a distance
+we will first shortly summarise path-based and                measure by h(a, b)pwupal = 1 − s(a, b)pwupal .
+
+
+                                                        751
+
+
+3.2   Distance Measures based on Information                 Genre Frequency based on Document Occur-
+      Content                                                rence. We can interpret the “frequency” of a
+Path-based distance measures work relatively well            genre node simply as the number of all documents
+on balanced hierarchies such as the one in Figure 1          belonging to that genre (including any of its sub-
+but fail to treat hierarchies with different levels          genres). Unfortunately, there are no estimates for
+of granularity well. For lexical hierarchies, as a           genre frequencies on, for example, a representa-
+result, several distance measures based on infor-            tive sample of web documents. Therefore, we ap-
+mation content have been suggested where the in-             proximate genre frequencies from the document
+formation content of a concept c in a hierarchy is           frequencies (dfs) in the training sets used in clas-
+measured by (Resnik, 1995)                                   sification. Note that (i) for balanced class distribu-
+                                                             tions this information will not be helpful and (ii)
+                              f req(c)                       that this is a relatively poor substitute for an esti-
+           IC(c) = −log(                ).     (10)
+                            f req(root)                      mation on an independent, representative corpus.
+The frequency f req of a concept c is the sum of             Genre Frequency based on Genre Labels. We
+the frequency of the node c itself and the frequen-          can also use the labels/names of the genre nodes
+cies of all its subnodes. Since the root may be a            as the unit of frequency estimation. Then, the
+dummy concept, its frequency is simply the sum               frequency of a genre node is the occurrence fre-
+of the frequencies of all its subnodes. The simi-            quency of its label in a corpus plus the occurrence
+larity between two nodes can then be defined as              frequencies of the labels of all its subnodes. Note
+the information content of their least common sub-           that there is no direct correspondence between this
+sumer:                                                       measure and the document frequency of a genre:
+                                                             measuring the number of times the potential genre
+          s(a, b)resk = IC(LCS(a, b)).         (11)          label poem occurs in a corpus is not in any way
+If two nodes just share the root as their subsumer,          equivalent to the number of poems in that corpus.
+their similarity will be zero. To convert 11 into a          However, the measure is still structurally aware
+distance measure, it is possible to add a constant 1         as frequencies of labels of subnodes are included,
+to it before inverting it, as given by                       i.e. a higher level genre label will have higher
+                                                             frequency (and lower information content) than a
+                                                             lower level genre label.1
+       h(a, b)resk = 1/(s(a, b)resk + 1).      (12)             For label frequency estimation, we manually
+                                                             expand any label abbreviations (such as "newsp"
+Several other similarity measures have been pro-             for BNC genre labels), delete stop words and func-
+posed based on the Resnik similarity such as the             tion words and then use two search methods. For
+one by (Lin, 1998):                                          the search method word we simply search the fre-
+                                                             quency of the genre label in a corpus, using three
+                         2IC(LCS(a, b))                      different corpora (the BNC, Brown and Google
+          s(a, b)lin =                  .      (13)
+                          IC(a) + IC(b)                      web search). As for the BNC and Brown cor-
+Again to avoid the effect of zero similarity when            pus some labels are very rarely mentioned, we for
+defining the Lin’s distance we use:                          these two corpora use also a search method gram
+                                                             where all character 5-grams within the genre label
+          h(a, b)lin = 1/(s(a, b)lin + 1).     (14)          are searched for and their frequencies aggregated.
+(Jiang and Conrath, 1997) directly define Jiang’s            3.3   Terminology
+distance (h(a, b)jng ):
+                                                             Algorithms are prefixed by the kind of distance
+      IC(a) + IC(b) − 2IC(LCS(a, b)).          (15)          measure they employ — IC for Information con-
+                                                             tent and p for path-based). If the measure is infor-
+3.2.1 Information Content of Genre Labels                        1
+                                                                   Obviously when using this measure we rely on genre la-
+The notion of information content of a genre is not          bels which are meaningful in the sense that lower level labels
+                                                             were chosen to be more specific and therefore probably rarer
+straightforward. We use two ways of measuring                terms in a corpus. The measure could not possibly be use-
+the frequency f req of a genre, depending on its             ful on a genre hierarchy that would give random names to its
+interpretation.                                              genres such as genre 1.
+
+
+
+                                                       752
+
+
+mation content based the specific measure is men-              4.3   Experimental Setup
+tioned next, such as lin. The way for measuring                We compare structural SVMs using all path-based
+genre frequency is indicated last with df for mea-             and information-content based measures (see also
+suring via document frequency and word/gram                    Section 3.3). As a baseline we use the accuracy
+when measured via frequency of genre labels. If                achieved by a standard "flat" SVM.
+frequencies of genre labels are used, the corpus                  We use 10-fold (randomised) cross validation
+for counting the occurrence of genre labels is also            throughout. In each fold, for each genre class 10%
+indicated via brown, bnc or the Web as estimated               of documents are used for testing. For the re-
+by Google hit counts gg. Standard non-structural               maining 90%, a portion of 10% are sampled for
+SVMs are indicated by f lat.                                   parameter tuning, leaving 80% for training. In
+                                                               each round the validation set is used to help de-
+4     Experiments
+                                                               termine the best C associated with Equation (5)
+4.1    Datasets                                                based on the validation accuracy from the candi-
+We use four genre-annotated corpora for genre                  date list 0.0001, 0.0005, 0.001, 0.005, 0.01,
+classification: the Brown Corpus (Kučera and                  0.05, 0.1, 0.5, 1. Note via this experiment setup,
+Francis, 1967), BNC (Lee, 2001), HGC (Stubbe                   all methods are tuned to their best performance.
+and Ringlstetter, 2007) and Syracuse (Crowston                    For any algorithm comparison, we use a McNe-
+et al., 2009). They have a wide variety of genre               mar test with the significance level of 5% as rec-
+labels (from 15 in the Brown corpus to 32 genres               ommended by (Dietterich, 1998).
+in HGC to 70 in the BNC to 292 in Syracuse), and               4.4   Features
+different types of hierarchies.
+                                                               The features used for genre classification are char-
+4.2    Evaluation Measures                                     acter 4-grams for all algorithms, i.e. each docu-
+We use standard classification accuracy (Acc) on               ment is represented by a binary vector indicating
+the most fine-grained level of target categories in            the existence of each character 4-gram. We used
+the genre hierarchy.                                           character n-grams because they are very easy to
+   In addition, given a structural distance H, mis-            extract, language-independent (no need to rely on
+classifications can be weighted based on the dis-              parsing or even stemming), and they are known
+tance measure. This allows us to penalize incor-               to have the best performance in genre classifica-
+rect predictions which are further away in the hi-             tion tasks (Kanaris and Stamatatos, 2009; Sharoff
+erarchy (such as between government documents                  et al., 2010).
+and westerns) more than "close" mismatches (such               4.5   Brown Corpus Results
+as between science fiction and westerns). For-
+mally, given the classification confusion matrix M             The Brown Corpus has 500 documents and is or-
+then each Mab for a 6= b contains the number                   ganized in a hierarchy with a depth of 3. It
+of class a documents that are misclassified into               contains 15 end-level genres. In one experiment
+class b. To achieve proper normalization in giv-               in (Karlgren and Cutting, 1994) the subgenres un-
+ing weights to misclassified entries, we can redis-            der fiction are grouped together, leading to 10 gen-
+tribute a total weight k − 1 to each row of H pro-             res to classify.
+portionally to its values, where k is the number               Results on 10-genre Brown Corpus. A stan-
+of genres. That is, given g the row summation                  dard flat SVM achieves an accuracy of 64.4%
+of H, we define a weight matrix Q by normal-                   whereas the best structural SVM based on Lin’s
+izing the rows of H in a way given by Qab =                    information content distance measure (IC-lin-
+(k − 1)hab /ga , a 6= b. We further assign a unit              word-bnc) achieves 68.8% accuracy, significantly
+value to the diagonal of Q. Then it is possible to             better at the 1% level. The result is also signif-
+construct a structurally-aware measure (S-Acc):                icantly better than prior work on the Brown cor-
+                   X            X                              pus in (Karlgren and Cutting, 1994) (who use the
+         S-Acc =        Maa /         Mab Qab .   (16)         whole corpus as test as well as training data). Ta-
+                    a           a,b                            ble 1 summarizes the best performing measures
+                                                               that all outperform the flat SVM at the 1% level.
+
+
+
+                                                         753
+
+
+ Table 1: Brown 10-genre Classification Results.                    column. The ’no-struct’ column corresponds to
+            Method                Accuracy                          vanilla accuracy. It is natural to expect each di-
+  Karlgren and Cutting, 1994 65 (Training)                          agonal entry of the numeric table to be the high-
+           Flat SVM                 64.40                           est, since the respective method is optimised for
+    SSVM(IC-lin-word-bnc)           68.80                           its own structural distance. However, in our case,
+     SSVM(IC-lin-word-br)           68.60                           Lin’s information content measure and the plen
+     SSVM(IC-lin-gram-br)           67.80                           measure perform well under any structural ac-
+                                                                    curacy evaluation measure and outperform flat
+                                                                    SVMs.
+
+                                                                    4.6    Other Corpora
+Figure 2 provides the box plots of accuracy scores.
+The dashed boxes indicate that the distance mea-                    In spite of the promising results on the Brown
+sures perform significantly worse than the best                     Corpus, structural SVMs on other corpora (BNC,
+performing IC-lin-word-bnc at the bottom. The                       HGC, Syracuse) did not show considerable im-
+solid boxes indicate the corresponding measures                     provement.
+are statistically comparable to the IC-lin-word-bnc                    HGC contains 1330 documents divided into 32
+in terms of the mean accuracy they can achieve.                     approximately equally frequent classes. Its hierar-
+                                                                    chy has just two levels. Standard accuracy for the
+  IC−jng−word−gg
+  IC−jng−gram−br
+                                                                    best performing structural methods on HGC is just
+ IC−jng−gram−bnc
+              flat
+                                                                    the same as for flat SVM (69.1%), with marginally
+ IC−jng−word−bnc
+  IC−jng−word−br
+                                                                    better structural accuracy (for example, 71.39 vs.
+            pmax                                                    71.04%, using a path-length based structural ac-
+             plsk
+  IC−lin−word−gg                                                    curacy). The BNC corpus contains 70 genres and
+ IC−resk−word−br
+IC−resk−gram−bnc                                                    4053 documents. The number of documents per
+        IC−lin−df
+ IC−resk−gram−br                                                    class ranges from 2 to 501. The accuracy of SSVM
+ IC−lin−gram−bnc
+       IC−resk−df                                                   is also just comparable to flat SVM (73.6%). The
+             plen
+ IC−resk−word−gg
+                                                                    Syracuse corpus is a recently developed large col-
+IC−resk−word−bnc
+   IC−lin−gram−br
+                                                                    lection of 3027 annotated webpages divided into
+          pwupal
+        IC−jng−df
+                                                                    292 genres (Crowston et al., 2009). Focusing only
+   IC−lin−word−br
+ IC−lin−word−bnc
+                                                                    on genres containing 15 or more examples, we ar-
+                     50   55   60   65
+                                    Accuracy
+                                               70   75   80         rived at a corpus of 2293 samples and 52 genres.
+                                                                    Accuracy for flat (53.3%) and structural SVMs
+Figure 2: Accuracy on Brown Corpus (10 genres).                     (53.7%) are again comparable.
+
+Results on 15-genre Brown Corpus. We per-                           5     Discussion
+form experiments on all 15 genres on the end level                  Given that structural learning can help in topical
+of the Brown corpus. The increase of genre classes                  classification tasks (Tsochantaridis et al., 2005;
+leads to reduced classification performance. In our                 Dekel et al., 2004), the lack of success on genres
+experiment, the flat SVM achieves an accuracy of                    is surprising. We now discuss potential reasons for
+52.40%, and the structural SVM using path length                    this lack of success.
+measure achieves 55.40%, a difference significant
+at the 5% level. The structural SVMs using infor-                   5.1    Tree Depth and Balance
+mation content measures IC-lin-gram-bnc and IC-                     Our best results were achieved on the Brown cor-
+resk-word-br also perform equally well. In addi-                    pus, whose genre tree has at least three attractive
+tion, we improve on the training accuracy of 52%                    properties. Firstly, it has a depth greater than 2,
+reported in (Karlgren and Cutting, 1994).                           i.e. several levels are distinguished. Secondly,
+   We are also interested in structural accuracy (S-                it seems visually balanced: branches from root
+Acc) to see whether the structural SVMs make                        to leaves (or terminals) are of pretty much equal
+fewer "big" mistakes. Table 2 shows a cross com-                    length; branching factors are similar, for exam-
+parison of structural accuracy. Each row shows                      ple ranging between 2 and 6 for the last level of
+how accurate the corresponding method is un-                        branching. Thirdly, the number of examples at
+der the structural accuracy criteria given in the
+
+
+                                                              754
+
+
+                               Table 2: Structural Accuracy on Brown 15-genre Classification.
+            Method             no-struct (=typical accuracy)         IC-lin-gram-bnc                   plen     IC-resk-word-br        IC-jng-word-gg
+               flat                        52.40                           55.34                      60.60          58.91                  52.19
+        IC-lin-gram-bnc                    55.00                           58.15                      63.59          61.83                  53.85
+              plen                         55.40                           58.74                      64.51          62.61                  54.27
+        IC-resk-word-br                    55.00                           58.24                      63.96          62.08                  54.08
+        IC-jng-word-gg                     46.00                           49.00                      54.89          53.01                  52.58
+
+
+                                                                                   IC−jng−word−gg
+each leaf node is roughly comparable (distribu-                                   IC−jng−word−bnc
+
+tional balance).                                                                   IC−jng−word−br
+                                                                                  IC−jng−gram−bnc
+
+   The other hierarchies violate these properties to                               IC−lin−word−gg
+                                                                                  IC−resk−word−gg
+a large extent. Thus, the genres in HGC are al-                                          IC−jng−df
+                                                                                   IC−jng−gram−br
+most represented by a flat list with just one extra                               IC−lin−gram−bnc
+                                                                                         IC−lin−df
+level over 32 categories. Similarly, the vast ma-                                   IC−lin−word−br
+                                                                                               flat
+jority of genres in the Syracuse corpus are also                                    IC−lin−gram−br
+                                                                                              plsk
+organised in two levels only. Such flat hierar-                                  IC−resk−word−bnc
+                                                                                              plen
+chies do not offer much scope to improve over a                                            pwupal
+
+completely flat list. There are considerably more                                 IC−lin−word−bnc
+                                                                                        IC−resk−df
+
+levels in the BNC for some branches, e.g., writ-                                  IC−resk−gram−br
+                                                                                             pmax
+
+ten/national/broadsheet/arts, but many other gen-                                IC−resk−gram−bnc
+                                                                                  IC−resk−word−br
+res are still only specified to the second level of                                                   35   40     45   50      55
+                                                                                                                            Accuracy
+                                                                                                                                       60   65    70    75
+
+
+its hierarchy, e.g., written/adverts. In addition, the
+BNC is also distributionally imbalanced, i.e. the                                Figure 4: Accuracy on skewed Brown Corpus (12
+number of documents per class varies from 2 to                                   genres).
+501 documents.
+   To test our hypothesis, we tried to skew the
+Brown genre tree in two ways. First, we kept the
+tree relatively balanced visually and distribution-                              As expected, the structural methods on either
+ally but flattened it by removing the second layer                               skewed or flattened hierarchies are not signifi-
+Press, Misc, Non-Fiction, Fiction from the hierar-                               cantly better than the flat SVM. For the flattened
+chy, leaving a tree with only two layers. Second,                                hierarchy of 15 leaf genres the maximal accuracy
+we skewed the visual and distributional balance of                               is 54.2% vs. 52.4% for the flat SVM (Figure 3), a
+the tree by collapsing its three leaf-level genres un-                           non-significant improvement. Similarly, the max-
+der Press, and the two under non-fiction, leading to                             imal accuracy on the skewed 12-genre hierarchy
+12 genres to classify (cf. Figure 1).                                            is 58.2% vs. 56% (see also Figure 4), again a not
+  IC−jng−word−gg                                                                 significant improvement.
+ IC−jng−word−bnc
+  IC−jng−word−br
+                                                                                    To measure the degree of balance of a tree,
+  IC−jng−gram−br
+ IC−jng−gram−bnc
+                                                                                 we introduce two tree balance scores based on
+  IC−lin−word−gg
+            pmax
+                                                                                 entropy. First, for both measures we extend all
+ IC−resk−gram−br
+             plsk
+                                                                                 branches to the maximum depth of the tree. Then
+       IC−resk−df                                                                level by level we calculate an entropy score, ei-
+              flat
+        IC−jng−df                                                                ther according to how many tree nodes at the next
+   IC−lin−gram−br
+ IC−lin−word−bnc                                                                 level belong to a node at this level (denoted as
+        IC−lin−df
+ IC−resk−word−gg                                                                 vb: visual balance), or according to how many
+   IC−lin−word−br
+          pwupal                                                                 end level documents belong to a node at this level
+             plen
+ IC−lin−gram−bnc
+                                                                                 (denoted as db: distribution balance). To make
+ IC−resk−word−br
+IC−resk−gram−bnc
+                                                                                 trees with different numbers of internal nodes
+IC−resk−word−bnc
+                     30   35   40    45          50   55   60   65    70
+                                                                                 and leaves more comparable, the entropy score
+                                          Accuracy
+                                                                                 at each level is normalized by the maximal en-
+                                                                                 tropy achieved by a tree with uniform distribution
+Figure 3: Accuracy on flattened Brown Corpus (15                                 of nodes/documents, which is simply −log(1/N ),
+genres).                                                                         where N denotes the number of nodes at the corre-
+
+
+                                                                           755
+
+
+sponding level. Finally, the entropy scores for all
+                                                                        Table 3: Tree Balance Scores
+levels are averaged. It can be shown that any per-                     Corpus            depth     vb       db
+fect N-ary tree will have the largest visual balance              Brown (10 genres)        3     0.9115   0.9024
+                                                                  Brown (15 genres)        3     0.9186   0.9083
+score of 1. If in addition its nodes at each level               Brown (15, flattened)     2     0.9855   0.8742
+contain the same number of documents, the distri-                Brown (12, skewed)        3     0.8747   0.8947
+bution balance score will reach the maximum, too.                    HGC (32)              2     0.9562   0.9570
+                                                                     BNC (70)              4     0.9536   0.8039
+   Table 3 shows the balance scores for all the cor-                Syracuse (52)          3     0.9404   0.8634
+pora we use. The first two rows for the Brown cor-
+pus have both large visual balance and distribution
+balance scores. As shown earlier, for those two se-
+tups the structural SVMs perform better than the
+flat approach. In contrast, for the tree hierarchies         form well overall; again for the Brown corpus
+of Brown that we deformed or flattened, and also             this is probably due to its balanced hierarchy
+BNC and Syracuse, either or both of the two bal-             which makes path length appropriate. There are
+ance scores tend to be lower, and no improvement             other probable reasons why information content
+has been obtained over the flat approach. This               based measures do not perform better than path-
+may indicate that a further exploration of the rela-         length based ones. When measured via docu-
+tion between tree balance and the performance of             ment frequency in a corpus we do not have suffi-
+structural SVMs is warranted. However, high vi-              ciently large, representative genre-annotated cor-
+sual balance and distribution scores do not neces-           pora to hand. When measured via genre label
+sarily imply high performance of structural SVMs,            frequency, we run into at least two problems.
+as very flat trees are also visually very balanced.          Firstly, as mentioned in Section 3.2.1 genre la-
+As an example, HGC has a high visual balance                 bel frequency does not have to correspond to class
+score due to a shallow hierarchy and a high distri-          frequency of documents. Secondly, the labels
+butional balance score due to a roughly equal num-           used are often abbreviations (e.g. W_institut_doc,
+ber of documents contained in each genre. How-               W_newsp_brdsht_nat_social in BNC Corpus),
+ever, HGC did not benefit from structural learning           underspecified (other, misc, unclassified) or a col-
+as it is also a very shallow hierarchy; therefore we         lection of phrases (e.g. belles letters, etc. in
+think that a third variable depth also needs to be           Brown). This made search for frequency very ap-
+taken into account.                                          proximate and also loosens the link between label
+   A similar observation on the importance of                and content.
+well-balanced hierarchies comes from a recent                   We investigated in more depth how well the dif-
+Pascal challenge on large scale hierarchical text            ferent distance measures are aligned. We adapt
+classification,2 which shows that some flat ap-              the alignment measure between kernels (Cristian-
+proaches perform competitively in topic classifi-            ini et al., 2002), to investigate how close the dis-
+cation with imbalanced hierarchies. However, the             tance matrices are. For two distance matrices H1
+participants do not explore explicitly the relation          and H2 , their alignment A(H1 , H2 ) is defined as:
+between tree balance and performance.                                           < H1 , H2 >F
+   Other methods for measuring tree balance                            √                                ,    (17)
+                                                                         < H1 , H1 >F , < H2 , H2 >F
+(some of which are related to ours) are used in
+                                                             where < H1 , H2 >F = ki,j H1 (gi , gj )H2 (gi , gj )
+                                                                                      P
+the field of phylogenetic research (Shao and Sokal,
+1990) but they are only applicable to visual bal-            which is the total sum of the entry-wise products
+ance. In addition, the methods they used often               between the two distance matrices. Figure 5 shows
+provide conflicting results on which trees are con-          several distance matrices on the (original) 15 genre
+sidered as balanced (Shao and Sokal, 1990).                  Brown corpus. The plen matrix has clear blocks
+                                                             for the super genres press, informative, imagina-
+5.2      Distance Measures                                   tive, etc. The IC-lin-gram-bnc matrix refines dis-
+We also scrutinise our distance measures as these            tances in the blocks, due to the introduction of in-
+are crucial for the structural approach. We no-              formation content. It keeps an alignment score that
+tice that simple path length based measures per-             is over 0.99 (the maximum is 1.00) toward the plen
+   2                                                         matrix, and still has visible block patterns. How-
+       http://lshtc.iit.demokritos.gr/
+                                                             ever, the IC-jng-word-bnc significantly adjusts the
+
+
+                                                       756
+
+
+distance entries, has a much lower alignment score                                                eral different genre distance measures. Although
+with the plen matrix, and doesn’t reveal appar-                                                   we were able to improve on non-structural ap-
+ent blocks. This partially explains the bad perfor-                                               proaches for the Brown corpus, we found it hard to
+mance of the Jiang distance measure on the Brown                                                  improve over flat SVMs on other corpora. As po-
+corpus (see Section 4). The diagrams also show                                                    tential reasons for this negative result, we suggest
+the high closeness between the best performing IC                                                 that current genre hierarchies are either not of suf-
+measure and the simple path length based mea-                                                     ficient depth or are visually or distributionally im-
+sure.                                                                                             balanced. We think further investigation into the
+                           plen                              IC−lin−gram−bnc (0.98376)
+                                                                                                  relationship between hierarchy balance and struc-
+    Press                                           Press
+                                                                                                  tural learning is warranted. Further investigation
+                                                                                                  is also needed into the appropriateness of n-gram
+     Misc                                            Misc
+                                                                                                  features for genre identification as well as good
+nonfiction                                      nonfiction
+                                                                                                  measures of genre distance.
+                                                                                                     In the future, an important task would be the re-
+             Informative          Imaginative                Informative      Imaginative         finement or unsupervised generation of new hier-
+                   plsk (0.96061)                            IC−jng−word−bnc (0.92993)
+                                                                                                  archies, using information theoretic or data-driven
+    Press                                           Press
+                                                                                                  approaches. For a full assessment of hierarchical
+                                                                                                  learning for genre classification, the field of genre
+     Misc                                            Misc
+                                                                                                  studies needs a testbed similar to the Reuters or 20
+nonfiction                                      nonfiction
+                                                                                                  Newsgroups datasets used in topic-based IR with a
+                                                                                                  balanced genre hierarchy and a representative cor-
+             Informative          Imaginative                Informative      Imaginative         pus of reliably annotated webpages.
+                                                                                                     With regard to algorithms, we are also inter-
+Figure 5: Distance Matrices on Brown. Values in                                                   ested in other formulations for structural SVMs
+bracket is the alignment with the plen matrix                                                     and their large-scale implementation as well as the
+                                                                                                  combination of different distance measures, for
+   An alternative to structural distance measures
+                                                                                                  example in ensemble learning.
+would be distance measures between the gen-
+res based on pairwise cosine similarities between                                                 Acknowledgements
+them. To assess this, we aggregated all character
+4-gram training vectors of each genre and calcu-                                                  We would like to thank the authors of each corpus
+lated standard cosine similarities. Note that these                                               collection, who invested a lot of effort into produc-
+similarities are based on the documents only and                                                  ing them. We are also grateful to Google Inc. for
+do not make use of the Brown hierarchy at all. Af-                                                supporting this research via their Google Research
+ter converting the similarities to distance, we plug                                              Awards programme.
+the distance matrix into our structural SVM. How-
+                                                                                                  References
+ever, accuracy on the Brown corpus (15 genres)
+was almost the same as for a flat SVM. Inspecting                                                 Boser, B. E., Guyon, I. M., and Vapnik, V. N.
+the distance matrix visually, we determined that                                                      (1992). A training algorithm for optimal mar-
+the cosine similarity could clearly distinguish be-                                                   gin classifiers. In COLT ’92: Proceedings of
+tween Fiction and Non-Fiction texts but not be-                                                       the fifth annual workshop on Computational
+tween any other genres. This also indicates that                                                      learning theory, pages 144–152, New York,
+the genre structural hierarchy clearly gives infor-                                                   NY, USA. ACM.
+mation not present in the simple character 4-gram
+features we use. For a more detailed discussion                                                   Crammer, K. and Singer, Y. (2002). On the algo-
+of the problems of the currently prevalently used                                                     rithmic implementation of multiclass kernel-
+character n-grams as features for genre classifica-                                                   based vector machines. J. Mach. Learn. Res.,
+tion, we refer the reader to (Sharoff et al., 2010).                                                  2:265–292.
+
+6       Conclusions                                                                               Cristianini, N., Shawe-Taylor, J., and Kandola, J.
+                                                                                                       (2002). On kernel target alignment. In Pro-
+In this paper, we have evaluated structural learn-                                                     ceedings of the Neural Information Process-
+ing approaches to genre classification using sev-
+
+
+                                                                                            757
+
+
+     ing Systems, NIPS’01, pages 367–373. MIT                Keerthi, S. S., Sundararajan, S., Chang, K.-W.,
+     Press.                                                      Hsieh, C.-J., and Lin, C.-J. (2008). A se-
+                                                                 quential dual method for large scale multi-
+Crowston, K., Kwasnik, B., and Rubleske, J.                      class linear svms. In KDD ’08: Proceeding of
+    (2009). Problems in the use-centered de-                     the 14th ACM SIGKDD international confer-
+    velopment of a taxonomy of web genres.                       ence on Knowledge discovery and data min-
+    In Mehler, A., Sharoff, S., and Santini,                     ing, pages 408–416, New York, NY, USA.
+    M., editors, Genres on the Web: Com-                         ACM.
+    putational Models and Empirical Studies.
+    Springer, Berlin/New York.                               Kessler, B., Nunberg, G., and Schütze, H. (1997).
+                                                                 Automatic detection of text genre. In Pro-
+Dekel, O., Keshet, J., and Singer, Y. (2004).                    ceedings of the 35th ACL/8th EACL, pages
+    Large margin hierarchical classification. In                 32–38.
+    ICML ’04: Proceedings of the twenty-first in-
+    ternational conference on Machine learning,              Kučera, H. and Francis, W. N. (1967). Computa-
+    page 27, New York, NY, USA. ACM.                              tional analysis of present-day American En-
+                                                                  glish. Brown University Press, Providence.
+Dietterich, T. G. (1998). Approximate statistical
+     tests for comparing supervised classification           Leacock, C. and Chodorow, M. (1998). Combin-
+     learning algorithms. Neural Computation,                    ing local context and WordNet similarity for
+     10:1895–1923.                                               word sense identification, pages 305–332. In
+                                                                 C. Fellbaum (Ed.), MIT Press.
+Giesbrecht, E. and Evert, S. (2009). Part-of-
+    Speech (POS) Tagging - a solved task? An                 Lee, D. (2001). Genres, registers, text types, do-
+    evaluation of POS taggers for the Web as                      mains, and styles: clarifying the concepts
+    corpus. In Proceedings of the Fifth Web                       and navigating a path through the BNC jun-
+    as Corpus Workshop (WAC5), pages 27–35,                       gle. Language Learning and Technology,
+    Donostia-San Sebastián.                                       5(3):37–72.
+
+Jiang, J. J. and Conrath, D. W. (1997). Semantic             Lin, D. (1998). An information-theoretic defini-
+     similarity based on corpus statistics and lexi-              tion of similarity. In ICML ’98: Proceed-
+     cal taxonomy. CoRR, cmp-lg/9709008.                          ings of the Fifteenth International Confer-
+                                                                  ence on Machine Learning, pages 296–304,
+Joachims, T. (1999). Making large-scale SVM                       San Francisco, CA, USA. Morgan Kaufmann
+    learning practical. In Schölkopf, B., Burges,                 Publishers Inc.
+    C., and Smola, A., editors, Advances in
+    Kernel Methods – Support Vector Learning,                Meyer zu Eissen, S. and Stein, B. (2004). Genre
+    pages 41–56. MIT Press.                                     classification of web pages. In Proceedings
+                                                                of the 27th German Conference on Artificial
+Joachims, T., Finley, T., and Yu, C.-N. (2009).                 Intelligence, Ulm, Germany.
+    Cutting-plane training of structural svms.
+    Machine Learning, 77(1):27–59.                           Pedersen, T., Pakhomov, S. V. S., Patwardhan, S.,
+                                                                 and Chute, C. G. (2007). Measures of seman-
+Kanaris, I. and Stamatatos, E. (2009). Learning to               tic similarity and relatedness in the biomed-
+    recognize webpage genres. Information Pro-                   ical domain. J. of Biomedical Informatics,
+    cessing and Management, 45:499–512.                          40(3):288–299.
+Karlgren, J. and Cutting, D. (1994). Recogniz-               Resnik, P. (1995). Using information content to
+    ing text genres with simple metrics using dis-               evaluate semantic similarity in a taxonomy.
+    criminant analysis. In Proc. of the 15th. Inter-             In IJCAI’95: Proceedings of the 14th inter-
+    national Conference on Computational Lin-                    national joint conference on Artificial intel-
+    guistics (C OLING 94), pages 1071 – 1075,                    ligence, pages 448–453, San Francisco, CA,
+    Kyoto, Japan.                                                USA. Morgan Kaufmann Publishers Inc.
+
+
+
+
+                                                       758
+
+
+Santini, M. (2007). Automatic Identification of
+     Genre in Web Pages. PhD thesis, University
+     of Brighton.
+
+Shao, K.-T. and Sokal, R. R. (1990). Tree balance.
+    Systematic Zoology, 39(3):266–276.
+
+Sharoff, S., Wu, Z., and Markert, K. (2010). The
+    Web library of Babel: evaluating genre col-
+    lections. In Proc. of the Seventh Language
+    Resources and Evaluation Conference, LREC
+    2010, Malta.
+
+Stubbe, A. and Ringlstetter, C. (2007). Recogniz-
+    ing genres. In Santini, M. and Sharoff, S.,
+    editors, Proc. Towards a Reference Corpus of
+    Web Genres.
+
+Tsochantaridis, I., Joachims, T., Hofmann, T., and
+    Altun, Y. (2005). Large margin methods
+    for structured and interdependent output vari-
+    ables. J. Mach. Learn. Res., 6:1453–1484.
+
+Vidulin, V., Luštrek, M., and Gams, M. (2007).
+    Using genres to improve search engines. In
+    Proc. Towards Genre-Enabled Search En-
+    gines: The Impact of NLP. RANLP-07.
+
+Webber, B. (2009). Genre distinctions for dis-
+   course in the Penn TreeBank. In Proc the
+   47th Annual Meeting of the ACL, pages 674–
+   682.
+
+Wu, Z. and Palmer, M. (1994). Verbs seman-
+    tics and lexical selection. In Proceedings of
+    the 32nd annual meeting on Association for
+    Computational Linguistics, pages 133–138,
+    Morristown, NJ, USA. Association for Com-
+    putational Linguistics.
+
+
+
+
+                                                     759
+

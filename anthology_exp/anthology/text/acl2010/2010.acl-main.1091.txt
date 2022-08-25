@@ -1,0 +1,749 @@
+                        Estimating Strictly Piecewise Distributions
+
+                     Jeffrey Heinz                                   James Rogers
+                 University of Delaware                             Earlham College
+                 Newark, Delaware, USA                          Richmond, Indiana, USA
+                  heinz@udel.edu                           jrogers@quark.cs.earlham.edu
+
+
+
+                      Abstract                                 which make distinctions on the basis of contigu-
+                                                               ous subsequences. The Strictly Local languages
+   Strictly Piecewise (SP) languages are a                     are the formal-language theoretic foundation for
+   subclass of regular languages which en-                     n-gram models (Garcia et al., 1990), which are
+   code certain kinds of long-distance de-                     widely used in natural language processing (NLP)
+   pendencies that are found in natural lan-                   in part because such distributions can be estimated
+   guages. Like the classes in the Chom-                       from positive data (i.e. a corpus) (Jurafsky and
+   sky and Subregular hierarchies, there are                   Martin, 2008). N -gram models describe prob-
+   many independently converging character-                    ability distributions over all strings on the basis
+   izations of the SP class (Rogers et al., to                 of the Markov assumption (Markov, 1913): that
+   appear). Here we define SP distributions                    the probability of the next symbol only depends
+   and show that they can be efficiently esti-                 on the previous contiguous sequence of length
+   mated from positive data.                                   n − 1. From the perspective of formal language
+                                                               theory, these distributions are perhaps properly
+1 Introduction                                                 called Strictly k-Local distributions (SLk ) where
+Long-distance dependencies in natural language                 k = n. It is well-known that one limitation of the
+are of considerable interest. Although much at-                Markov assumption is its inability to express any
+tention has focused on long-distance dependencies              kind of long-distance dependency.
+which are beyond the expressive power of models                   This paper defines Strictly k-Piecewise (SPk )
+with finitely many states (Chomsky, 1956; Joshi,               distributions and shows how they too can be effi-
+1985; Shieber, 1985; Kobele, 2006), there are                  ciently estimated from positive data. In contrast
+some long-distance dependencies in natural lan-                with the Markov assumption, our assumption is
+guage which permit finite-state characterizations.             that the probability of the next symbol is condi-
+For example, although it is well-known that vowel              tioned on the previous set of discontiguous subse-
+and consonantal harmony applies across any ar-                 quences of length k − 1 in the string. While this
+bitrary number of intervening segments (Ringen,                suggests the model has too many parameters (one
+1988; Baković, 2000; Hansson, 2001; Rose and                  for each subset of all possible subsequences), in
+Walker, 2004) and that phonological patterns are               fact the model has on the order of |Σ|k+1 parame-
+regular (Johnson, 1972; Kaplan and Kay, 1994),                 ters because of an independence assumption: there
+it is less well-known that harmony patterns are                is no interaction between different subsequences.
+largely characterizable by the Strictly Piecewise              As a result, SP distributions are efficiently com-
+languages, a subregular class of languages with                putable even though they condition the probabil-
+independently-motivated, converging characteri-                ity of the next symbol on the occurrences of ear-
+zations (see Heinz (2007, to appear) and especially            lier (possibly very distant) discontiguous subse-
+Rogers et al. (2009)).                                         quences. Essentially, these SP distributions reflect
+   As shown by Rogers et al. (to appear), the                  a kind of long-term memory.
+Strictly Piecewise (SP) languages, which make                     On the other hand, SP models have no short-
+distinctions on the basis of (potentially) discon-             term memory and are unable to make distinctions
+tiguous subsequences, are precisely analogous to               on the basis of contiguous subsequences. We do
+the Strictly Local (SL) languages (McNaughton                  not intend SP models to replace n-gram models,
+and Papert, 1971; Rogers and Pullum, to appear),               but instead expect them to be used alongside of
+
+
+                                                         886
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 886–896,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+them. Exactly how this is to be done is beyond the           is the (unique) state reachable from state q
+scope of this paper and is left for future research.                                         ˆ w)↑ other-
+                                                             via the sequence w, if any, or d(q,
+   Since SP languages are the analogue of SL lan-            wise. The language recognized by a DFA M is
+guages, which are the formal-language theoretical                   def
+                                                             L(M) = {w ∈ Σ∗ | d(qˆ 0 , w)↓ ∈ F }.
+foundation for n-gram models, which are widely
+                                                                A state is useful iff for all q ∈ Q, there exists
+used in NLP, it is expected that SP distributions
+                                                             w ∈ Σ∗ such that δ(q0 , w) = q and there exists
+and their estimation will also find wide applica-
+                                                             w ∈ Σ∗ such that δ(q, w) ∈ F . Useless states
+tion. Apart from their interest to problems in the-
+                                                             are not useful. DFAs without useless states are
+oretical phonology such as phonotactic learning
+                                                             trimmed.
+(Coleman and Pierrehumbert, 1997; Hayes and
+Wilson, 2008; Heinz, to appear), it is expected that            Two strings w and v over Σ are distinguished
+their use will have application, in conjunction with         by a DFA M iff d(q  ˆ 0 , w) 6= d(q
+                                                                                             ˆ 0 , v). They are
+n-gram models, in areas that currently use them;             Nerode equivalent with respect to a language L
+e.g. augmentative communication (Newell et al.,              if and only if wu ∈ L ⇐⇒ vu ∈ L for
+1998), part of speech tagging (Brill, 1995), and             all u ∈ Σ∗ . All DFAs which recognize L must
+speech recognition (Jelenik, 1997).                          distinguish strings which are inequivalent in this
+   §2 provides basic mathematical notation. §3               sense, but no DFA recognizing L necessarily dis-
+provides relevant background on the subregular hi-           tinguishes any strings which are equivalent. Hence
+erarchy. §4 describes automata-theoretic charac-             the number of equivalence classes of strings over
+terizations of SP languages. §5 defines SP distri-           Σ modulo Nerode equivalence with respect to L
+butions. §6 shows how these distributions can be             gives a (tight) lower bound on the number of states
+efficiently estimated from positive data and pro-            required to recognize L.
+vides a demonstration. §7 concludes the paper.                  A DFA is minimal if the size of its state set
+                                                             is minimal among DFAs accepting the same lan-
+2 Preliminaries                                              guage. The product of n DFAs M1 . . . Mn is
+                                                             given by the standard construction over the state
+We start with some mostly standard notation. Σ
+                                                             space Q1 × . . . × Qn (Hopcroft et al., 2001).
+denotes a finite set of symbols and a string over
+Σ is a finite sequence of symbols drawn from                    A     Probabilistic    Deterministic     Finite-
+that set. Σk , Σ≤k , Σ≥k , and Σ∗ denote all                 state    Automaton      (PDFA) is       a     tuple
+strings over this alphabet of length k, of length            M = hQ, Σ, q0 , δ, F, T i where Q is the state
+less than or equal to k, of length greater than              set, Σ is the alphabet, q0 is the start state, δ is
+or equal to k, and of any finite length, respec-             a deterministic transition function, F and T are
+tively. ǫ denotes the empty string. |w| denotes              the final-state and transition probabilities. In
+the length of string w. The prefixes of a string             particular, T : Q × Σ → R+ and F : Q → R+
+w are Pfx(w) = {v : ∃u ∈ Σ∗ such that vu = w}.               such that
+When discussing partial functions, the notation ↑
+and ↓ indicates that the function is undefined, re-                                         X
+spectively is defined, for particular arguments.                 for all q ∈ Q, F (q) +           T (q, a) = 1.      (1)
+   A language L is a subset of Σ∗ . A stochastic                                            a∈Σ
+language D is a probability distribution over Σ∗ .
+The probability p of word w with respect to D is
+written P rD (w)P= p. Recall that all distributions          Like DFAs, for all w ∈ Σ∗ , there is at most one
+D must satisfy w∈Σ∗P     P rD (w) = 1. If L is lan-          state reachable from q0 . PDFAs are typically rep-
+guage then P rD (L) = w∈L P rD (w).                          resented as labeled directed graphs as in Figure 1.
+   A Deterministic Finite-state Automaton (DFA)                 A PDFA M generates a stochastic language
+is a tuple M = hQ, Σ, q0 , δ, F i where Q is the             DM . If it exists, the (unique) path for a word w =
+state set, Σ is the alphabet, q0 is the start state,         a0 . . . ak belonging to Σ∗ through a PDFA is a
+δ is a deterministic transition function with do-            sequence h(q0 , a0 ), (q1 , a1 ), . . . , (qk , ak )i, where
+main Q × Σ and codomain Q, F is the set of                   qi+1 = δ(qi , ai ). The probability a PDFA assigns
+accepting states. Let dˆ : Q × Σ∗ → Q be                     to w is obtained by multiplying the transition prob-
+the (partial) path function of M, i.e., d(q,ˆ w)             abilities with the final probability along w’s path if
+
+
+                                                       887
+
+
+                                                c:1/9                 be the normalization term; and
+               c:3/10                           b:2/9
+                                                                                                             (hq1 ... qn i)
+               b:2/10                           a:2/9                  (a) let F (hq1 . . . qn i) = CF   Z(hq1 ... qn i) ;
+                                                                           and
+                              a:3/10                                   (b) for all σ ∈ Σ, let
+              A:2/10                           B:4/9
+                                                                                                      (hσ, q1 ... qn i)
+                                                                           T (hq1 . . . qn i, σ) = CTZ(hq 1 ... qn i)
+
+
+Figure 1: A picture of a PDFA with states labeled                In other words, the numerators of T and F are de-
+A and B. The probabilities of T and F are located                fined to be the co-emission probabilities (Vidal et
+to the right of the colon.                                       al., 2005a), and division by Z ensures that M de-
+                                                                 fines a well-formed probability distribution. Sta-
+it exists, and zero otherwise.                                   tistically speaking, the co-emission product makes
+                                                                 an independence assumption: the probability of σ
+                  k
+                                          !
+                  Y                                              being co-emitted from q1 , . . . , qn is exactly what
+P rDM (w) =             T (qi−1 , ai−1 ) · F (qk+1 ) (2)
+                  i=1
+                                                                 one expects if there is no interaction between the
+                                                                 individual factors; that is, between the probabil-
+                      ˆ 0 , w)↓ and 0 otherwise
+                   if d(q                                        ities of σ being emitted from any qi . Also note
+A probability distribution is regular deterministic              order of product is irrelevant up to renaming of
+iff there is a PDFA which generates it.                          the states, and so therefore we also speak of tak-
+   The structural components of a PDFA M are                     ing the product of a set of PDFAs (as opposed to
+its states Q, its alphabet Σ, its transitions δ, and             an ordered vector).
+its initial state q0 . By structure of a PDFA, we                   Estimating regular deterministic distributions is
+mean its structural components. Each PDFA M                      well-studied problem (Vidal et al., 2005a; Vidal et
+defines a family of distributions given by the pos-              al., 2005b; de la Higuera, in press). We limit dis-
+sible instantiations of T and F satisfying Equa-                 cussion to cases when the structure of the PDFA is
+tion 1. These distributions have |Q|· (|Σ| + 1) in-              known. Let S be a finite sample of words drawn
+dependent parameters (since for each state there                 from a regular deterministic distribution D. The
+are |Σ| possible transitions plus the possibility of             problem is to estimate parameters T and F of M
+finality.)                                                       so that DM approaches D. We employ the widely-
+   We define the product of PDFA in terms of co-                 adopted maximum likelihood (ML) criterion for
+emission probabilities (Vidal et al., 2005a).                    this estimation.
+Definition 1 Let A be a vector of PDFAs and let
+                                                                                                             !
+                                                                                              Y
+|A| = n. For each 1 ≤ i ≤ n let Mi =                                     (T̂ , F̂ ) = argmax        P rM (w)       (3)
+                                                                                      T,F
+hQi , Σ, q0i , δi , Fi , Ti i be the ith PDFA in A. The                                         w∈S
+probability that σ is co-emitted from q1 , . . . , qn in
+                                                                 It is well-known that if D is generated by some
+Q1 , . . . , Qn , respectively, is
+                                                                 PDFA M′ with the same structural components as
+                                    n
+                                    Y                            M, then optimizing the ML estimate guarantees
+       CT (hσ, q1 . . . qn i) =           Ti (qi , σ).
+                                                                 that DM approaches D as the size of S goes to
+                                    i=1
+                                                                 infinity (Vidal et al., 2005a; Vidal et al., 2005b;
+Similarly, the probability that a word simultane-                de la Higuera, in press).
+ously ends at q1 ∈ Q1 . . . qn ∈ Qn is
+                                                                    The optimization problem (3) is simple for de-
+                                    n
+                                    Y                            terministic automata with known structural com-
+           CF (hq1 . . . qn i) =          Fi (qi ).              ponents. Informally, the corpus is passed through
+                                    i=1
+       N                                                         the PDFA, and the paths of each word through the
+Then       A = hQ, Σ, q0 , δ, F, T i where                       corpus are tracked to obtain counts, which are then
+  1. Q, q0 , and δ are defined as with DFA product.              normalized by state. Let M = hQ, Σ, δ, q0 , F, T i
+                                                                 be the PDFA whose parameters F and T are to be
+  2. For all hq1 . . . qn i     ∈       Q, let                   estimated. For all states q ∈ Q and symbols a ∈
+     Z(hq1 . . . qn i) =                                         Σ, The ML estimation of the probability of T (q, a)
+                                                                 is obtained by dividing the number of times this
+                           X
+     CF (hq1 . . . qn i) +   CT (hσ, q1 . . . qn i)
+                              σ∈Σ                                transition is used in parsing the sample S by the
+
+
+                                                           888
+
+
+                                             c:1                      Testable in the Strict Sense (SP). Each language
+                    c:3                      b:2                      class in these hierarchies has independently mo-
+                    b:2                      a:2                      tivated, converging characterizations and each has
+                                                                      been claimed to correspond to specific, fundamen-
+                                a:3
+                                                                      tal cognitive capabilities (McNaughton and Pa-
+                    A:2                      B:4                      pert, 1971; Brzozowski and Simon, 1973; Simon,
+                                                                      1975; Thomas, 1982; Perrin and Pin, 1986; Garcı́a
+                                                                      and Ruiz, 1990; Beauquier and Pin, 1991; Straub-
+Figure 2: The automata shows the counts                               ing, 1994; Garcı́a and Ruiz, 1996; Rogers and Pul-
+obtained by parsing M with sample                                     lum, to appear; Kontorovich et al., 2008; Rogers et
+S = {ab, bba, ǫ, cab, acb, cc}.                                       al., to appear).
+                          Reg           MSO                              Languages in the weakest of these classes are
+                                                                      defined only in terms of the set of factors (SL)
+                                SF                                    or subsequences (SP) which are licensed to oc-
+                                        FO                            cur in the string (equivalently the complement of
+                 LTT                                                  that set with respect to Σ≤k , the forbidden fac-
+                                                                      tors or forbidden subsequences). For example, the
+                                                                      set containing the forbidden 2-factors {ab, ba} de-
+                  LT            PT      Prop
+                                                                      fines a Strictly 2-Local language which includes
+                                                                      all strings except those with contiguous substrings
+                  SL            SP
+                                                                      {ab, ba}. Similarly since the parameters of n-
+                  +1             <                                    gram models (Jurafsky and Martin, 2008) assign
+                                                                      probabilities to symbols given the preceding con-
+       Figure 3: Parallel Sub-regular Hierarchies.                    tiguous substrings up to length n − 1, we say they
+                                                                      describe Strictly n-Local distributions.
+number of times state q is encountered in the pars-                      These hierarchies have a very attractive model-
+ing of S. Similarly, the ML estimation of F (q) is                    theoretic characterization. The Locally Testable
+obtained by calculating the relative frequency of                     (LT) and Piecewise Testable languages are exactly
+state q being final with state q being encountered                    those that are definable by propositional formulae
+in the parsing of S. For both cases, the division is                  in which the atomic formulae are blocks of sym-
+normalizing; i.e. it guarantees that there is a well-                 bols interpreted factors (LT) or subsequences (PT)
+formed probability distribution at each state. Fig-                   of the string. The languages that are testable in the
+ure 2 illustrates the counts obtained for a machine                   strict sense (SL and SP) are exactly those that are
+M with sample S = {ab, bba, ǫ, cab, acb, cc}.1                        definable by formulae of this sort restricted to con-
+Figure 1 shows the PDFA obtained after normaliz-                      junctions of negative literals. Going the other way,
+ing these counts.                                                     the languages that are definable by First-Order for-
+                                                                      mulae with adjacency (successor) but not prece-
+3 Subregular Hierarchies                                              dence (less-than) are exactly the Locally Thresh-
+                                                                      old Testable (LTT) languages. The Star-Free lan-
+Within the class of regular languages there are
+                                                                      guages are those that are First-Order definable
+dual hierarchies of language classes (Figure 3),
+                                                                      with precedence alone (adjacency being FO defin-
+one in which languages are defined in terms of
+                                                                      able from precedence). Finally, by extending to
+their contiguous substrings (up to some length k,
+                                                                      Monadic Second-Order formulae (with either sig-
+known as k-factors), starting with the languages
+                                                                      nature, since they are MSO definable from each
+that are Locally Testable in the Strict Sense (SL),
+                                                                      other), one obtains the full class of Regular lan-
+and one in which languages are defined in terms
+                                                                      guages (McNaughton and Papert, 1971; Thomas,
+of their not necessarily contiguous subsequences,
+                                                                      1982; Rogers and Pullum, to appear; Rogers et al.,
+starting with the languages that are Piecewise
+                                                                      to appear).
+   1
+     Technically, this acceptor is neither a simple DFA or
+PDFA; rather, it has been called a Frequency DFA. We do                The relation between strings which is funda-
+not formally define them here, see (de la Higuera, in press).         mental along the Piecewise branch is the subse-
+
+
+                                                                889
+
+
+                                                                                          c                  c
+quence relation, which is a partial order on Σ∗ :
+                                                                                          b                  b
+           def
+     w ⊑ v ⇐⇒ w = ε or w = σ1 · · · σn and
+(∃w0 , . . . , wn ∈ Σ∗ )[v = w0 σ1 w1 · · · σn wn ].                                               a
+                                                                                          1                  2
+in which case we say w is a subsequence of v.
+   For w ∈ Σ∗ , let
+                                                                        Figure 4: The DFA representation of SI(aa).
+                  def         k
+       Pk (w) = {v ∈ Σ | v ⊑ w} and
+                        def
+        P≤k (w) = {v ∈ Σ≤k | v ⊑ w},
+                                                                                 T
+                                                                        1. L =    w∈S [SI(w)],   S finite,
+
+the set of subsequences of length k, respectively                       2. L ∈ SP
+length no greater than k, of w. Let Pk (L) and
+P≤k (L) be the natural extensions of these to sets                      3. (∃k)[P≤k (w) ⊆ P≤k (L) ⇒ w ∈ L],
+of strings. Note that P0 (w) = {ε}, for all w ∈ Σ∗ ,
+                                                                        4. w ∈ L and v ⊑ w ⇒ v ∈ L (L is subse-
+that P1 (w) is the set of symbols occurring in w and
+                                                                           quence closed),
+that P≤k (L) is finite, for all L ⊆ Σ∗ .
+   Similar to the Strictly Local languages, Strictly                    5. L = SI(X), X ⊆ Σ∗ (L is the complement
+Piecewise languages are defined only in terms of                           of a shuffle ideal).
+the set of subsequences (up to some length k)
+which are licensed to occur in the string.                              The DFA representation of the complement of a
+Definition 2 (SPk Grammar, SP) A SPk gram-                            shuffle ideal is especially important.
+mar is a pair G = hΣ, Gi where G ⊆ Σk . The                           Lemma 1 Let w ∈ Σk , w = σ1 · · · σk ,
+language licensed by a SPk grammar is                                 and MSI(w) = hQ, Σ, q0 , δ, F i, where Q =
+            def                                                       {i | 1 ≤ i ≤ k}, q0 = 1, F = Q and for all
+     L(G) = {w ∈ Σ∗ | P≤k (w) ⊆ P≤k (G)}.                             qi ∈ Q, σ ∈ Σ:
+A language is SPk iff it is L(G) for some SPk                                         
+                                                                                       qi+1 if σ = σi and i < k,
+grammar G. It is SP iff it is SPk for some k.
+                                                                          δ(qi , σ) =   ↑    if σ = σi and i = k,
+  This paper is primarily concerned with estimat-
+                                                                                        qi   otherwise.
+                                                                                      
+ing Strictly Piecewise distributions, but first we
+examine in greater detail properties of SP lan-                       Then MSI(w) is a minimal, trimmed DFA that rec-
+guages, in particular DFA representations.
+                                                                      ognizes the complement of SI(w), i.e., SI(w) =
+4 DFA representations of SP Languages                                 L(MSI(w) ).
+
+Following Sakarovitch and Simon (1983),                                  Figure 4 illustrates the DFA representation of
+Lothaire (1997) and Kontorovich, et al. (2008),                       the complement of SI(aa) with Σ = {a, b, c}. It is
+we call the set of strings that contain w as a                        easy to verify that the machine in Figure 4 accepts
+subsequence the principal shuffle ideal2 of w:                        all and only those words which do not contain an
+                                                                      aa subsequence.
+             SI(w) = {v ∈ Σ∗ | w ⊑ v}.                                   For any SPk language L = L(hΣ, Gi) 6= Σ∗ ,
+                                                                      the first characterization (1) in Theorem 1 above
+The shuffle ideal of a set of strings is defined as
+                                                                      yields a non-deterministic finite-state representa-
+                   SI(S) = ∪w∈S SI(w)                                 tion of L, which is a set A of DFA representations
+                                                                      of complements of principal shuffle ideals of the
+Rogers et al. (to appear) establish that the SP lan-                  elements of G. The trimmed automata product of
+guages have a variety of characteristic properties.                   this set yields a DFA, with the properties below
+Theorem 1 The following are equivalent:3                              (Rogers et al., to appear).
+    2
+      Properly SI(w) is the principal ideal generated by {w}          Lemma 2 Let M be a trimmed DFA recognizing
+wrt the inverse of ⊑.                                                 a SPk language constructed as described above.
+    3
+      For a complete proof, see Rogers et al. (to appear). We
+only note that 5 implies 1 by DeMorgan’s theorem and the              Then:
+fact that every shuffle ideal is finitely generated (see also
+Lothaire (1997)).                                                       1. All states of M are accepting states: F = Q.
+
+
+                                                                890
+
+
+                                b                                                           b
+                   b
+                                                                                            a
+                         a
+                  ǫ,b         ǫ,a,b
+              b          b                                                                ǫ,a,b
+              a
+        ǫ         ǫ,a           c                                               b     a
+                                                                                                            c
+                         c                                                                         c
+                                                                                                            b
+              c                                b                                            c
+                   c          ǫ,a,c                                            ǫ,b          b
+                                                                                                            a
+                         a             b                                              c
+                  ǫ,c                                                     b           b
+                                b
+                                            ǫ,a,b,c                             a
+                                                                                          ǫ,b,c    a
+                                                                                                        ǫ,a,b,c
+                         b
+                                       a
+                                                                          a
+                                                                     ǫ         ǫ,a
+                                                                                      c
+                              ǫ,b,c
+                                                                           c          b     c      b
+                                                                                c
+                                                                                            a
+
+Figure 5: The DFA representation of the of the                                 ǫ,c    a
+SP language given by G = h{a, b, c}, {aa, bc}i.                                           ǫ,a,c
+Names of the states reflect subsets of subse-
+quences up to length 1 of prefixes of the language.
+Note this DFA is trimmed, but not minimal.                   Figure 6: A DFA representation of the of the SP2
+                                                             language given by G = h{a, b, c}, Σ2 i. Names
+                                                             of the states reflect subsets of subsequences up to
+                                         ˆ 1 , σ)↑
+  2. For all q1 , q2 ∈ Q and σ ∈ Σ, if d(q                   length 1 of prefixes of the language. Note this
+           ˆ 1 , w) = q2 for some w ∈ Σ∗ then
+     and d(q                                                 DFA is trimmed, but not minimal.
+     ˆ
+     d(q2 , σ)↑. (Missing edges propagate down.)
+
+   Figure 5 illustrates with the DFA representa-             5 SP Distributions
+tion of the of the SP2 language given by G =
+h{a, b, c}, {aa, bc}i. It is straightforward to ver-         In the same way that SL distributions (n-gram
+ify that this DFA is identical (modulo relabeling of         models) generalize SL languages, SP distributions
+state names) to one obtained by the trimmed prod-            generalize SP languages. Recall that SP languages
+uct of the DFA representations of the complement             are characterizable by the intersection of the com-
+of the principal shuffle ideals of aa and bc, which          plements of principal shuffle ideals. SP distribu-
+are the prohibited subsequences.                             tions are similarly characterized.
+   States in the DFA in Figure 5 correspond to the              We begin with Piecewise-Testable distributions.
+subsequences up to length 1 of the prefixes of the           Definition 3 A distribution D is k-Piecewise
+language. With this in mind, it follows that the                                          def
+                                                             Testable (written D ∈ PTDk ) ⇐⇒ D can be de-
+DFA of Σ∗ = L(Σ, Σk ) has states which corre-                scribed by a PDFA M = hQ, Σ, q0 , δ, F, T i with
+spond to the subsequences up to length k − 1 of
+the prefixes of Σ∗ . Figure 6 illustrates such a DFA           1. Q = {P≤k−1 (w) : w ∈ Σ∗ }
+when k = 2 and Σ = {a, b, c}.
+   In fact, these DFAs reveal the differences be-              2. q0 = P≤k−1 (ǫ)
+tween SP languages and PT languages: they are
+                                                               3. For all w ∈ Σ∗ and all σ              ∈       Σ,
+exactly those expressed in Lemma 2. Within the
+                                                                  δ(P≤k−1 (w), a) = P≤k−1 (wa)
+state space defined by the subsequences up to
+length k − 1 of the prefixes of the language, if the           4. F and T satisfy Equation 1.
+conditions in Lemma 2 are violated, then the DFAs
+describe languages that are PT but not SP. Pictori-          In other words, a distribution is k-Piecewise
+ally, P T2 languages are obtained by arbitrarily re-         Testable provided it can be represented by a PDFA
+moving arcs, states, and the finality of states from         whose structural components are the same (mod-
+the DFA in Figure 6, and SP2 ones are obtained by            ulo renaming of states) as those of the DFA dis-
+non-arbitrarily removing them in accordance with             cussed earlier where states corresponded to the
+Lemma 2. The same applies straightforwardly for              subsequences up to length k − 1 of the prefixes
+any k (see Definition 3 below).                              of the language. The DFA in Figure 6 shows the
+
+
+                                                       891
+
+
+structure of a PDFA which describes a PT2 distri-                                                       c
+bution as long as the assigned probabilities satisfy                                   c                b
+Equation 1.                                                                            b                a
+   The following lemma follows directly from the
+finite-state representation of PTk distributions.
+                                                                                               a
+                                                                                       ǫ                a
+Lemma 3 Let D belong to PTDk and let M =
+hQ, Σ, q0 , δ, F, T i be a PDFA representing D de-
+fined according to Definition 3.
+                                                                 Figure 7: The structure of PDFA Ma . It is the
+    P rD (σ1 . . . σn ) = T (P≤k−1 (ǫ), σ1 ) ·                   same (modulo state names) as the DFA in Figure 4
+                                                               except for the self-loop labeled a on state a.
+            Y
+                   T (P≤k−1 (σ1 . . . σi−1 ), σi ) (4)
+           2≤i≤n
+
+         · F (P≤k−1 (w))                                         strings which contain a (state a) from those that
+                             k−1                                 do not (state ǫ). A set of PDFAs is a k-set of SD-
+PTk distributions have 2|Σ| (|Σ|+1) parameters
+                      k−1                                        PDFAs iff, for each w ∈ Σ≤k−1 , it contains ex-
+(since there are 2|Σ|     states and |Σ| + 1 possible
+                                                                 actly one w-SD-PDFA.
+events, i.e. transitions and finality).
+   Let P r(σ | #) and P r(# | P≤k (w)) denote                       In the same way that missing edges propagate
+the probability (according to some D ∈ PTDk )                    down in DFA representations of SP languages
+that a word begins with σ and ends after observ-                 (Lemma 2), the final and transitional probabili-
+ing P≤k (w). Then Equation 4 can be rewritten in                 ties must propagate down in PDFA representa-
+terms of conditional probability as                              tions of SPk distributions. In other words, the fi-
+                                                                 nal and transitional probabilities at states further
+  P rD (σ1 . . . σn ) = P r(σ1 | #) ·
+                                                               along paths beginning at the start state must be de-
+          Y                                                      termined by final and transitional probabilities at
+                 P r(σi | P≤k−1 (σ1 . . . σi−1 )) (5)          earlier states non-increasingly. This is captured by
+          2≤i≤n
+                                                                 defining SP distributions as a product of k-sets of
+       · P r(# | P≤k−1 (w))                                      SD-PDFAs (see Definition 5 below).
+Thus, the probability assigned to a word depends                    While the standard product based on co-
+not on the observed contiguous sequences as in a                 emission probability could be used for this pur-
+Markov model, but on observed subsequences.                      pose, we adopt a modified version of it defined
+   Like SP languages, SP distributions can be de-                for k-sets of SD-PDFAs: the positive co-emission
+fined in terms of the product of machines very sim-              probability. The automata product based on the
+ilar to the complement of principal shuffle ideals.              positive co-emission probability not only ensures
+Definition 4 Let w ∈ Σk−1 and w = σ1 · · · σk−1 .                that the probabilities propagate as necessary, but
+Mw = hQ, Σ, q0 , δ, F, T i is a w-subsequence-                   also that such probabilities are made on the ba-
+distinguishing    PDFA      (w-SD-PDFA)       iff                sis of observed subsequences, and not unobserved
+Q = Pfx(w), q0 = ǫ, for all u ∈ Pfx(w)                           ones. This idea is familiar from n-gram models:
+and each σ ∈ Σ,                                                  the probability of σn given the immediately pre-
+                                                                 ceding sequence σ1 . . . σn−1 does not depend on
+       δ(u, σ) = uσ iff uσ ∈ Pfx(w) and                          the probability of σn given the other (n − 1)-long
+                 u otherwise                                     sequences which do not immediately precede it,
+                                                                 though this is a logical possibility.
+and F and T satisfy Equation 1.
+   Figure 7 shows the structure of Ma which is                      Let A be a k-set of SD-PDFAs. For each
+almost the same as the complement of the princi-                 w ∈ Σ≤k−1 , let Mw = hQw , Σ, q0w , δw , Fw , Tw i
+pal shuffle ideal in Figure 4. The only difference               be the w-subsequence-distinguishing PDFA in A.
+is the additional self-loop labeled a on the right-              The positive co-emission probability that σ is si-
+most state labeled a. Ma defines a family of dis-                multaneously emitted from states qǫ , . . . , qu from
+tributions over Σ∗ , and its states distinguish those            the statesets Qǫ , . . . Qu , respectively, of each SD-
+
+
+                                                           892
+
+
+PDFA in A is                                                           Θ(|Σ|k+1 ). Furthermore, since each SD-PDFA
+                                  Y                                    only has one state contributing |Σ|+1 probabilities
+P CT (hσ, qǫ . . . qu i) =                     Tw (qw , σ) (6)                                                          k −1
+                                                                       to the product, and since there are |Σ≤k | = |Σ|
+                                                                                                                     |Σ|−1
+                             qw ∈hqǫ ...qu i
+                                qw =w                                  many SD-PDFAs in a k-set, there are
+Similarly, the probability that a word simultane-                       |Σ|k − 1               |Σ|k+1 + |Σ|k − |Σ| − 1
+ously ends at n states qǫ ∈ Qǫ , . . . , qu ∈ Qu is                              · (|Σ| + 1) =
+                                                                         |Σ| − 1                       |Σ| − 1
+                             Y
+  P CF (hqǫ . . . qu i) =               Fw (qw )    (7)
+                                                                       parameters, which is Θ(|Σ|k ).
+                             qw ∈hqǫ ...qu i
+                                qw =w                                  Lemma 5 Let D ∈ SPDk . Then D ∈ PTDk .
+In other words, the positive co-emission proba-                        Proof Since D ∈ SPDk , there is a k-set of
+bility is the product of the probabilities restricted                  subsequence-distinguishing PDFAs. The product
+to those assigned to the maximal states in each                        of this set has the same structure as the PDFA
+Mw . For example, consider a 2-set of SD-                              given in Definition 3.                       ⊣
+PDFAs A with Σ = {a, b, c}. A contains four
+PDFAs Mǫ ,N    Ma , Mb , Mc . Consider state q =
+hǫ, ǫ, b, ci ∈   A (this is the state labeled ǫ, b, c in               Theorem 2 A distribution D ∈ SPDk if D can
+Figure 6). Then                                                        be described by a PDFA M = hQ, Σ, q0 , δ, F, T i
+                                                                       satisfying Definition 3 and the following.
+CT (a, q) = Tǫ (ǫ, a)· Ta (ǫ, a)· Tb (b, a)· Tc (c, a)                   For all w ∈ Σ∗ and all σ ∈ Σ, let
+but                                                                        Z(w) =
+                                                                                         Y
+                                                                                                F (P≤k−1 (s)) +
+      P CT (a, q) = Tǫ (ǫ, a)· Tb (b, a)· Tc (c, a)                                 s∈P≤k−1 (w)
+                                                                                                                      
+since in PDFA Ma , the state ǫ is not the maximal                               X           Y
+                                                                                                     T (P≤k−1 (s), σ ′ ) (8)
+state.                                                                          σ′ ∈Σ   s∈P≤k−1 (w)
+   The positive co-emission product (⊗+ ) is de-
+fined just as with co-emission probabilities, sub-                     (This is the normalization term.) Then T must sat-
+stituting PCT and PCF for CT and CF, respec-                           isfy: T (P≤k−1 (w), σ) =
+tively, in Definition 1. The definition of ⊗+ en-                                 Q
+sures that the probabilities propagate on the basis                                 s∈P≤k−1 (w) T (P≤k−1 (s), σ)
+of observed subsequences, and not on the basis of                                                                     (9)
+                                                                                              Z(w)
+unobserved ones.
+                                                                       and F must satisfy: F (P≤k−1 (w)) =
+Lemma 4 Let k ≥ 1 and let A be a k-set of SD-
+PDFAs. Then ⊗+ S defines a well-formed proba-                                    Q
+                                                                                    s∈P≤k−1 (w) F (P≤k−1 (s))
+bility distribution over Σ∗ .                                                                                            (10)
+                                                                                              Z(w)
+Proof Since Mǫ belongs to A, it is always
+the case that PCT and PCF are defined. Well-                           Proof That SPDk satisfies Definition 3 Follows
+formedness follows from the normalization term                         directly from Lemma 5. Equations 8-10 follow
+as in Definition 1.                          ⊣                         from the definition of positive co-emission proba-
+                                                                       bility.                                         ⊣
+Definition 5 A distribution D is k-Strictly Piece-
+                          def                                             The way in which final and transitional proba-
+wise (written D ∈ SPDk ) ⇐⇒ D can be described                         bilities propagate down in SP distributions is re-
+by a PDFA which is the positive co-emission                            flected in the conditional probability as defined by
+product of a k-set of subsequence-distinguishing                       Equations 9 and 10. In terms of conditional prob-
+PDFAs.                                                                 ability, Equations 9 and 10 mean that the prob-
+By Lemma 4, SP distributions are well-formed.                          ability that σi follows a sequence σ1 . . . σi−1 is
+Unlike PDFAs for PT distributions, which distin-                       not only a function of P≤k−1 (σ1 . . . σi−1 ) (Equa-
+           k−1
+guish 2|Σ|              P number of states in a k-
+               states, the                                             tion 4) but further that it is a function of each
+set of SD-PDFAs is i<k (i + 1)|Σ|i , which is                          subsequence in σ1 . . . σi−1 up to length k − 1.
+
+
+                                                                 893
+
+
+In particular, P r(σi | P≤k−1 (σ1 . . . σi−1 )) is ob-         FM . It follows that as |S| increases, T̂N+ A and
+tained by substituting P r(σi | P≤ k−1 (s)) for                F̂N+ A approach the true values of TN+ A and
+T (P≤ k−1 (s), σ) and P r(# | P≤ k−1 (s)) for                  FN+ A and consequently DN+ A approaches D. ⊣
+F (P≤k−1 (s)) in Equations 8, 9 and 10. For ex-
+ample, for a SP2 distribution, the probability of                 We demonstrate learning long-distance depen-
+a given P≤1 (bc) (state ǫ, b, c in Figure 6) is the            dencies by estimating SP2 distributions given a
+normalized product of the probabilities of a given             corpus from Samala (Chumash), a language with
+P≤1 (ǫ), a given P≤1 (b), and a given P≤1 (c).                 sibilant harmony.4 There are two classes of sibi-
+   To summarize, SP and PT distributions are reg-              lants in Samala: [-anterior] sibilants like [s] and
+ular deterministic. Unlike PT distributions, how-               >                                              >
+                                                               [ts] and [+anterior] sibilants like [S] and [tS].5
+ever, SP distributions can be modeled with only                Samala words are subject to a phonological pro-
+Θ(|Σ|k ) parameters and Θ(|Σ|k+1 ) states. This                cess wherein the last sibilant requires earlier sibi-
+is true even though SP distributions distinguish               lants to have the same value for the feature [an-
+     k−1
+2|Σ|     states! Since SP distributions can be rep-            terior], no matter how many sounds intervene
+resented by a single PDFA, computing P r(w) oc-                (Applegate, 1972). As a consequence of this
+curs in only Θ(|w|) for such PDFA. While such                  rule, there are generally no words in Samala
+PDFA might be too large to be practical, P r(w)                where [-anterior] sibilants follow [+anterior]. E.g.
+can also be computed from the k-set of SD-PDFAs                [StojonowonowaS] ‘it stood upright’ (Applegate
+in Θ(|w|k ) (essentially building the path in the              1972:72) is licit but not *[Stojonowonowas].
+product machine on the fly using Equations 4, 8, 9                The results of estimating D ∈ SPD2 with
+and 10).                                                       the corpus is shown in Table 6. The results
+6 Estimating SP Distributions                                  clearly demonstrate the effectiveness of the model:
+                                                               the probability of a [α anterior] sibilant given
+The problem of ML estimation of SPk distribu-                  P≤1 ([-α anterior]) sounds is orders of magnitude
+tions is reduced to estimating the parameters of the           less than given P≤1 (α anterior]) sounds.
+SD-PDFAs. Training (counting and normaliza-
+tion) occurs over each of these machines (i.e. each                                                      x
+                                                                 P r(x | P≤1 (y))                  >                     >
+machine parses the entire corpus), which gives the                                      s          ts           S        tS
+ML estimates of the parameters of the distribution.                         s        0.0335     0.0051       0.0011   0.0002
+                                                                          ⁀ts        0.0218     0.0113       0.0009     0.
+It trivially follows that this training successfully
+                                                                y           S        0.0009        0.        0.0671   0.0353
+estimates any D ∈ SPDk .                                                   >
+                                                                           tS        0.0006        0.        0.0455   0.0313
+Theorem 3 For any D ∈ SPDk , let D generate
+sample S. Let A be the k-set of SD-PDFAs which                 Table 1: Results of SP2 estimation on the Samala
+describes exactly D. Then optimizing the MLE of                corpus. Only sibilants are shown.
+S with respect to each M ∈ A guarantees that the
+distributionN described by the positive co-emission            7 Conclusion
+product of + A approaches D as |S| increases.
+                                                               SP distributions are the stochastic version of SP
+Proof The MLE estimate of S with respect to
+                                                               languages, which model long-distance dependen-
+SPDk returns the parameter values that maximize                                                                 k−1
+                                                               cies. Although SP distributions distinguish 2|Σ|
+the likelihood of S. The parameters of D ∈ SPDk
+                                                               states, they do so with tractably many parameters
+are found on the maximal states of each M ∈ A.
+                                                               and states because of an assumption that distinct
+By definition, each M ∈ A describes a proba-
+                                                               subsequences do not interact. As shown, these
+bility distribution over Σ∗ , and similarly defines
+                                                               distributions are efficiently estimable from posi-
+a family of distributions. Therefore finding the
+                                                               tive data. As previously mentioned, we anticipate
+MLE of S with respect to SPDk means finding the
+                                                               these models to find wide application in NLP.
+MLE estimate of S with respect to each of the fam-
+ily of distributions which each M ∈ A defines,
+                                                                    4
+respectively.                                                        The corpus was kindly provided by Dr. Richard Apple-
+   Optimizing the ML estimate of S for each                    gate and drawn from his 2007 dictionary of Samala.
+                                                                   5
+                                                                     Samala actually contrasts glottalized, aspirated, and
+M ∈ A means that as |S| increases, the estimates               plain variants of these sounds (Applegate, 1972). These la-
+T̂M and F̂M approach the true values TM and                    ryngeal distinctions are collapsed here for easier exposition.
+
+
+                                                         894
+
+
+References                                                      Jeffrey Heinz. 2007. The Inductive Learning of
+                                                                   Phonotactic Patterns. Ph.D. thesis, University of
+R.B. Applegate. 1972. Ineseño Chumash Grammar.                    California, Los Angeles.
+  Ph.D. thesis, University of California, Berkeley.
+                                                                Jeffrey Heinz. to appear. Learning long distance
+R.B. Applegate. 2007. Samala-English dictionary : a                phonotactics. Linguistic Inquiry.
+  guide to the Samala language of the Ineseño Chu-
+  mash People. Santa Ynez Band of Chumash Indi-                 John Hopcroft, Rajeev Motwani, and Jeffrey Ullman.
+  ans.                                                            2001. Introduction to Automata Theory, Languages,
+                                                                  and Computation. Addison-Wesley.
+Eric Baković. 2000. Harmony, Dominance and Con-
+   trol. Ph.D. thesis, Rutgers University.                      Frederick Jelenik. 1997. Statistical Methods for
+                                                                  Speech Recognition. MIT Press.
+D. Beauquier and Jean-Eric Pin. 1991. Languages and
+  scanners. Theoretical Computer Science, 84:3–21.              C. Douglas Johnson. 1972. Formal Aspects of Phono-
+                                                                   logical Description. The Hague: Mouton.
+Eric Brill. 1995. Transformation-based error-driven
+   learning and natural language processing: A case             A. K. Joshi. 1985. Tree-adjoining grammars: How
+   study in part-of-speech tagging. Computational Lin-            much context sensitivity is required to provide rea-
+   guistics, 21(4):543–566.                                       sonable structural descriptions?      In D. Dowty,
+                                                                  L. Karttunen, and A. Zwicky, editors, Natural Lan-
+J. A. Brzozowski and Imre Simon. 1973. Character-                 guage Parsing, pages 206–250. Cambridge Univer-
+   izations of locally testable events. Discrete Mathe-           sity Press.
+   matics, 4:243–271.
+                                                                Daniel Jurafsky and James Martin. 2008. Speech
+Noam Chomsky. 1956. Three models for the descrip-                 and Language Processing: An Introduction to Nat-
+  tion of language. IRE Transactions on Information               ural Language Processing, Speech Recognition, and
+  Theory. IT-2.                                                   Computational Linguistics. Prentice-Hall, 2nd edi-
+                                                                  tion.
+J. S. Coleman and J. Pierrehumbert. 1997. Stochastic
+   phonological grammars and acceptability. In Com-             Ronald Kaplan and Martin Kay. 1994. Regular models
+   putational Phonology, pages 49–56. Somerset, NJ:               of phonological rule systems. Computational Lin-
+   Association for Computational Linguistics. Third               guistics, 20(3):331–378.
+   Meeting of the ACL Special Interest Group in Com-
+   putational Phonology.                                        Gregory Kobele. 2006. Generating Copies: An In-
+                                                                  vestigation into Structural Identity in Language and
+Colin de la Higuera. in press. Grammatical Infer-                 Grammar. Ph.D. thesis, University of California,
+  ence: Learning Automata and Grammars. Cam-                      Los Angeles.
+  bridge University Press.
+                                                                Leonid (Aryeh) Kontorovich, Corinna Cortes, and
+Pedro Garcı́a and José Ruiz. 1990. Inference of k-               Mehryar Mohri. 2008. Kernel methods for learn-
+  testable languages in the strict sense and applica-             ing languages.    Theoretical Computer Science,
+  tions to syntactic pattern recognition. IEEE Trans-             405(3):223 – 236. Algorithmic Learning Theory.
+  actions on Pattern Analysis and Machine Intelli-              M. Lothaire, editor. 1997. Combinatorics on Words.
+  gence, 9:920–925.
+                                                                  Cambridge University Press, Cambridge, UK, New
+                                                                  York.
+Pedro Garcı́a and José Ruiz. 1996. Learning k-
+  piecewise testable languages from positive data. In           A. A. Markov. 1913. An example of statistical study
+  Laurent Miclet and Colin de la Higuera, editors,                on the text of ‘eugene onegin’ illustrating the linking
+  Grammatical Interference: Learning Syntax from                  of events to a chain.
+  Sentences, volume 1147 of Lecture Notes in Com-
+  puter Science, pages 203–210. Springer.                       Robert McNaughton and Simon Papert.                1971.
+                                                                  Counter-Free Automata. MIT Press.
+Pedro Garcia, Enrique Vidal, and José Oncina. 1990.
+  Learning locally testable languages in the strict             A. Newell, S. Langer, and M. Hickey. 1998. The
+  sense. In Proceedings of the Workshop on Algorith-              rôle of natural language processing in alternative and
+  mic Learning Theory, pages 325–338.                             augmentative communication. Natural Language
+                                                                  Engineering, 4(1):1–16.
+Gunnar Hansson. 2001. Theoretical and typological
+  issues in consonant harmony. Ph.D. thesis, Univer-            Dominique Perrin and Jean-Eric Pin. 1986. First-
+  sity of California, Berkeley.                                   Order logic and Star-Free sets. Journal of Computer
+                                                                  and System Sciences, 32:393–406.
+Bruce Hayes and Colin Wilson. 2008. A maximum en-
+  tropy model of phonotactics and phonotactic learn-            Catherine Ringen. 1988. Vowel Harmony: Theoretical
+  ing. Linguistic Inquiry, 39:379–440.                            Implications. Garland Publishing, Inc.
+
+
+                                                          895
+
+
+James Rogers and Geoffrey Pullum. to appear. Aural
+  pattern recognition experiments and the subregular
+  hierarchy. Journal of Logic, Language and Infor-
+  mation.
+James Rogers, Jeffrey Heinz, Matt Edlefsen, Dylan
+  Leeman, Nathan Myers, Nathaniel Smith, Molly
+  Visscher, and David Wellcome. to appear. On lan-
+  guages piecewise testable in the strict sense. In Pro-
+  ceedings of the 11th Meeting of the Assocation for
+  Mathematics of Language.
+Sharon Rose and Rachel Walker. 2004. A typology of
+  consonant agreement as correspondence. Language,
+  80(3):475–531.
+Jacques Sakarovitch and Imre Simon. 1983. Sub-
+   words. In M. Lothaire, editor, Combinatorics on
+   Words, volume 17 of Encyclopedia of Mathemat-
+   ics and Its Applications, chapter 6, pages 105–134.
+   Addison-Wesley, Reading, Massachusetts.
+Stuart Shieber. 1985. Evidence against the context-
+   freeness of natural language. Linguistics and Phi-
+   losophy, 8:333–343.
+Imre Simon. 1975. Piecewise testable events. In
+  Automata Theory and Formal Languages: 2nd
+  Grammatical Inference conference, pages 214–222,
+  Berlin ; New York. Springer-Verlag.
+Howard Straubing. 1994. Finite Automata, Formal
+  Logic and Circuit Complexity. Birkhäuser.
+
+Wolfgang Thomas. 1982. Classifying regular events in
+ symbolic logic. Journal of Computer and Systems
+ Sciences, 25:360–376.
+Enrique Vidal, Franck Thollard, Colin de la Higuera,
+  Francisco Casacuberta, and Rafael C. Carrasco.
+  2005a. Probabilistic finite-state machines-part I.
+  IEEE Transactions on Pattern Analysis and Machine
+  Intelligence, 27(7):1013–1025.
+Enrique Vidal, Frank Thollard, Colin de la Higuera,
+  Francisco Casacuberta, and Rafael C. Carrasco.
+  2005b. Probabilistic finite-state machines-part II.
+  IEEE Transactions on Pattern Analysis and Machine
+  Intelligence, 27(7):1026–1039.
+
+
+
+
+                                                           896
+

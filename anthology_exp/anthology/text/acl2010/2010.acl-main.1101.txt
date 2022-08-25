@@ -1,0 +1,708 @@
+                  Starting From Scratch in Semantic Role Labeling
+                   Michael Connor                                    Yael Gertner
+                  University of Illinois                          University of Illinois
+                 connor2@uiuc.edu                         ygertner@cyrus.psych.uiuc.edu
+
+               Cynthia Fisher                                               Dan Roth
+             University of Illinois                                     University of Illinois
+      cfisher@cyrus.psych.uiuc.edu                                    danr@illinois.edu
+
+                      Abstract                                 tence comprehension. The structure-mapping ac-
+                                                               count makes three key assumptions: First, sen-
+    A fundamental step in sentence compre-                     tence comprehension is grounded by the acquisi-
+    hension involves assigning semantic roles                  tion of an initial set of concrete nouns. Nouns are
+    to sentence constituents. To accomplish                    arguably less dependent on prior linguistic knowl-
+    this, the listener must parse the sentence,                edge for their acquisition than are verbs; thus chil-
+    find constituents that are candidate argu-                 dren are assumed to be able to identify the refer-
+    ments, and assign semantic roles to those                  ents of some nouns via cross-situational observa-
+    constituents. Each step depends on prior                   tion (Gillette et al., 1999). Second, these nouns,
+    lexical and syntactic knowledge. Where                     once identified, yield a skeletal sentence structure.
+    do children learning their first languages                 Children treat each noun as a candidate argument,
+    begin in solving this problem? In this pa-                 and thus interpret the number of nouns in the sen-
+    per we focus on the parsing and argument-                  tence as a cue to its semantic predicate-argument
+    identification steps that precede Seman-                   structure (Fisher, 1996). Third, children represent
+    tic Role Labeling (SRL) training. We                       sentences in an abstract format that permits gener-
+    combine a simplified SRL with an un-                       alization to new verbs (Gertner et al., 2006).
+    supervised HMM part of speech tagger,                         The structure-mapping account of early syn-
+    and experiment with psycholinguistically-                  tactic bootstrapping makes strong predictions, in-
+    motivated ways to label clusters resulting                 cluding predictions of tell-tale errors. In the sen-
+    from the HMM so that they can be used                      tence “Ellen and John laughed”, an intransitive
+    to parse input for the SRL system. The                     verb appears with two nouns. If young chil-
+    results show that proposed shallow rep-                    dren rely on representations of sentences as sim-
+    resentations of sentence structure are ro-                 ple as an ordered set of nouns, then they should
+    bust to reductions in parsing accuracy, and                have trouble distinguishing such sentences from
+    that the contribution of alternative repre-                transitive sentences. Experimental evidence sug-
+    sentations of sentence structure to suc-                   gests that they do: 21-month-olds mistakenly in-
+    cessful semantic role labeling varies with                 terpreted word order in sentences such as “The girl
+    the integrity of the parsing and argument-                 and the boy kradded” as conveying agent-patient
+    identification stages.                                     roles (Gertner and Fisher, 2006).
+                                                                  Previous computational experiments with a
+1   Introduction
+                                                               system for automatic semantic role labeling
+In this paper we present experiments with an au-               (BabySRL: (Connor et al., 2008)) showed that
+tomatic system for semantic role labeling (SRL)                it is possible to learn to assign basic semantic
+that is designed to model aspects of human lan-                roles based on the shallow sentence representa-
+guage acquisition. This simplified SRL system is               tions proposed by the structure-mapping view.
+inspired by the syntactic bootstrapping theory, and            Furthermore, these simple structural features were
+by an account of syntactic bootstrapping known                 robust to drastic reductions in the integrity of
+as ’structure-mapping’ (Fisher, 1996; Gillette et              the semantic-role feedback (Connor et al., 2009).
+al., 1999; Lidz et al., 2003). Syntactic bootstrap-            These experiments showed that representations of
+ping theory proposes that young children use their             sentence structure as simple as ‘first of two nouns’
+very partial knowledge of syntax to guide sen-                 are useful, but the experiments relied on perfect
+
+
+                                                         989
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 989–998,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+knowledge of arguments and predicates as a start              stand sentences at the level of who did what to
+to classification.                                            whom. The architecture of our system is similar
+   Perfect built-in parsing finesses two problems             to a previous approach to modeling early language
+facing the human learner. The first problem in-               acquisition (Connor et al., 2009), which is itself
+volves classifying words by part-of-speech. Pro-              based on the standard architecture of a full SRL
+posed solutions to this problem in the NLP and                system (e.g. (Punyakanok et al., 2008)).
+human language acquisition literatures focus on                  This basic approach follows a multi-stage
+distributional learning as a key data source (e.g.,           pipeline, with each stage feeding in to the next.
+(Mintz, 2003; Johnson, 2007)). Importantly,                   The stages are: (1) Parsing the sentence, (2) Iden-
+infants are good at learning distributional pat-              tifying potential predicates and arguments based
+terns (Gomez and Gerken, 1999; Saffran et al.,                on the parse, (3) Classifying role labels for each
+1996). Here we use a fairly standard Hidden                   potential argument relative to a predicate, (4) Ap-
+Markov Model (HMM) to generate clusters of                    plying constraints to find the best labeling of ar-
+words that occur in similar distributional contexts           guments for a sentence. In this work we attempt
+in a corpus of input sentences.                               to limit the knowledge available at each stage to
+   The second problem facing the learner is                   the automatic output of the previous stage, con-
+more contentious: Having identified clusters of               strained by knowledge that we argue is available
+distributionally-similar words, how do children               to children in the early stages of language learn-
+figure out what role these clusters of words should           ing.
+play in a sentence interpretation system? Some                   In the parsing stage we use an unsupervised
+clusters contain nouns, which are candidate ar-               parser based on Hidden Markov Models (HMM),
+guments; others contain verbs, which take argu-               modeling a simple ‘predict the next word’ parser.
+ments. How is the child to know which are which?              Next the argument identification stage identifies
+In order to use the output of the HMM tagger to               HMM states that correspond to possible argu-
+process sentences for input to an SRL model, we               ments and predicates. The candidate arguments
+must find a way to automatically label the clusters.          and predicates identified in each input sentence are
+   Our strategies for automatic argument and pred-            passed to an SRL classifier that uses simple ab-
+icate identification, spelled out below, reflect core         stract features based on the number and order of
+claims of the structure-mapping theory: (1) The               arguments to learn to assign semantic roles.
+meanings of some concrete nouns can be learned
+                                                                 As input to our learner we use samples of
+without prior linguistic knowledge; these concrete
+                                                              natural child directed speech (CDS) from the
+nouns are assumed based on their meanings to be
+                                                              CHILDES corpora (MacWhinney, 2000). During
+possible arguments; (2) verbs are identified, not
+                                                              initial unsupervised parsing we experiment with
+primarily by learning their meanings via observa-
+                                                              incorporating knowledge through a combination
+tion, but rather by learning about their syntactic
+                                                              of statistical priors favoring a skewed distribution
+argument-taking behavior in sentences.
+                                                              of words into classes, and an initial hard cluster-
+   By using the HMM part-of-speech tagger in this
+                                                              ing of the vocabulary into function and content
+way, we can ask how the simple structural fea-
+                                                              words. The argument identifier uses a small set
+tures that we propose children start with stand up
+                                                              of frequent nouns to seed argument states, relying
+to reductions in parsing accuracy. In doing so, we
+                                                              on the assumptions that some concrete nouns can
+move to a parser derived from a particular theoret-
+                                                              be learned as a prerequisite to sentence interpreta-
+ical account of how the human learner might clas-
+                                                              tion, and are interpreted as candidate arguments.
+sify words, and link them into a system for sen-
+tence comprehension.                                             The SRL classifier starts with noisy largely un-
+                                                              supervised argument identification, and receives
+2   Model                                                     feedback based on annotation in the PropBank
+                                                              style; in training, each word identified as an argu-
+We model language learning as a Semantic Role                 ment receives the true role label of the phrase that
+Labeling (SRL) task (Carreras and Màrquez,                   word is part of. This represents the assumption
+2004). This allows us to ask whether a learner,               that learning to interpret sentences is naturally su-
+equipped with particular theoretically-motivated              pervised by the fit of the learner’s predicted mean-
+representations of the input, can learn to under-             ing with the referential context. The provision
+
+
+                                                        990
+
+
+of perfect ‘gold-standard’ feedback over-estimates               With HMM we can also easily incorporate ad-
+the real child’s access to this supervision, but al-          ditional knowledge during parameter estimation.
+lows us to investigate the consequences of noisy              The first (and simplest) parser we used was an
+argument identification for SRL performance. We               HMM trained using EM with 80 hidden states.
+show that even with imperfect parsing, a learner              The number of hidden states was made relatively
+can identify useful abstract patterns for sentence            large to increase the likelihood of clusters corre-
+interpretation. Our ultimate goal is to ‘close the            sponding to a single part of speech, while preserv-
+loop’ of this system, by using learning in the SRL            ing some degree of generalization.
+system to improve the initial unsupervised parse                 Johnson (2007) observed that EM tends to cre-
+and argument identification.                                  ate word clusters of uniform size, which does
+   The training data were samples of parental                 not reflect the way words cluster into parts of
+speech to three children (Adam, Eve, and                      speech in natural languages. The addition of pri-
+Sarah; (Brown, 1973)), available via CHILDES.                 ors biasing the system toward a skewed alloca-
+The SRL training corpus consists of parental utter-           tion of words to classes can help. The second
+ances in samples Adam 01-20 (child age 2;3 - 3;1),            parser was an 80 state HMM trained with Varia-
+Eve 01-18 (1;6 - 2;2), and Sarah 01-83 (2;3 - 3;11).          tional Bayes EM (VB) incorporating Dirichlet pri-
+All verb-containing utterances without symbols                ors (Beal, 2003).2
+indicating disfluencies were automatically parsed                In the third and fourth parsers we experi-
+with the Charniak parser (Charniak, 1997), anno-              ment with enriching the HMM POS-tagger with
+tated using an existing SRL system (Punyakanok                other psycholinguistically plausible knowledge.
+et al., 2008) and then errors were hand-corrected.            Words of different grammatical categories dif-
+The final annotated sample contains about 16,730              fer in their phonological as well as in their dis-
+propositions, with 32,205 arguments.                          tributional properties (e.g., (Kelly, 1992; Mon-
+                                                              aghan et al., 2005; Shi et al., 1998)); combining
+3       Unsupervised Parsing                                  phonological and distributional information im-
+As a first step of processing, we feed the learner            proves the clustering of words into grammatical
+large amounts of unlabeled text and expect it to              categories. The phonological difference between
+learn some structure over this data that will facil-          content and function words is particularly strik-
+itate future processing. The source of this text              ing (Shi et al., 1998). Even newborns can cate-
+is child directed speech collected from various               gorically distinguish content and function words,
+projects in the CHILDES repository1 . We re-                  based on the phonological difference between the
+moved sentences with fewer than three words or                two classes (Shi et al., 1999). Human learners may
+markers of disfluency. In the end we used 160                 treat content and function words as distinct classes
+thousand sentences from this set, totaling over 1             from the start.
+million tokens and 10 thousand unique words.                     To implement this division into function and
+   The goal of the parsing stage is to give the               content words3 , we start with a list of function
+learner a representation permitting it to generalize          word POS tags4 and then find words that appear
+over word forms. The exact parse we are after is              predominantly with these POS tags, using tagged
+a distributional and context-sensitive clustering of          WSJ data (Marcus et al., 1993). We allocated a
+words based on sequential processing. We chose                fixed number of states for these function words,
+an HMM based parser for this since, in essence                and left the rest of the states for the rest of the
+the HMM yields an unsupervised POS classifier,                words. This amounts to initializing the emission
+but without names for states. An HMM trained                  matrix for the HMM with a block structure; words
+with expectation maximization (EM) is analogous               from one class cannot be emitted by states al-
+to a simple process of predicting the next word in a          located to the other class. This trick has been
+stream and correcting connections accordingly for             used before in speech recognition work (Rabiner,
+each sentence.                                                   2
+                                                                   We tuned the prior using the same set of 8 value pairs
+    1
+    We used parts of the Bloom (Bloom, 1970; Bloom,           suggested by Gao and Johnson (2008), using a held out set of
+1973), Brent (Brent and Siskind, 2001), Brown (Brown,         POS-tagged CDS to evaluate final performance.
+                                                                 3
+1973), Clark (Clark, 1978), Cornell, MacWhin-                      We also include a small third class for punctuation,
+ney (MacWhinney, 2000), Post (Demetras et al., 1986)          which is discarded.
+                                                                 4
+and Providence (Demuth et al., 2006) collections.                  TO,IN,EX,POS,WDT,PDT,WRB,MD,CC,DT,RP,UH
+
+
+                                                        991
+
+
+1989), and requires far fewer resources than the                                      states than tags) is a many to one greedy mapping
+full tagging dictionary that is often used to intel-                                  of states to tags. It is known that EM gives a better
+ligently initialize an unsupervised POS classifier                                    many to one score than VB trained HMM (John-
+(e.g. (Brill, 1997; Toutanova and Johnson, 2007;                                      son, 2007), and likewise we see that here: with
+Ravi and Knight, 2009)).                                                              all data EM gives 0.75 matching, VB gives 0.74,
+   Because the function and content word preclus-                                     while both EM+Funct and VB+Funct reach 0.80.
+tering preceded parameter estimation, it can be                                          Adding the function/content word split to the
+combined with either EM or VB learning. Al-                                           HMM structure improves both EM and VB esti-
+though this initial split forces sparsity on the emis-                                mation in terms of both tag matching accuracy and
+sion matrix and allows more uniform sized clus-                                       information. However, these measures look at the
+ters, Dirichlet priors may still help, if word clus-                                  parser only in isolation. What is more important to
+ters within the function or content word subsets                                      us is how useful the provided word clusters are for
+vary in size and frequency. The third parser was                                      future semantic processing. In the next sections
+an 80 state HMM trained with EM estimation,                                           we use the outputs of our four parsers to identify
+with 30 states pre-allocated to function words;                                       arguments and predicates.
+the fourth parser was the same except that it was
+trained with VB EM.                                                                   4   Argument Identification
+3.1                         Parser Evaluation                                         The unsupervised parser provides a state label for
+                                                                                      each word in each sentence; the goal of the ar-
+                            5.2                                                       gument identification stage is to use these states
+                                                               EM
+                             5                                 VB                     to label words as potential arguments, predicates
+                                                          EM+Funct
+                            4.8                                                       or neither. As described in the introduction, core
+ Variation of Information
+
+
+
+
+                                                          VB+Funct
+                            4.6                                                       premises of the structure-mapping account offer
+                            4.4
+                                                                                      routes whereby we could label some HMM states
+                            4.2
+                                                                                      as argument or predicate states.
+                             4
+                            3.8
+                                                                                         The structure-mapping account holds that sen-
+                            3.6                                                       tence comprehension is grounded in the learning
+                            3.4                                                       of an initial set of nouns. Children are assumed
+                            3.2                                                       to identify the referents of some concrete nouns
+                               100   1000          10000       100000   1e+06
+                                            Training Sentences
+                                                                                      via cross-situational learning (Gillette et al., 1999;
+                                                                                      Smith and Yu, 2008). Children then assume, by
+Figure 1:       Unsupervised Part of Speech results, match-                           virtue of the meanings of these nouns, that they are
+ing states to gold POS labels. All systems use 80 states, and
+comparison is to gold labeled CDS text, which makes up a
+                                                                                      candidate arguments. This is a simple form of se-
+subset of the HMM training data. Variation of Information is                          mantic bootstrapping, requiring the use of built-in
+an information-theoretic measure summing mutual informa-                              links between semantics and syntax to identify the
+tion between tags and states, proposed by (Meilă, 2002), and
+first used for Unsupervised Part of Speech in (Goldwater and                          grammatical type of known words (Pinker, 1984).
+Griffiths, 2007). Smaller numbers are better, indicating less                         We use a small set of known nouns to transform
+information lost in moving from the HMM states to the gold                            unlabeled word clusters into candidate arguments
+POS tags. Note that incorporating function word precluster-
+ing allows both EM and VB algorithms to achieve the same                              for the SRL: HMM states that are dominated by
+performance with an order of magnitude fewer sentences.                               known names for animate or inanimate objects are
+                                                                                      assumed to be argument states.
+   We first evaluate these parsers (the first stage                                      Given text parsed by the HMM parser and a
+of our SRL system) on unsupervised POS tag-                                           list of known nouns, the argument identifier pro-
+ging. Figure 1 shows the performance of the four                                      ceeds in multiple steps as illustrated in figure 2.
+systems using Variation of Information to mea-                                        The first stage identifies as argument states those
+sure match between gold states and unsupervised                                       states that appear at least half the time in the train-
+parsers as we vary the amount of text they receive.                                   ing data with known nouns. This use of a seed
+Each point on the graph represents the average re-                                    list and distributional clustering is similar to Proto-
+sult over 10 runs of the HMM with different sam-                                      type Driven Learning (Haghighi and Klein, 2006),
+ples of the unlabeled CDS. Another common mea-                                        except we are only providing information on one
+sure for unsupervised POS (when there are more                                        specific class.
+
+
+                                                                                992
+
+
+       Algorithm A RGUMENT S TATE I DENTIFICATION                         verbs is much more troublesome. Verbs’ mean-
+           I NPUT: Parsed Text T = list of (word, state) pairs
+                   Set of concrete nouns N                                ings are abstract, therefore harder to identify based
+           O UTPUT: Set of argument states A
+                     Argument count likelihood ArgLike(s, c)              on scene information alone (Gillette et al., 1999).
+            Identify Argument States
+                                                                          As a result, early vocabularies are dominated by
+            Let f req(s) = |{(∗, s) ∈ T }|                                nouns (Gentner, 2006). On the structure-mapping
+            Let f reqN (s) = |{(w, s) ∈ T |w ∈ N }|
+                                                                          account, learners identify verbs, and begin to de-
+            For each s:
+              If f reqN (s) ≥ f req(s)/2
+                                                                          termine their meanings, based on sentence struc-
+                 Add s to A                                               ture cues. Verbs take noun arguments; thus, learn-
+            Collect Per Sentence Argument Count statistics                ers could learn which words are verbs by detect-
+            For each Sentence S ∈ T :
+              Let Arg(S) = |{(w, s) ∈ S|s ∈ A}|
+                                                                          ing each verb’s syntactic argument-taking behav-
+              For (w, s) ∈ S s.t. s ∈
+                                    /A                                    ior. Experimental evidence provides some support
+                 Increment ArgCount(s, Arg(S))
+                                                                          for this procedure: 2-year-olds keep track of the
+            For each s ∈
+                       / A, and argument count c:
+              ArgLike(s, c) = ArgCount(s, c)/f req(s)                     syntactic structures in which a new verb appears,
+                                                                          even without a concurrent scene that provides cues
+                   (a) Argument Identification
+                                                                          to the verb’s semantic content (Yuan and Fisher,
+                                                                          2009).
+      Algorithm P REDICATE S TATE I DENTIFICATION                            We implement this behavior by identifying as
+          I NPUT: Parsed Sentence S = list of (word, state) pairs
+                  Set of argument states A                                predicate states the HMM states that appear com-
+                  Sentence Argument Count ArgLike(s, c)
+          O UTPUT: Most likely predicate (v, sv )
+                                                                          monly with a particular number of previously
+                                                                          identified arguments. First, we collect statistics
+          Find Number of arguments in sentence
+          Let Arg(S) = |{(w, s) ∈ S|s ∈ A}|                               over the entire HMM training corpus regarding
+          Find Non-argument state in sentence most likely                 how many arguments are identified per sentence,
+           to appear with this number of arguments                        and which states that are not identified as argu-
+          (v, sv ) = argmax(w,s)∈S ArgLike(s, Arg(S))
+                                                                          ment states appear with each number of argu-
+                                                                          ments. Next, for each parsed sentence that serves
+                   (b) Predicate Identification
+                                                                          as SRL input, the algorithm chooses as the most
+                                                                          likely predicate the word whose state is most likely
+Figure 2: Argument identification algorithm. This is a two
+stage process: argument state identification based on statis-             to appear with the number of arguments found in
+tics collected over entire text and per sentence predicate iden-          the current input sentence. Note that this algo-
+tification.
+                                                                          rithm assumes exactly one predicate per sentence.
+                                                                          Implicitly, the argument count likelihood divides
+                                                                          predicate states up into transitive and intransitive
+   As a list of known nouns we collected all those
+                                                                          predicates based on appearances in the simple sen-
+nouns that appear three times or more in the child
+                                                                          tences of CDS.
+directed speech training data and judged to be ei-
+ther animate or inanimate nouns. The full set of                          4.1    Argument Identification Evaluation
+365 nouns covers over 93% of noun occurences                              Figure 3 shows argument and predicate identifi-
+in our data. In upcoming sections we experiment                           cation accuracy for each of the four parsers when
+with varying the number of seed nouns used from                           provided with different numbers of known nouns.
+this set, selecting the most frequent set of nouns.                       The known word list is very skewed with its most
+Reflecting the spoken nature of the child directed                        frequent members dominating the total noun oc-
+speech, the most frequent nouns are pronouns,                             currences in the data. The ten most frequent
+but beyond the top 10 we see nouns naming peo-                            words5 account for 60% of the total noun occur-
+ple (‘daddy’, ‘ursula’) and object nouns (‘chair’,                        rences. We achieve the different occurrence cov-
+‘lunch’).                                                                 erage numbers of figure 3 by using the most fre-
+    What about verbs? A typical SRL model iden-                           quent N words from the list that give the specific
+tifies candidate arguments and tries to assign roles                      coverage6 . Pronouns refer to people or objects,
+to them relative to each verb in the sentence. In                         but are abstract in that they can refer to any person
+principle one might suppose that children learn                           or object. The inclusion of pronouns in our list of
+the meanings of verbs via cross-situational ob-                              5
+                                                                             you, it, I, what, he, me, ya, she, we, her
+servation just as they learn the meanings of con-                            6
+                                                                             N of 5, 10, 30, 83, 227 cover 50%, 60%, 70%, 80%,
+crete nouns. But identifying the meanings of                              90% of all noun occurrences
+
+
+                                                                    993
+
+
+      0.8                                                             sifier, distinctions between parsers reappear, sug-
+                                                                      gesting that argument identification F1 masks sys-
+      0.7
+                                                                      tematic patterns in the errors.
+      0.6                                   EM
+                                            VB
+                                       EM+Funct                       5   Testing SRL Performance
+ F1
+
+
+
+
+      0.5                              VB+Funct
+
+      0.4                                                             Finally, we used the results of the previous pars-
+                                                                      ing and argument-identification stages in training
+      0.3
+                                                                      a simplified SRL classifier (BabySRL), equipped
+      0.2                                                             with sets of features derived from the structure-
+         0.45 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95            mapping account. For argument classification we
+                     %Noun Occurences Covered
+                                                                      used a linear classifier trained with a regularized
+Figure 3: Effect of number of concrete nouns for seeding              perceptron update rule (Grove and Roth, 2001).
+argument identification with various unsupervised parsers.            In the results reported below the BabySRL did
+Argument identification accuracy is computed against true ar-
+gument boundaries from hand labeled data. The upper set of            not use sentence-level inference for the final clas-
+results show primary argument (A0-4) identification F1, and           sification, every identified argument is classified
+bottom lines show predicate identification F1.                        independently; thus multiple nouns can have the
+                                                                      same role. In what follows, we compare the per-
+                                                                      formance of the BabySRL across the four parsers.
+known nouns represents the assumption that tod-                       We evaluated SRL performance by testing the
+dlers have already identified pronouns as referen-                    BabySRL with constructed sentences like those
+tial terms. Even 19-month-olds assign appropri-                       used for the experiments with children described
+ately different interpretations to novel verbs pre-                   in the Introduction. All test sentences contained a
+sented in simple transitive versus intransitive sen-                  novel verb, to test the model’s ability to general-
+tences with pronoun arguments (“He’s kradding                         ize.
+him!” vs. “He’s kradding!”; (Yuan et al., 2007)).
+                                                                         We examine the performance of four versions
+In ongoing work we experiment with other meth-
+                                                                      of the BabySRL, varying in the features used to
+ods of identifying seed nouns.
+                                                                      represent sentences. All four versions include
+    Two groups of curves appear in figure 3: the                      lexical features consisting of the target argument
+upper group shows the primary argument iden-                          and predicate (as identified in the previous steps).
+tification accuracy and the bottom group shows                        The baseline model has only these lexical features
+the predicate identification accuracy. We evaluate                    (Lexical). Following Connor et al. (2008; 2009),
+compared to gold tagged data with true argument                       the key feature type we propose is noun pattern
+and predicate boundaries. The primary argument                        features (NounPat). Noun pattern features indi-
+(A0-4) identification accuracy is the F1 value, with                  cate how many nouns there are in the sentence and
+precision calculated as the proportion of identified                  which noun the target is. For example, in “You
+arguments that appear as part of a true argument,                     dropped it!”, ‘you’ has a feature active indicating
+and recall as the proportion of true arguments that                   that it is the first of two nouns, while ‘it’ has a fea-
+have some state identified as an argument. F1 is                      ture active indicating that it is the second of two
+calculated similarly for predicate identification, as                 nouns. We compared the behavior of noun pat-
+one state per sentence is identified as the predicate.                tern features to another simple representation of
+   As shown in figure 3, argument identification F1                   word order, position relative to the verb (VerbPos).
+is higher than predicate identification (which is to                  In the same example sentence, ‘you’ has a feature
+be expected, given that predicate identification de-                  active indicating that it is pre-verbal; for ‘it’ a fea-
+pends on accurate arguments), and as we add more                      ture is active indicating that it is post-verbal. A
+seed nouns the argument identification improves.                      fourth version of the BabySRL (Combined) used
+Surprisingly, despite the clear differences in un-                    both NounPat and VerbPos features.
+supervised POS performance seen in figure 1, the                         We structured our tests of the BabySRL to test
+different parsers do not yield very different argu-                   the predictions of the structure-mapping account.
+ment and predicate identification. As we will see                     (1) NounPat features will improve the SRL’s abil-
+in the next section, however, when the arguments                      ity to interpret simple transitive test sentences
+identified in this step are used to train SRL clas-                   containing two nouns and a novel verb, relative
+
+
+                                                                994
+
+
+to a lexical baseline. Like 21-month-old chil-                feature sets. The top and bottom panels in Figure 4
+dren (Gertner et al., 2006), the SRL should inter-            differ in the number of nouns provided to seed the
+pret the first noun as an agent and the second as             argument identification stage. The top row shows
+a patient. (2) Because NounPat features represent             performance with 10 seed nouns (the 10 most fre-
+word order solely in terms of a sequence of nouns,            quent nouns, mostly animate pronouns), and the
+an SRL equipped with these features will make the             bottom row shows performance with 365 concrete
+errors predicted by the structure-mapping account             (animate or inanimate) nouns treated as known.
+and documented in children (Gertner and Fisher,               Relative to the lexical baseline, NounPat features
+2006). (3) NounPat features permit the SRL to                 fared well: they promoted the assignment of A0-
+assign different roles to the subjects of transitive          A1 interpretations to transitive sentences, across
+and intransitive sentences that differ in their num-          all parser versions and both sets of known nouns.
+ber of nouns. This effect follows from the nature             Both VB estimation and the content-function word
+of the NounPat features: These features partition             split increased the ability of NounPat features to
+the training data based on the number of nouns,               learn that the first of two nouns was an agent, and
+and therefore learn separately the likely roles of            the second a patient. The NounPat features also
+the ‘1st of 1 noun’ and the ‘1st of 2 nouns’.                 promote the predicted error with two-noun intran-
+   These patterns contrast with the behavior of the           sitive sentences (Figures 4(b), 4(d)). Despite the
+VerbPos features: When the BabySRL was trained                relatively low accuracy of predicate identification
+with perfect parsing, VerbPos promoted agent-                 noted in section 4.1, the VerbPos features did suc-
+patient interpretations of transitive test sentences,         ceed in promoting an A0A1 interpretation for tran-
+and did so even more successfully than Noun-                  sitive sentences containing novel verbs relative to
+Pat features did, reflecting the usefulness of po-            the lexical baseline. In every case the performance
+sition relative to the verb in understanding English          of the Combined model that includes both Noun-
+sentences. In addition, VerbPos features elimi-               Pat and VerbPos features exceeds the performance
+nated the errors with two-noun intransitive sen-              of either NounPat or VerbPos alone, suggesting
+tences. Given test sentences such as ‘You and                 both contribute to correct predictions for transitive
+Mommy krad’, VerbPos features represented both                sentences. However, the performance of VerbPos
+nouns as pre-verbal, and therefore identified both            features did not improve with parsing accuracy as
+as likely agents. However, VerbPos features did               did the performance of the NounPat features. Most
+not help the SRL assign different roles to the                strikingly, the VerbPos features did not eliminate
+subjects of simple transitive and intransitive sen-           the predicted error with two-noun intransitive sen-
+tences: ‘Mommy’ in ‘Mommy krads you’ and                      tences, as shown in panels 4(b) and 4(d). The
+’Mommy krads’ are both represented simply as                  Combined model predicted an A0A1 sequence for
+pre-verbal.                                                   these sentences, showing no reduction in this error
+                                                              due to the participation of VerbPos features.
+   To test the system’s predictions on transitive and
+intransitive two noun sentences, we constructed                   Table 1 shows SRL performance on the same
+two test sentence templates: ‘A krads B’ and ‘A               transitive test sentences (‘A krads B’), compared
+and B krad’, where A and B were replaced with                 to simple one-noun intransitive sentences (‘A
+familiar animate nouns. The animate nouns were                krads’). To permit a direct comparison, the table
+selected from all three children’s data in the train-         reports the proportion of transitive test sentences
+ing set and paired together in the templates such             for which the first noun was assigned an agent
+that all pairs are represented.                               (A0) interpretation, and the proportion of intran-
+   Figure 4 shows SRL performance on test sen-                sitive test sentences with the agent (A0) role as-
+tences containing a novel verb and two animate                signed to the single noun in the sentence. Here we
+nouns. Each plot shows the proportion of test sen-            report only the results from the best-performing
+tences that were assigned an agent-patient (A0-               parser (trained with VB EM, and content/function
+A1) role sequence; this sequence is correct for               word pre-clustering), compared to the same clas-
+transitive sentences but is an error for two-noun             sifiers trained with gold standard argument iden-
+intransitive sentences. Each group of bars shows              tification. When trained on arguments identified
+the performance of the BabySRL trained using one              via the unsupervised POS tagger, noun pattern
+of the four parsers, equipped with each of our four           features promoted agent interpretations of tran-
+
+
+                                                        995
+
+
+                                       Two Noun Transitive, % Agent First                 One Noun Intransitive, % Agent Prediction
+                                    Lexical NounPat VerbPos Combine                       Lexical NounPat VerbPos Combine
+      VB+Funct 10 seed               0.48     0.61        0.55       0.71                  0.48      0.57         0.56      0.59
+      VB+Funct 365 seed              0.22     0.64        0.41       0.74                  0.23      0.33         0.43      0.41
+      Gold Arguments                 0.16     0.41        0.69       0.77                  0.17      0.18         0.70      0.58
+
+Table 1: SRL result comparison when trained with best unsupervised argument identifier versus trained with gold arguments.
+Comparison is between agent first prediction of two noun transitive sentences vs. one noun intransitive sentences. The unsu-
+pervised arguments lead the classifier to rely more on noun pattern features; when the true arguments and predicate are known
+the verb position feature leads the classifier to strongly indicate agent first in both settings.
+
+              0.8                                                                   0.8
+                     Lexical                                                                Lexical
+              0.7   NounPat                                                         0.7    NounPat
+                    VerbPos                                                                VerbPos
+                    Combine                                                                Combine
+              0.6                                                                   0.6
+
+              0.5                                                                   0.5
+    %A0A1
+
+
+
+
+                                                                           %A0A1
+              0.4                                                                   0.4
+
+              0.3                                                                   0.3
+
+              0.2                                                                   0.2
+
+              0.1                                                                   0.1
+
+                0                                                                    0
+                    EM         VB     EM+Funct VB+Funct   Gold                              EM        VB   EM+Funct VB+Funct   Gold
+
+            (a) Two Noun Transitive Sentence, 10 seed nouns                   (b) Two Noun Intransitive Sentence, 10 seed nouns
+
+              0.8                                                                   0.8
+                     Lexical                                                                Lexical
+              0.7   NounPat                                                         0.7    NounPat
+                    VerbPos                                                                VerbPos
+                    Combine                                                                Combine
+              0.6                                                                   0.6
+
+              0.5                                                                   0.5
+    %A0A1
+
+
+
+
+                                                                           %A0A1
+
+
+
+
+              0.4                                                                   0.4
+
+              0.3                                                                   0.3
+
+              0.2                                                                   0.2
+
+              0.1                                                                   0.1
+
+                0                                                                    0
+                    EM         VB     EM+Funct VB+Funct   Gold                              EM        VB   EM+Funct VB+Funct   Gold
+
+       (c) Two Noun Transitive Sentence, 365 seed nouns                     (d) Two Noun Intransitive Sentence, 365 seed nouns
+
+Figure 4: SRL classification performance on transitive and intransitive test sentences containing two nouns and a novel
+verb. Performance with gold-standard argument identification is included for comparison. Across parses, noun pattern features
+promote agent-patient (A0A1) interpretations of both transitive (“You krad Mommy”) and two-noun intransitive sentences
+(“You and Mommy krad”); the latter is an error found in young children. Unsupervised parsing is less accurate in identifying
+the verb, so verb position features fail to eliminate errors with two-noun intransitive sentences.
+
+
+sitive subjects, but not for intransitive subjects.                    structure. Representations that reflect the posi-
+This differentiation between transitive and intran-                    tion of the verb may be powerful guides for un-
+sitive sentences was clearer when more known                           derstanding simple English sentences, but repre-
+nouns were provided. Verb position features, in                        sentations reflecting only the number and order of
+contrast, promote agent interpretations of subjects                    nouns can dominate early in acquisition, depend-
+weakly with unsupervised argument identification,                      ing on the integrity of parsing decisions.
+but equally for transitive and intransitive.
+                                                                       6           Conclusion and Future Work
+   Noun pattern features were robust to increases
+in parsing noise. The behavior of verb position                        The key innovation in the present work is the
+features suggests that variations in the identifiabil-                 combination of unsupervised part-of-speech tag-
+ity of different parts of speech can affect the use-                   ging and argument identification to permit learn-
+fulness of alternative representations of sentence                     ing in a simplified SRL system. Children do not
+
+
+                                                                 996
+
+
+have the luxury of treating part-of-speech tagging            M.R. Brent and J.M. Siskind. 2001. The role of expo-
+and semantic role labeling as separable tasks. In-              sure to isolated words in early vocabulary develop-
+                                                                ment. Cognition, 81:31–44.
+stead, they must learn to understand sentences
+starting from scratch, learning the meanings of               E. Brill. 1997. Unsupervised learning of disambigua-
+some words, and using those words and their pat-                 tion rules for part of speech tagging. In Natural
+terns of arrangement into sentences to bootstrap                 Language Processing Using Very Large Corpora.
+their way into more mature knowledge.                            Kluwer Academic Press.
+   We have created a first step toward modeling               R. Brown. 1973. A First Language. Harvard Univer-
+this incremental process. We combined unsuper-                   sity Press, Cambridge, MA.
+vised parsing with minimal supervision to begin to
+                                                              X. Carreras and L. Màrquez. 2004. Introduction to
+identify arguments and predicates. An SRL clas-
+                                                                the CoNLL-2004 shared tasks: Semantic role label-
+sifier used simple representations built from these             ing. In Proceedings of CoNLL-2004, pages 89–97.
+identified arguments to extract useful abstract pat-            Boston, MA, USA.
+terns for classifying semantic roles. Our results
+                                                              E. Charniak. 1997. Statistical parsing with a context-
+suggest that multiple simple representations of
+                                                                 free grammar and word statistics. In Proc. National
+sentence structure could co-exist in the child’s sys-            Conference on Artificial Intelligence.
+tem for sentence comprehension; representations
+that will ultimately turn out to be powerful guides           E.V. Clark. 1978. Awwareness of language: Some ev-
+to role identification may be less powerful early in            idence from what children say and do. In R. J. A.
+                                                                Sinclair and W. Levelt, editors, The child’s concep-
+acquisition because of the noise introduced by the              tion of language. Springer Verlag, Berlin.
+unsupervised parsing.
+   The next step is to ‘close the loop’, using higher         M. Connor, Y. Gertner, C. Fisher, and D. Roth. 2008.
+                                                                Baby srl: Modeling early language acquisition. In
+level semantic feedback to improve the earlier ar-
+                                                                Proc. of the Annual Conference on Computational
+gument identification and parsing stages. Per-                  Natural Language Learning (CoNLL), pages xx–yy,
+haps with the help of semantic feedback the sys-                Aug.
+tem can automatically improve predicate identifi-
+cation, which in turn allows it to correct the ob-            M. Connor, Y. Gertner, C. Fisher, and D. Roth.
+                                                                2009. Minimally supervised model of early lan-
+served intransitive sentence error. This approach               guage acquisition. In Proc. of the Annual Confer-
+will move us closer to the goal of using initial sim-           ence on Computational Natural Language Learning
+ple structural patterns and natural observation of              (CoNLL), Jun.
+the world (semantic feedback) to bootstrap more
+                                                              M. Demetras, K. Post, and C. Snow. 1986. Feedback
+and more sophisticated representations of linguis-              to first-language learners. Journal of Child Lan-
+tic structure.                                                  guage, 13:275–292.
+
+Acknowledgments                                               K. Demuth, J. Culbertson, and J. Alter. 2006. Word-
+                                                                minimality, epenthesis, and coda licensing in the ac-
+                                                                quisition of english. Language & Speech, 49:137–
+This research is supported by NSF grant BCS-                    174.
+0620257 and NIH grant R01-HD054448.
+                                                              C. Fisher. 1996. Structural limits on verb mapping:
+                                                                The role of analogy in children’s interpretation of
+                                                                sentences. Cognitive Psychology, 31:41–81.
+References
+M.J. Beal. 2003. Variational Algorithms for Ap-               Jianfeng Gao and Mark Johnson. 2008. A compar-
+  proximate Bayesian Inference. Ph.D. thesis, Gatsby             ison of bayesian estimators for unsupervised hid-
+  Computational Neuroscience Unit, University Col-               den markov model pos taggers. In Proceedings of
+  lege London.                                                   EMNLP-2008, pages 344–352.
+
+                                                              D. Gentner. 2006. Why verbs are hard to learn. In
+L. Bloom. 1970. Language development: Form and                  K. Hirsh-Pasek and R. Golinkoff, editors, Action
+   function in emerging grammars. MIT Press, Cam-               meets word: How children learn verbs, pages 544–
+   bridge, MA.                                                  564. Oxford University Press.
+
+L. Bloom. 1973. One word at a time: The use of                Y. Gertner and C. Fisher. 2006. Predicted errors in
+   single-word utterances before syntax. Mouton, The             early verb learning. In 31st Annual Boston Univer-
+   Hague.                                                        sity Conference on Language Development.
+
+
+                                                        997
+
+
+Y. Gertner, C. Fisher, and J. Eisengart. 2006. Learning           V. Punyakanok, D. Roth, and W. Yih. 2008. The im-
+   words and rules: Abstract knowledge of word or-                   portance of syntactic parsing and inference in se-
+   der in early sentence comprehension. Psychological                mantic role labeling. Computational Linguistics,
+   Science, 17:684–691.                                              34(2).
+
+J. Gillette, H. Gleitman, L. R. Gleitman, and A. Led-             L. R. Rabiner. 1989. A tutorial on hidden Markov
+   erer. 1999. Human simulations of vocabulary learn-                models and selected applications in speech recogni-
+   ing. Cognition, 73:135–176.                                       tion. Proceedings of the IEEE, 77(2):257–285.
+
+Sharon Goldwater and Tom Griffiths. 2007. A fully                 Sujith Ravi and Kevin Knight. 2009. Minimized
+  bayesian approach to unsupervised part-of-speech                  models for unsupervised part-of-speech tagging. In
+  tagging. In Proceedings of 45th Annual Meeting of                 Proceedings of the Joint Conferenceof the 47th An-
+  the Association of Computational Linguists, pages                 nual Meeting of the Association for Computational
+  744–751.                                                          Linguistics and the 4th International Joint Confer-
+                                                                    ence on Natural Language Processing of the Asian
+R. Gomez and L. Gerken. 1999. Artificial grammar                    Federation of Natural Language Processing (ACL-
+   learning by 1-year-olds leads to specific and abstract           IJCNLP).
+   knowledge. Cognition, 70:109–135.
+                                                                  J.R. Saffran, R.N. Aslin, and E.L. Newport. 1996. Sta-
+                                                                     tistical learning by 8-month-old infants. Science,
+A. Haghighi and D. Klein. 2006. Prototype-drive
+                                                                     274:1926–1928.
+  learning for sequence models. In Proceedings of
+  NAACL-2006, pages 320–327.                                      Rushen Shi, James L. Morgan, and Paul Allopenna.
+                                                                    1998. Phonological and acoustic bases for ear-
+Mark Johnson. 2007. Why doesnt em find good hmm                     liest grammatical category assignment: a cross-
+ pos-taggers? In Proceedings of the 2007 Joint Con-                 linguistic perspective. Journal of Child Language,
+ ference on Empirical Methods in Natural Language                   25(01):169–201.
+ Processing and Computational Natural Language
+ Learning (EMNLP-CoNLL), pages 296–305.                           Rushen Shi, Janet F. Werker, and James L. Morgan.
+                                                                    1999. Newborn infants’ sensitivity to perceptual
+M.H. Kelly. 1992. Using sound to solve syntac-                      cues to lexical and grammatical words. Cognition,
+  tic problems: The role of phonology in grammat-                   72(2):B11 – B21.
+  ical category assignments. Psychological Review,
+  99:349–364.                                                     L.B. Smith and C. Yu. 2008. Infants rapidly learn
+                                                                    word-referent mappings via cross-situational statis-
+J. Lidz, H. Gleitman, and L. R. Gleitman. 2003. Un-                 tics. Cognition, 106:1558–1568.
+   derstanding how input matters: verb learning and the
+   footprint of universal grammar. Cognition, 87:151–             Kiristina Toutanova and Mark Johnson. 2007. A
+   178.                                                             bayesian lda-based model for semi-supervised part-
+                                                                    of-speech tagging. In Proceedings of NIPS.
+B. MacWhinney. 2000. The CHILDES project: Tools
+   for analyzing talk. Third Edition. Lawrence Elr-               S. Yuan and C. Fisher. 2009. “really? she blicked
+   baum Associates, Mahwah, NJ.                                      the baby?”: Two-year-olds learn combinatorial facts
+                                                                     about verbs by listening. Psychological Science,
+M. P. Marcus, B. Santorini, and M. Marcinkiewicz.                    20:619–626.
+  1993. Building a large annotated corpus of En-                  S. Yuan, C. Fisher, Y. Gertner, and J. Snedeker. 2007.
+  glish: The Penn Treebank. Computational Linguis-                   Participants are more than physical bodies: 21-
+  tics, 19(2):313–330, June.                                         month-olds assign relational meaning to novel tran-
+                                                                     sitive verbs. In Biennial Meeting of the Society for
+Marina Meilă. 2002. Comparing clusterings. Techni-                  Research in Child Development, Boston, MA.
+ cal Report 418, University of Washington Statistics
+ Department.
+
+T. Mintz. 2003. Frequent frames as a cue for grammat-
+   ical categories in child directed speech. Cognition,
+   90:91–117.
+
+P. Monaghan, N. Chater, and M.H. Christiansen. 2005.
+   The differential role of phonological and distribu-
+   tional cues in grammatical categorisation. Cogni-
+   tion, 96:143–182.
+
+S. Pinker. 1984. Language learnability and language
+   development. Harvard University Press, Cambridge,
+   MA.
+
+
+                                                            998
+

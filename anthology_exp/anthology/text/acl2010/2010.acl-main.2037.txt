@@ -1,0 +1,358 @@
+                                       Top-Down K-Best A∗ Parsing
+
+                Adam Pauls and Dan Klein                                          Chris Quirk
+                 Computer Science Division                                      Microsoft Research
+              University of California at Berkeley                             Redmond, WA, 98052
+               {adpauls,klein}@cs.berkeley.edu                                 chrisq@microsoft.com
+
+
+
+
+                          Abstract
+                                                                   2     Review
+        We propose a top-down algorithm for ex-
+        tracting k-best lists from a parser. Our                   Because our algorithm is very similar to KA∗ ,
+        algorithm, TKA∗ is a variant of the k-                     which is in turn an extension of the (1-best) A∗
+        best A∗ (KA∗ ) algorithm of Pauls and                      parsing algorithm of Klein and Manning (2003),
+        Klein (2009). In contrast to KA∗ , which                   we first introduce notation and review those two
+        performs an inside and outside pass be-                    algorithms before presenting our new algorithm.
+        fore performing k-best extraction bottom                   2.1     Notation
+        up, TKA∗ performs only the inside pass
+                                                                   Assume we have a PCFG2 G and an input sen-
+        before extracting k-best lists top down.
+                                                                   tence s0 . . . sn−1 of length n. The grammar G has
+        TKA∗ maintains the same optimality and
+                                                                   a set of symbols denoted by capital letters, includ-
+        efficiency guarantees of KA∗ , but is sim-
+                                                                   ing a distinguished goal (root) symbol G. With-
+        pler to both specify and implement.
+                                                                   out loss of generality, we assume Chomsky nor-
+1       Introduction                                               mal form: each non-terminal rule r in G has the
+                                                                   form r = A → B C with weight wr . Edges
+Many situations call for a parser to return a k-                   are labeled spans e = (A, i, j). Inside deriva-
+best list of parses instead of a single best hypothe-              tions of an edge (A, i, j) are trees with root non-
+sis.1 Currently, there are two efficient approaches                terminal A, spanning si . . . sj−1 . The weight (neg-
+known in the literature. The k-best algorithm of                   ative log-probability) of the best (minimum) inside
+Jiménez and Marzal (2000) and Huang and Chi-                      derivation for an edge e is called the Viterbi in-
+ang (2005), referred to hereafter as L AZY, oper-                  side score β(e), and the weight of the best deriva-
+ates by first performing an exhaustive Viterbi in-                 tion of G → s0 . . . si−1 A sj . . . sn−1 is called
+side pass and then lazily extracting k-best lists in               the Viterbi outside score α(e). The goal of a k-
+top-down manner. The k-best A∗ algorithm of                        best parsing algorithm is to compute the k best
+Pauls and Klein (2009), hereafter KA∗ , computes                   (minimum weight) inside derivations of the edge
+Viterbi inside and outside scores before extracting                (G, 0, n).
+k-best lists bottom up.                                               We formulate the algorithms in this paper
+   Because these additional passes are only partial,               in terms of prioritized weighted deduction rules
+KA∗ can be significantly faster than L AZY, espe-                  (Shieber et al., 1995; Nederhof, 2003). A prior-
+cially when a heuristic is used (Pauls and Klein,                  itized weighted deduction rule has the form
+2009). In this paper, we propose TKA∗ , a top-
+down variant of KA∗ that, like L AZY, performs                                                 p(w1 ,...,wn )
+                                                                       φ1 : w1 , . . . , φn : wn −−−−−−−−→ φ0 : g(w1 , . . . , wn )
+only an inside pass before extracting k-best lists
+top-down, but maintains the same optimality and                    where φ1 , . . . , φn are the antecedent items of the
+efficiency guarantees as KA∗ . This algorithm can                  deduction rule and φ0 is the conclusion item. A
+be seen as a generalization of the lattice k-best al-              deduction rule states that, given the antecedents
+gorithm of Soong and Huang (1991) to parsing.                      φ1 , . . . , φn with weights w1 , . . . , wn , the conclu-
+Because TKA∗ eliminates the outside pass from                      sion φ0 can be formed with weight g(w1 , . . . , wn )
+KA∗ , TKA∗ is simpler both in implementation and                   and priority p(w1 , . . . , wn ).
+specification.                                                        2
+                                                                        While we present the algorithm specialized to parsing
+    1
+        See Huang and Chiang (2005) for a review.                  with a PCFG, this algorithm generalizes to a wide range of
+
+
+                                                             200
+                            Proceedings of the ACL 2010 Conference Short Papers, pages 200–204,
+                      Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+       (a)                       (b)        G                                           G                          G
+                   VP
+                                                                          NP                 VP             NP              VP
+                                            VP
+                                                                          NN            VP         NP       NN      VP            NP
+
+             s2    s3 s4           s0 ... s2 s5 ... sn-1                                                          VP NN
+       (c)                       (d)        G
+                                                                             s0    s1 s2 s3       s4   s5   s0   s1 s2 s3        s4 s5
+                  VP
+                                       NP        VP                                   (a)                            (b)
+        VBZ            NP
+                                       NN VP          NP
+                                                                       Figure 2: (a) An outside derivation item before expansion at
+                  DT NN
+         s2       s3        s4         s0 s1      s2 sn-1              the edge (VP, 1, 4). (b) A possible expansion of the item in
+                                                                       (a) using the rule VP→ VP NN. Frontier edges are marked in
+                                                                       boldface.
+Figure 1: Representations of the different types of items
+used in parsing. (a) An inside edge item I(VP, 2, 5). (b)
+An outside edge item O(VP, 2, 5). (c) An inside deriva-                its weight plus a heuristic h(A, i, j). For consis-
+tion item: D(T VP , 2, 5). (d) An outside derivation item:
+Q(TVP G
+        , 1, 2, {(N P, 2, n)}. The edges in boldface are fron-
+                                                                       tent and admissible heuristics h(·), this deduction
+tier edges.                                                            rule guarantees that when an inside edge item is
+                                                                       removed from the agenda, its current weight is its
+   These deduction rules are “executed” within                         true Viterbi inside score.
+a generic agenda-driven algorithm, which con-
+                                                                          The heuristic h controls the speed of the algo-
+structs items in a prioritized fashion. The algo-
+                                                                       rithm. It can be shown that an edge e satisfying
+rithm maintains an agenda (a priority queue of
+                                                                       β(e) + h(A, i, j) > β(G, 0, n) will never be re-
+items), as well as a chart of items already pro-
+                                                                       moved from the agenda, allowing some edges to
+cessed. The fundamental operation of the algo-
+                                                                       be safely pruned during parsing. The more closely
+rithm is to pop the highest priority item φ from the
+                                                                       h(e) approximates the Viterbi outside cost α(e),
+agenda, put it into the chart with its current weight,
+                                                                       the more items are pruned.
+and apply deduction rules to form any items which
+can be built by combining φ with items already                         2.3        KA∗
+in the chart. When the resulting items are either
+new or have a weight smaller than an item’s best                       The use of inside edge items in A∗ exploits the op-
+score so far, they are put on the agenda with pri-                     timal substructure property of derivations – since
+ority given by p(·). Because all antecedents must                      a best derivation of a larger edge is always com-
+be constructed before a deduction rule is executed,                    posed of best derivations of smaller edges, it is
+we sometimes refer to particular conclusion item                       only necessary to compute the best way of build-
+as “waiting” on another item before it can be built.                   ing a particular inside edge item. When finding
+                                                                       k-best lists, this is no longer possible, since we are
+2.2   A∗                                                               interested in suboptimal derivations.
+                                                                          Thus, KA∗ , the k-best extension of A∗ , must
+A∗ parsing (Klein and Manning, 2003) is an al-
+                                                                       search not in the space of inside edge items,
+gorithm for computing the 1-best parse of a sen-
+                                                                       but rather in the space of inside derivation items
+tence. A∗ operates on items called inside edge
+                                                                       D(T A , i, j), which represent specific derivations
+items I(A, i, j), which represent the many pos-
+                                                                       of the edge (A, i, j) using tree T A . However, the
+sible inside derivations of an edge (A, i, j). In-
+                                                                       number of inside derivation items is exponential
+side edge items are constructed according to the
+                                                                       in the length of the input sentence, and even with
+IN deduction rule of Table 1. This deduction rule
+                                                                       a very accurate heuristic, running A∗ directly in
+constructs inside edge items in a bottom-up fash-
+                                                                       this space is not feasible.
+ion, combining items representing smaller edges
+                                                                          Fortunately, Pauls and Klein (2009) show that
+I(B, i, k) and I(C, k, j) with a grammar rule r =
+                                                                       with a perfect heuristic, that is, h(e) = α(e) ∀e,
+A → B C to form a larger item I(A, i, j). The
+                                                                       A∗ search on inside derivation items will only
+weight of a newly constructed item is given by the
+                                                                       remove items from the agenda that participate
+sum of the weights of the antecedent items and
+                                                                       in the true k-best lists (up to ties). In order
+the grammar rule r, and its priority is given by
+                                                                       to compute this perfect heuristic, KA∗ makes
+hypergraph search problems as shown in Klein and Manning               use of outside edge items O(A, i, j) which rep-
+(2001).                                                                resent the many possible derivations of G →
+
+
+                                                                 201
+
+
+                                                                                  w1 +w2 +wr +h(A,i,j)
+      IN∗† :                             I(B, i, l) : w1      I(C, l, j) : w2     −−−−−−−−−−−−−−→             I(A, i, j) : w1 + w2 + wr
+                                                                                   w +w3 +wr +w1
+     IN-D† :        O(A, i, j) : w1     D(T B , i, l) : w2   D(T C , l, j) : w3   −−2−−−−−−−−→               D(T A , i, j) : w2 + w3 + wr
+                                                                                   w +w3 +wr +w2
+    OUT-L† :        O(A, i, j) : w1      I(B, i, l) : w2      I(C, l, j) : w3     −−1−−−−−−−−→                O(B, i, l) : w1 + w3 + wr
+                                                                                   w +w2 +wr +w3
+    OUT-R† :        O(A, i, j) : w1      I(B, i, l) : w2      I(C, l, j) : w3     −−1−−−−−−−−→                O(C, l, j) : w1 + w2 + wr
+                                                                                  w1 +wr +w2 +w3 +β(F )
+    OUT-D∗ :    Q(TAG , i, j, F) : w1     I(B, i, l) : w2      I(C, l, j) : w3    −−−−−−−−−−−−−−−→        Q(TBG , i, l, FC ) : w1 + wr
+
+Table 1: The deduction rules used in this paper. Here, r is the rule A → B C. A superscript * indicates that the rule is used
+in TKA∗ , and a superscript † indicates that the rule is used in KA∗ . In IN-D, the tree TA is rooted at (A, i, j) and has children
+T B and T C . P
+              In OUT-D, the tree TBG is the tree TAG extended at (A, i, j) with rule r, FC is the list F with (C, l, j) prepended,
+and β(F) is e∈F β(e). Whenever the left child I(B, i, l) of an application of OUT-D represents a terminal, the next edge is
+removed from F and is used as the new point of expansion.
+
+
+s1 . . . si A sj+1 . . . sn (see Figure 1(b)).                             mal completion costs are Viterbi inside scores, and
+   Outside items are built using the OUT-L and                             we could forget the outside pass.
+OUT-R deduction rules shown in Table 1. OUT-                                  TKA∗ does exactly that. Inside edge items are
+L and OUT-R combine, in a top-down fashion, an                             constructed in the same way as KA∗ , but once the
+outside edge over a larger span and inside edge                            inside edge item I(G, 0, n) has been discovered,
+over a smaller span to form a new outside edge                             TKA∗ begins building partial derivations from the
+over a smaller span. Because these rules make ref-                         goal outwards. We replace the inside derivation
+erence to inside edge items I(A, i, j), these items                        items of KA∗ with outside derivation items, which
+must also be built using the IN deduction rules                            represent trees rooted at the goal and expanding
+from 1-best A∗ . Outside edge items must thus wait                         downwards. These items bottom out in a list of
+until the necessary inside edge items have been                            edges called the frontier edges. See Figure 1(d)
+built. The outside pass is initialized with the item                       for a graphical representation. When a frontier
+O(G, 0, n) when the inside edge item I(G, 0, n) is                         edge represents a single word in the input, i.e. is
+popped from the agenda.                                                    of the form (si , i, i + 1), we say that edge is com-
+   Once we have started populating outside scores                          plete. An outside derivation can be expanded by
+using the outside deductions, we can initiate a                            applying a rule to one of its incomplete frontier
+search on inside derivation items.3 These items                            edges; see Figure 2. In the same way that inside
+are built bottom-up using the IN-D deduction rule.                         derivation items wait on exact outside scores be-
+The crucial element of this rule is that derivation                        fore being built, outside derivation items wait on
+items for a particular edge wait until the exact out-                      the inside edge items of all frontier edges before
+side score of that edge has been computed. The al-                         they can be constructed.
+gorithm terminates when k derivation items rooted                             Although building derivations top-down obvi-
+at (G, 0, n) have been popped from the agenda.                             ates the need for a 1-best outside pass, it raises a
+                                                                           new issue. When building derivations bottom-up,
+3        TKA∗                                                              the only way to expand a particular partial inside
+KA∗ efficiently explores the space of inside                               derivation is to combine it with another partial in-
+derivation items because it waits for the exact                            side derivation to build a bigger tree. In contrast,
+Viterbi outside cost before building each deriva-                          an outside derivation item can be expanded any-
+tion item. However, these outside costs and asso-                          where along its frontier. Naively building deriva-
+ciated deduction items are only auxiliary quanti-                          tions top-down would lead to a prohibitively large
+ties used to guide the exploration of inside deriva-                       number of expansion choices.
+tions: they allow KA∗ to prioritize currently con-                            We solve this issue by always expanding the
+structed inside derivation items (i.e., constructed                        left-most incomplete frontier edge of an outside
+derivations of the goal) by their optimal comple-                          derivation item. We show the deduction rule
+tion costs. Outside costs are thus only necessary                          OUT-D which performs this deduction in Fig-
+because we construct partial derivations bottom-                           ure 1(d). We denote an outside derivation item as
+up; if we constructed partial derivations in a top-                        Q(TAG , i, j, F), where TAG is a tree rooted at the
+down fashion, all we would need to compute opti-                           goal with left-most incomplete edge (A, i, j), and
+     3
+                                                                           F is the list of incomplete frontier edges exclud-
+     We stress that the order of computation is entirely speci-
+fied by the deduction rules – we only speak about e.g. “initi-             ing (A, i, j), ordered from left to right. Whenever
+ating a search” as an appeal to intuition.                                 the application of this rule “completes” the left-
+
+
+                                                                     202
+
+
+most edge, the next edge is removed from F and               3.3    Advantages
+is used as the new point of expansion. Once all
+frontier edges are complete, the item represents a           Although our algorithm eliminates the 1-best out-
+correctly scored derivation of the goal, explored in         side pass of KA∗ , in practice, even for k = 104 ,
+a pre-order traversal.                                       the 1-best inside pass remains the overwhelming
+                                                             bottleneck (Pauls and Klein, 2009), and our modi-
+3.1   Correctness                                            fications leave that pass unchanged.
+                                                                However, we argue that our implementation is
+It should be clear that expanding the left-most in-
+                                                             simpler to specify and implement. In terms of de-
+complete frontier edge first eventually explores the
+                                                             duction rules, our algorithm eliminates the 2 out-
+same set of derivations as expanding all frontier
+                                                             side deduction rules and replaces the IN-D rule
+edges simultaneously. The only worry in fixing
+                                                             with the OUT-D rule, bringing the total number
+this canonical order is that we will somehow ex-
+                                                             of rules from four to two.
+plore the Q items in an incorrect order, possibly
+building some complete derivation Q0C before a                  The ease of specification translates directly into
+more optimal complete derivation QC . However,               ease of implementation. In particular, if high-
+note that all items Q along the left-most construc-          quality heuristics are not available, it is often more
+tion of QC have priority equal to or better than any         efficient to implement the 1-best inside pass as
+less optimal complete derivation Q0C . Therefore,            an exhaustive dynamic program, as in Huang and
+when Q0C is enqueued, it will have lower priority            Chiang (2005). In this case, one would only need
+than all Q; Q0C will therefore not be dequeued un-           to implement a single, agenda-based k-best extrac-
+til all Q – and hence QC – have been built.                  tion phase, instead of the 2 needed for KA∗ .
+    Furthermore, it can be shown that the top-down
+expansion strategy maintains the same efficiency             3.4    Performance
+and optimality guarantees as KA∗ for all item
+                                                             The contribution of this paper is theoretical, not
+types: for consistent heuristics h, the first k en-
+                                                             empirical. We have argued that TKA∗ is simpler
+tirely complete outside derivation items are the
+                                                             than TKA∗ , but we do not expect it to do any more
+true k-best derivations (modulo ties), and that only
+                                                             or less work than KA∗ , modulo grammar specific
+derivation items which participate in those k-best
+                                                             optimizations. Therefore, we simply verify, like
+derivations will be removed from the queue (up to
+                                                             KA∗ , that the additional work of extracting k-best
+ties).
+                                                             lists with TKA∗ is negligible compared to the time
+3.2   Implementation Details                                 spent building 1-best inside edges.
+                                                                We examined the time spent building 100-best
+Building derivations bottom-up is convenient from
+                                                             lists for the same experimental setup as Pauls and
+an indexing point of view: since larger derivations
+                                                             Klein (2009).4 On 100 sentences, our implemen-
+are built from smaller ones, it is not necessary to
+                                                             tation of TKA∗ constructed 3.46 billion items, of
+construct the larger derivation from scratch. In-
+                                                             which about 2% were outside derivation items.
+stead, one can simply construct a new tree whose
+                                                             Our implementation of KA∗ constructed 3.41 bil-
+children point to the old trees, saving both mem-
+                                                             lion edges, of which about 0.1% were outside edge
+ory and CPU time.
+                                                             items or inside derivation items. In other words,
+   In order keep the same efficiency when build-             the cost of k-best extraction is dwarfed by the
+ing trees top-down, a slightly different data struc-         the 1-best inside edge computation in both cases.
+ture is necessary. We represent top-down deriva-             The reason for the slight performance advantage
+tions as a lazy list of expansions. The top node             of KA∗ is that our implementation of KA∗ uses
+TGG is an empty list, and whenever we expand an              lazy optimizations discussed in Pauls and Klein
+outside derivation item Q(TAG , i, j, F) with a rule         (2009), and while such optimizations could easily
+r = A → B C and split point l, the resulting                 be incorporated in TKA∗ , we have not yet done so
+derivation TBG is a new list item with (r, l) as the         in our implementation.
+head data, and TAG as its tail. The tree can be re-
+constructed later by recursively reconstructing the             4
+                                                                  This setup used 3- and 6-round state-split grammars from
+parent, and adding the edges (B, i, l) and (C, l, j)         Petrov et al. (2006), the former used to compute a heuristic
+as children of (A, i, j).                                    for the latter, tested on sentences of length up to 25.
+
+
+                                                       203
+
+
+4   Conclusion
+We have presented TKA∗ , a simplification to the
+KA∗ algorithm. Our algorithm collapses the 1-
+best outside and bottom-up derivation passes of
+KA∗ into a single, top-down pass without sacri-
+ficing efficiency or optimality. This reduces the
+number of non base-case deduction rules, making
+TKA∗ easier both to specify and implement.
+
+Acknowledgements
+This project is funded in part by the NSF under
+grant 0643742 and an NSERC Postgraduate Fel-
+lowship.
+
+
+References
+Liang Huang and David Chiang. 2005. Better k-best
+  parsing. In Proceedings of the International Work-
+  shop on Parsing Technologies (IWPT), pages 53–64.
+Vı́ctor M. Jiménez and Andrés Marzal. 2000. Com-
+   putation of the n best parse trees for weighted and
+   stochastic context-free grammars. In Proceedings
+   of the Joint IAPR International Workshops on Ad-
+   vances in Pattern Recognition, pages 183–192, Lon-
+   don, UK. Springer-Verlag.
+Dan Klein and Christopher D. Manning. 2001. Pars-
+  ing and hypergraphs. In Proceedings of the Interna-
+  tional Workshop on Parsing Technologies (IWPT),
+  pages 123–134.
+Dan Klein and Christopher D. Manning. 2003. A*
+  parsing: Fast exact Viterbi parse selection. In
+  Proceedings of the Human Language Technology
+  Conference and the North American Association
+  for Computational Linguistics (HLT-NAACL), pages
+  119–126.
+Mark-Jan Nederhof. 2003. Weighted deductive pars-
+ ing and Knuth’s algorithm. Computationl Linguis-
+ tics, 29(1):135–143.
+Adam Pauls and Dan Klein. 2009. K-best A* parsing.
+  In Proccedings of the Association for Computational
+  Linguistics (ACL).
+Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+   Klein. 2006. Learning accurate, compact, and in-
+   terpretable tree annotation. In Proccedings of the
+   Association for Computational Linguistics (ACL).
+Stuart M. Shieber, Yves Schabes, and Fernando C. N.
+   Pereira. 1995. Principles and implementation of
+   deductive parsing. Journal of Logic Programming,
+   24:3–36.
+Frank K. Soong and Eng-Fong Huang. 1991. A tree-
+  trellis based fast search for finding the n best sen-
+  tence hypotheses in continuous speech recognition.
+  In Proceedings of the Workshop on Speech and Nat-
+  ural Language.
+
+
+                                                          204
+

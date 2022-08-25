@@ -1,0 +1,773 @@
+      A Latent Dirichlet Allocation method for Selectional Preferences
+
+                           Alan Ritter, Mausam and Oren Etzioni
+                       Department of Computer Science and Engineering
+                 Box 352350, University of Washington, Seattle, WA 98195, USA
+                         {aritter,mausam,etzioni}@cs.washington.edu
+
+
+
+                      Abstract                                 them based on a corpus of relation instances.
+                                                                  Resnik (1996) presented the earliest work in
+    The computation of selectional prefer-                     this area, describing an information-theoretic ap-
+    ences, the admissible argument values for                  proach that inferred selectional preferences based
+    a relation, is a well-known NLP task with                  on the WordNet hypernym hierarchy. Recent work
+    broad applicability. We present L DA - SP,                 (Erk, 2007; Bergsma et al., 2008) has moved away
+    which utilizes LinkLDA (Erosheva et al.,                   from generalization to known classes, instead
+    2004) to model selectional preferences.                    utilizing distributional similarity between nouns
+    By simultaneously inferring latent top-                    to generalize beyond observed relation-argument
+    ics and topic distributions over relations,                pairs. This avoids problems like WordNet’s poor
+    L DA - SP combines the benefits of pre-                    coverage of proper nouns and is shown to improve
+    vious approaches: like traditional class-                  performance. These methods, however, no longer
+    based approaches, it produces human-                       produce the generalized class for an argument.
+    interpretable classes describing each re-
+                                                                  In this paper we describe a novel approach to
+    lation’s preferences, but it is competitive
+                                                               computing selectional preferences by making use
+    with non-class-based methods in predic-
+                                                               of unsupervised topic models. Our approach is
+    tive power.
+                                                               able to combine benefits of both kinds of meth-
+    We compare L DA - SP to several state-of-                  ods: it retains the generalization and human-
+    the-art methods achieving an 85% increase                  interpretability of class-based approaches and is
+    in recall at 0.9 precision over mutual in-                 also competitive with the direct methods on pre-
+    formation (Erk, 2007). We also eval-                       dictive tasks.
+    uate L DA - SP’s effectiveness at filtering                   Unsupervised topic models, such as latent
+    improper applications of inference rules,                  Dirichlet allocation (LDA) (Blei et al., 2003) and
+    where we show substantial improvement                      its variants are characterized by a set of hidden
+    over Pantel et al.’s system (Pantel et al.,                topics, which represent the underlying semantic
+    2007).                                                     structure of a document collection. For our prob-
+                                                               lem these topics offer an intuitive interpretation –
+1   Introduction                                               they represent the (latent) set of classes that store
+Selectional Preferences encode the set of admissi-             the preferences for the different relations. Thus,
+ble argument values for a relation. For example,               topic models are a natural fit for modeling our re-
+locations are likely to appear in the second argu-             lation data.
+ment of the relation X is headquartered in Y and                  In particular, our system, called L DA - SP, uses
+companies or organizations in the first. A large,              LinkLDA (Erosheva et al., 2004), an extension of
+high-quality database of preferences has the po-               LDA that simultaneously models two sets of dis-
+tential to improve the performance of a wide range             tributions for each topic. These two sets represent
+of NLP tasks including semantic role labeling                  the two arguments for the relations. Thus, L DA - SP
+(Gildea and Jurafsky, 2002), pronoun resolution                is able to capture information about the pairs of
+(Bergsma et al., 2008), textual inference (Pantel              topics that commonly co-occur. This information
+et al., 2007), word-sense disambiguation (Resnik,              is very helpful in guiding inference.
+1997), and many more. Therefore, much atten-                      We run L DA - SP to compute preferences on a
+tion has been focused on automatically computing               massive dataset of binary relations r(a1 , a2 ) ex-
+
+
+                                                         424
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 424–434,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+tracted from the Web by T EXT RUNNER (Banko                          Erk (2007) showed the advantages of this ap-
+and Etzioni, 2008). Our experiments demon-                        proach over Resnik’s information-theoretic class-
+strate that L DA - SP significantly outperforms state             based method on a pseudo-disambiguation evalu-
+of the art approaches obtaining an 85% increase                   ation. These methods obtain better lexical cover-
+in recall at precision 0.9 on the standard pseudo-                age, but are unable to obtain any abstract represen-
+disambiguation task.                                              tation of selectional preferences.
+   Additionally, because L DA - SP is based on a for-
+                                                                     Our solution fits into the general category
+mal probabilistic model, it has the advantage that
+                                                                  of generative probabilistic models, which model
+it can naturally be applied in many scenarios. For
+                                                                  each relation/argument combination as being gen-
+example, we can obtain a better understanding of
+                                                                  erated by a latent class variable. These classes
+similar relations (Table 1), filter out incorrect in-
+                                                                  are automatically learned from the data. This re-
+ferences based on querying our model (Section
+                                                                  tains the class-based flavor of the problem, with-
+4.3), as well as produce a repository of class-based
+                                                                  out the knowledge limitations of the explicit class-
+preferences with a little manual effort as demon-
+                                                                  based approaches. Probably the closest to our
+strated in Section 4.4. In all these cases we obtain
+                                                                  work is a model proposed by Rooth et al. (1999),
+high quality results, for example, massively out-
+                                                                  in which each class corresponds to a multinomial
+performing Pantel et al.’s approach in the textual
+                                                                  over relations and arguments and EM is used to
+inference task.1
+                                                                  learn the parameters of the model. In contrast,
+2       Previous Work                                             we use a LinkLDA framework in which each re-
+                                                                  lation is associated with a corresponding multi-
+Previous work on selectional preferences can                      nomial distribution over classes, and each argu-
+be broken into four categories: class-based ap-                   ment is drawn from a class-specific distribution
+proaches (Resnik, 1996; Li and Abe, 1998; Clark                   over words; LinkLDA captures co-occurrence of
+and Weir, 2002; Pantel et al., 2007), similarity                  classes in the two arguments. Additionally we
+based approaches (Dagan et al., 1999; Erk, 2007),                 perform full Bayesian inference using collapsed
+discriminative (Bergsma et al., 2008), and genera-                Gibbs sampling, in which parameters are inte-
+tive probabilistic models (Rooth et al., 1999).                   grated out (Griffiths and Steyvers, 2004).
+   Class-based approaches, first proposed by
+Resnik (1996), are the most studied of the four.                     Recently, Bergsma et. al. (2008) proposed the
+They make use of a pre-defined set of classes, ei-                first discriminative approach to selectional prefer-
+ther manually produced (e.g. WordNet), or auto-                   ences. Their insight that pseudo-negative exam-
+matically generated (Pantel, 2003). For each re-                  ples could be used as training data allows the ap-
+lation, some measure of the overlap between the                   plication of an SVM classifier, which makes use of
+classes and observed arguments is used to iden-                   many features in addition to the relation-argument
+tify those that best describe the arguments. These                co-occurrence frequencies used by other meth-
+techniques produce a human-interpretable output,                  ods. They automatically generated positive and
+but often suffer in quality due to an incoherent tax-             negative examples by selecting arguments having
+onomy, inability to map arguments to a class (poor                high and low mutual information with the rela-
+lexical coverage), and word sense ambiguity.                      tion. Since it is a discriminative approach it is
+   Because of these limitations researchers have                  amenable to feature engineering, but needs to be
+investigated non-class based approaches, which                    retrained and tuned for each task. On the other
+attempt to directly classify a given noun-phrase                  hand, generative models produce complete prob-
+as plausible/implausible for a relation. Of these,                ability distributions of the data, and hence can be
+the similarity based approaches make use of a dis-                integrated with other systems and tasks in a more
+tributional similarity measure between arguments                  principled manner (see Sections 4.2.2 and 4.3.1).
+and evaluate a heuristic scoring function:                        Additionally, unlike L DA - SP Bergsma et al.’s sys-
+                  X                                               tem doesn’t produce human-interpretable topics.
+  Srel (arg) =            sim(arg, arg0 ) · wtrel (arg)           Finally, we note that L DA - SP and Bergsma’s sys-
+              arg0 ∈Seen(rel)                                     tem are potentially complimentary – the output of
+    1
+                                                                  L DA - SP could be used to generate higher-quality
+   Our repository of selectional preferences is available
+at http://www.cs.washington.edu/research/                         training data for Bergsma, potentially improving
+ldasp.                                                            their results.
+
+
+                                                            425
+
+
+   Topic models such as LDA (Blei et al., 2003)                these relations. 2 Our task is to compute, for each
+and its variants have recently begun to see use                argument ai of each relation r, a set of usual ar-
+in many NLP applications such as summarization                 gument values (noun phrases) that it takes. For
+(Daumé III and Marcu, 2006), document align-                  example, for the relation is headquartered in the
+ment and segmentation (Chen et al., 2009), and                 first argument set will include companies like Mi-
+inferring class-attribute hierarchies (Reisinger and           crosoft, Intel, General Motors and second argu-
+Pasca, 2009). Our particular model, LinkLDA, has               ment will favor locations like New York, Califor-
+been applied to a few NLP tasks such as simul-                 nia, Seattle.
+taneously modeling the words appearing in blog
+posts and users who will likely respond to them                3.1   IndependentLDA
+(Yano et al., 2009), modeling topic-aligned arti-              We first describe the straightforward application
+cles in different languages (Mimno et al., 2009),              of LDA to modeling our corpus of extracted rela-
+and word sense induction (Brody and Lapata,                    tions. In this case two separate LDA models are
+2009).                                                         used to model a1 and a2 independently.
+   Finally, we highlight two systems, developed                   In the generative model for our data, each rela-
+independently of our own, which apply LDA-style                tion r has a corresponding multinomial over topics
+models to similar tasks. Ó Séaghdha (2010) pro-              θr , drawn from a Dirichlet. For each extraction, a
+poses a series of LDA-style models for the task                hidden topic z is first picked according to θr , and
+of computing selectional preferences. This work                then the observed argument a is chosen according
+learns selectional preferences between the fol-                to the multinomial βz .
+lowing grammatical relations: verb-object, noun-                  Readers familiar with topic modeling terminol-
+noun, and adjective-noun. It also focuses on                   ogy can understand our approach as follows: we
+jointly modeling the generation of both predicate              treat each relation as a document whose contents
+and argument, and evaluation is performed on a                 consist of a bags of words corresponding to all the
+set of human-plausibility judgments obtaining im-              noun phrases observed as arguments of the rela-
+pressive results against Keller and Lapata’s (2003)            tion in our corpus. Formally, LDA generates each
+Web hit-count based system. Van Durme and                      argument in the corpus of relations as follows:
+Gildea (2009) proposed applying LDA to general                    for each topic t = 1 . . . T do
+knowledge templates extracted using the K NEXT                         Generate βt according to symmetric Dirich-
+system (Schubert and Tong, 2003). In contrast,                    let distribution Dir(η).
+our work uses LinkLDA and focuses on modeling                     end for
+multiple arguments of a relation (e.g., the subject               for each relation r = 1 . . . |R| do
+and direct object of a verb).                                          Generate θr according to Dirichlet distribu-
+                                                                  tion Dir(α).
+                                                                       for each tuple i = 1 . . . Nr do
+3   Topic Models for Selectional Prefs.                                    Generate zr,i from Multinomial(θr ).
+                                                                           Generate the argument ar,i from multi-
+We present a series of topic models for the task of               nomial βzr,i .
+computing selectional preferences. These models                        end for
+vary in the amount of independence they assume                    end for
+between a1 and a2 . At one extreme is Indepen-                    One weakness of IndependentLDA is that it
+dentLDA, a model which assumes that both a1 and                doesn’t jointly model a1 and a2 together. Clearly
+a2 are generated completely independently. On                  this is undesirable, as information about which
+the other hand, JointLDA, the model at the other               topics one of the arguments favors can help inform
+extreme (Figure 1) assumes both arguments of a                 the topics chosen for the other. For example, class
+specific extraction are generated based on a single            pairs such as (team, game), (politician, political is-
+hidden variable z. LinkLDA (Figure 2) lies be-                 sue) form much more plausible selectional prefer-
+tween these two extremes, and as demonstrated in               ences than, say, (team, political issue), (politician,
+Section 4, it is the best model for our relation data.         game).
+  We are given a set R of binary relations and a                  2
+                                                                    We focus on binary relations, though the techniques pre-
+corpus D = {r(a1 , a2 )} of extracted instances for            sented in the paper are easily extensible to n-ary relations.
+
+
+                                                         426
+
+
+3.2   JointLDA                                                             α                            α
+
+
+As a more tightly coupled alternative, we first                                           |R|                         |R|
+                                                                           θ                            θ
+propose JointLDA, whose graphical model is de-
+picted in Figure 1. The key difference in JointLDA                         z                       z1        z2
+
+(versus LDA) is that instead of one, it maintains
+                                                                     a1          a2                a1        a2
+two sets of topics (latent distributions over words)                                  N                           N
+denoted by β and γ, one for classes of each ar-
+gument. A topic id k represents a pair of topics,                    β           γ                 β         γ
+
+βk and γk , that co-occur in the arguments of ex-                                     T                           T
+
+tracted relations. Common examples include (Per-                     η1          η2                η1        η2
+
+son, Location), (Politician, Political issue), etc.
+                                                                 Figure 1: JointLDA             Figure 2: LinkLDA
+The hidden variable z = k indicates that the noun
+phrase for the first argument was drawn from the
+                                                               ing related topic pairs between arguments we em-
+multinomial βk , and that the second argument was
+                                                               ploy a sparse prior over the per-relation topic dis-
+drawn from γk . The per-relation distribution θr is
+                                                               tributions. Because a few topics are likely to be
+a multinomial over the topic ids and represents the
+                                                               assigned most of the probability mass for a given
+selectional preferences, both for arg1s and arg2s
+                                                               relation it is more likely (although not necessary)
+of a relation r.
+                                                               that the same topic number k will be drawn for
+   Although JointLDA has many desirable proper-                both arguments.
+ties, it has some drawbacks as well. Most notably,                When comparing LinkLDA with JointLDA the
+in JointLDA topics correspond to pairs of multi-               better model may not seem immediately clear. On
+nomials (βk , γk ); this leads to a situation in which         the one hand, JointLDA jointly models the gen-
+multiple redundant distributions are needed to rep-            eration of both arguments in an extracted tuple.
+resent the same underlying semantic class. For                 This allows one argument to help disambiguate
+example consider the case where we we need to                  the other in the case of ambiguous relation strings.
+represent the following selectional preferences for            LinkLDA, however, is more flexible; rather than
+our corpus of relations: (person, location), (per-             requiring both arguments to be generated from one
+son, organization), and (person, crime). Because               of |Z| possible pairs of multinomials (βz , γz ), Lin-
+JointLDA requires a separate pair of multinomials              kLDA allows the arguments of a given extraction
+for each topic, it is forced to use 3 separate multi-          to be generated from |Z|2 possible pairs. Thus,
+nomials to represent the class person, rather than             instead of imposing a hard constraint that z1 =
+learning a single distribution representing person             z2 (as in JointLDA), LinkLDA simply assigns a
+and choosing 3 different topics for a2 . This results          higher probability to states in which z1 = z2 , be-
+in poor generalization because the data for a single           cause both hidden variables are drawn from the
+class is divided into multiple topics.                         same (sparse) distribution θr . LinkLDA can thus
+   In order to address this problem while maintain-            re-use argument classes, choosing different com-
+ing the sharing of influence between a1 and a2 , we            binations of topics for the arguments if it fits the
+next present LinkLDA, which represents a com-                  data better. In Section 4 we show experimentally
+promise between IndependentLDA and JointLDA.                   that LinkLDA outperforms JointLDA (and Inde-
+LinkLDA is more flexible than JointLDA, allow-                 pendentLDA) by wide margins. We use L DA - SP
+ing different topics to be chosen for a1 , and a2 ,            to refer to LinkLDA in all the experiments below.
+however still models the generation of topics from
+the same distribution for a given relation.                    3.4   Inference
+                                                               For all the models we use collapsed Gibbs sam-
+3.3   LinkLDA
+                                                               pling for inference in which each of the hid-
+Figure 2 illustrates the LinkLDA model in the                  den variables (e.g., zr,i,1 and zr,i,2 in LinkLDA)
+plate notation, which is analogous to the model                are sampled sequentially conditioned on a full-
+in (Erosheva et al., 2004). In particular note that            assignment to all others, integrating out the param-
+each ai is drawn from a different hidden topic zi ,            eters (Griffiths and Steyvers, 2004). This produces
+however the zi ’s are drawn from the same distri-              robust parameter estimates, as it allows computa-
+bution θr for a given relation r. To facilitate learn-         tion of expectations over the posterior distribution
+
+
+                                                         427
+
+
+as opposed to estimating maximum likelihood pa-               tracted by T EXT RUNNER (Banko and Etzioni,
+rameters. In addition, the integration allows the             2008) from 500 million Web pages.
+use of sparse priors, which are typically more ap-               To create a generalization corpus from this
+propriate for natural language data. In all exper-            large dataset. We first selected 3,000 relations
+iments we use hyperparameters α = η1 = η2 =                   from the middle of the tail (we used the 2,000-
+0.1. We generated initial code for our samplers us-           5,000 most frequent ones)3 and collected all in-
+ing the Hierarchical Bayes Compiler (Daume III,               stances. To reduce sparsity, we discarded all tu-
+2007).                                                        ples containing an NP that occurred fewer than 50
+                                                              times in the data. This resulted in a vocabulary of
+3.5    Advantages of Topic Models                             about 32,000 noun phrases, and a set of about 2.4
+There are several advantages to using topic mod-              million tuples in our generalization corpus.
+els for our task. First, they naturally model the                We inferred topic-argument and relation-topic
+class-based nature of selectional preferences, but            multinomials (β, γ, and θ) on the generalization
+don’t take a pre-defined set of classes as input.             corpus by taking 5 samples at a lag of 50 after
+Instead, they compute the classes automatically.              a burn in of 750 iterations. Using multiple sam-
+This leads to better lexical coverage since the is-           ples introduces the risk of topic drift due to lack
+sue of matching a new argument to a known class               of identifiability, however we found this to not be
+is side-stepped. Second, the models naturally han-            a problem in practice. During development we
+dle ambiguous arguments, as they are able to as-              found that the topics tend to remain stable across
+sign different topics to the same phrase in different         multiple samples after sufficient burn in, and mul-
+contexts. Inference in these models is also scalable          tiple samples improved performance. Table 1 lists
+– linear in both the size of the corpus as well as            sample topics and high ranked words for each (for
+the number of topics. In addition, there are several          both arguments) as well as relations favoring those
+scalability enhancements such as SparseLDA (Yao               topics.
+et al., 2009), and an approximation of the Gibbs
+Sampling procedure can be efficiently parallelized            4.2     Task Independent Evaluation
+(Newman et al., 2009). Finally we note that, once             We first compare the three LDA-based approaches
+a topic distribution has been learned over a set of           to each other and two state of the art similarity
+training relations, one can efficiently apply infer-          based systems (Erk, 2007) (using mutual informa-
+ence to unseen relations (Yao et al., 2009).                  tion and Jaccard similarity respectively). These
+                                                              similarity measures were shown to outperform the
+4     Experiments
+                                                              generative model of Rooth et al. (1999), as well
+We perform three main experiments to assess the               as class-based methods such as Resnik’s. In this
+quality of the preferences obtained using topic               pseudo-disambiguation experiment an observed
+models. The first is a task-independent evaluation            tuple is paired with a pseudo-negative, which
+using a pseudo-disambiguation experiment (Sec-                has both arguments randomly generated from the
+tion 4.2), which is a standard way to evaluate the            whole vocabulary (according to the corpus-wide
+quality of selectional preferences (Rooth et al.,             distribution over arguments). The task is, for each
+1999; Erk, 2007; Bergsma et al., 2008). We use                relation-argument pair, to determine whether it is
+this experiment to compare the various topic mod-             observed, or a random distractor.
+els as well as the best model with the known state
+of the art approaches to selectional preferences.             4.2.1    Test Set
+Secondly, we show significant improvements to                 For this experiment we gathered a primary corpus
+performance at an end-task of textual inference in            by first randomly selecting 100 high-frequency re-
+Section 4.3. Finally, we report on the quality of             lations not in the generalization corpus. For each
+a large database of Wordnet-based preferences ob-             relation we collected all tuples containing argu-
+tained after manually associating our topics with             ments in the vocabulary. We held out 500 ran-
+Wordnet classes (Section 4.4).                                domly selected tuples as the test set. For each tu-
+                                                                  3
+4.1 Generalization Corpus                                           Many of the most frequent relations have very weak se-
+                                                              lectional preferences, and thus provide little signal for infer-
+For all experiments we make use of a corpus                   ring meaningful topics. For example, the relations has and is
+of r(a1 , a2 ) tuples, which was automatically ex-            can take just about any arguments.
+
+
+                                                        428
+
+
+ Topic t                          Arg1                          Relations which assign                            Arg2
+                                                                highest probability to t
+ 18          The residue - The mixture - The reaction           was treated with, is         EtOAc - CH2Cl2 - H2O - CH.sub.2Cl.sub.2
+             mixture - The solution - the mixture - the re-     treated with,        was     - H.sub.2O - water - MeOH - NaHCO3 -
+             action mixture - the residue - The reaction -      poured     into,     was     Et2O - NHCl - CHCl.sub.3 - NHCl - drop-
+             the solution - The filtrate - the reaction - The   extracted with, was          wise - CH2Cl.sub.2 - Celite - Et.sub.2O -
+             product - The crude product - The pellet -         purified by, was di-         Cl.sub.2 - NaOH - AcOEt - CH2C12 - the
+             The organic layer - Thereto - This solution        luted with, was filtered     mixture - saturated NaHCO3 - SiO2 - H2O
+             - The resulting solution - Next - The organic      through, is disolved in,     - N hydrochloric acid - NHCl - preparative
+             phase - The resulting mixture - C. )               is washed with               HPLC - to0 C
+ 151         the Court - The Court - the Supreme Court          will hear, ruled in, de-     the case - the appeal - arguments - a case -
+             - The Supreme Court - this Court - Court           cides, upholds, struck       evidence - this case - the decision - the law
+             - The US Supreme Court - the court - This          down,        overturned,     - testimony - the State - an interview - an
+             Court - the US Supreme Court - The court           sided with, affirms          appeal - cases - the Court - that decision -
+             - Supreme Court - Judge - the Court of Ap-                                      Congress - a decision - the complaint - oral
+             peals - A federal judge                                                         arguments - a law - the statute
+ 211         President Bush - Bush - The President -            hailed, vetoed, pro-         the bill - a bill - the decision - the war - the
+             Clinton - the President - President Clinton        moted, will deliver,         idea - the plan - the move - the legislation -
+             - President George W. Bush - Mr. Bush -            favors,    denounced,        legislation - the measure - the proposal - the
+             The Governor - the Governor - Romney -             defended                     deal - this bill - a measure - the program -
+             McCain - The White House - President -                                          the law - the resolution - efforts - the agree-
+             Schwarzenegger - Obama                                                          ment - gay marriage - the report - abortion
+ 224         Google - Software - the CPU - Clicking -           will display, to store, to   data - files - the data - the file - the URL -
+             Excel - the user - Firefox - System - The          load, processes, cannot      information - the files - images - a URL - the
+             CPU - Internet Explorer - the ability - Pro-       find, invokes, to search     information - the IP address - the user - text
+             gram - users - Option - SQL Server - Code          for, to delete               - the code - a file - the page - IP addresses -
+             - the OS - the BIOS                                                             PDF files - messages - pages - an IP address
+
+Table 1: Example argument lists from the inferred topics. For each topic number t we list the most
+probable values according to the multinomial distributions for each argument (βt and γt ). The middle
+column reports a few relations whose inferred topic distributions θr assign highest probability to t.
+
+ple r(a1 , a2 ) in the held-out set, we removed all                     argument is similar.
+tuples in the training set containing either of the                                                               T
+
+rel-arg pairs, i.e., any tuple matching r(a1 , ∗) or
+                                                                                                                  X
+                                                                         P (a1 |r, ¬D) ≈ PLDA (a1 |r)       =           P (a1 |t)P (t|r)
+r(∗, a2 ). Next we used collapsed Gibbs sampling                                                                  t=0
+                                                                                                                  T
+to infer a distribution over topics, θr , for each of                                                       =
+                                                                                                                  X
+                                                                                                                        βt (a1 )θr (t)
+the relations in the primary corpus (based solely                                                                 t=0
+
+on tuples in the training set) using the topics from
+                                                                           A simple application of Bayes Rule gives the
+the generalization corpus.
+                                                                        probability that a particular argument is not a
+   For each of the 500 observed tuples in the test-                     distractor.   Here the distractor-related proba-
+set we generated a pseudo-negative tuple by ran-                        bilities are independent of r, i.e., P (D|r) =
+domly sampling two noun phrases from the distri-                        P (D), P (a1 |D, r) = P (a1 |D), etc. We estimate
+bution of NPs in both corpora.                                          P (a1 |D) according to their frequency in the gen-
+                                                                        eralization corpus.
+4.2.2      Prediction                                                                     P (¬D|r)P (a1 |r, ¬D)
+                                                                        P (¬D|r, a1 ) =
+                                                                                                P (a1 |r)
+Our prediction system needs to determine whether                                                  P (¬D)PLDA (a1 |r)
+                                                                                        ≈
+a specific relation-argument pair is admissible ac-                                       P (D)P (a1 |D) + P (¬D)PLDA (a1 |r)
+cording to the selectional preferences or is a ran-
+dom distractor (D). Following previous work, we                         4.2.3 Results
+perform this experiment independently for the two                       Figure 3 plots the precision-recall curve for the
+relation-argument pairs (r, a1 ) and (r, a2 ).                          pseudo-disambiguation experiment comparing the
+  We first compute the probability of observing                         three different topic models. L DA - SP, which uses
+a1 for first argument of relation r given that it is                    LinkLDA, substantially outperforms both Inde-
+not a distractor, P (a1 |r, ¬D), which we approx-                       pendentLDA and JointLDA.
+imate by its probability given an estimate of the                          Next, in figure 4, we compare L DA - SP with
+parameters inferred by our model, marginalizing                         mutual information and Jaccard similarities us-
+over hidden topics t. The analysis for the second                       ing both the generalization and primary corpus for
+
+
+                                                                  429
+
+
+              1.0
+                                                    LDA−SP
+                                                                              zioni et al., 2005; Kozareva et al., 2008).
+                                                    IndependentLDA
+                                                    JointLDA
+              0.8                                                             4.3     End Task Evaluation
+  precision
+
+
+                                                                              We now evaluate L DA - SP’s ability to improve per-
+                                                                              formance at an end-task. We choose the task of
+              0.6
+
+
+
+
+                                                                              improving textual entailment by learning selec-
+                                                                              tional preferences for inference rules and filtering
+              0.4
+
+
+
+
+                                                                              inferences that do not respect these. This applica-
+                    0.0      0.2      0.4    0.6       0.8       1.0          tion of selectional preferences was introduced by
+                                        recall                                Pantel et. al. (2007). For now we stick to infer-
+Figure 3: Comparison of LDA-based approaches                                  ence rules of the form r1 (a1 , a2 ) ⇒ r2 (a1 , a2 ),
+on the pseudo-disambiguation task. L DA - SP (Lin-                            though our ideas are more generally applicable to
+kLDA) substantially outperforms the other mod-                                more complex rules. As an example, the rule (X
+els.                                                                          defeats Y) ⇒ (X plays Y) holds when X and Y
+              1.0
+
+
+
+
+                                                   LDA−SP
+                                                                              are both sports teams, however fails to produce a
+                                                   Jaccard
+                                                   Mutual Information
+                                                                              reasonable inference if X and Y are Britain and
+                                                                              Nazi Germany respectively.
+              0.8
+  precision
+
+
+
+
+                                                                              4.3.1    Filtering Inferences
+              0.6
+
+
+
+
+                                                                              In order for an inference to be plausible, both re-
+                                                                              lations must have similar selectional preferences,
+                                                                              and further, the arguments must obey the selec-
+              0.4
+
+
+
+
+                    0.0      0.2      0.4    0.6       0.8       1.0          tional preferences of both the antecedent r1 and
+                                        recall                                the consequent r2 .4 Pantel et al. (2007) made
+Figure 4: Comparison to similarity-based selec-                               use of these intuitions by producing a set of class-
+tional preference systems. L DA - SP obtains 85%                              based selectional preferences for each relation,
+higher recall at precision 0.9.                                               then filtering out any inferences where the argu-
+                                                                              ments were incompatible with the intersection of
+computation of similarities. We find L DA - SP sig-                           these preferences. In contrast, we take a proba-
+nificantly outperforms these methods. Its edge is                             bilistic approach, evaluating the quality of a spe-
+most noticed at high precisions; it obtains 85%                               cific inference by measuring the probability that
+more recall at 0.9 precision compared to mutual                               the arguments in both the antecedent and the con-
+information. Overall L DA - SP obtains an 15% in-                             sequent were drawn from the same hidden topic
+crease in the area under precision-recall curve over                          in our model. Note that this probability captures
+mutual information. All three systems’ AUCs are                               both the requirement that the antecedent and con-
+shown in Table 2; L DA - SP’s improvements over                               sequent have similar selectional preferences, and
+both Jaccard and mutual information are highly                                that the arguments from a particular instance of the
+significant with a significance level less than 0.01                          rule’s application match their overlap.
+using a paired t-test.                                                           We use zri ,j to denote the topic that generates
+   In addition to a superior performance in se-                               the j th argument of relation ri . The probability
+lectional preference evaluation L DA - SP also pro-                           that the two arguments a1 , a2 were drawn from
+duces a set of coherent topics, which can be use-                             the same hidden topic factorizes as follows due to
+ful in their own right. For instance, one could use                           the conditional independences in our model:5
+them for tasks such as set-expansion (Carlson et
+                                                                          P (zr1 ,1 = zr2 ,1 , zr1 ,2 = zr2 ,2 |a1 , a2 ) =
+al., 2010) or automatic thesaurus induction (Et-
+                                                                                           P (zr1 ,1 = zr2 ,1 |a1 )P (zr1 ,2 = zr2 ,2 |a2 )
+                          L DA - SP    MI-Sim        Jaccard-Sim                 4
+                                                                                    Similarity-based and discriminative methods are not ap-
+          AUC             0.833        0.727         0.711                    plicable to this task as they offer no straightforward way
+                                                                              to compare the similarity between selectional preferences of
+Table 2: Area under the precision recall curve.                               two relations.
+                                                                                  5
+L DA - SP’s AUC is significantly higher than both                                   Note that all probabilities are conditioned on an estimate
+                                                                              of the parameters θ, β, γ from our model, which are omitted
+similarity-based methods according to a paired t-                             for compactness.
+test with a significance level below 0.01.
+
+                                                                        430
+
+
+                                                                                        1.0
+ To compute each of these factors we simply                                                    X
+                                                                                                                             LDA−SP
+marginalize over the hidden topics:                                                                                      X   ISP.JIM
+
+
+
+
+                                                                                        0.8
+                                                                                                                         O   ISP.IIM−OR
+
+
+
+
+                                                                            precision
+                             T
+                             X
+P (zr1 ,j = zr2 ,j |aj ) =         P (zr1 ,j = t|aj )P (zr2 ,j = t|aj )
+                             t=1
+
+
+
+
+                                                                                        0.6
+                                                                                                          O
+  where P (z = t|a) can be computed using
+
+
+
+
+                                                                                        0.4
+Bayes rule. For example,
+                                   P (a1 |zr1 ,1 = t)P (zr1 ,1 = t)                           0.0   0.2       0.4    0.6      0.8    1.0
+   P (zr1 ,1 = t|a1 )    =
+                                                 P (a1 )                                                        recall
+                                   βt (a1 )θr1 (t)
+                         =                                                  Figure 5: Precision and recall on the inference fil-
+                                       P (a1 )
+                                                                            tering task.
+4.3.2 Experimental Conditions                                                              Top 10 Inference Rules Ranked by L DA - SP
+In order to evaluate L DA - SP’s ability to filter in-                                   antecedent      consequent      KL-div
+ferences based on selectional preferences we need                                        will begin at   will start at   0.014999
+                                                                                         shall review    shall determine 0.129434
+a set of inference rules between the relations in                                        may increase    may reduce      0.214841
+our corpus. We therefore mapped the DIRT In-                                             walk from       walk to         0.219471
+ference rules (Lin and Pantel, 2001), (which con-                                        consume         absorb          0.240730
+                                                                                         shall keep      shall maintain  0.264299
+sist of pairs of dependency paths) to T EXT RUN -                                        shall pay to    will notify     0.290555
+NER relations as follows. We first gathered all in-                                      may apply for may obtain        0.313916
+stances in the generalization corpus, and for each                                       copy            download        0.316502
+                                                                                         should pay      must pay        0.371544
+r(a1 , a2 ) created a corresponding simple sentence                                      Bottom 10 Inference Rules Ranked by L DA - SP
+by concatenating the arguments with the relation                                         antecedent      consequent      KL-div
+string between them. Each such simple sentence                                           lose to         shall take      10.011848
+was parsed using Minipar (Lin, 1998). From                                               should play     could do        10.028904
+                                                                                         could play      get in          10.048857
+the parses we extracted all dependency paths be-                                         will start at   move to         10.060994
+tween nouns that contain only words present in                                           shall keep      will spend      10.105493
+the T EXT RUNNER relation string. These depen-                                           should play     get in          10.131299
+                                                                                         shall pay to    leave for       10.131364
+dency paths were then matched against each pair                                          shall keep      return to       10.149797
+in the DIRT database, and all pairs of associated                                        shall keep      could do        10.178032
+relations were collected producing about 26,000                                          shall maintain have spent       10.221618
+inference rules.                                                            Table 3: Top 10 and Bottom 10 ranked inference
+   Following Pantel et al. (2007) we randomly                               rules ranked by L DA - SPafter automatically filter-
+sampled 100 inference rules. We then automati-                              ing out negations and antonyms (using WordNet).
+cally filtered out any rules which contained a nega-
+tion, or for which the antecedent and consequent
+contained a pair of antonyms found in WordNet                                  In addition we demonstrate L DA - SP’s abil-
+(this left us with 85 rules). For each rule we col-                         ity to rank inference rules by measuring the
+lected 10 random instances of the antecedent, and                           Kullback Leibler Divergence6 between the topic-
+generated the consequent. We randomly sampled                               distributions of the antecedent and consequent, θr1
+300 of these inferences to hand-label.                                      and θr2 respectively. Table 3 shows the top 10 and
+                                                                            bottom 10 rules out of the 26,000 ranked by KL
+4.3.3 Results
+                                                                            Divergence after automatically filtering antonyms
+In figure 5 we compare the precision and recall of                          (using WordNet) and negations. For slight varia-
+L DA - SP against the top two performing systems                            tions in rules (e.g., symmetric pairs) we mention
+described by Pantel et al. (ISP.IIM-∨ and ISP.JIM,                          only one example to show more variety.
+both using the CBC clusters (Pantel, 2003)). We
+find that L DA - SP achieves both higher precision
+and recall than ISP.IIM-∨. It is also able to achieve                           6
+                                                                                  KL-Divergence is an information-theoretic measure of
+the high-precision point of ISP.JIM and can trade                           the similarity between two probability distributions, and de-
+                                                                                                                           P (x)
+precision to get a much larger recall.
+                                                                                                           P
+                                                                            fined as follows: KL(P ||Q) = x P (x) log Q(x)       .
+
+
+                                                                      431
+
+
+4.4    A Repository of Class-Based Preferences                                 arg1 class              relation        arg2 class
+                                                                              politician#1        was running for       leader#1
+Finally we explore L DA - SP’s ability to produce a                            people#1               will love          show#3
+repository of human interpretable class-based se-                           organization#1        has responded to    accusation#2
+                                                                          administrative unit#1    has appointed     administrator#3
+lectional preferences. As an example, for the re-
+lation was born in, we would like to infer that                              Table 4: Class-based Selectional Preferences.
+the plausible arguments include (person, location)
+and (person, date).                                                         We emphasize that tagging a pair of class-based
+   Since we already have a set of topics, our                            preferences is a highly subjective task, so these re-
+task reduces to mapping the inferred topics to an                        sults should be treated as preliminary. Still, these
+equivalent class in a taxonomy (e.g., WordNet).                          early results are promising. We wish to undertake
+We experimented with automatic methods such                              a larger scale study soon.
+as Resnik’s, but found them to have all the same
+problems as directly applying these approaches to                        5    Conclusions and Future Work
+the SP task.7 Guided by the fact that we have a
+                                                                         We have presented an application of topic mod-
+relatively small number of topics (600 total, 300
+                                                                         eling to the problem of automatically computing
+for each argument) we simply chose to label them
+                                                                         selectional preferences. Our method, L DA - SP,
+manually. By labeling this small number of topics
+                                                                         learns a distribution over topics for each rela-
+we can infer class-based preferences for an arbi-
+                                                                         tion while simultaneously grouping related words
+trary number of relations.
+                                                                         into these topics. This approach is capable of
+   In particular, we applied a semi-automatic
+                                                                         producing human interpretable classes, however,
+scheme to map topics to WordNet. We first applied
+                                                                         avoids the drawbacks of traditional class-based ap-
+Resnik’s approach to automatically shortlist a few
+                                                                         proaches (poor lexical coverage and ambiguity).
+candidate WordNet classes for each topic. We then
+                                                                         L DA - SP achieves state-of-the-art performance on
+manually picked the best class from the shortlist
+                                                                         predictive tasks such as pseudo-disambiguation,
+that best represented the 20 top arguments for a
+                                                                         and filtering incorrect inferences.
+topic (similar to Table 1). We marked all incoher-
+                                                                            Because L DA - SP generates a complete proba-
+ent topics with a special symbol ∅. This process
+                                                                         bilistic model for our relation data, its results are
+took one of the authors about 4 hours to complete.
+                                                                         easily applicable to many other tasks such as iden-
+   To evaluate how well our topic-class associa-
+                                                                         tifying similar relations, ranking inference rules,
+tions carry over to unseen relations we used the
+                                                                         etc. In the future, we wish to apply our model
+same random sample of 100 relations from the
+                                                                         to automatically discover new inference rules and
+pseudo-disambiguation experiment.8 For each ar-
+                                                                         paraphrases.
+gument of each relation we picked the top two top-
+                                                                            Finally, our repository of selectional pref-
+ics according to frequency in the 5 Gibbs samples.
+                                                                         erences for 10,000 relations is available at
+We then discarded any topics which were labeled
+                                                                         http://www.cs.washington.edu/
+with ∅; this resulted in a set of 236 predictions. A
+                                                                         research/ldasp.
+few examples are displayed in table 4.
+   We evaluated these classes and found the accu-                        Acknowledgments
+racy to be around 0.88. We contrast this with Pan-
+tel’s repository,9 the only other released database                      We would like to thank Tim Baldwin, Colin
+of selectional preferences to our knowledge. We                          Cherry, Jesse Davis, Elena Erosheva, Stephen
+evaluated the same 100 relations from his website                        Soderland, Dan Weld, in addition to the anony-
+and tagged the top 2 classes for each argument and                       mous reviewers for helpful comments on a previ-
+evaluated the accuracy to be roughly 0.55.                               ous draft. This research was supported in part by
+                                                                         NSF grant IIS-0803481, ONR grant N00014-08-
+   7
+      Perhaps recent work on automatic coherence ranking                 1-0431, DARPA contract FA8750-09-C-0179, a
+(Newman et al., 2010) and labeling (Mei et al., 2007) could
+produce better results.                                                  National Defense Science and Engineering Grad-
+    8
+      Recall that these 100 were not part of the original 3,000          uate (NDSEG) Fellowship 32 CFR 168a, and car-
+in the generalization corpus, and are, therefore, representative         ried out at the University of Washington’s Turing
+of new “unseen” relations.
+    9
+      http://demo.patrickpantel.com/                                     Center.
+Content/LexSem/paraphrase.htm
+
+
+                                                                   432
+
+
+References                                                     Frank Keller and Mirella Lapata. 2003. Using the web
+                                                                 to obtain frequencies for unseen bigrams. Comput.
+Michele Banko and Oren Etzioni. 2008. The tradeoffs              Linguist.
+  between open and traditional relation extraction. In
+  ACL-08: HLT.                                                 Zornitsa Kozareva, Ellen Riloff, and Eduard Hovy.
+                                                                 2008. Semantic class learning from the web with
+Shane Bergsma, Dekang Lin, and Randy Goebel.
+                                                                 hyponym pattern linkage graphs. In ACL-08: HLT.
+  2008. Discriminative learning of selectional pref-
+  erence from unlabeled text. In EMNLP.
+                                                               Hang Li and Naoki Abe. 1998. Generalizing case
+David M. Blei, Andrew Y. Ng, and Michael I. Jordan.              frames using a thesaurus and the mdl principle.
+  2003. Latent dirichlet allocation. J. Mach. Learn.             Comput. Linguist.
+  Res.
+                                                               Dekang Lin and Patrick Pantel. 2001. Dirt-discovery
+Samuel Brody and Mirella Lapata. 2009. Bayesian                  of inference rules from text. In KDD.
+  word sense induction. In EACL, pages 103–111,
+  Morristown, NJ, USA. Association for Computa-                Dekang Lin. 1998. Dependency-based evaluation of
+  tional Linguistics.                                            minipar. In Proc. Workshop on the Evaluation of
+                                                                 Parsing Systems.
+Andrew Carlson, Justin Betteridge, Richard C. Wang,
+  Estevam R. Hruschka Jr., and Tom M. Mitchell.                Qiaozhu Mei, Xuehua Shen, and ChengXiang Zhai.
+  2010. Coupled semi-supervised learning for infor-              2007. Automatic labeling of multinomial topic
+  mation extraction. In WSDM 2010.                               models. In KDD.
+
+Harr Chen, S. R. K. Branavan, Regina Barzilay, and             David Mimno, Hanna M. Wallach, Jason Naradowsky,
+  David R. Karger. 2009. Global models of document               David A. Smith, and Andrew McCallum. 2009.
+  structure using latent permutations. In NAACL.                 Polylingual topic models. In EMNLP.
+
+Stephen Clark and David Weir. 2002. Class-based                David Newman, Arthur Asuncion, Padhraic Smyth,
+   probability estimation using a semantic hierarchy.            and Max Welling. 2009. Distributed algorithms for
+   Comput. Linguist.                                             topic models. JMLR.
+
+Ido Dagan, Lillian Lee, and Fernando C. N. Pereira.            David Newman, Jey Han Lau, Karl Grieser, and Tim-
+   1999. Similarity-based models of word cooccur-                othy Baldwin. 2010. Automatic evaluation of topic
+   rence probabilities. In Machine Learning.                     coherence. In NAACL-HLT.
+Hal Daumé III and Daniel Marcu. 2006. Bayesian                Diarmuid Ó Séaghdha. 2010. Latent variable mod-
+  query-focused summarization. In Proceedings of                 els of selectional preference. In Proceedings of the
+  the 21st International Conference on Computational             48th Annual Meeting of the Association for Compu-
+  Linguistics and 44th Annual Meeting of the Associ-             tational Linguistics.
+  ation for Computational Linguistics.
+                                                               Patrick Pantel, Rahul Bhagat, Bonaventura Coppola,
+Hal Daume III. 2007. hbc: Hierarchical bayes com-                Timothy Chklovski, and Eduard H. Hovy. 2007.
+  piler. http://hal3.name/hbc.                                   Isp: Learning inferential selectional preferences. In
+                                                                 HLT-NAACL.
+Katrin Erk. 2007. A simple, similarity-based model
+  for selectional preferences. In Proceedings of the
+                                                               Patrick Andre Pantel. 2003. Clustering by commit-
+  45th Annual Meeting of the Association of Compu-
+                                                                 tee. Ph.D. thesis, University of Alberta, Edmonton,
+  tational Linguistics.
+                                                                 Alta., Canada.
+Elena Erosheva, Stephen Fienberg, and John Lafferty.
+  2004. Mixed-membership models of scientific pub-             Joseph Reisinger and Marius Pasca. 2009. Latent vari-
+  lications. Proceedings of the National Academy of               able models of concept-attribute attachment. In Pro-
+  Sciences of the United States of America.                       ceedings of the Joint Conference of the 47th Annual
+                                                                  Meeting of the ACL and the 4th International Joint
+Oren Etzioni, Michael Cafarella, Doug Downey,                     Conference on Natural Language Processing of the
+  Ana maria Popescu, Tal Shaked, Stephen Soderl,                  AFNLP.
+  Daniel S. Weld, and Alex Yates. 2005. Unsuper-
+  vised named-entity extraction from the web: An ex-           P. Resnik.      1996.     Selectional constraints: an
+  perimental study. Artificial Intelligence.                      information-theoretic model and its computational
+                                                                  realization. Cognition.
+Daniel Gildea and Daniel Jurafsky. 2002. Automatic
+  labeling of semantic roles. Comput. Linguist.                Philip Resnik. 1997. Selectional preference and sense
+                                                                 disambiguation. In Proc. of the ACL SIGLEX Work-
+T. L. Griffiths and M. Steyvers. 2004. Finding scien-            shop on Tagging Text with Lexical Semantics: Why,
+   tific topics. Proc Natl Acad Sci U S A.                       What, and How?
+
+
+                                                         433
+
+
+Mats Rooth, Stefan Riezler, Detlef Prescher, Glenn
+ Carroll, and Franz Beil. 1999. Inducing a semanti-
+ cally annotated lexicon via em-based clustering. In
+ Proceedings of the 37th annual meeting of the Asso-
+ ciation for Computational Linguistics on Computa-
+ tional Linguistics.
+Lenhart Schubert and Matthew Tong. 2003. Extract-
+  ing and evaluating general world knowledge from
+  the brown corpus. In In Proc. of the HLT-NAACL
+  Workshop on Text Meaning, pages 7–13.
+Benjamin Van Durme and Daniel Gildea. 2009. Topic
+  models for corpus-centric knowledge generalization.
+  In Technical Report TR-946, Department of Com-
+  puter Science, University of Rochester, Rochester.
+Tae Yano, William W. Cohen, and Noah A. Smith.
+  2009. Predicting response to political blog posts
+  with topic models. In NAACL.
+L. Yao, D. Mimno, and A. Mccallum. 2009. Effi-
+   cient methods for topic model inference on stream-
+   ing document collections. In KDD.
+
+
+
+
+                                                        434
+

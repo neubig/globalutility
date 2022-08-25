@@ -1,0 +1,727 @@
+    Sentiment Learning on Product Reviews via Sentiment Ontology Tree
+                     Wei Wei                                            Jon Atle Gulla
+            Department of Computer and                            Department of Computer and
+                Information Science                                   Information Science
+           Norwegian University of Science                       Norwegian University of Science
+                  and Technology                                        and Technology
+              wwei@idi.ntnu.no                                       jag@idi.ntnu.no
+
+
+                      Abstract                                    Carrying out sentiment analysis on product re-
+    Existing works on sentiment analysis on                    views is not a trivial task. Although there have al-
+    product reviews suffer from the following                  ready been a lot of publications investigating on
+    limitations: (1) The knowledge of hierar-                  similar issues, among which the representatives
+    chical relationships of products attributes                are (Turney, 2002; Dave et al., 2003; Hu and Liu,
+    is not fully utilized. (2) Reviews or sen-                 2004; Liu et al., 2005; Popescu and Etzioni, 2005;
+    tences mentioning several attributes asso-                 Zhuang et al., 2006; Lu and Zhai, 2008; Titov and
+    ciated with complicated sentiments are not                 McDonald, 2008; Zhou and Chaovalit, 2008; Lu et
+    dealt with very well. In this paper, we pro-               al., 2009), there is still room for improvement on
+    pose a novel HL-SOT approach to label-                     tackling this problem. When we look into the de-
+    ing a product’s attributes and their asso-                 tails of each example of product reviews, we find
+    ciated sentiments in product reviews by a                  that there are some intrinsic properties that exist-
+    Hierarchical Learning (HL) process with a                  ing previous works have not addressed in much de-
+    defined Sentiment Ontology Tree (SOT).                     tail.
+    The empirical analysis against a human-                       First of all, product reviews constitute domain-
+    labeled data set demonstrates promising                    specific knowledge. The product’s attributes men-
+    and reasonable performance of the pro-                     tioned in reviews might have some relationships
+    posed HL-SOT approach. While this pa-                      between each other. For example, for a digital
+    per is mainly on sentiment analysis on re-                 camera, comments on image quality are usually
+    views of one product, our proposed HL-                     mentioned. However, a sentence like “40D han-
+    SOT approach is easily generalized to la-                  dles noise very well up to ISO 800”, also refers
+    beling a mix of reviews of more than one                   to image quality of the camera 40D. Here we say
+    products.                                                  “noise” is a sub-attribute factor of “image quality”.
+                                                               We argue that the hierarchical relationship be-
+1   Introduction
+                                                               tween a product’s attributes can be useful knowl-
+As the internet reaches almost every corner of this            edge if it can be formulated and utilized in product
+world, more and more people write reviews and                  reviews analysis. Secondly, Vocabularies used in
+share opinions on the World Wide Web. The user-                product reviews tend to be highly overlapping. Es-
+generated opinion-rich reviews will not only help              pecially, for same attribute, usually same words or
+other users make better judgements but they are                synonyms are involved to refer to them and to de-
+also useful resources for manufacturers of prod-               scribe sentiment on them. We believe that labeling
+ucts to keep track and manage customer opinions.               existing product reviews with attributes and cor-
+However, as the number of product reviews grows,               responding sentiment forms an effective training
+it becomes difficult for a user to manually learn              resource to perform sentiment analysis. Thirdly,
+the panorama of an interesting topic from existing             sentiments expressed in a review or even in a
+online information. Faced with this problem, re-               sentence might be opposite on different attributes
+search works, e.g., (Hu and Liu, 2004; Liu et al.,             and not every attributes mentioned are with senti-
+2005; Lu et al., 2009), of sentiment analysis on               ments. For example, it is common to find a frag-
+product reviews were proposed and have become                  ment of a review as follows:
+a popular research topic at the crossroads of infor-           Example 1: “...I am very impressed with this cam-
+mation retrieval and computational linguistics.                era except for its a bit heavy weight especially with
+
+
+                                                         404
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 404–413,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                                                                                                          camera
+
+
+
+
+                                            camera +           design and usability                                                   image quality                            lens    camera -
+
+
+
+
+   design and usability +          weight              interface           design and usability -             image quality +     noise            resolution     image quality -     lens +      lens -
+
+
+
+
+       weight +         weight -        interface +         menu            button          interface -             noise +     noise -            resolution +     resolution -
+
+
+
+
+                                            menu +         menu -          button +          button -
+
+
+
+
+                                               Figure 1: an example of part of a SOT for digital camera
+
+
+extra lenses attached. It has many buttons and two                                                            a camera itself. Each of the non-leaf nodes (white
+main dials. The first dial is thumb dial, located                                                             nodes) of the SOT represents an attribute of a cam-
+near shutter button. The second one is the big                                                                era3 . All leaf nodes (gray nodes) of the SOT rep-
+round dial located at the back of the camera...”                                                              resent sentiment (positive/negative) nodes respec-
+In this example, the first sentence gives positive                                                            tively associated with their parent nodes. A for-
+comment on the camera as well as a complaint on                                                               mal definition on SOT is presented in Section 3.1.
+its heavy weight. Even if the words “lenses” ap-                                                              With the proposed concept of SOT, we manage to
+pears in the review, it is not fair to say the cus-                                                           formulate the two tasks of the sentiment analysis
+tomer expresses any sentiment on lens. The sec-                                                               to be a hierarchical classification problem. We fur-
+ond sentence and the rest introduce the camera’s                                                              ther propose a specific hierarchical learning algo-
+buttons and dials. It’s also not feasible to try to                                                           rithm, called HL-SOT algorithm, which is devel-
+get any sentiment from these contents. We ar-                                                                 oped based on generalizing an online-learning al-
+gue that when performing sentiment analysis on                                                                gorithm H-RLS (Cesa-Bianchi et al., 2006). The
+reviews, such as in the Example 1, more attention                                                             HL-SOT algorithm has the same property as the
+is needed to distinguish between attributes that are                                                          H-RLS algorithm that allows multiple-path label-
+mentioned with and without sentiment.                                                                         ing (input target text can be labeled with nodes be-
+   In this paper, we study the problem of senti-                                                              longing to more than one path in the SOT) and
+ment analysis on product reviews through a novel                                                              partial-path labeling (the input target text can be
+method, called the HL-SOT approach, namely Hi-                                                                labeled with nodes belonging to a path that does
+erarchical Learning (HL) with Sentiment Ontol-                                                                not end on a leaf). This property makes the ap-
+ogy Tree (SOT). By sentiment analysis on prod-                                                                proach well suited for the situation where com-
+uct reviews we aim to fulfill two tasks, i.e., label-                                                         plicated sentiments on different attributes are ex-
+ing a target text1 with: 1) the product’s attributes                                                          pressed in one target text. Unlike the H-RLS algo-
+(attributes identification task), and 2) their corre-                                                         rithm , the HL-SOT algorithm enables each clas-
+sponding sentiments mentioned therein (sentiment                                                              sifier to separately learn its own specific thresh-
+annotation task). The result of this kind of label-                                                           old. The proposed HL-SOT approach is empiri-
+ing process is quite useful because it makes it pos-                                                          cally analyzed against a human-labeled data set.
+sible for a user to search reviews on particular at-                                                          The experimental results demonstrate promising
+tributes of a product. For example, when consider-                                                            and reasonable performance of our approach.
+ing to buy a digital camera, a prospective user who                                                              This paper makes the following contributions:
+cares more about image quality probably wants to                                                                   • To the best of our knowledge, with the pro-
+find comments on the camera’s image quality in                                                                       posed concept of SOT, the proposed HL-SOT
+other users’ reviews. SOT is a tree-like ontology                                                                    approach is the first work to formulate the
+structure that formulates the relationships between                                                                  tasks of sentiment analysis to be a hierarchi-
+a product’s attributes. For example, Fig. 1 is a SOT                                                                 cal classification problem.
+for a digital camera2 . The root node of the SOT is
+   1                                                                                                               • A specific hierarchical learning algorithm is
+      Each product review to be analyzed is called target text
+in the following of this paper.                                                                               tive/negative sentiment associated with an attribute m.
+    2                                                                                                             3
+      Due to the space limitation, not all attributes of a digi-                                                    A product itself can be treated as an overall attribute of
+tal camera are enumerated in this SOT; m+/m- means posi-                                                      the product.
+
+
+                                                                                                        405
+
+
+      further proposed to achieve tasks of senti-             2005), the concepts of prior polarity and contex-
+      ment analysis in one hierarchical classifica-           tual polarity were proposed. This paper presented
+      tion process.                                           a system that is able to automatically identify the
+                                                              contextual polarity for a large subset of sentiment
+    • The proposed HL-SOT approach can be gen-                expressions. In (Turney, 2002), an unsupervised
+      eralized to make it possible to perform senti-          learning algorithm was proposed to classify re-
+      ment analysis on target texts that are a mix of         views as recommended or not recommended by
+      reviews of different products, whereas exist-           averaging sentiment annotation of phrases in re-
+      ing works mainly focus on analyzing reviews             views that contain adjectives or adverbs. How-
+      of only one type of product.                            ever, the performances of these works are not good
+                                                              enough for sentiment analysis on product reviews,
+The remainder of the paper is organized as fol-
+                                                              where sentiment on each attribute of a product
+lows. In Section 2, we provide an overview of
+                                                              could be so complicated that it is unable to be ex-
+related work on sentiment analysis. Section 3
+                                                              pressed by overall document sentiment.
+presents our work on sentiment analysis with HL-
+SOT approach. The empirical analysis and the re-
+                                                                 Attributes-based sentiment analysis is to ana-
+sults are presented in Section 4, followed by the
+                                                              lyze sentiment based on each attribute of a prod-
+conclusions, discussions, and future work in Sec-
+                                                              uct. In (Hu and Liu, 2004), mining product fea-
+tion 5.
+                                                              tures was proposed together with sentiment polar-
+2    Related Work                                             ity annotation for each opinion sentence. In that
+                                                              work, sentiment analysis was performed on prod-
+The task of sentiment analysis on product reviews             uct attributes level. In (Liu et al., 2005), a system
+was originally performed to extract overall senti-            with framework for analyzing and comparing con-
+ment from the target texts. However, in (Turney,              sumer opinions of competing products was pro-
+2002), as the difficulty shown in the experiments,            posed. The system made users be able to clearly
+the whole sentiment of a document is not neces-               see the strengths and weaknesses of each prod-
+sarily the sum of its parts. Then there came up               uct in the minds of consumers in terms of various
+with research works shifting focus from overall               product features. In (Popescu and Etzioni, 2005),
+document sentiment to sentiment analysis based                Popescu and Etzioni not only analyzed polarity
+on product attributes (Hu and Liu, 2004; Popescu              of opinions regarding product features but also
+and Etzioni, 2005; Ding and Liu, 2007; Liu et al.,            ranked opinions based on their strength. In (Liu
+2005).                                                        et al., 2007), Liu et al. proposed Sentiment-PLSA
+   Document overall sentiment analysis is to sum-             that analyzed blog entries and viewed them as a
+marize the overall sentiment in the document. Re-             document generated by a number of hidden sen-
+search works related to document overall senti-               timent factors. These sentiment factors may also
+ment analysis mainly rely on two finer levels senti-          be factors based on product attributes. In (Lu and
+ment annotation: word-level sentiment annotation              Zhai, 2008), Lu et al. proposed a semi-supervised
+and phrase-level sentiment annotation. The word-              topic models to solve the problem of opinion inte-
+level sentiment annotation is to utilize the polar-           gration based on the topic of a product’s attributes.
+ity annotation of words in each sentence and sum-             The work in (Titov and McDonald, 2008) pre-
+marize the overall sentiment of each sentiment-               sented a multi-grain topic model for extracting the
+bearing word to infer the overall sentiment within            ratable attributes from product reviews. In (Lu et
+the text (Hatzivassiloglou and Wiebe, 2000; An-               al., 2009), the problem of rated attributes summary
+dreevskaia and Bergler, 2006; Esuli and Sebas-                was studied with a goal of generating ratings for
+tiani, 2005; Esuli and Sebastiani, 2006; Hatzi-               major aspects so that a user could gain different
+vassiloglou and McKeown, 1997; Kamps et al.,                  perspectives towards a target entity. All these re-
+2004; Devitt and Ahmad, 2007; Yu and Hatzivas-                search works concentrated on attribute-based sen-
+siloglou, 2003). The phrase-level sentiment anno-             timent analysis. However, the main difference
+tation focuses sentiment annotation on phrases not            with our work is that they did not sufficiently uti-
+words with concerning that atomic units of expres-            lize the hierarchical relationships among a prod-
+sion is not individual words but rather appraisal             uct attributes. Although a method of ontology-
+groups (Whitelaw et al., 2005). In (Wilson et al.,            supported polarity mining, which also involved
+
+
+                                                        406
+
+
+ontology to tackle the sentiment analysis problem,                  great”. The “camera” SOT has two sentiment leaf
+was proposed in (Zhou and Chaovalit, 2008), that                    child nodes as well as three non-leaf child nodes
+work studied polarity mining by machine learn-                      which are respectively root nodes of sub-SOTs for
+ing techniques that still suffered from a problem                   sub-attributes “design and usability”, “image qual-
+of ignoring dependencies among attributes within                    ity”, and “lens”. These sub-attributes SOTs re-
+an ontology’s hierarchy. In the contrast, our work                  cursively repeat until each node in the SOT does
+solves the sentiment analysis problem as a hierar-                  not have any more non-leaf child node, which
+chical classification problem that fully utilizes the               means the corresponding attributes do not have
+hierarchy of the SOT during training and classifi-                  any sub-attributes, e.g., the attribute node “button”
+cation process.                                                     in Fig. 1.
+
+3   The HL-SOT Approach                                             3.2 Sentiment Analysis with SOT
+ In this section, we first propose a formal defini-                 In this subsection, we present the HL-SOT ap-
+tion on SOT. Then we formulate the HL-SOT ap-                       proach. With the defined SOT, the problem of sen-
+proach. In this novel approach, tasks of sentiment                  timent analysis is able to be formulated to be a hi-
+analysis are to be achieved in a hierarchical classi-               erarchial classification problem. Then a specific
+fication process.                                                   hierarchical learning algorithm is further proposed
+                                                                    to solve the formulated problem.
+3.1 Sentiment Ontology Tree
+As we discussed in Section 1, the hierarchial rela-                 3.2.1 Problem Formulation
+tionships among a product’s attributes might help                   In the proposed HL-SOT approach, each target
+improve the performance of attribute-based senti-                   text is to be indexed by a unit-norm vector x ∈
+ment analysis. We propose to use a tree-like ontol-                 X , X = Rd . Let Y = {1, ..., N } denote the fi-
+ogy structure SOT, i.e., Sentiment Ontology Tree,                   nite set of nodes in SOT. Let y = {y1 , ..., yN } ∈
+to formulate relationships among a product’s at-                    {0, 1}N be a label vector to a target text x, where
+                                                                    ∀i ∈ Y :
+tributes. Here,we give a formal definition on what
+a SOT is.                                                                   {
+                                                                                1, if x is labeled by the classifier of node i,
+                                                                     yi =
+Definition 1 [SOT] SOT is an abbreviation for                                   0, if x is not labeled by the classifier of node i.
+Sentiment Ontology Tree that is a tree-like ontol-
+ogy structure T (v, v + , v − , T). v is the root node               A label vector y ∈ {0, 1}N is said to respect
+of T which represents an attribute of a given prod-                 SOT if and only if y satisfies ∀i ∈ Y , ∀j ∈
+uct. v + is a positive sentiment leaf node associ-                  A(i) : if yi = 1 then yj = 1, where A(i)
+ated with the attribute v. v − is a negative sen-                   represents a set ancestor nodes of i, i.e.,A(i) =
+timent leaf node associated with the attribute v.                   {x|ancestor(i, x)}. Let Y denote a set of label
+T is a set of subtrees. Each element of T is also                   vectors that respect SOT. Then the tasks of senti-
+a SOT T ′ (v ′ , v ′+ , v ′− , T′ ) which represents a sub-         ment analysis can be formulated to be the goal of a
+attribute of its parent attribute node.                             hierarchical classification that is to learn a function
+By the Definition 1, we define a root of a SOT to                   f : X → Y, that is able to label each target text
+represent an attribute of a product. The SOT’s two                  x ∈ X with classifier of each node and generating
+leaf child nodes are sentiment (positive/negative)                  with x a label vector y ∈ Y that respects SOT. The
+nodes associated with the root attribute. The SOT                   requirement of a generated label vector y ∈ Y en-
+recursively contains a set of sub-SOTs where each                   sures that a target text is to be labeled with a node
+root of a sub-SOT is a non-leaf child node of the                   only if its parent attribute node is labeled with the
+root of the SOT and represent a sub-attribute be-                   target text. For example, in Fig. 1 a review is to
+longing to its parent attribute. This definition suc-               be labeled with “image quality +” requires that the
+cessfully describes the hierarchical relationships                  review should be successively labeled as related to
+among all the attributes of a product. For example,                 “camera” and “image quality”. This is reasonable
+in Fig. 1 the root node of the SOT for a digital cam-               and consistent with intuition, because if a review
+era is its general overview attribute. Comments on                  cannot be identified to be related to a camera, it is
+a digital camera’s general overview attribute ap-                   not safe to infer that the review is commenting a
+pearing in a review might be like “this camera is                   camera’s image quality with positive sentiment.
+
+
+                                                              407
+
+
+3.2.2 HL-SOT Algorithm                                        row vector wi,t of the weight matrix Wt is updated
+The algorithm H-RLS studied in (Cesa-Bianchi et               by a regularized least squares estimator given by:
+al., 2006) solved a similar hierarchical classifica-
+                                                                                           ⊤
+tion problem as we formulated above. However,                     wi,t = (I + Si,Q(i,t−1) Si,Q(i,t−1) + rt rt⊤ )−1
+the H-RLS algorithm was designed as an online-                             ×Si,Q(i,t−1) (li,i1 , li,i2 , ..., li,iQ(i,t−1) )⊤
+learning algorithm which is not suitable to be ap-                                                                             (1)
+plied directly in our problem setting. Moreover,              where I is a d × d identity matrix, Q(i, t − 1)
+the algorithm H-RLS defined the same value as                 denotes the number of times the parent of node i
+the threshold of each node classifier. We argue               observes a positive label before observing the in-
+that if the threshold values could be learned sepa-           stance rt , Si,Q(i,t−1) = [ri1 , ..., riQ(i,t−1) ] is a d ×
+rately for each classifiers, the performance of clas-         Q(i, t−1) matrix whose columns are the instances
+sification process would be improved. Therefore               ri1 , ..., riQ(i,t−1) , and (li,i1 , li,i2 , ..., li,iQ(i,t−1) )⊤ is
+we propose a specific hierarchical learning algo-             a Q(i, t−1)-dimensional vector of the correspond-
+rithm, named HL-SOT algorithm, that is able to                ing labels observed by node i. The Formula 1 re-
+train each node classifier in a batch-learning set-           stricts that the weight vector wi,t of the classifier i
+ting and allows separately learning for the thresh-           is only updated on the examples that are positive
+old of each node classifier.                                  for its parent node. Then the label vector ŷrt is
+Defining the f function Let w1 , ..., wN be                   computed for the instance rt , before the real label
+weight vectors that define linear-threshold classi-           vector lrt is observed. Then the current threshold
+fiers of each node in SOT. Let W = (w1 , ..., wN )⊤           vector θt is updated by:
+be an N × d matrix called weight matrix. Here we
+                                                                              θt+1 = θt + ϵ(ŷrt − lrt ),                     (2)
+generalize the work in (Cesa-Bianchi et al., 2006)
+and define the hierarchical classification function
+                                                              where ϵ is a small positive real number that de-
+f as:
+                                                              notes a corrective step for correcting the current
+               ŷ = f (x) = g(W · x),
+                                                              threshold vector θt . To illustrate the idea behind
+where x ∈ X , ŷ ∈ Y. Let z = W · x. Then the                 the Formula 2, let yt′ = ŷrt − lrt . Let yi,t
+                                                                                                          ′ denote
+
+function ŷ = g(z) on an N -dimensional vector z                                         ′
+                                                              an element of the vector yt . The Formula 2 correct
+defines:                                                      the current threshold θi,t for the classifier i in the
+∀i = 1, ..., N :                                              following way:
+       
+                                                                       ′ = 0, it means the classifier i made a
+       B(zi ≥ θi ), if i is a root node in SOT                  • If yi,t
+ ŷi =                 or yj = 1 for j = P(i),                     proper classification for the current instance
+       
+                                                                  rt . Then the current threshold θi does not
+         0,            else
+                                                                   need to be adjusted.
+where P(i) is the parent node of i in SOT and                          ′ = 1, it means the classifier i made an
+B(S) is a boolean function which is 1 if and only                • If yi,t
+if the statement S is true. Then the hierarchical                  improper classification by mistakenly identi-
+classification function f is parameterized by the                  fying the attribute i of the training instance
+weight matrix W = (w1 , ..., wN )⊤ and threshold                   rt that should have not been identified. This
+vector θ = (θ1 , ..., θN )⊤ . The hierarchical learn-              indicates the value of θi is not big enough to
+ing algorithm HL-SOT is proposed for learning                      serve as a threshold so that the attribute i in
+the parameters of W and θ.                                         this case can be filtered out by the classifier
+                                                                   i. Therefore, the current threshold θi will be
+Parameters Learning for f function Let D de-                       adjusted to be larger by ϵ.
+note the training data set: D = {(r, l)|r ∈ X , l ∈
+Y}. In the HL-SOT learning process, the weight                         ′ = −1, it means the classifier i made an
+                                                                 • If yi,t
+matrix W is firstly initialized to be a 0 matrix,                  improper classification by failing to identify
+where each row vector wi is a 0 vector. The thresh-                the attribute i of the training instance rt that
+old vector is initialized to be a 0 vector. Each in-               should have been identified. This indicates
+stance in the training set D goes into the training                the value of θi is not small enough to serve as
+process. When a new instance rt is observed, each                  a threshold so that the attribute i in this case
+
+
+                                                        408
+
+
+Algorithm 1 Hierarchical Learning Algorithm HL-SOT            proposed approach?(4)how does the dimensional-
+    INITIALIZATION:                                           ity d of index terms space impact the proposed ap-
+ 1: Each vector wi,1 , i = 1, ..., N of weight ma-            proach’s computing efficiency and accuracy?
+    trix W1 is set to be 0 vector
+                                                              4.1 Data Set Preparation
+ 2: Threshold vector θ1 is set to be 0 vector
+    BEGIN                                                     The data set contains 1446 snippets of customer
+ 3: for t = 1, ..., |D| do                                    reviews on digital cameras that are collected from
+ 4:     Observe instance rt ∈ X                               a customer review website4 . We manually con-
+ 5:     for i = 1, ...N do                                    struct a SOT for the product of digital cameras.
+ 6:         Update each row wi,t of weight matrix             The constructed SOT (e.g., Fig. 1) contains 105
+    Wt by Formula 1                                           nodes that include 35 non-leaf nodes representing
+ 7:     end for                                               attributes of the digital camera and 70 leaf nodes
+ 8:     Compute ŷrt = f (rt ) = g(Wt · rt )                  representing associated sentiments with attribute
+ 9:     Observe label vector lrt ∈ Y of the in-               nodes. Then we label all the snippets with corre-
+    stance rt                                                 sponding labels of nodes in the constructed SOT
+10:     Update threshold vector θt by Formula 2               complying with the rule that a target text is to be
+11: end for                                                   labeled with a node only if its parent attribute node
+    END                                                       is labeled with the target text. We randomly divide
+                                                              the labeled data set into five folds so that each fold
+                                                              at least contains one example snippets labeled by
+     can be recognized by the classifier i. There-            each node in the SOT. For each experiment set-
+     fore, the current threshold θi will be adjusted          ting, we run 5 experiments to perform cross-fold
+     to be smaller by ϵ.                                      evaluation by randomly picking three folds as the
+                                                              training set and the other two folds as the testing
+   The hierarchial learning algorithm HL-SOT is               set. All the testing results are averages over 5 run-
+presented as in Algorithm 1. The HL-SOT al-                   ning of experiments.
+gorithm enables each classifier to have its own
+specific threshold value and allows this thresh-              4.2 Evaluation Metrics
+old value can be separately learned and corrected             Since the proposed HL-SOT approach is a hier-
+through the training process. It is not only a batch-         archical classification process, we use three clas-
+learning setting of the H-RLS algorithm but also              sic loss functions for measuring classification per-
+a generalization to the latter. If we set the algo-           formance. They are the One-error Loss (O-Loss)
+rithm HL-SOT’s parameter ϵ to be 0, the HL-SOT                function, the Symmetric Loss (S-Loss) function,
+becomes the H-RLS algorithm in a batch-learning               and the Hierarchical Loss (H-Loss) function:
+setting.
+                                                                • One-error loss (O-Loss) function is defined
+4   Empirical Analysis                                            as:
+                                                                          LO (ŷ, l) = B(∃i : ŷi ̸= li ),
+In this section, we conduct systematic experiments
+                                                                      where ŷ is the prediction label vector and l is
+to perform empirical analysis on our proposed HL-
+                                                                      the true label vector; B is the boolean func-
+SOT approach against a human-labeled data set.
+                                                                      tion as defined in Section 3.2.2.
+In order to encode each text in the data set by a
+d-dimensional vector x ∈ Rd , we first remove all               • Symmetric loss (S-Loss) function is defined
+the stop words and then select the top d frequency                as:
+terms appearing in the data set to construct the in-                                  ∑
+                                                                                      N
+
+dex term space. Our experiments are intended to                          LS (ŷ, l) =   B(ŷi ̸= li ),
+                                                                                               i=1
+address the following questions:(1) whether uti-
+lizing the hierarchical relationships among labels              • Hierarchical loss (H-Loss) function is defined
+help to improve the accuracy of the classification?               as:
+(2) whether the introduction of separately learn-                                    ∑
+                                                                                     N
+ing threshold for each classifier help to improve                     LH (ŷ, l) =         B(ŷi ̸= li ∧ ∀j ∈ A(i), ŷj = lj ),
+the accuracy of the classification? (3) how does                                     i=1
+                                                                 4
+the corrective step ϵ impact the performance of the                  http://www.consumerreview.com/
+
+
+                                                        409
+
+
+                       Table 1: Performance Comparisons (A Smaller Loss Value Means a Better Performance)
+                                                                            Dimensinality=110                                   Dimensinality=220
+                                                Metrics
+                                                                       H-RLS HL-flat HL-SOT                                H-RLS HL-flat HL-SOT
+                                                O-Loss                 0.9812   0.8772     0.8443                          0.9783   0.8591     0.8428
+                                                S-Loss                 8.5516   2.8921     2.3190                          7.8623   2.8449     2.2812
+                                                H-Loss                 3.2479   1.1383     1.0366                          3.1029   1.1298     1.0247
+
+         0.852                                                                          2.4                                                                1.05
+
+
+          0.85                                                                                                                                            1.045
+                                                                                       2.35
+
+         0.848                                                                                                                                             1.04
+
+                                                                                        2.3
+O−Loss
+
+
+
+
+                                                                                                                                                 H−Loss
+                                                                              S−Loss
+         0.846                                                                                                                                            1.035
+
+
+         0.844                                                                                                                                             1.03
+                                                                                       2.25
+
+         0.842                                                                                                                                            1.025
+
+                                                                                        2.2
+          0.84                                           d=110                                                                     d=110                   1.02                                       d=110
+                                                         d=220                                                                     d=220                                                              d=220
+         0.838                                                                         2.15
+                 0      0.02     0.04    0.06     0.08           0.1                          0   0.02     0.04    0.06     0.08           0.1                    0   0.02     0.04    0.06    0.08           0.1
+                               Corrective Step                                                           Corrective Step                                                     Corrective Step
+
+                               (a) O-Loss                                                                (b) S-Loss                                                          (c) H-Loss
+
+                                                                          Figure 2: Impact of Corrective Step ϵ
+
+
+                     where A denotes a set of nodes that are an-                                                          • H-RLS: The H-RLS approach is imple-
+                     cestors of node i in SOT.                                                                              mented by applying the H-RLS algorithm
+                                                                                                                            studied in (Cesa-Bianchi et al., 2006). Un-
+Unlike the O-Loss function and the S-Loss func-                                                                             like our proposed HL-SOT algorithm that en-
+tion, the H-Loss function captures the intuition                                                                            ables the threshold values to be learned sepa-
+that loss should only be charged on a node when-                                                                            rately for each classifiers in the training pro-
+ever a classification mistake is made on a node of                                                                          cess, the H-RLS algorithm only uses an iden-
+SOT but no more should be charged for any ad-                                                                               tical threshold values for each classifiers in
+ditional mistake occurring in the subtree of that                                                                           the classification process.
+node. It measures the discrepancy between the
+                                                                                                                  Experiments are conducted on the performance
+prediction labels and the true labels with consider-
+                                                                                                                  comparison between the proposed HL-SOT ap-
+ation on the SOT structure defined over the labels.
+                                                                                                                  proach with HL-flat approach and the H-RLS ap-
+In our experiments, the recorded loss function val-
+                                                                                                                  proach. The dimensionality d of the index term
+ues for each experiment running are computed by
+                                                                                                                  space is set to be 110 and 220. The corrective step
+averaging the loss function values of each testing
+                                                                                                                  ϵ is set to be 0.005. The experimental results are
+snippets in the testing set.
+                                                                                                                  summarized in Table 1. From Table 1, we can ob-
+                                                                                                                  serve that the HL-SOT approach generally beats
+4.3 Performance Comparison
+                                                                                                                  the H-RLS approach and HL-flat approach on O-
+In order to answer the questions (1), (2) in the                                                                  Loss, S-Loss, and H-Loss respectively. The H-
+beginning of this section, we compare our HL-                                                                     RLS performs worse than the HL-flat and the HL-
+SOT approach with the following two baseline ap-                                                                  SOT, which indicates that the introduction of sepa-
+proaches:                                                                                                         rately learning threshold for each classifier did im-
+                                                                                                                  prove the accuracy of the classification. The HL-
+          • HL-flat: The HL-flat approach involves an al-                                                         SOT approach performs better than the HL-flat,
+            gorithm that is a “flat” version of HL-SOT                                                            which demonstrates the effectiveness of utilizing
+            algorithm by ignoring the hierarchical rela-                                                          the hierarchical relationships among labels.
+            tionships among labels when each classifier
+            is trained. In the training process of HL-flat,                                                       4.4 Impact of Corrective Step ϵ
+            the algorithm reflexes the restriction in the                                                         The parameter ϵ in the proposed HL-SOT ap-
+            HL-SOT algorithm that requires the weight                                                             proach controls the corrective step of the classi-
+            vector wi,t of the classifier i is only updated                                                       fiers’ thresholds when any mistake is observed in
+            on the examples that are positive for its parent                                                      the training process. If the corrective step ϵ is set
+            node.                                                                                                 too large, it might cause the algorithm to be too
+
+
+                                                                                                            410
+
+
+                                                                                                                                                                1.045
+         0.846                                                        2.35
+
+                                                                      2.34                                                                                       1.04
+         0.845
+                                                                      2.33
+                                                                                                                                                                1.035
+         0.844                                                        2.32
+O−Loss
+
+
+
+
+                                                                                                                                                       H−Loss
+                                                             S−Loss
+                                                                                                                                                                 1.03
+                                                                      2.31
+         0.843
+
+                                                                       2.3                                                                                      1.025
+         0.842
+                                                                      2.29
+                                                                                                                                                                 1.02
+         0.841                                                        2.28
+                                                                                                                                                                1.015
+                                                                      2.27
+          0.84
+                                                                      2.26                                                                                       1.01
+             50      100     150     200      250      300                50      100     150     200                250                   300                       50      100         150     200   250     300
+                  Dimensionality of Index Term Space                           Dimensionality of Index Term Space                                                         Dimensionality of Index Term Space
+
+                           (a) O-Loss                                                   (b) S-Loss                                                                                   (c) H-Loss
+
+                                   Figure 3: Impact of Dimensionality d of Index Term Space (ϵ = 0.005)
+
+
+sensitive to each observed mistake. On the con-                                                                                12
+                                                                                                                                    x 10
+                                                                                                                                         6
+
+
+
+
+trary, if the corrective step is set too small, it might
+                                                                                                                               10
+cause the algorithm not sensitive enough to the ob-
+
+
+
+
+                                                                                                         Time Consuming (ms)
+served mistakes. Hence, the corrective step ϵ is                                                                                8
+
+a factor that might impact the performance of the
+proposed approach. Fig. 2 demonstrates the im-                                                                                  6
+
+
+pact of ϵ on O-Loss, S-Loss, and H-Loss. The                                                                                    4
+
+dimensionality of index term space d is set to be
+110 and 220. The value of ϵ is set to vary from                                                                                 2
+
+
+0.001 to 0.1 with each step of 0.001. Fig. 2 shows                                                                              0
+                                                                                                                                    50           100              150              200         250      300
+that the parameter ϵ impacts the classification per-                                                                                         Dimensionality of Index Term Space
+formance significantly. As the value of ϵ increase,
+the O-Loss, S-Loss, and H-Loss generally increase                                                       Figure 4: Time Consuming Impacted by d
+(performance decrease). In Fig. 2c it is obviously
+detected that the H-Loss decreases a little (perfor-
+                                                                                                  considering the computing efficiency impacted by
+mance increase) at first before it increases (perfor-
+                                                                                                  d, Fig. 4 shows that the computational complex-
+mance decrease) with further increase of the value
+                                                                                                  ity of our approach is non-linear increased with
+of ϵ. This indicates that a finer-grained value of ϵ
+                                                                                                  d’s growing, which indicates that indexing more
+will not necessarily result in a better performance
+                                                                                                  terms will improve the accuracy of our proposed
+on the H-loss. However, a fine-grained corrective
+                                                                                                  approach although this is paid by decreasing the
+step generally makes a better performance than a
+                                                                                                  computing efficiency.
+coarse-grained corrective step.
+
+4.5 Impact of Dimensionality d of Index                                                           5 Conclusions, Discussions and Future
+    Term Space                                                                                      Work
+In the proposed HL-SOT approach, the dimen-                                                         In this paper, we propose a novel and effec-
+sionality d of the index term space controls the                                                  tive approach to sentiment analysis on product re-
+number of terms to be indexed. If d is set                                                        views. In our proposed HL-SOT approach, we de-
+too small, important useful terms will be missed                                                  fine SOT to formulate the knowledge of hierarchi-
+that will limit the performance of the approach.                                                  cal relationships among a product’s attributes and
+However, if d is set too large, the computing ef-                                                 tackle the problem of sentiment analysis in a hier-
+ficiency will be decreased. Fig. 3 shows the im-                                                  archical classification process with the proposed
+pacts of the parameter d respectively on O-Loss,                                                  algorithm. The empirical analysis on a human-
+S-Loss, and H-Loss, where d varies from 50 to 300                                                 labeled data set demonstrates the promising re-
+with each step of 10 and the ϵ is set to be 0.005.                                                sults of our proposed approach. The performance
+From Fig. 3, we observe that as the d increases the                                               comparison shows that the proposed HL-SOT ap-
+O-Loss, S-Loss, and H-Loss generally decrease                                                     proach outperforms two baselines: the HL-flat and
+(performance increase). This means that when                                                      the H-RLS approach. This confirms two intuitive
+more terms are indexed better performance can                                                     motivations based on which our approach is pro-
+be achieved by the HL-SOT approach. However,                                                      posed: 1) separately learning threshold values for
+
+
+                                                                                           411
+
+
+each classifier improve the classification accuracy;           extraction from wordnet glosses. In Proceedings of
+2) knowledge of hierarchical relationships of la-              11th Conference of the European Chapter of the As-
+                                                               sociation for Computational Linguistics (EACL’06),
+bels improve the approach’s performance. The ex-
+                                                               Trento, Italy.
+periments on analyzing the impact of parameter
+ϵ indicate that a fine-grained corrective step gen-          Nicolò Cesa-Bianchi, Claudio Gentile, and Luca Zani-
+erally makes a better performance than a coarse-               boni. 2006. Incremental algorithms for hierarchi-
+grained corrective step. The experiments on an-                cal classification. Journal of Machine Learning Re-
+                                                               search (JMLR), 7:31–54.
+alyzing the impact of the dimensionality d show
+that indexing more terms will improve the accu-              Kushal Dave, Steve Lawrence, and David M. Pennock.
+racy of our proposed approach while the comput-                2003. Mining the peanut gallery: opinion extraction
+ing efficiency will be greatly decreased.                      and semantic classification of product reviews. In
+   The focus of this paper is on analyzing review              Proceedings of 12nd International World Wide Web
+                                                               Conference (WWW’03), Budapest, Hungary.
+texts of one product. However, the framework of
+our proposed approach can be generalized to deal             Ann Devitt and Khurshid Ahmad. 2007. Sentiment
+with a mix of review texts of more than one prod-              polarity identification in financial news: A cohesion-
+ucts. In this generalization for sentiment analysis            based approach. In Proceedings of 45th Annual
+                                                               Meeting of the Association for Computational Lin-
+on multiple products reviews, a “big” SOT is con-              guistics (ACL’07), Prague, Czech Republic.
+structed and the SOT for each product reviews is
+a sub-tree of the “big” SOT. The sentiment analy-            Xiaowen Ding and Bing Liu. 2007. The utility of
+sis on multiple products reviews can be performed              linguistic rules in opinion mining. In Proceedings
+the same way the HL-SOT approach is applied on                 of 30th Annual International ACM Special Inter-
+                                                               est Group on Information Retrieval Conference (SI-
+single product reviews and can be tackled in a hier-           GIR’07), Amsterdam, The Netherlands.
+archical classification process with the “big” SOT.
+   This paper is motivated by the fact that the              Andrea Esuli and Fabrizio Sebastiani. 2005. Deter-
+relationships among a product’s attributes could               mining the semantic orientation of terms through
+                                                               gloss classification. In Proceedings of 14th ACM
+be a useful knowledge for mining product review
+                                                               Conference on Information and Knowledge Man-
+texts. The SOT is defined to formulate this knowl-             agement (CIKM’05), Bremen, Germany.
+edge in the proposed approach. However, what
+attributes to be included in a product’s SOT and             Andrea Esuli and Fabrizio Sebastiani. 2006. Senti-
+how to structure these attributes in the SOT is an             wordnet: A publicly available lexical resource for
+                                                               opinion mining. In Proceedings of 5th International
+effort of human beings. The sizes and structures               Conference on Language Resources and Evaluation
+of SOTs constructed by different individuals may               (LREC’06), Genoa, Italy.
+vary. How the classification performance will be
+affected by variances of the generated SOTs is               Vasileios Hatzivassiloglou and Kathleen R. McKeown.
+worthy of study. In addition, an automatic method              1997. Predicting the semantic orientation of ad-
+                                                               jectives. In Proceedings of 35th Annual Meeting
+to learn a product’s attributes and the structure              of the Association for Computational Linguistics
+of SOT from existing product review texts will                 (ACL’97), Madrid, Spain.
+greatly benefit the efficiency of the proposed ap-
+proach. We plan to investigate on these issues in            Vasileios Hatzivassiloglou and Janyce M. Wiebe.
+                                                               2000. Effects of adjective orientation and grad-
+our future work.                                               ability on sentence subjectivity. In Proceedings
+                                                               of 18th International Conference on Computational
+Acknowledgments                                                Linguistics (COLING’00), Saarbrüken, Germany.
+The authors would like to thank the anonymous
+                                                             Minqing Hu and Bing Liu. 2004. Mining and sum-
+reviewers for many helpful comments on the                     marizing customer reviews. In Proceedings of 10th
+manuscript. This work is funded by the Research                ACM SIGKDD Conference on Knowledge Discovery
+Council of Norway under the VERDIKT research                   and Data Mining (KDD’04), Seattle, USA.
+programme (Project No.: 183337).
+                                                             Jaap Kamps, Maarten Marx, R. ort. Mokken, and
+                                                                Maarten de Rijke. 2004. Using WordNet to mea-
+                                                                sure semantic orientation of adjectives. In Proceed-
+References                                                      ings of 4th International Conference on Language
+Alina Andreevskaia and Sabine Bergler. 2006. Min-               Resources and Evaluation (LREC’04), Lisbon, Por-
+  ing wordnet for a fuzzy sentiment: Sentiment tag              tugal.
+
+
+                                                       412
+
+
+Bing Liu, Minqing Hu, and Junsheng Cheng. 2005.                Li Zhuang, Feng Jing, and Xiao-Yan Zhu. 2006.
+  Opinion observer: analyzing and comparing opin-                Movie review mining and summarization. In Pro-
+  ions on the web. In Proceedings of 14th Inter-                 ceedings of the 15th ACM International Confer-
+  national World Wide Web Conference (WWW’05),                   ence on Information and knowledge management
+  Chiba, Japan.                                                  (CIKM’06), Arlington, USA.
+
+Yang Liu, Xiangji Huang, Aijun An, and Xiaohui Yu.
+  2007. ARSA: a sentiment-aware model for predict-
+  ing sales performance using blogs. In Proceedings
+  of the 30th Annual International ACM Special Inter-
+  est Group on Information Retrieval Conference (SI-
+  GIR’07), Amsterdam, The Netherlands.
+
+Yue Lu and Chengxiang Zhai. 2008. Opinion inte-
+  gration through semi-supervised topic modeling. In
+  Proceedings of 17th International World Wide Web
+  Conference (WWW’08), Beijing, China.
+
+Yue Lu, ChengXiang Zhai, and Neel Sundaresan.
+  2009. Rated aspect summarization of short com-
+  ments. In Proceedings of 18th International World
+  Wide Web Conference (WWW’09), Madrid, Spain.
+
+Ana-Maria Popescu and Oren Etzioni. 2005. Extract-
+  ing product features and opinions from reviews. In
+  Proceedings of Human Language Technology Con-
+  ference and Empirical Methods in Natural Lan-
+  guage Processing Conference (HLT/EMNLP’05),
+  Vancouver, Canada.
+
+Ivan Titov and Ryan T. McDonald. 2008. Modeling
+   online reviews with multi-grain topic models. In
+   Proceedings of 17th International World Wide Web
+   Conference (WWW’08), Beijing, China.
+
+Peter D. Turney. 2002. Thumbs up or thumbs down?
+  semantic orientation applied to unsupervised classi-
+  fication of reviews. In Proceedings of 40th Annual
+  Meeting of the Association for Computational Lin-
+  guistics (ACL’02), Philadelphia, USA.
+
+Casey Whitelaw, Navendu Garg, and Shlomo Arga-
+  mon. 2005. Using appraisal taxonomies for senti-
+  ment analysis. In Proceedings of 14th ACM Confer-
+  ence on Information and Knowledge Management
+  (CIKM’05), Bremen, Germany.
+
+Theresa Wilson, Janyce Wiebe, and Paul Hoffmann.
+  2005. Recognizing contextual polarity in phrase-
+  level sentiment analysis. In Proceedings of Hu-
+  man Language Technology Conference and Empir-
+  ical Methods in Natural Language Processing Con-
+  ference (HLT/EMNLP’05), Vancouver, Canada.
+
+Hong Yu and Vasileios Hatzivassiloglou. 2003. To-
+  wards answering opinion questions: Separating facts
+  from opinions and identifying the polarity of opin-
+  ion sentences. In Proceedings of 8th Conference on
+  Empirical Methods in Natural Language Processing
+  (EMNLP’03), Sapporo, Japan.
+
+Lina Zhou and Pimwadee Chaovalit. 2008. Ontology-
+  supported polarity mining. Journal of the American
+  Society for Information Science and Technology (JA-
+  SIST), 59(1):98–110.
+
+
+                                                         413
+

@@ -1,0 +1,405 @@
+Jointly optimizing a two-step conditional random field model for machine
+              transliteration and its fast decoding algorithm
+                       Dong Yang, Paul Dixon and Sadaoki Furui
+                            Department of Computer Science
+                             Tokyo Institute of Technology
+                                Tokyo 152-8552 Japan
+                {raymond,dixonp,furui}@furui.cs.titech.ac.jp
+
+
+                    Abstract                                   Source Name       Target Name                Note
+
+   This paper presents a joint optimization                    Google              䈋℠                English-to-Chinese
+   method of a two-step conditional random                                          gu ge          Chinese Romanized writing
+
+
+   field (CRF) model for machine transliter-                   Google              䉫䊷 䉫 䊦             English-to-Japanese
+                                                                                   guu   gu   ru     Japanese Romanized writing
+   ation and a fast decoding algorithm for
+   the proposed method. Our method lies in
+                                                                     Figure 1: Transliteration examples
+   the category of direct orthographical map-
+   ping (DOM) between two languages with-                    acters called Katakana; examples are given in Fig-
+   out using any intermediate phonemic map-                  ure 1.
+   ping. In the two-step CRF model, the first                   An intuitive transliteration method (Knight and
+   CRF segments an input word into chunks                    Graehl, 1998; Oh et al., 2006) is to firstly convert
+   and the second one converts each chunk                    a source word into phonemes, then find the corre-
+   into one unit in the target language. In this             sponding phonemes in the target language, and fi-
+   paper, we propose a method to jointly op-                 nally convert them to the target language’s written
+   timize the two-step CRFs and also a fast                  system. There are two reasons why this method
+   algorithm to realize it. Our experiments                  does not work well: first, the named entities have
+   show that the proposed method outper-                     diverse origins and this makes the grapheme-to-
+   forms the well-known joint source channel                 phoneme conversion very difficult; second, the
+   model (JSCM) and our proposed fast al-                    transliteration is usually not only determined by
+   gorithm decreases the decoding time sig-                  the pronunciation, but also affected by how they
+   nificantly. Furthermore, combination of                   are written in the original language.
+   the proposed method and the JSCM gives                       Direct orthographical mapping (DOM), which
+   further improvement, which outperforms                    performs the transliteration between two lan-
+   state-of-the-art results in terms of top-1 ac-            guages directly without using any intermediate
+   curacy.                                                   phonemic mapping, is recently gaining more at-
+                                                             tention in the transliteration research community,
+1 Introduction
+                                                             and it is also the “Standard Run” of the “NEWS
+There are more than 6000 languages in the world              2009 Machine Transliteration Shared Task” (Li et
+and 10 languages of them have more than 100 mil-             al., 2009). In this paper, we try to make our system
+lion native speakers. With the information revolu-           satisfy the standard evaluation condition, which
+tion and globalization, systems that support mul-            requires that the system uses the provided parallel
+tiple language processing and spoken language                corpus (without pronunciation) only, and cannot
+translation become urgent demands. The transla-              use any other bilingual or monolingual resources.
+tion of named entities from alphabetic to syllabary             The source channel and joint source channel
+language is usually performed through translitera-           models (JSCMs) (Li et al., 2004) have been pro-
+tion, which tries to preserve the pronunciation in           posed for DOM, which try to model P (T |S) and
+the original language.                                       P (T, S) respectively, where T and S denote the
+   For example, in Chinese, foreign words are                words in the target and source languages. Ekbal
+written with Chinese characters; in Japanese, for-           et al. (2006) modified the JSCM to incorporate
+eign words are usually written with special char-            different context information into the model for
+
+
+                                                       275
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 275–280,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+Indian languages. In the “NEWS 2009 Machine                       • Single unit features: C−2 , C−1 , C0 , C1 , C2
+Transliteration Shared Task”, a new two-step CRF
+model for transliteration task has been proposed                  • Combination features: C−1 C0 , C0 C1
+(Yang et al., 2009), in which the first step is to
+                                                                Here, C0 is the current character, C−1 and C1 de-
+segment a word in the source language into char-
+                                                                note the previous and next characters, and C−2 and
+acter chunks and the second step is to perform a
+                                                                C2 are the characters located two positions to the
+context-dependent mapping from each chunk into
+                                                                left and right of C0 .
+one written unit in the target language.
+                                                                   One limitation of their work is that only top-1
+   In this paper, we propose to jointly optimize a
+                                                                segmentation is output to the following CRF con-
+two-step CRF model. We also propose a fast de-
+                                                                verter.
+coding algorithm to speed up the joint search. The
+rest of this paper is organized as follows: Sec-                2.3 CRF converter
+tion 2 explains the two-step CRF method, fol-
+                                                                Similar to the CRF segmenter, the CRF converter
+lowed by Section 3 which describes our joint opti-
+                                                                has the format shown in Figure 2.
+mization method and its fast decoding algorithm;
+Section 4 introduces a rapid implementation of a                  For this CRF, Yang et al. (2009) used the fol-
+JSCM system in the weighted finite state trans-                 lowing features:
+ducer (WFST) framework; and the last section                      • Single unit features: CK−1 , CK0 , CK1
+reports the experimental results and conclusions.
+Although our method is language independent, we                   • Combination       features:        CK−1 CK0 ,
+use an English-to-Chinese transliteration task in                   CK0 CK1
+all the explanations and experiments.
+                                                                where CK represents the source language chunk,
+2 Two-step CRF method                                           and the subscript notation is the same as the CRF
+                                                                segmenter.
+2.1   CRF introduction
+A chain-CRF (Lafferty et al., 2001) is an undi-                 3 Joint optimization and its fast decoding
+rected graphical model which assigns a probability                algorithm
+to a label sequence L = l1 l2 . . . lT , given an input
+                                                                3.1 Joint optimization
+sequence C = c1 c2 . . . cT . CRF training is usually
+performed through the L-BFGS algorithm (Wal-                    We denote a word in the source language by S, a
+lach, 2002) and decoding is performed by the                    segmentation of S by A, and a word in the target
+Viterbi algorithm. We formalize machine translit-               langauge by T . Our goal is to find the best word T̂
+eration as a CRF tagging problem, as shown in                   in the target language which maximizes the prob-
+Figure 2.                                                       ability P (T |S).
+                                                                    Yang et al. (2009) used only the best segmen-
+                                                                tation in the first CRF and the best output in the
+      Timothy                     㩖㥿㽓                           second CRF, which is equivalent to
+      T/B i/N m/B o/N t/B h/N y/N
+      Ti/㩖 mo/㥿 thy/㽓                                                     Â = arg max P (A|S)
+                                                                                       A
+                                                                          T̂   = arg max P (T |S, Â),           (1)
+Figure 2: An pictorial description of a CRF seg-                                       T
+menter and a CRF converter
+                                                                where P (A|S) and P (T |S, A) represent two
+                                                                CRFs respectively. This method considers the seg-
+2.2   CRF segmenter                                             mentation and the conversion as two independent
+In the CRF, a feature function describes a co-                  steps. A major limitation is that, if the segmenta-
+occurrence relation, and it is usually a binary func-           tion from the first step is wrong, the error propa-
+tion, taking the value 1 when both an observa-                  gates to the second step, and the error is very dif-
+tion and a label transition are observed. Yang et               ficult to recover.
+al. (2009) used the following features in the seg-                 In this paper, we propose a new method to
+mentation tool:                                                 jointly optimize the two-step CRF, which can be
+
+
+                                                          276
+
+
+written as:                                                  with low probabilities. Here we propose a no-loss
+                                                             fast decoding algorithm for deciding when to stop
+      T̂   = arg max P (T |S)                                performing the second CRF decoding.
+                T
+                     X                                          Suppose we have a list of segmentation candi-
+           = arg max     P (T, A|S)                          dates which are generated by the 1st CRF, ranked
+                 T      A
+                       X                                     by probabilities P (A|S) in descending order A :
+           = arg max        P (A|S)P (T |S, A)               A1 , A2 , ..., AN and we are performing the 2nd
+                 T      A                                    CRF decoding starting from A1 . Up to Ak ,
+                                                 (2)         we get a list of candidates T : T1 , T2 , ..., TL ,
+                                                             ranked by probabilities in descending order. If
+   The joint optimization considers all the segmen-          we can guarantee that, even performing the 2nd
+tation possibilities and sums the probability over           CRF decoding for all the remaining segmentations
+all the alternative segmentations which generate             Ak+1 , Ak+2 , ..., AN , the top 1 candidate does not
+the same output. It considers the segmentation and           change, then we can stop decoding.
+conversion in a unified framework and is robust to              We can show that the following formula is the
+segmentation errors.                                         stop condition:
+3.2    N-best approximation                                                                        X
+                                                                                                   k
+                                                             Pk (T1 |S) − Pk (T2 |S) > 1 −               P (Aj |S). (3)
+In the process of finding the best output using
+                                                                                                   j=1
+Equation 2, a dynamic programming algorithm for
+joint decoding of the segmentation and conversion               The meaning of this formula is that the prob-
+is possible, but the implementation becomes very             ability of all the remaining candidates is smaller
+complicated. Another direction is to divide the de-          than the probability difference between the best
+coding into two steps of segmentation and conver-            and the second best candidates; on the other hand,
+sion, which is this paper’s method. However, exact           even if all the remaining probabilities are added to
+inference by listing all possible candidates explic-         the second best candidate, it still cannot overturn
+itly and summing over all possible segmentations             the top candidate. The mathematical proof is pro-
+is intractable, because of the exponential computa-          vided in Appendix A.
+tion complexity with the source word’s increasing               The stop condition here has no approximation
+length.                                                      nor pre-defined assumption, and it is a no-loss fast
+   In the segmentation step, the number of possible          decoding algorithm.
+segmentations is 2N , where N is the length of the           4 Rapid development of a JSCM system
+source word and 2 is the size of the tagging set. In
+the conversion step, the number of possible candi-           The JSCM represents how the source words and
+              ′
+dates is M N , where N ′ is the number of chunks             target names are generated simultaneously (Li et
+from the 1st step and M is the size of the tagging           al., 2004):
+set. M is usually large, e.g., about 400 in Chinese                  P (S, T ) = P (s1 , s2 , ..., sk , t1 , t2 , ..., tk )
+and 50 in Japanese, and it is impossible to list all
+                                                                 = P (< s, t >1 , < s, t >2 , ..., < s, t >k )
+the candidates.
+   Our analysis shows that beyond the 10th candi-                    Y
+                                                                     K
+                                                                 =         P (< s, t >k | < s, t >k−1
+                                                                                                  1 )                    (4)
+date, almost all the probabilities of the candidates
+                                                                     k=1
+in both steps drop below 0.01. Therefore we de-
+cided to generate top-10 results for both steps to           where S = (s1 , s2 , ..., sk ) is a word in the source
+approximate the Equation 2.                                  langauge and T = (t1 , t2 , ..., tk ) is a word in the
+                                                             target language.
+3.3    Fast decoding algorithm                                  The training parallel data without alignment is
+As introduced in the previous subsection, in the             first aligned by a Viterbi version EM algorithm (Li
+whole decoding process we have to perform n-best             et al., 2004).
+CRF decoding in the segmentation step and 10 n-                 The decoding problem in JSCM can be written
+best CRF decoding in the second CRF. Is it really            as:
+necessary to perform the second CRF for all the
+segmentations? The answer is “No” for candidates                           T̂   = arg max P (S, T ).                     (5)
+                                                                                         T
+
+
+                                                       277
+
+
+   After the alignments are generated, we use the             testing takes minutes on a normal PC, the train-
+MITLM toolkit (Hsu and Glass, 2008) to build a                ing of the CRF converter takes up to 13 hours on
+trigram model with modified Kneser-Ney smooth-                an 8-core (8*3G Hz) server.
+ing. We then convert the n-gram to a WFST
+M (Sproat et al., 2000; Caseiro et al., 2002). To al-           Measure               Top-1    Mean      MRR
+low transliteration from a sequence of characters,                                    ACC      F-score
+a second WFST T is constructed. The input word                  Baseline              0.670    0.869     0.750
+is converted to an acceptor I, and it is then com-              Joint optimization    0.708    0.885     0.789
+bined with T and M according to O = I ◦ T ◦ M                   JSCM                  0.706    0.882     0.789
+where ◦ denotes the composition operator. The                 Table 2: Comparison of the proposed decoding
+n–best paths are extracted by projecting the out-             method with the previous method and the JSCM
+put, removing the epsilon labels and applying the
+n-shortest paths algorithm with determinization in            5.2 Further improvement
+the OpenFst Toolkit (Allauzen et al., 2007).                  We tried to combine the two-step CRF model and
+                                                              the JSCM. From the two-step CRF model we get
+5 Experiments                                                 the conditional probability PCRF (T |S) and from
+We use several metrics from (Li et al., 2009) to              the JSCM we get the joint probability P (S, T ).
+measure the performance of our system.                        The conditional probability of PJSCM (T |S) can
+  1. Top-1 ACC: word accuracy of the top-1 can-               be calculuated as follows:
+didate
+  2. Mean F-score: fuzziness in the top-1 candi-                                  P (T, S)   P (T, S)
+date, how close the top-1 candidate is to the refer-           PJSCM (T |S) =              =P           . (6)
+                                                                                   P (S)     T P (T, S)
+ence
+  3. MRR: mean reciprocal rank, 1/MRR tells ap-               They are used in our combination method as:
+proximately the average rank of the correct result
+5.1   Comparison with the baseline and JSCM                   P (T |S) = λPCRF (T |S) + (1 − λ)PJSCM (T |S)
+                                                                                                               (7)
+We use the training, development and test sets of
+                                                              where λ denotes the interpolation weight (λ is set
+NEWS 2009 data for English-to-Chinese in our
+                                                              by development data in this paper).
+experiments as detailed in Table 1. This is a paral-
+                                                                 As we can see in Table 3, the linear combination
+lel corpus without alignment.
+                                                              of two sytems further improves the top-1 ACC to
+  Training data    Development data      Test data            0.720, and it has outperformed the best reported
+  31961            2896                  2896                 “Standard Run” (Li et al., 2009) result 0.717. (The
+                                                              reported best “Standard Run” result 0.731 used
+   Table 1: Corpus size (number of word pairs)
+                                                              target language phoneme information, which re-
+   We compare the proposed decoding method
+                                                              quires a monolingual dictionary; as a result it is
+with the baseline which uses only the best candi-
+                                                              not a standard run.)
+dates in both CRF steps, and also with the well
+known JSCM. As we can see in Table 2, the pro-                  Measure               Top-1    Mean      MRR
+posed method improves the baseline top-1 ACC                                          ACC      F-score
+from 0.670 to 0.708, and it works as well as, or                Baseline+JSCM         0.713    0.883     0.794
+even better than the well known JSCM in all the                 Joint optimization
+three measurements.                                             + JSCM                0.720    0.888     0.797
+   Our experiments also show that the decoding                  state-of-the-art      0.717    0.890     0.785
+time can be reduced significantly via using our fast             (Li et al., 2009)
+decoding algorithm. As we have explained, with-
+out fast decoding, we need 11 CRF n-best decod-                      Table 3: Model combination results
+ing for each word; the number can be reduced to
+                                                              6 Conclusions and future work
+3.53 (1 “the first CRF”+2.53 “the second CRF”)
+via the fast decoding algorithm.                              In this paper we have presented our new joint
+   We should notice that the decoding time is sig-            optimization method for a two-step CRF model
+nificantly shorter than the training time. While              and its fast decoding algorithm. The proposed
+
+
+                                                        278
+
+
+method improved the system significantly and out-                      If Equation 3 holds, then for ∀i 6= 1,
+performed the JSCM. Combining the proposed
+method with JSCM, the performance was further                                                              X
+                                                                                                           k
+                                                                     Pk (T1 |S) > Pk (T2 |S) + (1 −               P (Aj |S))
+improved.
+                                                                                                            j=1
+   In future work we are planning to combine our
+system with multilingual systems. Also we want                                                             X
+                                                                                                           k
+                                                                                 ≥ Pk (Ti |S) + (1 −              P (Aj |S))
+to make use of acoustic information in machine                                                             j=1
+transliteration. We are currently investigating dis-
+                                                                                                       X
+                                                                                                       N
+criminative training as a method to further im-                                  = Pk (Ti |S) +              P (Aj |S)
+prove the JSCM. Another issue of our two-step                                                        j=k+1
+CRF method is that the training complexity in-
+                                                                                 ≥ Pk (Ti |S)
+creases quadratically according to the size of the
+label set, and how to reduce the training time needs                                      X
+                                                                                          N
+                                                                                      +           P (Aj |S)P (Ti |S, Aj )
+more research.                                                                            j=k+1
+                                                                                 = P (Ti |S)                              (9)
+Appendix A. Proof of Equation 3
+                                                                      Therefore, P (T1 |S) > P (Ti |S)(i 6= 1), and T1
+The CRF segmentation provides a list of segmen-                      maximizes the probability P (T |S).
+tations: A : A1 , A2 , ..., AN , with conditional
+probabilities P (A1 |S), P (A2 |S), ..., P (AN |S).
+
+               X
+               N
+                     P (Aj |S) = 1.
+               j=1
+
+
+   The CRF conversion, given a segmenta-
+tion Ai , provides a list of transliteration out-
+put T1 , T2 , ..., TM , with conditional probabilities
+P (T1 |S, Ai ), P (T2 |S, Ai ), ..., P (TM |S, Ai ).
+   In our fast decoding algorithm, we start per-
+forming the CRF conversion from A1 , then A2 ,
+and then A3 , etc. Up to Ak , we get a list of can-
+didates T : T1 , T2 , ..., TL , ranked by probabili-
+ties Pk (T |S) in descending order. The probability
+Pk (Tl |S)(l = 1, 2, ..., L) is accumulated probabil-
+ity of P (Tl |S) over A1 , A2 , ..., Ak , calculated by:
+
+                   X
+                   k
+    Pk (Tl |S) =         P (Aj |S)P (Tl |S, Aj )
+                   j=1
+
+
+   If we continue performing the CRF conversion
+to cover all N (N ≥ k) segmentations, eventually
+we will get:
+
+                       X
+                       N
+     P (Tl |S) =               P (Aj |S)P (Tl |S, Aj )
+                         j=1
+
+                       X
+                       k
+                 ≥             P (Aj |S)P (Tl |S, Aj )
+                         j=1
+                 = Pk (Tl |S)                            (8)
+
+
+                                                               279
+
+
+References                                                      Dong Yang, Paul Dixon, Yi-Cheng Pan, Tasuku Oon-
+                                                                  ishi, Masanobu Nakamura and Sadaoki Furui 2009.
+Cyril Allauzen, Michael Riley, Johan Schalkwyk, Wo-               Combining a Two-step Conditional Random Field
+  jciech Skut and Mehryar Mohri 2007. OpenFst: A                  Model and a Joint Source Channel Model for Ma-
+  General and Efficient Weighted Finite-State Trans-              chine Transliteration, Proceedings of the 2009
+  ducer Library. Proceedings of the Ninth Interna-                Named Entities Workshop: Shared Task on Translit-
+  tional Conference on Implementation and Applica-                eration (NEWS 2009), pages 72-75
+  tion of Automata, (CIAA), pages 11-23.
+
+Diamantino Caseiro, Isabel Trancosoo, Luis Oliveira
+  and Ceu Viana 2002. Grapheme-to-phone using fi-
+  nite state transducers. Proceedings IEEE Workshop
+  on Speech Synthesis.
+
+Asif Ekbal, Sudip Kumar Naskar and Sivaji Bandy-
+  opadhyay. 2006. A modified joint source-channel
+  model for transliteration, Proceedings of the COL-
+  ING/ACL, pages 191-198.
+
+Bo-June Hsu and James Glass 2008. Iterative Lan-
+  guage Model Estimation: Efficient Data Structure
+  & Algorithms. Proceedings Interspeech, pages 841-
+  844.
+
+Kevin Knight and Jonathan Graehl. 1998. Machine
+  Transliteration, Association for Computational Lin-
+  guistics.
+
+John Lafferty, Andrew McCallum, and Fernando
+  Pereira 2001. Conditional Random Fields: Prob-
+  abilistic Models for Segmenting and Labeling Se-
+  quence Data., Proceedings of International Confer-
+  ence on Machine Learning, pages 282-289.
+
+Haizhou Li, Min Zhang and Jian Su. 2004. A joint
+  source-channel model for machine transliteration,
+  Proceedings of the 42nd Annual Meeting on Asso-
+  ciation for Computational Linguistics.
+
+Haizhou Li, A. Kumaran, Vladimir Pervouchine and
+  Min Zhang 2009. Report of NEWS 2009 Ma-
+  chine Transliteration Shared Task, Proceedings of
+  the 2009 Named Entities Workshop: Shared Task on
+  Transliteration (NEWS 2009), pages 1-18
+
+Jong-Hoon Oh, Key-Sun Choi and Hitoshi Isahara.
+  2006. A comparison of different machine transliter-
+  ation models , Journal of Artificial Intelligence Re-
+  search, 27, pages 119-151.
+
+Richard Sproat 2000. Corpus-Based Methods and
+  Hand-Built Methods. Proceedings of International
+  Conference on Spoken Language Processing, pages
+  426-428.
+
+Andrew J. Viterbi 1967. Error Bounds for Convolu-
+  tional Codes and an Asymptotically Optimum De-
+  coding Algorithm. IEEE Transactions on Informa-
+  tion Theory, Volume IT-13, pages 260-269.
+
+Hanna Wallach 2002. Efficient Training of Condi-
+  tional Random Fields. M. Thesis, University of Ed-
+  inburgh.
+
+
+                                                          280
+

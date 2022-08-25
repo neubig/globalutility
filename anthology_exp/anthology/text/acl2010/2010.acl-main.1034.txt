@@ -1,0 +1,717 @@
+             Fine-grained Tree-to-String Translation Rule Extraction
+          Xianchao Wu†                         Takuya Matsuzaki†                          Jun’ichi Tsujii†‡∗
+                     †
+                 Department of Computer Science, The University of Tokyo
+                     7-3-1 Hongo, Bunkyo-ku, Tokyo 113-0033, Japan
+                  ‡
+                   School of Computer Science, University of Manchester
+                        ∗
+                         National Centre for Text Mining (NaCTeM)
+    Manchester Interdisciplinary Biocentre, 131 Princess Street, Manchester M1 7DN, UK
+
+                         {wxc, matuzaki, tsujii}@is.s.u-tokyo.ac.jp
+                      Abstract                                                            koroshita      korosareta
+                                                                                          (active)       (passive)
+                                                                   VBN(killed)            6 (6/10,6/6)   4 (4/10,4/4)
+    Tree-to-string translation rules are widely                    VBN(killed:active)     5 (5/6,5/6)    1 (1/6,1/4)
+    used in linguistically syntax-based statis-                    VBN(killed:passive)    1 (1/4,1/6)    3 (3/4,3/4)
+    tical machine translation systems. In this
+                                                               Table 1: Bidirectional translation probabilities of
+    paper, we propose to use deep syntac-
+                                                               rules, denoted in the brackets, change when voice
+    tic information for obtaining fine-grained
+                                                               is attached to “killed”.
+    translation rules. A head-driven phrase
+    structure grammar (HPSG) parser is used
+    to obtain the deep syntactic information,                  phrasal tags are used as the tree node labels. As
+    which includes a fine-grained description                  will be testified by our experiments, we argue that
+    of the syntactic property and a semantic                   the simple POS/phrasal tags are too coarse to re-
+    representation of a sentence. We extract                   flect the accurate translation probabilities of the
+    fine-grained rules from aligned HPSG                       translation rules.
+    tree/forest-string pairs and use them in                      For example, as shown in Table 1, sup-
+    our tree-to-string and string-to-tree sys-                 pose a simple tree fragment “VBN(killed)” ap-
+    tems. Extensive experiments on large-                      pears 6 times with “koroshita”, which is a
+    scale bidirectional Japanese-English trans-                Japanese translation of an active form of “killed”,
+    lations testified the effectiveness of our ap-             and 4 times with “korosareta”, which is a
+    proach.                                                    Japanese translation of a passive form of “killed”.
+                                                               Then, without larger tree fragments, we will
+1   Introduction                                               more frequently translate “VBN(killed)” into “ko-
+                                                               roshita” (with a probability of 0.6).            But,
+Tree-to-string translation rules are generic and ap-
+                                                               “VBN(killed)” is indeed separable into two fine-
+plicable to numerous linguistically syntax-based
+                                                               grained tree fragments of “VBN(killed:active)”
+Statistical Machine Translation (SMT) systems,
+                                                               and “VBN(killed:passive)”1 .          Consequently,
+such as string-to-tree translation (Galley et al.,
+                                                               “VBN(killed:active)” appears 5 times with “ko-
+2004; Galley et al., 2006; Chiang et al., 2009),
+                                                               roshita” and 1 time with “korosareta”; and
+tree-to-string translation (Liu et al., 2006; Huang
+                                                               “VBN(killed:passive)” appears 1 time with “ko-
+et al., 2006), and forest-to-string translation (Mi et
+                                                               roshita” and 3 times with “korosareta”. Now, by
+al., 2008; Mi and Huang, 2008). The algorithms
+                                                               attaching the voice information to “killed”, we are
+proposed by Galley et al. (2004; 2006) are fre-
+                                                               gaining a rule set that is more appropriate to reflect
+quently used for extracting minimal and composed
+                                                               the real translation situations.
+rules from aligned 1-best tree-string pairs. Deal-
+ing with the parse error problem and rule sparse-                 This motivates our proposal of using deep syn-
+ness problem, Mi and Huang (2008) replaced the                 tactic information to obtain a fine-grained trans-
+1-best parse tree with a packed forest which com-              lation rule set. We name the information such as
+pactly encodes exponentially many parses for tree-             the voice of a verb in a tree fragment as deep syn-
+to-string rule extraction.                                     tactic information. We use a head-driven phrase
+   However, current tree-to-string rules only make             structure grammar (HPSG) parser to obtain the
+use of Probabilistic Context-Free Grammar tree                     1
+                                                                     For example, “John has killed Mary.” versus “John was
+fragments, in which part-of-speech (POS) or                    killed by Mary.”
+
+
+                                                         325
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 325–334,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+deep syntactic information of an English sentence,
+which includes a fine-grained description of the                  Aligned tree-string pair:
+                                                                                              Training
+                                                                                                       S     x0              はx     1
+                                                                                                 x0 NP VP x1
+syntactic property and a semantic representation                         S                            VP     x1              をx     0
+of the sentence. We extract fine-grained trans-                     NP       VP          Extract x0 V NP x1
+
+                                                                                                                          ジョン
+lation rules from aligned HPSG tree/forest-string                                         rules      NP
+                                                                             V    NP
+pairs. We localize an HPSG tree/forest to make                                                               John
+                                                                  John killed Mary
+it segmentable at any nodes to fit the extraction                                                             V
+                                                                                                                          殺した
+algorithms described in (Galley et al., 2006; Mi                 ジョン は マリー を 殺した                killed
+and Huang, 2008). We also propose a linear-time
+algorithm for extracting composed rules guided
+                                                                 jyon ha mari wo koroshita       NP
+                                                                                                Mary
+                                                                                                                         マリー
+                                                                                                ……
+by predicate-argument structures. The effective-                                                      Apply
+                                                                                        Testing        rules
+ness of the rules are testified in our tree-to-string
+and string-to-tree systems, taking bidirectional                                   ジョン は マリー を 殺した
+                                                                      Bottom-up                                 CKY decoding
+Japanese-English translations as our test cases.                       decoding John           Mary          killed
+   This paper is organized as follows. In Section 2,
+                                                                                    NP             NP         V
+we briefly review the tree-to-string and string-to-                                 NP             V          NP
+tree translation frameworks, tree-to-string rule ex-                                                    VP
+traction algorithms, and rich syntactic information                   tree-to-string                    VP         string-to-tree
+previously used for SMT. The HPSG grammar and                                                  S
+our proposal of fine-grained rule extraction algo-                                parsing
+rithms are described in Section 3. Section 4 gives                                          John killed Mary
+the experiments for applying fine-grained transla-
+tion rules to large-scale Japanese-English transla-            Figure 1: Illustration of the training and decod-
+tion tasks. Finally, we conclude in Section 5.                 ing processes for tree-to-string and string-to-tree
+                                                               translations.
+2   Related Work
+2.1 Tree-to-string and string-to-tree                          f1J is a sentence of a foreign language other than
+    translations                                               English, Et is a 1-best parse tree of an English sen-
+                                                               tence E = eI1 , and A = {(j, i)} is an alignment
+Tree-to-string translation (Liu et al., 2006; Huang            between the words in F and E.
+et al., 2006) first uses a parser to parse a source               The basic idea of GHKM algorithm is to de-
+sentence into a 1-best tree and then searches for              compose Et into a series of tree fragments, each
+the best derivation that segments and converts the             of which will form a rule with its corresponding
+tree into a target string. In contrast, string-to-tree         translation in the foreign language. A is used as a
+translation (Galley et al., 2004; Galley et al., 2006;         constraint to guide the segmentation procedure, so
+Chiang et al., 2009) is like bilingual parsing. That           that the root node of every tree fragment of Et ex-
+is, giving a (bilingual) translation grammar and a             actly corresponds to a contiguous span on the for-
+source sentence, we are trying to construct a parse            eign language side. Based on this consideration, a
+forest in the target language. Consequently, the               frontier set (fs) is defined to be a set of nodes n in
+translation results can be collected from the leaves           Et that satisfies the following constraint:
+of the parse forest.
+   Figure 1 illustrates the training and decoding                fs = {n|span(n) ∩ comp span(n) = ϕ}.                               (1)
+processes of bidirectional Japanese-English trans-
+lations. The English sentence is “John killed                  Here, span(n) is defined by the indices of the first
+Mary” and the Japanese sentence is “jyon ha mari               and last word in F that are reachable from a node
+wo koroshita”, in which the function words “ha”                n, and comp span(n) is defined to be the comple-
+and “wo” are not aligned with any English word.                ment set of span(n), i.e., the union of the spans
+                                                               of all nodes n′ in Et that are neither descendants
+2.2 Tree/forest-based rule extraction                          nor ancestors of n. span(n) and comp span(n)
+Galley et al. (2004) proposed the GHKM algo-                   of each n can be computed by first a bottom-up
+rithm for extracting (minimal) tree-to-string trans-           exploration and then a top-down traversal of Et .
+lation rules from a tuple of ⟨F, Et , A⟩, where F =               By restricting each fragment so that it only takes
+
+
+                                                         326
+
+
+                                      HEAD      c8                HEAD      c3
+                                      SEM_HEAD c8                 SEM_HEAD c3
+                                 c7   CAT       S            c0   CAT       S
+                                      XCAT                        XCAT
+                                      SCHEMA head_mod             SCHEMA subj_head
+
+                                              2.77
+                        HEAD     c9                                      4.52
+                        SEM_HEAD c9                                     HEAD     c4                                   HEAD     c11
+                     c8 CAT      S                                      SEM_HEAD c4                                   SEM_HEAD c11
+                        XCAT                                         c3 CAT      VP                             c10   CAT      NP
+                        SCHEMA subj_head                                XCAT                                          XCAT
+                                                                        SCHEMA head_comp                              SCHEMA empty_spec_head
+                              0.81
+          HEAD         c2                                                           2.25
+                                        HEAD           t3
+          SEM_HEAD c2                                            HEAD          t1      HEAD          c6
+                                        SEM_HEAD t3
+       c1 CAT          NP                                        SEM_HEAD t1           SEM_HEAD c6                       0
+                                     c9 CAT          VP       c4 CAT         VX
+          XCAT                          XCAT                                        c5 CAT           NP
+          SCHEMA empty_spec_head                                 XCAT                  XCAT
+                                                 -3.47                                 SCHEMA empty_spec_head
+                        0.00                                              -0.03
+                                                                                                      0            HEAD         t4
+              HEAD         t0    killed                       killed                                               SEM_HEAD t4
+                                                              CAT V                           HEAD        t2   c11 CAT
+           c2 SEM_HEAD t0        CAT V
+                                                              POS VBD                         SEM_HEAD t2
+                                                                                                                             NX
+              CAT         NX     POS VBD                                                   c                       XCAT
+                                                              BASE kill                     6 CAT       NX
+              XCAT               BASE kill
+                                                              LEXENTRY [NP.nom                XCAT                         -2.82
+                              t3 LEXENTRY [NP.nom
+               -0.001              <V.bse>]_lxm-                 <V.bse> NP.acc]
+                                   past_verb_rule
+                                                          t 1    _lxm-past_verb_rule                  -0.07
+            John                 PRED verb_arg1               PRED verb_arg12               Mary                Mary
+            CAT      N           TENSE past                   TENSE past                    CAT     N           CAT     N
+         t0 POS NNP              ASPECT none                  ASPECT none                   POS    NNP       t4 POS NNP
+            BASE john            VOICE      active            VOICE      active          t2 BASE mary           BASE mary
+            LEXENTRY [D<         AUX        minus             AUX        minus              LEXENTRY            LEXENTRY
+              N.3sg>]_lxm        ARG1       c1                ARG1       c1                   [D<N.3sg>]_lxm       V[D<N.3sg>]
+            PRED noun_arg0                                    ARG2       c5                 PRED noun_arg0      PRED noun_arg0
+
+                                                              John    killed   Mary
+
+                                                         ジョン は マリー を 殺した
+                               1. c0(x0:c1, x1:c3)  x0はx1                            c0                 minimum
+                               2. c1(x0:c2)  x0
+                                            ジョン                                 c1         c3            covering tree
+                               3. c2(t0) 
+                                                を
+                               4. c3(x0:c4, x1:c5)  x1 x0
+                                                                                      c4            c5
+                               5. c4(t1)   殺した                                       t1
+                               6. c5(x0:c6)  x0
+                               7. c6(t2)   マリー                                 x0   は x を 殺した  1
+
+                              An HPSG-tree based minimal rule set              A PAS-based composed rule
+
+
+Figure 2: Illustration of an aligned HPSG forest-string pair. The forest includes two parse trees by taking
+“Mary” as a modifier (t3 , t4 ) or an argument (t1 , t2 ) of “killed”. Arrows with broken lines denote the PAS
+dependencies from the terminal node t1 to its argument nodes (c1 and c5 ). The scores of the hyperedges
+are attached to the forest as well.
+
+the nodes in fs as the root and leaf nodes, a well-                     2006). For each aligned tree-string pair, Gal-
+formed fragmentation of Et is generated. With                           ley et al. (2006) constructed a derivation-forest,
+fs computed, rules are extracted through a depth-                       in which composed rules were generated, un-
+first traversal of Et : we cut Et at all nodes in fs                    aligned words of foreign language were consis-
+to form tree fragments and extract a rule for each                      tently attached, and the translation probabilities
+fragment. These extracted rules are called minimal                      of rules were estimated by using Expectation-
+rules (Galley et al., 2004). For example, the 1-                        Maximization (EM) (Dempster et al., 1977) train-
+best tree (with gray nodes) in Figure 2 is cut into 7                   ing. For example, by combining the minimal rules
+pieces, each of which corresponds to the tree frag-                     of 1, 4, and 5, we obtain a composed rule, as
+ment in a rule (bottom-left corner of the figure).                      shown in the bottom-right corner of Figure 2.
+   In order to include richer context information                          Considering the parse error problem in the
+and account for multiple interpretations of un-                         1-best or k-best parse trees, Mi and Huang
+aligned words of foreign language, minimal rules                        (2008) extracted tree-to-string translation rules
+which share adjacent tree fragments are connected                       from aligned packed forest-string pairs. A for-
+together to form composed rules (Galley et al.,                         est compactly encodes exponentially many trees
+
+
+                                                                  327
+
+
+rather than the 1-best tree used by Galley et al.             fine-grained tree-to-string rule extraction, rather
+(2004; 2006). Two problems were managed to                    than string-to-string translation (Hassan et al.,
+be tackled during extracting rules from an aligned            2007; Birch et al., 2007).
+forest-string pair: where to cut and how to cut.                 The Logon project2 (Oepen et al., 2007) for
+Equation 1 was used again to compute a frontier               Norwegian-English translation integrates in-depth
+node set to determine where to cut the packed                 grammatical analysis of Norwegian (using lexi-
+forest into a number of tree-fragments. The dif-              cal functional grammar, similar to (Riezler and
+ference with tree-based rule extraction is that the           Maxwell, 2006)) with semantic representations in
+nodes in a packed forest (which is a hypergraph)              the minimal recursion semantics framework, and
+now are hypernodes, which can take a set of in-               fully grammar-based generation for English using
+coming hyperedges. Then, by limiting each frag-               HPSG. A hybrid (of rule-based and data-driven)
+ment to be a tree and whose root/leaf hypernodes              architecture with a semantic transfer backbone is
+all appearing in the frontier set, the packed forest          taken as the vantage point of this project. In
+can be segmented properly into a set of tree frag-            contrast, the fine-grained tree-to-string translation
+ments, each of which can be used to generate a                rule extraction approaches in this paper are to-
+tree-to-string translation rule.                              tally data-driven, and easily applicable to numer-
+                                                              ous language pairs by taking English as the source
+2.3 Rich syntactic information for SMT                        or target language.
+Before describing our approaches of applying                  3 Fine-grained rule extraction
+deep syntactic information yielded by an HPSG
+parser for fine-grained rule extraction, we would             We now introduce the deep syntactic informa-
+like to briefly review what kinds of deep syntactic           tion generated by an HPSG parser and then de-
+information have been employed for SMT.                       scribe our approaches for fine-grained tree-to-
+   Two kinds of supertags, from Lexicalized Tree-             string rule extraction. Especially, we localize an
+Adjoining Grammar and Combinatory Categorial                  HPSG tree/forest to fit the extraction algorithms
+Grammar (CCG), have been used as lexical syn-                 described in (Galley et al., 2006; Mi and Huang,
+tactic descriptions (Hassan et al., 2007) for phrase-         2008). Also, we propose a linear-time com-
+based SMT (Koehn et al., 2007). By introduc-                  posed rule extraction algorithm by making use of
+ing supertags into the target language side, i.e.,            predicate-argument structures.
+the target language model and the target side                 3.1 Deep syntactic information by HPSG
+of the phrase table, significant improvement was                  parsing
+achieved for Arabic-to-English translation. Birch
+et al. (2007) also reported a significant improve-            Head-driven phrase structure grammar (HPSG) is
+ment for Dutch-English translation by applying                a lexicalist grammar framework. In HPSG, lin-
+CCG supertags at a word level to a factorized SMT             guistic entities such as words and phrases are rep-
+system (Koehn et al., 2007).                                  resented by a data structure called a sign. A sign
+                                                              gives a factored representation of the syntactic fea-
+   In this paper, we also make use of supertags
+                                                              tures of a word/phrase, as well as a representation
+on the English language side. In an HPSG
+                                                              of their semantic content. Phrases and words rep-
+parse tree, these lexical syntactic descriptions
+                                                              resented by signs are composed into larger phrases
+are included in the LEXENTRY feature (re-
+                                                              by applications of schemata. The semantic rep-
+fer to Table 2) of a lexical node (Matsuzaki
+                                                              resentation of the new phrase is calculated at the
+et al., 2007).       For example, the LEXEN-
+                                                              same time. As such, an HPSG parse tree/forest
+TRY feature of “t1 :killed” takes the value of
+                                                              can be considered as a tree/forest of signs (c.f. the
+[NP.nom<V.bse>NP.acc]_lxm-past
+                                                              HPSG forest in Figure 2).
+_verb_rule in Figure 2.                  In which,
+                                                                 An HPSG parse tree/forest has two attractive
+[NP.nom<V.bse>NP.acc] is an HPSG
+                                                              properties as a representation of an English sen-
+style supertag, which tells us that the base form
+                                                              tence in syntax-based SMT. First, we can carefully
+of “killed” needs a nominative NP in the left hand
+                                                              control the condition of the application of a trans-
+side and an accessorial NP in the right hand side.
+                                                              lation rule by exploiting the fine-grained syntactic
+The major differences are that, we use a larger
+                                                                 2
+feature set (Table 2) including the supertags for                    http://www.emmtee.net/
+
+
+                                                        328
+
+
+ Feature             Description                                          ARG1              ARG1                ARG1   I
+                                                                                 John                   She
+ CAT                 phrasal category                                                                                  ARG1
+                                                                       kill             ignore                want
+ XCAT                fine-grained phrasal category
+                                                                                 Mary     ARG2                 ARG2    dispute
+ SCHEMA              name of the schema applied in the node               ARG2                   fact
+ HEAD                pointer to the head daughter                                                             ARG2
+ SEM HEAD            pointer to the semantic head daughter
+ CAT                 syntactic category
+ POS                 Penn Treebank-style part-of-speech tag
+                                                                       Figure 3: Predicate argument structures for the
+ BASE                base form                                         sentences of “John killed Mary” and “She ignored
+ TENSE               tense of a verb (past, present, untensed)         the fact that I wanted to dispute”.
+ ASPECT              aspect of a verb (none, perfect,
+                     progressive, perfect-progressive)
+ VOICE               voice of a verb (passive, active)
+ AUX                 auxiliary verb or not (minus, modal,              al., 2003) used in this paper, the semantic content
+                     have, be, do, to, copular)                        of a sentence/phrase is represented by a predicate-
+ LEXENTRY            lexical entry, with supertags embedded
+ PRED                type of a predicate
+                                                                       argument structure (PAS). Figure 3 shows the PAS
+ ARG⟨x⟩              pointer to semantic arguments, x = 1..4           of the example sentence in Figure 2, “John killed
+                                                                       Mary”, and a more complex PAS for another sen-
+Table 2: Syntactic/semantic features extracted                         tence, “She ignored the fact that I wanted to dis-
+from HPSG signs that are included in the output                        pute”, which is adopted from (Miyao et al., 2003).
+of Enju. Features in phrasal nodes (top) and lexi-                     In an HPSG tree/forest, each leaf node generally
+cal nodes (bottom) are listed separately.                              introduces a predicate, which is represented by
+                                                                       the pair of LEXENTRY (lexical entry) feature and
+                                                                       PRED (predicate type) feature. The arguments of
+description in the English parse tree/forest, as well                  a predicate are designated by the pointers from the
+as those in the translation rules. Second, we can                      ARG⟨x⟩ features in a leaf node to non-terminal
+identify sub-trees in a parse tree/forest that cor-                    nodes.
+respond to basic units of the semantics, namely
+sub-trees covering a predicate and its arguments,                      3.2 Localize HPSG forest
+by using the semantic representation given in the
+signs. We expect that extraction of translation                        Our fine-grained translation rule extraction algo-
+rules based on such semantically-connected sub-                        rithm is sketched in Algorithm 1. Considering that
+trees will give a compact and effective set of trans-                  a parse tree is a trivial packed forest, we only use
+lation rules.                                                          the term forest to expand our discussion, hereafter.
+   A sign in the HPSG tree/forest is represented by                    Recall that there are pointer-valued features in the
+a typed feature structure (TFS) (Carpenter, 1992).                     TFSs (Table 2) which prevent arbitrary segmenta-
+A TFS is a directed-acyclic graph (DAG) wherein                        tion of a packed forest. Hence, we have to localize
+the edges are labeled with feature names and the                       an HPSG forest.
+nodes (feature values) are typed. In the original                         For example, there are ARG pointers from t1 to
+HPSG formalism, the types are defined in a hierar-                     c1 and c5 in the HPSG forest of Figure 2. How-
+chy and the DAG can have arbitrary shape (e.g., it                     ever, the three nodes are not included in one (min-
+can be of any depth). We however use a simplified                      imal) translation rule. This problem is caused
+form of TFS, for simplicity of the algorithms. In                      by not considering the predicate argument depen-
+the simplified form, a TFS is converted to a (flat)                    dency among t1 , c1 , and c5 while performing the
+set of pairs of feature names and their values. Ta-                    GHKM algorithm. We can combine several min-
+ble 2 lists the features used in this paper, which                     imal rules (Galley et al., 2006) together to ad-
+are a subset of those in the original output from an                   dress this dependency. Yet we have a faster way
+HPSG parser, Enju3 . The HPSG forest shown in                          to tackle PASs, as will be described in the next
+Figure 2 is in this simplified format. An impor-                       subsection.
+tant detail is that we allow a feature value to be a                      Even if we omit ARG, there are still two kinds
+pointer to another (simplified) TFS. Such pointer-                     of pointer-valued features in TFSs, HEAD and
+valued features are necessary for denoting the se-                     SEM HEAD. Localizing these pointer-valued fea-
+mantics, as explained shortly.                                         tures is straightforward, since during parsing, the
+   In the Enju English HPSG grammar (Miyao et                          HEAD and SEM HEAD of a node are automati-
+                                                                       cally transferred to its mother node. That is, the
+   3
+       http://www-tsujii.is.s.u-tokyo.ac.jp/enju/index.html            syntactic and semantic head of a node only take
+
+
+                                                                 329
+
+
+Algorithm 1 Fine-grained rule extraction                             Algorithm 2 PASR extraction
+Input: HPSG tree/forest Ef , foreign sentence F , and align-         Input: HPSG tree Et , foreign sentence F , and alignment A
+   ment A                                                            Output: a PAS-based rule set R
+Output: a PAS-based rule set R1 and/or a tree-rule set R2
+                                                                      1: R = {}
+ 1: if Ef is an HPSG tree then                                        2: for node n ∈ Leaves(Et ) do
+          ′
+ 2:    Ef = localize Tree(Ef )                                        3:    if Open(n.ARG) then
+                                  ′                                   4:       Tc = MinimumCoveringTree(Et , n, n.ARGs)
+ 3:    R1 = PASR extraction(Ef , F , A) ◃ Algorithm 2                 5:       if root and leaf nodes of Tc are in fs then
+          ′′                ′
+ 4:    Ef = ignore PAS(Ef )                                           6:           generate a rule r using fragment Tc
+                               ′′
+ 5:    R2 = TR extraction(Ef , F , A) ◃ composed rule ex-             7:           R.append(r)
+       traction algorithm in (Galley et al., 2006)                    8:       end if
+ 6: else if Ef is an HPSG forest then                                 9:    end if
+          ′                                                          10: end for
+ 7:    Ef = localize Forest(Ef );
+                                              ′
+ 8:    R2 = forest based rule extraction(Ef , F , A) ◃ Algo-
+       rithm 1 in (Mi and Huang, 2008)
+ 9: end if                                                           See (Wu, 2010) for more examples of minimum
+                                                                     covering trees.
+                                                                        Taking a minimum covering tree as the tree
+the identifier of the daughter node as the values.                   fragment, we can easily build a tree-to-string
+For example, HEAD and SEM HEAD of node c0                            translation rule that reflects the semantic depen-
+take the identical value to be c3 in Figure 2.                       dency of a PAS. The algorithm of PAS-based
+   To extract tree-to-string rules from the tree                     rule (PASR) extraction is sketched in Algorithm
+structures of an HPSG forest, our solution is to                     2. Suppose we are given a tuple of ⟨F, Et , A⟩.
+pre-process an HPSG forest in the following way:                     Et is pre-processed by replacing HEAD and
+                                                                     SEM HEAD to be L, R, or S, and computing the
+   • for a phrasal hypernode, replace its HEAD                       span and comp span of each node.
+     and SEM HEAD value with L, R, or S,                                We extract PAS-based rules through one-time
+     which respectively represent left daughter,                     traversal of the leaf nodes in Et (line 2). For each
+     right daughter, or single daughter (line 2 and                  leaf node n, we extract a minimum covering tree
+     7); and,                                                        Tc if n contains at least one argument. That is, at
+                                                                     least one ARG⟨x⟩ takes the value of some node
+   • for a lexical node, ARG⟨x⟩ and PRED fea-                        identifier, where x ranges 1 over 4 (line 3). Then,
+     tures are ignored (line 4).                                     we require the root and yield nodes of Tc being in
+                                                                     the frontier set of Et (line 5). Based on Tc , we can
+A pure syntactic-based HPSG forest without any
+                                                                     easily build a tree-to-string translation rule by fur-
+pointer-valued features can be yielded through this
+                                                                     ther completing the right-hand-side string by sort-
+pre-processing for the consequent execution of the
+                                                                     ing the spans of Tc ’s leaf nodes, lexicalizing the
+extraction algorithms (Galley et al., 2006; Mi and
+                                                                     terminal node’s span(s), and assigning a variable
+Huang, 2008).
+                                                                     to each non-terminal node’s span. Maximum like-
+3.3 Predicate-argument structures                                    lihood estimation is used to calculate the transla-
+                                                                     tion probabilities of each rule.
+In order to extract translation rules from PASs,                        An example of PAS-based rule is shown in the
+we want to localize a predicate word and its ar-                     bottom-right corner of Figure 2. In the rule, the
+guments into one tree fragment. For example, in                      subject and direct-object of “killed” are general-
+Figure 2, we can use a tree fragment which takes                     ized into two variables, x0 and x1 .
+c0 as its root node and c1 , t1 , and c5 on its yield (=
+leaf nodes of a tree fragment) to cover “killed” and                 4 Experiments
+its subject and direct object arguments. We define
+this kind of tree fragment to be a minimum cov-                      4.1 Translation models
+ering tree. For example, the minimum covering                        We use a tree-to-string model and a string-to-tree
+tree of {t1 , c1 , c5 } is shown in the bottom-right                 model for bidirectional Japanese-English transla-
+corner of Figure 2. The definition supplies us a                     tions. Both models use a phrase translation table
+linear-time algorithm to directly find the tree frag-                (PTT), an HPSG tree-based rule set (TRS), and
+ment that covers a PAS during both rule extracting                   a PAS-based rule set (PRS). Since the three rule
+and rule matching when decoding an HPSG tree.                        sets are independently extracted and estimated, we
+
+
+                                                               330
+
+
+use Minimum Error Rate Training (MERT) (Och,                         The string-to-tree decoder searches for the op-
+2003) to tune the weights of the features from the                timal derivation d∗ that parses a Japanese string
+three rule sets on the development set.                           F into a packed forest of the set of all possible
+   Given a 1-best (localized) HPSG tree Et , the                  derivations D:
+tree-to-string decoder searches for the optimal
+derivation d∗ that transforms Et into a Japanese                    d∗ = arg max{λ1 log pLM (τ (d)) + λ2 |τ (d)|
+                                                                               d∈D
+string among the set of all possible derivations D:                       + λ3 g(d) + log s(d|F )}.                (3)
+  d∗ = arg max{λ1 log pLM (τ (d)) + λ2 |τ (d)|                    This formula differs from Equation 2 by replacing
+              d∈D
+                                                                  Et with F in s(d|·) and adding g(d), which is the
+         + log s(d|Et )}.                            (2)
+                                                                  number of glue rules used in d. Further definitions
+Here, the first item is the language model (LM)                   of s(d|F ) and f (r) are identical with those used
+probability where τ (d) is the target string of                   in Equation 2.
+derivation d; the second item is the translation                  4.2 Decoding algorithms
+length penalty; and the third item is the transla-
+tion score, which is decomposed into a product of                 In our translation models, we have made use
+feature values of rules:                                          of three kinds of translation rule sets which are
+             ∏                                                    trained separately. We perform derivation-level
+  s(d|Et ) =      f (r∈P T T )f (r∈T RS )f (r∈P RS ).             combination as described in (Liu et al., 2009b) for
+              r∈d                                                 mixing different types of translation rules within
+                                                                  one derivation.
+This equation reflects that the translation rules in                 For tree-to-string translation, we use a bottom-
+one d come from three sets. Inspired by (Liu et                   up beam search algorithm (Liu et al., 2006) for
+al., 2009b), it is appealing to combine these rule                decoding an HPSG tree Et . We keep at most 10
+sets together in one decoder because PTT provides                 best derivations with distinct τ (d)s at each node.
+excellent rule coverages while TRS and PRS offer                     Recall the definition of minimum covering tree,
+linguistically motivated phrase selections and non-               which supports a faster way to retrieve available
+local reorderings. Each f (r) is in turn a product of             rules from PRS without generating all the sub-
+five features:                                                    trees. That is, when node n fortunately to be the
+                                                                  root of some minimum covering tree(s), we use the
+f (r) = p(s|t)λ3 · p(t|s)λ4 · l(s|t)λ5 · l(t|s)λ6 · eλ7 .
+                                                                  tree(s) to seek available PAS-based rules in PRS.
+Here, s/t represent the source/target part of a rule              We keep a hash-table with the key to be the node
+in PTT, TRS, or PRS; p(·|·) and l(·|·) are transla-               identifier of n and the value to be a priority queue
+tion probabilities and lexical weights of rules from              of available PAS-based rules. The hash-table is
+PTT, TRS, and PRS. The derivation length penalty                  easy to be filled by one-time traversal of the termi-
+is controlled by λ7 .                                             nal nodes in Et . At each terminal node, we seek
+   In our string-to-tree model, for efficient decod-              its minimum covering tree, retrieve PRS, and up-
+ing with integrated n-gram LM, we follow (Zhang                   date the hash-table. For example, suppose we are
+et al., 2006) and inversely binarize all translation              decoding an HPSG tree (with gray nodes) shown
+rules into Chomsky Normal Forms that contain                      in Figure 2. At t1 , we can extract its minimum
+at most two variables and can be incrementally                    covering tree with the root node to be c0 , then take
+scored by LM. In order to make use of the bina-                   this tree fragment as the key to retrieve PRS, and
+rized rules in the CKY decoding, we add two kinds                 consequently put c0 and the available rules in the
+of glues rules:                                                   hash-table. When decoding at c0 , we can directly
+                                                                  access the hash-table looking for available PAS-
+          S → Xm (1) , Xm (1) ;                                   based rules.
+          S → S (1) Xm (2) , S (1) Xm (2) .                          In contrast, we use a CKY-style algorithm with
+                                                                  beam-pruning and cube-pruning (Chiang, 2007)
+Here Xm ranges over the nonterminals appearing                    to decode Japanese sentences. For each Japanese
+in a binarized rule set. These glue rules can be                  sentence F , the output of the chart-parsing algo-
+seen as an extension from X to {Xm }of the two                    rithm is expressed as a hypergraph representing a
+glue rules described in (Chiang, 2007).                           set of derivations. Given such a hypergraph, we
+
+
+                                                            331
+
+
+                           Train     Dev.      Test                                      PRS     C3S     C3     FS       F
+         # of sentences    994K        2K        2K                       tree nodes     TFS    POS     TFS    POS     TFS
+         # of Jp words    28.2M     57.4K     57.1K                       # rules         0.9   62.1    83.9   92.5   103.7
+         # of En words    24.7M     50.3K     49.9K                       # tree types    0.4   23.5    34.7   40.6    45.2
+                                                                          extract time    3.5       -   98.6      -   121.2
+        Table 3: Statistics of the JST corpus.
+                                                                       Table 4: Statistics of several kinds of tree-to-string
+                                                                       rules. Here, the number is in million level and the
+use the Algorithm 3 described in (Huang and Chi-                       time is in hour.
+ang, 2005) to extract its k-best (k = 500 in our
+experiments) derivations. Since different deriva-                      200 for English-to-Japanese translation and 500
+tions may lead to the same target language string,                     for Japanese-to-English translation.
+we further adopt Algorithm 3’s modification, i.e.,                       We used four dual core Xeon machines
+keep a hash-table to maintain the unique target                        (4×3.0GHz×2CPU, 4×64GB memory) to run all
+sentences (Huang et al., 2006), to efficiently gen-                    the experiments.
+erate the unique k-best translations.
+                                                                       4.4 Results
+4.3 Setups
+                                                                       Table 4 illustrates the statistics of several transla-
+The JST Japanese-English paper abstract corpus4 ,
+                                                                       tion rule sets, which are classified by:
+which consists of one million parallel sentences,
+was used for training and testing. This corpus                           • using TFSs or simple POS/phrasal tags (an-
+was constructed from a Japanese-English paper                              notated by a superscript S) to represent tree
+abstract corpus by using the method of Utiyama                             nodes;
+and Isahara (2007). Table 3 shows the statistics
+of this corpus. Making use of Enju 2.3.1, we suc-                        • composed rules (PRS) extracted from the
+cessfully parsed 987,401 English sentences in the                          PAS of 1-best HPSG trees;
+training set, with a parse rate of 99.3%. We mod-
+ified this parser to output a packed forest for each                     • composed rules (C3 ), extracted from the tree
+English sentence.                                                          structures of 1-best HPSG trees, and 3 is the
+   We executed GIZA++ (Och and Ney, 2003) and                              maximum number of internal nodes in the
+grow-diag-final-and balancing strategy (Koehn et                           tree fragments; and
+al., 2007) on the training set to obtain a phrase-
+aligned parallel corpus, from which bidirectional                        • forest-based rules (F ), where the packed
+phrase translation tables were estimated. SRI Lan-                         forests are pre-pruned by the marginal
+guage Modeling Toolkit (Stolcke, 2002) was em-                             probability-based inside-outside algorithm
+ployed to train 5-gram English and Japanese LMs                            used in (Mi and Huang, 2008).
+on the training set. We evaluated the translation
+                                                                          Table 5 reports the BLEU-4 scores achieved by
+quality using the case-insensitive BLEU-4 metric
+                                                                       decoding the test set making use of Joshua and our
+(Papineni et al., 2002). The MERT toolkit we used
+                                                                       systems (t2s = tree-to-string and s2t = string-to-
+is Z-mert5 (Zaidan, 2009).
+                                                                       tree) under numerous rule sets. We analyze this
+   The baseline system for comparison is Joshua
+                                                                       table in terms of several aspects to prove the effec-
+(Li et al., 2009), a freely available decoder for hi-
+                                                                       tiveness of deep syntactic information for SMT.
+erarchical phrase-based SMT (Chiang, 2005). We
+                                                                          Let’s first look at the performance of TFSs. We
+respectively extracted 4.5M and 5.3M translation
+                                                                       take C3S and F S as approximations of CFG-based
+rules from the training set for the 4K English and
+                                                                       translation rules. Comparing the BLEU-4 scores
+Japanese sentences in the development and test
+                                                                       of PTT+C3S and PTT+C3 , we gained 0.56 (t2s)
+sets. We used the default configuration of Joshua,
+                                                                       and 0.57 (s2t) BLEU-4 points which are signifi-
+expect setting the maximum number of items/rules
+                                                                       cant improvements (p < 0.05). Furthermore, we
+and the k of k-best outputs to be the identical
+                                                                       gained 0.50 (t2s) and 0.62 (s2t) BLEU-4 points
+   4
+     http://www.jst.go.jp. The corpus can be conditionally             from PTT+F S to PTT+F , which are also signif-
+obtained from NTCIR-7 patent translation workshop home-                icant improvements (p < 0.05). The rich fea-
+page: http://research.nii.ac.jp/ntcir/permission/ntcir-7/perm-
+en-PATMT.html.                                                         tures included in TFSs contribute to these im-
+   5
+     http://www.cs.jhu.edu/ ozaidan/zmert/                             provements.
+
+
+                                                                 332
+
+
+    Systems       BLEU-t2s   Decoding   BLEU-s2t             posed rules from predicate-argument structures.
+    Joshua          21.79     0.486       19.73
+    PTT             18.40     0.013       17.21              We applied our fine-grained translation rules to a
+    PTT+PRS         22.12     0.031       19.33              tree-to-string system and an Hiero-style string-to-
+    PTT+C3S         23.56     2.686       20.59              tree system. Extensive experiments on large-scale
+    PTT+C3          24.12     2.753       21.16
+    PTT+C3 +PRS     24.13     2.930       21.20              bidirectional Japanese-English translations testi-
+    PTT+F S         24.25     3.241       22.05              fied the significant improvements on BLEU score.
+    PTT+F           24.75     3.470       22.67                 We argue the fine-grained translation rules are
+                                                             generic and applicable to many syntax-based SMT
+Table 5: BLEU-4 scores (%) achieved by Joshua
+                                                             frameworks such as the forest-to-string model (Mi
+and our systems under numerous rule configura-
+                                                             et al., 2008). Furthermore, it will be interesting
+tions. The decoding time (seconds per sentence)
+                                                             to extract fine-grained tree-to-tree translation rules
+of tree-to-string translation is listed as well.
+                                                             by integrating deep syntactic information in the
+                                                             source and/or target language side(s). These tree-
+   Also, BLEU-4 scores were inspiringly in-                  to-tree rules are applicable for forest-to-tree trans-
+creased 3.72 (t2s) and 2.12 (s2t) points by append-          lation models (Liu et al., 2009a).
+ing PRS to PTT, comparing PTT with PTT+PRS.
+Furthermore, in Table 5, the decoding time (sec-             Acknowledgments
+onds per sentence) of tree-to-string translation by          This work was partially supported by Grant-in-
+using PTT+PRS is more than 86 times faster than              Aid for Specially Promoted Research (MEXT,
+using the other tree-to-string rule sets. This sug-          Japan) and Japanese/Chinese Machine Translation
+gests that the direct generation of minimum cover-           Project in Special Coordination Funds for Pro-
+ing trees for rule matching is extremely faster than         moting Science and Technology (MEXT, Japan),
+generating all subtrees of a tree node. Note that            and Microsoft Research Asia Machine Translation
+PTT performed extremely bad compared with all                Theme. The first author thanks Naoaki Okazaki
+other systems or tree-based rule sets. The major             and Yusuke Miyao for their help and the anony-
+reason is that we did not perform any reordering             mous reviewers for improving the earlier version.
+or distorting during decoding with PTT.
+   However, in both t2s and s2t systems, the
+BLEU-4 score benefits of PRS were covered by                 References
+the composed rules: both PTT+C3S and PTT+C3                  Alexandra Birch, Miles Osborne, and Philipp Koehn.
+performed significant better (p < 0.01) than                   2007. Ccg supertags in factored statistical machine
+PTT+PRS, and there are no significant differences              translation. In Proceedings of the Second Work-
+                                                               shop on Statistical Machine Translation, pages 9–
+when appending PRS to PTT+C3 . The reason is                   16, June.
+obvious: PRS is only a small subset of the com-
+posed rules, and the probabilities of rules in PRS           Bob Carpenter. 1992. The Logic of Typed Feature
+were estimated by maximum likelihood, which is                 Structures. Cambridge University Press.
+fast but biased compared with EM based estima-               David Chiang, Kevin Knight, and Wei Wang. 2009.
+tion (Galley et al., 2006).                                    11,001 new features for statistical machine transla-
+   Finally, by using PTT+F , our systems achieved              tion. In Proceedings of HLT-NAACL, pages 218–
+                                                               226, June.
+the best BLEU-4 scores of 24.75% (t2s) and
+22.67% (s2t), both are significantly better (p <             David Chiang. 2005. A hierarchical phrase-based
+0.01) than that achieved by Joshua.                            model for statistical machine translation. In Pro-
+                                                               ceedings of ACL, pages 263–270, Ann Arbor, MI.
+
+5    Conclusion                                              David Chiang. 2007. Hierarchical phrase-based trans-
+                                                               lation. Computational Lingustics, 33(2):201–228.
+We have proposed approaches of using deep syn-
+                                                             A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977.
+tactic information for extracting fine-grained tree-           Maximum likelihood from incomplete data via the
+to-string translation rules from aligned HPSG                  em algorithm. Journal of the Royal Statistical Soci-
+forest-string pairs. The main contributions are the            ety, 39:1–38.
+applications of GHKM-related algorithms (Galley              Michel Galley, Mark Hopkins, Kevin Knight, and
+et al., 2006; Mi and Huang, 2008) to HPSG forests              Daniel Marcu. 2004. What’s in a translation rule?
+and a linear-time algorithm for extracting com-                In Proceedings of HLT-NAACL.
+
+
+                                                       333
+
+
+Michel Galley, Jonathan Graehl, Kevin Knight, Daniel             Franz Josef Och and Hermann Ney. 2003. A sys-
+  Marcu, Steve DeNeefe, Wei Wang, and Ignacio                      tematic comparison of various statistical alignment
+  Thayer. 2006. Scalable inference and training of                 models. Computational Linguistics, 29(1):19–51.
+  context-rich syntactic translation models. In Pro-
+  ceedings of COLING-ACL, pages 961–968, Sydney.                 Franz Josef Och. 2003. Minimum error rate training
+                                                                   in statistical machine translation. In Proceedings of
+Hany Hassan, Khalil Sima’an, and Andy Way. 2007.                   ACL, pages 160–167.
+  Supertagged phrase-based statistical machine trans-
+  lation. In Proceedings of ACL, pages 288–295, June.            Stephan Oepen, Erik Velldal, Jan Tore Lønning, Paul
+                                                                    Meurer, and Victoria Rosén. 2007. Towards hy-
+Liang Huang and David Chiang. 2005. Better k-best                   brid quality-oriented machine translation - on lin-
+  parsing. In Proceedings of IWPT.                                  guistics and probabilities in mt. In Proceedings
+Liang Huang, Kevin Knight, and Aravind Joshi. 2006.                 of the 11th International Conference on Theoretical
+  Statistical syntax-directed translation with extended             and Methodological Issues in Machine Translation
+  domain of locality. In Proceedings of 7th AMTA.                   (TMI-07), September.
+
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris                Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+  Callison-Burch, Marcello Federico, Nicola Bertoldi,              Jing Zhu. 2002. Bleu: a method for automatic
+  Brooke Cowan, Wade Shen, Christine Moran,                        evaluation of machine translation. In Proceedings
+  Richard Zens, Chris Dyer, Ondřej Bojar, Alexandra               of ACL, pages 311–318.
+  Constantin, and Evan Herbst. 2007. Moses: Open
+  source toolkit for statistical machine translation. In         Stefan Riezler and John T. Maxwell, III. 2006. Gram-
+  Proceedings of the ACL 2007 Demo and Poster Ses-                  matical machine translation. In Proceedings of HLT-
+  sions, pages 177–180.                                             NAACL, pages 248–255.
+
+Zhifei Li, Chris Callison-Burch, Chris Dyery, Juri               Andreas Stolcke. 2002. Srilm-an extensible language
+  Ganitkevitch, Sanjeev Khudanpur, Lane Schwartz,                  modeling toolkit. In Proceedings of International
+  Wren N. G. Thornton, Jonathan Weese, and Omar F.                 Conference on Spoken Language Processing, pages
+  Zaidan. 2009. Demonstration of joshua: An open                   901–904.
+  source toolkit for parsing-based machine translation.
+  In Proceedings of the ACL-IJCNLP 2009 Software                 Masao Utiyama and Hitoshi Isahara. 2007. A
+  Demonstrations, pages 25–28, August.                            japanese-english patent parallel corpus. In Proceed-
+                                                                  ings of MT Summit XI, pages 475–482, Copenhagen.
+Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-
+  to-string alignment templates for statistical machine          Xianchao Wu. 2010. Statistical Machine Transla-
+  transaltion. In Proceedings of COLING-ACL, pages                 tion Using Large-Scale Lexicon and Deep Syntactic
+  609–616, Sydney, Australia.                                      Structures. Ph.D. dissertation. Department of Com-
+                                                                   puter Science, The University of Tokyo.
+Yang Liu, Yajuan Lü, and Qun Liu. 2009a. Improving
+  tree-to-tree translation with packed forests. In Pro-          Omar F. Zaidan. 2009. Z-MERT: A fully configurable
+  ceedings of ACL-IJCNLP, pages 558–566, August.                  open source tool for minimum error rate training of
+                                                                  machine translation systems. The Prague Bulletin of
+Yang Liu, Haitao Mi, Yang Feng, and Qun Liu. 2009b.               Mathematical Linguistics, 91:79–88.
+  Joint decoding with multiple translation models. In
+  Proceedings of ACL-IJCNLP, pages 576–584, Au-                  Hao Zhang, Liang Huang, Daniel Gildea, and Kevin
+  gust.                                                            Knight. 2006. Synchronous binarization for ma-
+                                                                   chine translation. In Proceedings of HLT-NAACL,
+Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii.               pages 256–263, June.
+  2007. Efficient hpsg parsing with supertagging and
+  cfg-filtering. In Proceedings of IJCAI, pages 1671–
+  1676, January.
+Haitao Mi and Liang Huang. 2008. Forest-based trans-
+  lation rule extraction. In Proceedings of the 2008
+  Conference on Empirical Methods in Natural Lan-
+  guage Processing, pages 206–214, October.
+Haitao Mi, Liang Huang, and Qun Liu. 2008. Forest-
+  based translation. In Proceedings of ACL-08:HLT,
+  pages 192–199, Columbus, Ohio.
+Yusuke Miyao, Takashi Ninomiya, and Jun’ichi Tsu-
+  jii. 2003. Probabilistic modeling of argument struc-
+  tures including non-local dependencies. In Proceed-
+  ings of the International Conference on Recent Ad-
+  vances in Natural Language Processing, pages 285–
+  291, Borovets.
+
+
+                                                           334
+

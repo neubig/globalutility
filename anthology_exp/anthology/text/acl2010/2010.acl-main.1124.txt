@@ -1,0 +1,688 @@
+                    Global Learning of Focused Entailment Graphs
+
+        Jonathan Berant                            Ido Dagan                           Jacob Goldberger
+       Tel-Aviv University                     Bar-Ilan University                     Bar-Ilan University
+         Tel-Aviv, Israel                      Ramat-Gan, Israel                       Ramat-Gan, Israel
+    jonatha6@post.tau.ac.il                   dagan@cs.biu.ac.il                    goldbej@eng.biu.ac.il
+
+
+
+
+                      Abstract                                on broad-scale acquisition of entailment rules for
+                                                              predicates, e.g. (Lin and Pantel, 2001; Sekine,
+    We propose a global algorithm for learn-                  2005; Szpektor and Dagan, 2008).
+    ing entailment relations between predi-                      Previous work has focused on learning each en-
+    cates. We define a graph structure over                   tailment rule in isolation. However, it is clear that
+    predicates that represents entailment rela-               there are interactions between rules. A prominent
+    tions as directed edges, and use a global                 example is that entailment is a transitive relation,
+    transitivity constraint on the graph to learn             and thus the rules ‘X → Y ’ and ‘Y → Z’ imply
+    the optimal set of edges, by formulating                  the rule ‘X → Z’. In this paper we take advantage
+    the optimization problem as an Integer                    of these global interactions to improve entailment
+    Linear Program. We motivate this graph                    rule learning.
+    with an application that provides a hierar-                  First, we describe a structure termed an entail-
+    chical summary for a set of propositions                  ment graph that models entailment relations be-
+    that focus on a target concept, and show                  tween propositional templates (Section 3). Next,
+    that our global algorithm improves perfor-                we show that we can present propositions accord-
+    mance by more than 10% over baseline al-                  ing to an entailment hierarchy derived from the
+    gorithms.                                                 graph, and suggest a novel hierarchical presenta-
+                                                              tion scheme for corpus propositions referring to a
+1   Introduction                                              target concept. As in this application each graph
+The Textual Entailment (TE) paradigm (Dagan et                focuses on a single concept, we term those focused
+al., 2009) is a generic framework for applied se-             entailment graphs (Section 4).
+mantic inference. The objective of TE is to recog-               In the core section of the paper, we present an
+nize whether a target meaning can be inferred from            algorithm that uses a global approach to learn the
+a given text. For example, a Question Answer-                 entailment relations of focused entailment graphs
+ing system has to recognize that ‘alcohol affects             (Section 5). We define a global function and look
+blood pressure’ is inferred from ‘alcohol reduces             for the graph that maximizes that function under
+blood pressure’ to answer the question ‘What af-              a transitivity constraint. The optimization prob-
+fects blood pressure?’                                        lem is formulated as an Integer Linear Program
+   TE systems require extensive knowledge of en-              (ILP) and solved with an ILP solver. We show that
+tailment patterns, often captured as entailment               this leads to an optimal solution with respect to
+rules: rules that specify a directional inference re-         the global function, and demonstrate that the algo-
+lation between two text fragments (when the rule              rithm outperforms methods that utilize only local
+is bidirectional this is known as paraphrasing). An           information by more than 10%, as well as meth-
+important type of entailment rule refers to propo-            ods that employ a greedy optimization algorithm
+sitional templates, i.e., propositions comprising             rather than an ILP solver (Section 6).
+a predicate and arguments, possibly replaced by
+                                                              2   Background
+variables. The rule required for the previous ex-
+ample would be ‘X reduce Y → X affect Y’. Be-                 Entailment learning Two information types have
+cause facts and knowledge are mostly expressed                primarily been utilized to learn entailment rules
+by propositions, such entailment rules are central            between predicates: lexicographic resources and
+to the TE task. This has led to active research               distributional similarity resources. Lexicographic
+
+
+                                                        1220
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1220–1229,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+resources are manually-prepared knowledge bases          variables are integers, the problem is termed an In-
+containing information about semantic relations          teger Linear Program (ILP). Linear programming
+between lexical items.       WordNet (Fellbaum,          has attracted attention recently in several fields of
+1998), by far the most widely used resource, spec-       NLP, such as semantic role labeling, summariza-
+ifies relations such as hyponymy, derivation, and        tion and parsing (Roth and tau Yih, 2005; Clarke
+entailment that can be used for semantic inference       and Lapata, 2008; Martins et al., 2009). In this
+(Budanitsky and Hirst, 2006). WordNet has also           paper we formulate the entailment graph learning
+been exploited to automatically generate a training      problem as an Integer Linear Program, and find
+set for a hyponym classifier (Snow et al., 2005),        that this leads to an optimal solution with respect
+and we make a similar use of WordNet in Section          to the target function in our experiment.
+5.1.
+   Lexicographic resources are accurate but tend
+                                                         3     Entailment Graph
+to have low coverage. Therefore, distributional          This section presents an entailment graph struc-
+similarity is used to learn broad-scale resources.       ture, which resembles the graph in (Szpektor and
+Distributional similarity algorithms predict a se-       Dagan, 2009).
+mantic relation between two predicates by com-              The nodes of an entailment graph are propo-
+paring the arguments with which they occur. Quite        sitional templates. A propositional template is a
+a few methods have been suggested (Lin and Pan-          path in a dependency tree between two arguments
+tel, 2001; Bhagat et al., 2007; Yates and Etzioni,       of a common predicate1 (Lin and Pantel, 2001;
+2009), which differ in terms of the specifics of the     Szpektor and Dagan, 2008). Note that in a de-
+ways in which predicates are represented, the fea-       pendency parse, such a path passes through the
+tures that are extracted, and the function used to       predicate. We require that a variable appears in at
+compute feature vector similarity. Details on such       least one of the argument positions, and that each
+methods are given in Section 5.1.                        sense of a polysemous predicate corresponds to a
+   Global learning It is natural to describe en-         separate template (and a separate graph node): X
+                                                            subj         obj             subj           obj
+tailment relations between predicates by a graph.        ←−− treat#1 −−→ Y and X ←−− treat#1 −−→ nau-
+Nodes represent predicates, and edges represent          sea are propositional templates for the first sense
+entailment between nodes. Nevertheless, using a          of the predicate treat. An edge (u, v) represents
+graph for global learning of entailment between          the fact that template u entails template v. Note
+predicates has attracted little attention. Recently,     that the entailment relation transcends beyond hy-
+Szpektor and Dagan (2009) presented the resource         ponymy. For example, the template X is diagnosed
+Argument-mapped WordNet, providing entailment            with asthma entails the template X suffers from
+relations for predicates in WordNet. Their re-           asthma, although one is not a hyponoym of the
+source was built on top of WordNet, and makes            other. An example of an entailment graph is given
+simple use of WordNet’s global graph structure:          in Figure 1, left.
+new rules are suggested by transitively chaining            Since entailment is a transitive relation, an en-
+graph edges, and verified against corpus statistics.     tailment graph is transitive, i.e., if the edges (u, v)
+   The most similar work to ours is Snow et al.’s al-    and (v, w) are in the graph, so is the edge (u, w).
+gorithm for taxonomy induction (2006). Snow et           This is why we require that nodes be sense-
+al.’s algorithm learns the hyponymy relation, un-        specified, as otherwise transitivity does not hold:
+der the constraint that it is a transitive relation.     Possibly a → b for one sense of b, b → c for an-
+Their algorithm incrementally adds hyponyms to           other sense of b, but a 9 c.
+an existing taxonomy (WordNet), using a greedy              Because graph nodes represent propositions,
+search algorithm that adds at each step the set of       which generally have a clear truth value, we can
+hyponyms that maximize the probability of the ev-        assume that transitivity is indeed maintained along
+idence while respecting the transitivity constraint.     paths of any length in an entailment graph, as en-
+   In this paper we tackle a similar problem of          tailment between each pair of nodes either occurs
+learning a transitive relation, but we use linear pro-   or doesn’t occur with very high probability. We
+gramming. A Linear Program (LP) is an optimiza-          support this further in section 4.1, where we show
+tion problem, where a linear function is minimized         1
+                                                             We restrict our discussion to templates with two argu-
+(or maximized) under linear constraints. If the          ments, but generalization is straightforward.
+
+
+                                                     1221
+
+
+                                                                                                                 reduce
+                                                                                          help with              nausea
+                                                                                           nausea
+        X-related-to-nausea      X-associated-with-nausea
+                                                                                                                 relaxation
+                                                                                          acupuncture
+                                                                      related to
+                                                                       nausea                                     treat
+    X-prevent-nausea                  X-help-with-nausea                                                         nausea
+                                                                                           prevent
+                                                                                           nausea                drugs
+                                                                        headache
+                                                                         Oxicontine          ginger                Nabilone
+                              X-reduce-nausea     X-treat-nausea
+                                                                                                                   Lorazepam
+
+
+
+Figure 1: Left: An entailment graph. For clarity, edges that can be inferred by transitivity are omitted. Right: A hierarchical
+summary of propositions involving nausea as an argument, such as headache is related to nausea, acupuncture helps with
+nausea, and Lorazepam treats nausea.
+
+
+that in our experimental setting the length of paths               while nausea is often accompanied by vomitting.
+in the entailment graph is relatively small.                          We suggest that the prominent information
+   Transitivity implies that in each strong connec-                in a text lies in the propositions it contains,
+tivity component2 of the graph, all nodes are syn-                 which specify particular relations between the
+onymous. Moreover, if we merge every strong                        concepts. Propositions have been mostly pre-
+connectivity component to a single node, the                       sented through unstructured textual summaries or
+graph becomes a Directed Acyclic Graph (DAG),                      manually-constructed ontologies, which are ex-
+and the graph nodes can be sorted and presented                    pensive to build. We propose using the entail-
+hierarchically. Next, we show an application that                  ment graph structure, which describes entailment
+leverages this property.                                           relations between predicates, to naturally present
+                                                                   propositions hierarchically. That is, the entailment
+4       Motivating Application                                     hierarchy can be used as an additional facet, which
+In this section we propose an application that pro-                can improve navigation and provide a compact hi-
+vides a hierarchical view of propositions extracted                erarchical summary of the propositions.
+from a corpus, based on an entailment graph.                          Figure 1 illustrates a scenario, on which we
+   Organizing information in large collections has                 evaluate later our learning algorithm. Assume a
+been found to be useful for effective information                  user would like to retrieve information about a tar-
+access (Kaki, 2005; Stoica et al., 2007). It allows                get concept such as nausea. We can extract the set
+for easier data exploration, and provides a compact                of propositions where nausea is an argument auto-
+view of the underlying content. A simple form of                   matically from a corprus, and learn an entailment
+structural presentation is by a single hierarchy, e.g.             graph over propositional templates derived from
+(Hofmann, 1999). A more complex approach is                        the extracted propositions, as illustrated in Figure
+hierarchical faceted metadata, where a number of                   1, left. Then, we follow the steps in the process
+concept hierarchies are created, corresponding to                  described in Section 3: merge synonymous nodes
+different facets or dimensions (Stoica et al., 2007).              that are in the same strong connectivity compo-
+   Hierarchical faceted metadata categorizes con-                  nent, and turn the resulting DAG into a predicate
+cepts of a domain in several dimensions, but does                  hierarchy, which we can then use to present the
+not specify the relations between them. For ex-                    propositions (Figure 1, right). Note that in all
+ample, in the health-care domain we might have                     propositional templates one argument is the tar-
+facets for categories such as diseases and symp-                   get concept (nausea), and the other is a variable
+toms. Thus, when querying about nausea, one                        whose corpus instantiations can be presented ac-
+might find it is related to vomitting and chicken                  cording to another hierarchy (e.g. Nabilone and
+pox, but not that chicken pox is a cause of nausea,                Lorazepam are types of drugs).
+    2
+                                                                     Moreover, new propositions are inferred from
+    A strong connectivity component is a subset of nodes in
+the graph where there is a path from any node to any other         the graph by transitivity. For example, from the
+node.                                                              proposition ‘relaxation reduces nausea’ we can in-
+
+
+                                                             1222
+
+
+fer the proposition ‘relaxation helps with nausea’.     procedure used by Lin and Pantel (2001). How-
+                                                        ever, we only consider templates containing a
+4.1    Focused entailment graphs                        predicate term and arguments3 . The arguments are
+The application presented above generates entail-       replaced with variables, resulting in propositional
+                                                                                    subj           obj
+ment graphs of a specific form: (1) Propositional       templates such as X ←−− affect −−→ Y.
+templates have exactly one argument instantiated           Distributional similarity representation We
+by the same entity (e.g. nausea). (2) The predicate     aim to train a classifier that for an input template
+sense is unspecified, but due to the rather small       pair (t1 , t2 ) determines whether t1 entails t2 . A
+number of nodes and the instantiating argument,         template pair is represented by a feature vector
+each predicate corresponds to a unique sense.           where each coordinate is a different distributional
+   Generalizing this notion, we define a focused        similarity score. There are a myriad of distribu-
+entailment graph to be an entailment graph where        tional similarity algorithms. We briefly describe
+the number of nodes is relatively small (and con-       those used in this paper, obtained through varia-
+sequently paths in the graph are short), and predi-     tions along the following dimensions:
+cates have a single sense (so transitivity is main-        Predicate representation Most algorithms mea-
+tained without sense specification). Section 5          sure the similarity between templates with two
+presents an algorithm that given the set of nodes                                                             subj
+                                                        variables (binary templates) such as X ←−− af-
+of a focused entailment graph learns its edges, i.e.,           obj
+the entailment relations between all pairs of nodes.    fect −−→ Y (Lin and Pantel, 2001; Bhagat et al.,
+The algorithm is evaluated in Section 6 using our       2007; Yates and Etzioni, 2009). Szpketor and Da-
+proposed application. For brevity, from now on          gan (2008) suggested learning over templates with
+                                                                                                              subj
+the term entailment graph will stand for focused        one variable (unary templates) such as X ←−− af-
+entailment graph.                                       fect, and using them to estimate a score for binary
+                                                        templates.
+5     Learning Entailment Graph Edges                      Feature representation The features of a tem-
+                                                        plate are some representation of the terms that in-
+In this section we present an algorithm for learn-
+                                                        stantiated the argument variables in a corpus. Two
+ing the edges of an entailment graph given its set
+                                                        representations are used in our experiment (see
+of nodes. The first step is preprocessing: We use
+                                                        Section 6). Another variant occurs when using bi-
+a large corpus and WordNet to train an entail-
+                                                        nary templates: a template may be represented by
+ment classifier that estimates the likelihood that
+                                                        a pair of feature vectors, one for each variable (Lin
+one propositional template entails another. Next,
+                                                        and Pantel, 2001), or by a single vector, where fea-
+we can learn on the fly for any input graph: given
+                                                        tures represent pairs of instantiations (Szpektor et
+the graph nodes, we employ a global optimiza-
+                                                        al., 2004; Yates and Etzioni, 2009). The former
+tion approach that determines the set of edges that
+                                                        variant reduces sparsity problems, while Yates and
+maximizes the probability (or score) of the entire
+                                                        Etzioni showed the latter is more informative and
+graph, given the edge probabilities (or scores) sup-
+                                                        performs favorably on their data.
+plied by the entailment classifier and the graph
+                                                           Similarity function We consider two similarity
+constraints (transitivity and others).
+                                                        functions: The Lin (2001) similarity measure, and
+5.1    Training an entailment classifier                the Balanced Inclusion (BInc) similarity measure
+                                                        (Szpektor and Dagan, 2008). The former is a
+We describe a procedure for learning an entail-         symmetric measure and the latter is asymmetric.
+ment classifier, given a corpus and a lexicographic     Therefore, information about the direction of en-
+resource (WordNet). First, we extract a large set of    tailment is provided by the BInc measure.
+propositional templates from the corpus. Next, we          We then generate for any (t1 , t2 ) features that
+represent each pair of propositional templates with     are the 12 distributional similarity scores using all
+a feature vector of various distributional similar-     combinations of the dimensions. This is reminis-
+ity scores. Last, we use WordNet to automatically       cent of Connor and Roth (2007), who used the out-
+generate a training set and train a classifier.         put of unsupervised classifiers as features for a su-
+   Template extraction We parse the corpus with         pervised classifier in a verb disambiguation task.
+a dependency parser and extract all propositional
+                                                           3
+templates from every parse tree, employing the                 Via a simple heuristic, omitted due to space limitations
+
+
+                                                    1223
+
+
+   Training set generation Following the spirit of       strong evidence that one does not entail the other
+Snow et al. (2005), WordNet is used to automati-         and so we add the constraint Iuv = 0. Combined
+cally generate a training set of positive (entailing)    with the constraint of transitivity this implies that
+and negative (non-entailing) template pairs. Let         there must be no path from u to v. This is done in
+T be the set of propositional templates extracted        the following two scenarios: (1) When two nodes
+from the corpus. For each ti ∈ T with two vari-          u and v are identical except for a pair of words wu
+ables and a single predicate word w, we extract          and wv , and wu is an antonym of wv , or a hyper-
+from WordNet the set H of direct hypernyms and           nym of wv at distance ≥ 2. (2) When two nodes
+synonyms of w. For every h ∈ H, we generate a            u and v are transitive opposites, that is, if u =
+new template tj from ti by replacing w with h. If             subj       obj                       obj      subj
+                                                         X ←−− w −−→ Y and v = X ←−− w −−→ Y ,
+tj ∈ T , we consider (ti , tj ) to be a positive exam-   for any word w4 .
+ple. Negative examples are generated analogously,           Score-based target function We assume an en-
+by looking at direct co-hyponyms of w instead of         tailment classifier estimating a positive score Suv
+hypernyms and synonyms. This follows the no-             if it believes Iuv = 1 and a negative score other-
+tion of “contrastive estimation” (Smith and Eisner,      wise (for example, an SVM classifier). We look
+2005), since we generate negative examples that          for a graph G that maximizes the sum of scores
+are semantically similar to positive examples and        over the edges:
+thus focus the classifier’s attention on identifying
+the boundary between the classes. Last, we filter
+training examples for which all features are zero,              Ĝ = argmax S(G)
+                                                                        G
+and sample an equal number of positive and neg-                                         
+ative examples (for which we compute similarity                               X
+features), since classifiers tend to perform poorly                = argmax     Suv Iuv  − λ|E|
+                                                                           G        u6=v
+on the minority class when trained on imbalanced
+data (Van Hulse et al., 2007; Nikulin, 2008).
+                                                            where λ|E| is a regularization term reflecting
+5.2   Global learning of edges                           the fact that edges are sparse. Note that this con-
+                                                         stant needs to be optimized on a development set.
+Once the entailment classifier is trained we learn          Probabilistic target function Let Fuv be the
+the graph edges given its nodes. This is equiv-          features for the pair of nodes (u, v) and F =
+alent to learning all entailment relations between       ∪u6=v Fuv . We assume an entailment classifier es-
+all propositional template pairs for that graph.         timating the probability of an edge given its fea-
+   To learn edges we consider global constraints,        tures: Puv = P (Iuv = 1|Fuv ). We look for the
+which allow only certain graph topologies. Since         graph G that maximizes the posterior probability
+we seek a global solution under transitivity and         P (G|F ):
+other constraints, linear programming is a natural
+choice, enabling the use of state of the art opti-                        Ĝ = argmax P (G|F )
+mization packages. We describe two formulations                                     G
+of integer linear programs that learn the edges: one        Following Snow et al., we make two inde-
+maximizing a global score function, and another          pendence assumptions: First, we assume each
+maximizing a global probability function.                set of features Fuv is independent of other sets
+   Let Iuv be an indicator denoting the event that       of features given the graph G, i.e., P (F |G) =
+node u entails node v. Our goal is to learn the
+                                                         Q
+                                                           u6=v P (Fuv |G). Second, we assume the features
+edges E over a set of nodes V . We start by formu-       for the pair (u, v) are generated by a distribution
+lating the constraints and then the target functions.    depending only on whether entailment holds for
+   The first constraint is that the graph must re-       (u, v). Thus, P (Fuv |G) = P (Fuv |Iuv ). Last,
+spect transitivity. Our formulation is equivalent to     for simplicity we assume edges are independent
+the one suggested by Finkel and Manning (2008)           and the prior probability of a graph is a product
+in a coreference resolution task:                        of the prior probabilities of the edge indicators:
+                                                             4
+                                                               We note that in some rare cases transitive verbs are in-
+          ∀u,v,w∈V Iuv + Ivw − Iuw ≤ 1                   deed reciprocal, as in “X marry Y”, but in the grand ma-
+                                                         jority of cases reciprocal activities are not expressed using
+  In addition, for a few pairs of nodes we have          a transitive-verb structure.
+
+
+                                                     1224
+
+
+          Q
+P (G) = u6=v P (Iuv ). Note that although we                      large taxonomy (WordNet) and therefore utilize a
+assume edges are independent, dependency is still                 greedy algorithm, while we simultaneously learn
+expressed using the transitivity constraint. We ex-               all edges of a rather small graph and employ in-
+press P (G|F ) using the assumptions above and                    teger linear programming, which is more sound
+Bayes rule:                                                       theoretically, and as shown in Section 6, leads to
+                                                                  an optimal solution. Nevertheless, Snow et al.’s
+                                                                  model can also be formulated as a linear program
+   P (G|F ) ∝ P (G)P (F |G)                                       with the following target function:
+              Y
+            =    [P (Iuv )P (Fuv |Iuv )]
+                 u6=v                                                              X               Puv · P (Iuv = 0)
+                                 P (Iuv |Fuv )P (Fuv )                argmax              log                            Iuv
+                                                                                                (1 − Puv ) · P (Iuv = 1)
+                 Y
+             =          P (Iuv )                                             G     u6=v
+                                       P (Iuv )
+                 u6=v
+
+             ∝
+                 Y
+                        P (Iuv |Fuv )                                Note that if the prior inverse odds k =
+                                                                  P (Iuv =0)
+                 u6=v                                             P (Iuv =1) = 1, i.e., P (Iuv = 1) = 0.5, then
+                   Y                Y                             this is equivalent to our probabilistic formulation.
+             =             Puv ·             (1 − Puv )           We implemented Snow et al’s model and optimiza-
+                 (u,v)∈E           (u,v)∈E
+                                        /
+                                                                  tion algorithm and in Section 6.3 we compare our
+  Note that the prior P (Fuv ) is constant with re-               model and optimization algorithm to theirs.
+spect to the graph. Now we look for the graph that
+                                                                  6       Experimental Evaluation
+maximizes log P (G|F ):
+                                                                  This section presents our evaluation, which is
+                 X                       X                        geared for the application proposed in Section 4.
+Ĝ = argmax               log Puv +               log(1 − Puv )
+         G
+              (u,v)∈E                   (u,v)∈E
+                                             /                    6.1       Experimental setting
+              X
+  = argmax           [Iuv · log Puv                               A health-care corpus of 632MB was harvested
+         G    u6=v                                                from the web and parsed with the Minipar parser
+                     + (1 − Iuv ) · log(1 − Puv )]                (Lin, 1998). The corpus contains 2,307,585
+              X            Puv                                    sentences and almost 50 million word tokens.
+  = argmax           log           · Iuv                          We used the Unified Medical Language System
+         G               1 − Puv
+              u6=v                                                (UMLS)5 to annotate medical concepts in the cor-
+                                                                  pus. The UMLS is a database that maps nat-
+P the last transition we omit the constant
+(in
+                                                                  ural language phrases to over one million con-
+   u6=v log(1−Puv )). Importantly, while the score-               cept identifiers in the health-care domain (termed
+based formulation contains a parameter λ that re-
+                                                                  CUIs). We annotated all nouns and noun phrases
+quires optimization, this probabilistic formulation
+                                                                  that are in the UMLS with their possibly multi-
+is parameter free and does not utilize a develop-
+                                                                  ple CUIs. We extracted all propositional templates
+ment set at all.
+                                                                  from the corpus, where both argument instantia-
+   Since the variables are binary, both formula-
+                                                                  tions are medical concepts, i.e., annotated with a
+tions are integer linear programs with O(|V |2 )
+                                                                  CUI (∼50,000 templates). When computing dis-
+variables and O(|V |3 ) transitivity constraints that
+                                                                  tributional similarity scores, a template is repre-
+can be solved using standard ILP packages.
+                                                                  sented as a feature vector of the CUIs that instan-
+   Our work resembles Snow et al.’s in that both
+                                                                  tiate its arguments.
+try to learn graph edges given a transitivity con-
+                                                                     To evaluate the performance of our algo-
+straint. However, there are two key differences
+                                                                  rithm, we constructed 23 gold standard entailment
+in the model and in the optimization algorithm.
+                                                                  graphs. First, 23 medical concepts, representing
+First, Snow et al.’s model attempts to determine
+                                                                  typical topics of interest in the medical domain,
+the graph that maximizes the likelihood P (F |G)
+                                                                  were manually selected from a list of the most fre-
+and not the posterior P (G|F ). Therefore, their
+                                                                  quent concepts in the corpus. For each concept,
+model contains an edge prior P (Iuv ) that has to
+                                                                  nodes were defined by extracting all propositional
+be estimated, whereas in our model it cancels out.
+                                                                      5
+Second, they incrementally add hyponyms to a                              http://www.nlm.nih.gov/research/umls
+
+
+                                                           1225
+
+
+                           Using a development set                               Not using a development set
+                       Edges                  Propositions                     Edges                  Propositions
+                R        P       F1       R        P          F1         R       P       F1       R        P            F1
+ LP            46.0     50.1    43.8     67.3    69.6        66.2       48.7    41.9    41.2     67.9    62.0          62.3
+ Greedy        45.7     37.1    36.6     64.2    57.2        56.3       48.2    41.7    41.0     67.8    62.0          62.4
+ Local-LP      44.5     45.3    38.1     65.2    61.0        58.6       69.3    19.7    26.8     82.7    33.3          42.6
+ Local1        53.5     34.9    37.5     73.5    50.6        56.1       92.9    11.1    19.7     95.4    18.6          30.6
+ Local2        52.5     31.6    37.7     69.8    50.0        57.1       63.2    24.9    33.6     77.7    39.3          50.5
+ Local∗1       53.5     38.0    39.8     73.5    54.6        59.1       92.6    11.3    20.0     95.3    18.9          31.1
+ Local∗2       52.5     32.1    38.1     69.8    50.6        57.4       63.1    25.5    34.0     77.7    39.9          50.9
+ WordNet        -        -        -       -        -           -        10.8    44.1    13.2     39.9    72.4          47.3
+
+                                          Table 1: Results for all experiments
+
+
+templates for which the target concept instanti-               test set.
+ated an argument at least K(= 3) times (average
+number of graph nodes=22.04, std=3.66, max=26,                 6.2      Evaluated algorithms
+min=13).                                                       Local algorithms We described 12 distributional
+   Ten medical students constructed the gold stan-             similarity measures computed over our corpus
+dard of graph edges. Each concept graph was                    (Section 5.1). For each measure we computed for
+annotated by two students. Following RTE-5                     each template t a list of templates most similar to
+practice (Bentivogli et al., 2009), after initial an-          t (or entailing t for directional measures). In ad-
+notation the two students met for a reconcili-                 dition, we obtained similarity lists learned by Lin
+ation phase. They worked to reach an agree-                    and Pantel (2001), and replicated 3 similarity mea-
+ment on differences and corrected their graphs.                sures learned by Szpektor and Dagan (2008), over
+Inter-annotator agreement was calculated using                 the RCV1 corpus7 . For each distributional similar-
+the Kappa statistic (Siegel and Castellan, 1988)               ity measure (altogether 16 measures), we learned a
+both before (κ = 0.59) and after (κ = 0.9) rec-                graph by inserting any edge (u, v), when u is in the
+onciliation. 882 edges were included in the 23                 top K templates most similar to v. We also omit-
+graphs out of a possible 10,364, providing a suf-              ted edges for which there was strong evidence that
+ficiently large data set. The graphs were randomly             they do not exist, as specified by the constraints
+split into a development set (11 graphs) and a test            in Section 5.2. Another local resource was Word-
+set (12 graphs)6 . The entailment graph fragment               Net where we inserted an edge (u, v) when v was
+in Figure 1 is from the gold standard.                         a direct hypernym or synonym of u. For all algo-
+   The graphs learned by our algorithm were eval-              rithms, we added all edges inferred by transitivity.
+uated by two measures, one evaluating the graph                   Global algorithms We experimented with all
+directly, and the other motivated by our applica-              6 combinations of the following two dimensions:
+tion: (1) F1 of the learned edges compared to the              (1) Target functions: score-based, probabilistic
+gold standard edges (2) Our application provides               and Snow et al.’s (2) Optimization algorithms:
+a summary of propositions extracted from the cor-              Snow et al.’s greedy algorithm and a standard ILP
+pus. Note that we infer new propositions by prop-              solver. A training set of 20,144 examples was au-
+agating inference transitively through the graph.              tomatically generated, each example represented
+Thus, we compute F1 for the set of propositions                by 16 features using the distributional similarity
+inferred from the learned graph, compared to the               measures mentioned above. SVMperf (Joachims,
+set inferred based on the gold standard graph. For             2005) was used to train an SVM classifier yield-
+example, given the proposition from the corpus                 ing Suv , and the SMO classifier from WEKA (Hall
+‘relaxation reduces nausea’ and the edge ‘X re-                et al., 2009) estimated Puv . We used the lpsolve8
+duce nausea → X help with nausea’, we evaluate                 package to solve the linear programs. In all re-
+the set {‘relaxation reduces nausea’, ‘relaxation              sults, the relaxation ∀u,v 0 ≤ Iuv ≤ 1 was used,
+helps with nausea’}. The final score for an algo-              which guarantees an optimal output solution. In
+rithm is a macro-average over the 12 graphs of the                  7
+                                                                     http://trec.nist.gov/data/reuters/reuters.html. The simi-
+                                                               larity lists were computed using: (1) Unary templates and
+   6                                                           the Lin function (2) Unary templates and the BInc function
+   Test set concepts were: asthma, chemotherapy, diarrhea,
+FDA, headache, HPV, lungs, mouth, salmonella, seizure,         (3) Binary templates and the Lin function
+                                                                   8
+smoking and X-ray.                                                   http://lpsolve.sourceforge.net/5.5/
+
+
+                                                         1226
+
+
+               Global=T/Local=F      Global=F/Local=T
+      GS= T            50                   143                          X-reduce-headache               X-experience-headache
+      GS= F           140                  1087
+
+Table 2: Comparing disagreements between the best local
+and global algorithms against the gold standard                X-prevent-headache                        X-suffer-from-headache
+
+
+
+
+all experiments the output solution was integer,                          X-treat-headache                            X-report-headache
+and therefore it is optimal. Constructing graph
+nodes and learning its edges given an input con-                                     Global
+cept took 2-3 seconds on a standard desktop.                   Figure 2: Subgraph of tuned-LP output for “headache”
+
+6.3    Results and analysis
+                                                                 X-reduce-headache                      X-experience-headache
+Table 1 summarizes the results of the algorithms.
+The left half depicts methods where the develop-
+ment set was needed to tune parameters, and the
+right half depicts methods that do not require a                        X-prevent-headache        X-suffer-from-headache
+(manually created) development set at all. Hence,
+our score-based LP (tuned-LP), where the param-
+eter λ is tuned, is on the left, and the probabilis-
+                                                                 X-treat-headache                     X-report-headache
+tic LP (untuned-LP) is on the right. The row
+Greedy is achieved by using the greedy algorithm
+                                                                                             Global
+instead of lpsolve. The row Local-LP is achieved
+                                                                Figure 3: Subgraph of Local∗1 output for“headache”
+by omitting global transitivity constraints, making
+the algorithm completely local. We omit Snow et
+al.’s formulation, since the optimal prior inverse         ods are sensitive to parameter tuning and in the
+odds k was almost exactly 1, which conflates with          absence of a development set their performance
+untuned-LP.                                                dramatically deteriorates.
+   The rows Local1 and Local2 present the best
+                                                              To further establish the merits of global algo-
+distributional similarity resources.      Local1 is
+                                                           rithms, we compare (Table 2) tuned-LP, the best
+achieved using binary templates, the Lin function,
+                                                           global algorithm, with Local∗1 , the best local al-
+and a single vector with feature pairs. Local2 is
+                                                           gorithm. The table considers all edges where the
+identical but employs the BInc function. Local∗1
+                                                           two algorithms disagree, and counts how many
+and Local∗2 also exploit the local constraints men-
+                                                           are in the gold standard and how many are not.
+tioned above. Results on the left were achieved
+                                                           Clearly, tuned-LP is superior at avoiding wrong
+by optimizing the top-K parameter on the devel-
+                                                           edges (false positives). This is because tuned-
+opment set, and on the right by optimizing on the
+                                                           LP refrains from adding edges that subsequently
+training set automatically generated from Word-
+                                                           induce many undesirable edges through transitiv-
+Net.
+                                                           ity. Figures 2 and 3 illustrate this by compar-
+   The global methods clearly outperform local             ing tuned-LP and Local∗1 on a subgraph of the
+methods: Tuned-LP outperforms significantly all            Headache concept, before adding missing edges
+local methods that require a development set both          to satisfy transitivity to Local∗1 . Note that Local∗1
+on the edges F1 measure (p<.05) and on the                 inserts a single wrong edge X-report-headache →
+propositions F1 measure (p<.01)9 . The untuned-            X-prevent-headache, which leads to adding 8 more
+LP algorithm also significantly outperforms all lo-        wrong edges. This is the type of global considera-
+cal methods that do not require a development              tion that is addressed in an ILP formulation, but is
+set on the edges F1 measure (p<.05) and on                 ignored in a local approach and often overlooked
+the propositions F1 measure (p<.01). Omitting              when employing a greedy algorithm. Figure 2 also
+the global transitivity constraints decreases perfor-      illustrates the utility of a local entailment graph for
+mance, as shown by Local-LP. Last, local meth-             information presentation. Presenting information
+   9
+     We tested significance using the two-sided Wilcoxon   according to this subgraph distinguishes between
+rank test (Wilcoxon, 1945)                                 propositions dealing with headache treatments and
+
+
+                                                        1227
+
+
+propositions dealing with headache risk groups.        and the nine students who prepared the gold stan-
+   Comparing our use of an ILP algorithm to            dard data set. This work was developed under
+the greedy one reveals that tuned-LP significantly     the collaboration of FBK-irst/University of Haifa
+outperforms its greedy counterpart on both mea-        and was partially supported by the Israel Science
+sures (p<.01). However, untuned-LP is practically      Foundation grant 1112/08. The first author is
+equivalent to its greedy counterpart. This indicates   grateful to the Azrieli Foundation for the award of
+that in this experiment the greedy algorithm pro-      an Azrieli Fellowship, and has carried out this re-
+vides a good approximation for the optimal solu-       search in partial fulllment of the requirements for
+tion achieved by our LP formulation.                   the Ph.D. degree.
+   Last, when comparing WordNet to local distri-
+butional similarity methods, we observe low recall
+and high precision, as expected. However, global       References
+methods achieve much higher recall than WordNet        Luisa Bentivogli, Ido Dagan, Hoa Trang Dang, Danilo
+while maintaining comparable precision.                  Giampiccolo, and Bernarde Magnini. 2009. The
+   The results clearly demonstrate that a global ap-     fifth Pascal recognizing textual entailment chal-
+                                                         lenge. In Proceedings of TAC-09.
+proach improves performance on the entailment
+graph learning task, and the overall advantage of      Rahul Bhagat, Patrick Pantel, and Eduard Hovy. 2007.
+employing an ILP solver rather than a greedy al-         LEDIR: An unsupervised algorithm for learning di-
+gorithm.                                                 rectionality of inference rules. In Proceedings of
+                                                         EMNLP-CoNLL.
+7   Conclusion                                         Alexander Budanitsky and Graeme Hirst. 2006. Eval-
+                                                         uating wordnet-based measures of lexical semantic
+This paper presented a global optimization algo-
+                                                         relatedness. Computational Linguistics, 32(1):13–
+rithm for learning entailment relations between          47.
+predicates represented as propositional templates.
+We modeled the problem as a graph learning prob-       James Clarke and Mirella Lapata. 2008. Global in-
+                                                         ference for sentence compression: An integer linear
+lem, and searched for the best graph under a global
+                                                         programming approach. Journal of Artificial Intelli-
+transitivity constraint. We used Integer Linear          gence Research, 31:273–381.
+Programming to solve the optimization problem,
+which is theoretically sound, and demonstrated         Michael Connor and Dan Roth. 2007. Context sensi-
+empirically that this method outperforms local al-       tive paraphrasing with a single unsupervised classi-
+                                                         fier. In Proceedings of ECML.
+gorithms as well as a greedy optimization algo-
+rithm on the graph learning task.                      Ido Dagan, Bill Dolan, Bernardo Magnini, and Dan
+   Currently, we are investigating a generalization       Roth. 2009. Recognizing textual entailment: Ratio-
+of our probabilistic formulation that includes a          nal, evaluation and approaches. Natural Language
+                                                          Engineering, 15(4):1–17.
+prior on the edges, and the relation of this prior
+to the regularization term introduced in our score-    Christiane Fellbaum, editor. 1998. WordNet: An Elec-
+based formulation. In future work, we would like         tronic Lexical Database (Language, Speech, and
+to learn general entailment graphs over a large          Communication). The MIT Press.
+number of nodes. This will introduce a challenge       Jenny Rose Finkel and Christopher D. Manning. 2008.
+to our current optimization algorithm due to com-         Enforcing transitivity in coreference resolution. In
+plexity issues, and will require careful handling of      Proceedings of ACL-08: HLT, Short Papers.
+predicate ambiguity. Additionally, we will inves-
+                                                       Mark Hall, Eibe Frank, Geoffrey Holmes, Bernhard
+tigate novel features for the entailment classifier.    Pfahringer, Peter Reutemann, and Ian H. Witten.
+This paper used distributional similarity, but other    2009. The WEKA data mining software: An up-
+sources of information are likely to improve per-       date. SIGKDD Explorations, 11(1).
+formance further.
+                                                       Thomas Hofmann. 1999. The cluster-abstraction
+                                                         model: Unsupervised learning of topic hierarchies
+Acknowledgments                                          from text data. In Proceedings of IJCAI.
+We would like to thank Roy Bar-Haim, David             Thorsten Joachims. 2005. A support vector method for
+Carmel and the anonymous reviewers for their             multivariate performance measures. In Proceedings
+useful comments. We also thank Dafna Berant              of ICML.
+
+
+                                                   1228
+
+
+Mika Kaki. 2005. Findex: Search results categories      Frank Wilcoxon. 1945. Individual comparisons by
+  help users when document ranking fails. In Pro-         ranking methods. Biometrics Bulletin, 1:80–83.
+  ceedings of CHI.
+                                                        Alexander Yates and Oren Etzioni. 2009. Unsuper-
+Dekang Lin and Patrick Pantel. 2001. Discovery of in-     vised methods for determining object and relation
+  ference rules for question answering. Natural Lan-      synonyms on the web. Journal of Artificial Intelli-
+  guage Engineering, 7(4):343–360.                        gence Research, 34:255–296.
+
+Dekang Lin. 1998. Dependency-based evaluation of
+  Minipar. In Proceedings of the Workshop on Evalu-
+  ation of Parsing Systems at LREC.
+
+Andre Martins, Noah Smith, and Eric Xing. 2009.
+  Concise integer linear programming formulations
+  for dependency parsing. In Proceedings of ACL.
+
+Vladimir Nikulin. 2008. Classification of imbalanced
+  data with random sets and mean-variance filtering.
+  IJDWM, 4(2):63–78.
+
+Dan Roth and Wen tau Yih. 2005. Integer linear pro-
+  gramming inference for conditional random fields.
+  In Proceedings of ICML, pages 737–744.
+
+Satoshi Sekine. 2005. Automatic paraphrase discovery
+  based on context and keywords between ne pairs. In
+  Proceedings of IWP.
+
+Sideny Siegel and N. John Castellan. 1988. Non-
+   parametric Statistics for the Behavioral Sciences.
+   McGraw-Hill, New-York.
+
+Noah Smith and Jason Eisner. 2005. Contrastive es-
+  timation: Training log-linear models on unlabeled
+  data. In Proceedings of ACL.
+
+Rion Snow, Daniel Jurafsky, and Andrew Y. Ng. 2005.
+  Learning syntactic patterns for automatic hypernym
+  discovery. In Proceedings of NIPS.
+
+Rion Snow, Daniel Jurafsky, and Andrew Y. Ng. 2006.
+  Semantic taxonomy induction from heterogenous
+  evidence. In Proceedings of ACL.
+
+Emilia Stoica, Marti Hearst, and Megan Richardson.
+  2007. Automating creation of hierarchical faceted
+  metadata structures. In Proceedings of NAACL-
+  HLT.
+
+Idan Szpektor and Ido Dagan. 2008. Learning entail-
+   ment rules for unary templates. In Proceedings of
+   COLING.
+
+Idan Szpektor and Ido Dagan. 2009. Augmenting
+   wordnet-based inference with argument mapping.
+   In Proceedings of TextInfer-2009.
+
+Idan Szpektor, Hristo Tanev, Ido Dagan, and Bonaven-
+   tura Coppola. 2004. Scaling web-based acquisition
+   of entailment relations. In Proceedings of EMNLP.
+
+Jason Van Hulse, Taghi Khoshgoftaar, and Amri
+   Napolitano. 2007. Experimental perspectives on
+   learning from imbalanced data. In Proceedings of
+   ICML.
+
+
+                                                    1229
+

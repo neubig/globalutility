@@ -1,0 +1,374 @@
+                            Extracting Sequences from the Web
+
+                     Anthony Fader, Stephen Soderland, and Oren Etzioni
+                               University of Washington, Seattle
+                         {afader,soderlan,etzioni}@cs.washington.edu
+
+
+
+
+                    Abstract                                     Most common cause of death in the United States:
+                                                                    1. heart disease, 2. cancer, 3. stroke, 4. COPD,
+    Classical Information Extraction (IE) sys-                      5. pneumonia, 6. cirrhosis, 7. AIDS, 8. chronic liver
+                                                                    disease, 9. sepsis, 10. suicide, 11. septic shock.
+    tems fill slots in domain-specific frames.
+                                                                 Largest tobacco company in the world:
+    This paper reports on S EQ, a novel                             1. Philip Morris, 2. BAT, 3. Japan Tobacco,
+    open IE system that leverages a domain-                         4. Imperial Tobacco, 5. Altadis.
+                                                                 Largest rodent in the world:
+    independent frame to extract ordered se-                        1. Capybara, 2. Beaver, 3. Patagonian Cavies. 4. Maras.
+    quences such as presidents of the United                     Sign of the zodiac:
+    States or the most common causes of death                       1. Aries, 2. Taurus, 3. Gemini, 4. Cancer, 5. Leo,
+                                                                    6. Virgo, 7. Libra, 8. Scorpio, 9. Sagittarius,
+    in the U.S. S EQ leverages regularities                         10. Capricorn, 11. Aquarius, 12. Pisces, 13. Ophiuchus.
+    about sequences to extract a coherent set
+    of sequences from Web text. S EQ nearly                  Table 1: Examples of sequences extracted by S EQ
+    doubles the area under the precision-recall              from unstructured Web text.
+    curve compared to an extractor that does
+    not exploit these regularities.
+1   Introduction                                             its position (e.g., (Washington, 1) and (JFK, 35)).
+                                                             The task of sequence extraction is to automatically
+Classical IE systems fill slots in domain-specific           instantiate sequence frames given a corpus of un-
+frames such as the time and location slots in sem-           structured text.
+inar announcements (Freitag, 2000) or the terror-
+                                                                By definition, sequences have two properties
+ist organization slot in news stories (Chieu et al.,
+                                                             that we can leverage in creating a sequence ex-
+2003). In contrast, open IE systems are domain-
+                                                             tractor: functionality and density. Functionality
+independent, but extract “flat” sets of assertions
+                                                             means position k in a sequence is occupied by a
+that are not organized into frames and slots
+                                                             single real-world entity x. Density means that if
+(Sekine, 2006; Banko et al., 2007). This paper
+                                                             a value has been observed at position k then there
+reports on S EQ—an open IE system that leverages
+                                                             must exist values for all i < k, and possibly more
+a domain-independent frame to extract ordered se-
+                                                             after it.
+quences of objects from Web text. We show that
+the novel, domain-independent sequence frame in
+S EQ substantially boosts the precision and recall           2      The S EQ System
+of the system and yields coherent sequences fil-
+tered from low-precision extractions (Table 1).              Sequence extraction has two parts: identify-
+   Sequence extraction is distinct from set expan-           ing possible extractions (x, k, s) from text, and
+sion (Etzioni et al., 2004; Wang and Cohen, 2007)            then classifying those extractions as either cor-
+because sequences are ordered and because the ex-            rect or incorrect. In the following section, we
+traction process does not require seeds or HTML              describe a way to identify candidate extractions
+lists as input.                                              from text using a set of lexico-syntactic patterns.
+   The domain-independent sequence frame con-                We then show that classifying extractions based
+sists of a sequence name s (e.g., presidents of the          on sentence-level features and redundancy alone
+United States), and a set of ordered pairs (x, k)            yields low precision, which is improved by lever-
+where x is a string naming a member of the se-               aging the functionality and density properties of
+quence with name s, and k is an integer indicating           sequences as done in our S EQ system.
+
+
+                                                       286
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 286–290,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+         Pattern              Example                                  we define the measure totalConf that takes into
+         the ORD              the fifth
+         the RB ORD           the very first                           account redundancy in an input corpus C. As
+         the JJS              the best                                 Downey et al. observed (2005), extractions that
+         the RB JJS           the very best                            occur more frequently in multiple distinct sen-
+         the ORD JJS          the third biggest
+         the RBS JJ           the most popular                         tences are more likely to be correct.
+         the ORD RBS JJ       the second least likely
+                                                                       totalConf (x, k, s|C) =
+Table 2: The patterns used by S EQ to detect ordi-                          X
+nal phrases are noun phrases that begin with one                                   localConf (x, k, s|sentence) (1)
+of the part-of-speech patterns listed above.                             sentence∈C
+
+                                                                       2.2   Challenges
+2.1    Generating Sequence Extractions                                 The scores localConf and totalConf are not suffi-
+                                                                       cient to identify valid sequence extractions. They
+To obtain candidate sequence extractions (x, k, s)
+                                                                       tend to give high scores to extractions where the
+from text, the S EQ system finds sentences in its
+                                                                       sequence scope is too general or too specific. In
+input corpus that contain an ordinal phrase (OP).
+                                                                       our running example, the sequence name “Presi-
+Table 2 lists the lexico-syntactic patterns S EQ uses
+                                                                       dent” is too general – many countries and orga-
+to detect ordinal phrases. The value of k is set to
+                                                                       nizations have a president. The sequence name
+the integer corresponding to the ordinal number in
+                                                                       “President of the United States in 1960” is too spe-
+the OP.1
+                                                                       cific – there were not multiple U.S. presidents in
+   Next, S EQ takes each sentence that contains an                     1960.
+ordinal phrase o, and finds candidate items of the
+                                                                          These errors can be explained as violations of
+form (x, k) for the sequence with name s. S EQ
+                                                                       functionality and density. The sequence with
+constrains x to be an NP that is disjoint from o, and
+                                                                       name “President” will have many distinct candi-
+s to be an NP (which may have post-modifying
+                                                                       date extractions in its positions, which is a vio-
+PPs or clauses) following the ordinal number in o.
+                                                                       lation of functionality. The sequence with name
+   For example, given the sentence “With help                          “President of the United States in 1960” will not
+from his father, JFK was elected as the 35th Pres-                     satisfy density, since it will have extractions for
+ident of the United States in 1960”, S EQ finds                        only one position.
+the candidate sequences with names “President”,                           In the next section, we present the details of how
+“President of the United States”, and “President of                    S EQ incorporates functionality and density into its
+the United States in 1960”, each of which has can-                     assessment of a candidate extraction.
+didate extractions (JFK, 35), (his father, 35), and
+                                                                          Given an extraction (x, k, s), S EQ must clas-
+(help, 35). We use heuristics to filter out many of
+                                                                       sify it as either correct or incorrect. S EQ breaks
+the candidate values (e.g., no value should cross a
+                                                                       this problem down into two parts: (1) determining
+sentence-like boundary, and x should be at most
+                                                                       whether s is a correct sequence name, and (2) de-
+some distance from the OP).
+                                                                       termining whether (x, k) is an item in s, assuming
+   This process of generating candidate ex-                            s is correct.
+tractions has high coverage, but low preci-                               A joint probabilistic model of these two deci-
+sion. The first step in identifying correct ex-                        sions would require a significant amount of la-
+tractions is to compute a confidence measure                           beled data. To get around this problem, we repre-
+localConf (x, k, s|sentence), which measures                           sent each (x, k, s) as a vector of features and train
+how likely (x, k, s) is given the sentence it came                     two Naive Bayes classifiers: one for classifying s
+from. We do this using domain-independent syn-                         and one for classifying (x, k). We then rank ex-
+tactic features based on POS tags and the pattern-                     tractions by taking the product of the two classi-
+based features “x {is,are,was,were} the kth s” and                     fiers’ confidence scores.
+“the kth s {is,are,was,were} x”. The features are
+                                                                          We now describe the features used in the two
+then combined using a Naive Bayes classifier.
+                                                                       classifiers and how the classifiers are trained.
+   In addition to the local, sentence-based features,
+   1
+                                                                       Classifying Sequences To classify a sequence
+     Sequences often use a superlative for the first item (k =
+1) such as “the deepest lake in Africa”, “the second deepest           name s, S EQ uses features to measure the func-
+lake in Africa” (or “the 2nd deepest ...”), etc.                       tionality and density of s. Functionality means
+
+
+                                                                 287
+
+
+that a correct sequence with name s has one cor-                          1.0
+                                                                                                      Both Feature Sets
+rect value x at each position k, possibly with ad-
+                                                                                                      Only Density
+ditional noise due to extraction errors and synony-                       0.8
+                                                                                                      Only Functionality
+mous values of x. For a fixed sequence name s                                                         Max localConf
+
+
+
+
+                                                              Precision
+and position k, we can weight each of the candi-                          0.6
+
+date x values in that position by their normalized
+total confidence:                                                         0.4
+
+                        totalConf (x, k, s|C)
+  w(x|k, s, C) = P                       0                                0.2
+                        x0 totalConf (x , k, s|C)
+For overly general sequences, the distribution of                         0.0
+                                                                             0.0   0.2    0.4       0.6        0.8         1.0
+weights for a position will tend to be more flat,
+                                                                                             Recall
+since there are many equally-likely candidate x
+values. To measure this property, we use a func-              Figure 1: Using density or functionality features
+tion analogous to information entropy:                        alone is effective in identifying correct sequence
+                X                                             names. Combining both types of features outper-
+ H(k, s|C) = −      w(x|k, s, C) log2 w(x|k, s, C)
+                   x
+                                                              forms either by a statistically significant margin
+                                                              (paired t-test, p < 0.05).
+Sequences s that are too general will tend to have
+high values of H(k, s|C) for many values of k.
+We found that a good measure of the overall non-              classification sub-task (Figure 1). Second, we
+functionality of s is the average value of H(k, s|C)          report on S EQ’s performance on the sequence-
+for k = 1, 2, 3, 4.                                           extraction task (Figure 2).
+   For a sequence name s that is too specific, we                 To create a test set, we selected all sentences
+would expect that there are only a few filled-in po-          containing ordinal phrases from Banko’s 500M
+sitions. We model the density of s with two met-              Web page corpus (2008). To enrich this set O,
+rics. The first is numF illedP os(s|C), the num-              we obtained additional sentences from Bing.com
+ber of distinct values of k such that there is some           as follows. For each sequence name s satis-
+extraction (x, k) for s in the corpus. The second             fying localConf (x, k, s|sentence) ≥ 0.5 for
+is totalSeqConf (s|C), which is the sum of the                some sentence in O, we queried Bing.com for
+scores of most confident x in each position:                  “the kth s” for k = 1, 2, . . . until no more hits
+                                                              were returned.2 For each query, we downloaded
+    totalSeqConf (s|C) =
+             X                                                the search snippets and added them to our cor-
+                max totalConf (x, k, s|C) (2)                 pus. This procedure resulted in making 95, 611
+                       x
+               k                                              search engine queries. The final corpus contained
+   The functionality and density features are com-            3, 716, 745 distinct sentences containing an OP.
+bined using a Naive Bayes classifier. To train the                Generating candidate extractions using the
+classifier, we use a set of sequence names s labeled          method from Section 2.1 resulted in a set of over
+as either correct or incorrect, which we describe in          40 million distinct extractions, the vast majority
+Section 3.                                                    of which are incorrect. To get a sample with
+                                                              a significant number of correct extractions, we
+Classifying Sequence Items To classify (x, k)                 filtered this set to include only extractions with
+given s, S EQ uses two features: the total con-               totalConf (x, k, s|C) ≥ 0.8 for some sentence,
+fidence totalConf (x, k, s|C) and the same total              resulting in a set of 2, 409, 211 extractions.
+confidence normalized to sum to 1 over all x, hold-               We then randomly sampled and manually la-
+ing k and s constant. To train the classifier, we use         beled 2, 000 of these extractions for evaluation.
+a set of extractions (x, k, s) where s is known to            We did a Web search to verify the correctness of
+be a correct sequence name.                                   the sequence name s and that x is the kth item in
+3    Experimental Results                                     the sequence. In some cases, the ordering rela-
+                                                              tion of the sequence name was ambiguous (e.g.,
+This section reports on two experiments. First, we                        2
+                                                                   We queried for both the numeric form of the ordinal and
+measured how the density and functionality fea-               the number spelled out (e.g “the 2nd ...” and “the second ...”).
+tures improve performance on the sequence name                We took up to 100 results per query.
+
+
+                                                        288
+
+
+            1.0                                                                 R EDUND, which ranks extractions by totalConf .
+                                                         S EQ
+                                                                                Figure 2 shows the precision-recall curves for each
+                                                         R EDUND
+            0.8                                                                 system on the test data. The area under the curves
+                                                         L OCAL
+                                                                                for S EQ, R EDUND, and L OCAL are 0.59, 0.31,
+Precision
+
+
+
+            0.6                                                                 and 0.17, respectively. The low precision and flat
+                                                                                curve for L OCAL suggests that localConf is not
+            0.4                                                                 informative for classifying extractions on its own.
+                                                                                   R EDUND outperformed L OCAL, especially at
+            0.2
+                                                                                the high-precision part of the curve. On the subset
+                                                                                of extractions with correct s, R EDUND can iden-
+            0.0
+               0.0         0.2       0.4       0.6       0.8       1.0          tify x as the kth item with precision of 0.85 at re-
+                                        Recall                                  call 0.80. This is consistent with previous work on
+                                                                                redundancy-based extractors on the Web. How-
+Figure 2: S EQ outperforms the baseline systems,
+                                                                                ever, R EDUND still suffered from the problems
+increasing the area under the curve by 247% rela-
+                                                                                of over-specification and over-generalization de-
+tive to L OCAL and by 90% relative to R EDUND.
+                                                                                scribed in Section 2. S EQ reduces the negative ef-
+                                                                                fects of these problems by decreasing the scores
+“largest state in the US” could refer to land area or                           of sequence names that appear too general or too
+population), which could lead to merging two dis-                               specific.
+tinct sequences. In practice, we found that most
+ordering relations were used in a consistent way                                4   Related Work
+(e.g., “largest city in” always means largest by
+                                                                                There has been extensive work in extracting lists
+population) and only about 5% of the sequence
+                                                                                or sets of entities from the Web. These extrac-
+names in our sample have an ambiguous ordering
+                                                                                tors rely on either (1) HTML features (Cohen
+relation.
+                                                                                et al., 2002; Wang and Cohen, 2007) to extract
+   We compute precision-recall curves relative to
+                                                                                from structured text or (2) lexico-syntactic pat-
+this random sample by changing a confidence
+                                                                                terns (Hearst, 1992; Etzioni et al., 2005) to ex-
+threshold. Precision is the percentage of correct
+                                                                                tract from unstructured text. S EQ is most similar
+extractions above a threshold, while recall is the
+                                                                                to this second type of extractor, but additionally
+percentage correct above a threshold divided by
+                                                                                leverages the sequence regularities of functionality
+the total number of correct extractions. Because
+                                                                                and density. These regularities allow the system to
+S EQ requires training data, we used 15-fold cross
+                                                                                overcome the poor performance of the purely syn-
+validation on the labeled sample.
+                                                                                tactic extractor L OCAL and the redundancy-based
+   The functionality and density features boost
+                                                                                extractor R EDUND.
+S EQ’s ability to correctly identify sequence
+names. Figure 1 shows how well S EQ can iden-
+                                                                                5   Conclusions
+tify correct sequence names using only functional-
+ity, only density, and using functionality and den-                             We have demonstrated that an extractor leveraging
+sity in concert. The baseline used is the maximum                               sequence regularities can greatly outperform ex-
+value of localConf (x, k, s) over all (x, k). Both                              tractors without this knowledge. Identifying likely
+the density features and the functionality features                             sequence names and then filling in sequence items
+are effective at this task, but using both types of                             proved to be an effective approach to sequence ex-
+features resulted in a statistically significant im-                            traction.
+provement over using either type of feature in-                                    One line of future research is to investigate
+dividually (paired t-test of area under the curve,                              other types of domain-independent frames that ex-
+p < 0.05).                                                                      hibit useful regularities. Other examples include
+   We measure S EQ’s efficacy on the complete                                   events (with regularities about actor, location, and
+sequence-extraction task by contrasting it with two                             time) and a generic organization-role frame (with
+baseline systems. The first is L OCAL, which                                    regularities about person, organization, and role
+ranks extractions by localConf .3 The second is                                 played).
+            3
+                If an extraction arises from multiple sentences, we use         the maximal localConf .
+
+
+                                                                          289
+
+
+6   Acknowledgements                                            Richard C. Wang and William W. Cohen. 2007.
+                                                                  Language-independent set expansion of named enti-
+This research was supported in part by NSF                        ties using the web. In ICDM, pages 342–350. IEEE
+grant IIS-0803481, ONR grant N00014-08-1-                         Computer Society.
+0431, DARPA contract FA8750-09-C-0179, and
+an NSF Graduate Research Fellowship, and was
+carried out at the University of Washington’s Tur-
+ing Center.
+
+
+References
+Michele Banko and Oren Etzioni. 2008. The tradeoffs
+  between open and traditional relation extraction. In
+  Proceedings of ACL-08: HLT, pages 28–36.
+
+Michele Banko, Michael J. Cafarella, Stephen Soder-
+  land, Matthew Broadhead, and Oren Etzioni. 2007.
+  Open information extraction from the web. In IJ-
+  CAI, pages 2670–2676.
+
+H. Chieu, H. Ng, and Y. Lee. 2003. Closing the
+  gap: Learning-based information extraction rival-
+  ing knowledge-engineering methods. In ACL, pages
+  216–223.
+
+William W. Cohen, Matthew Hurst, and Lee S. Jensen.
+  2002. A flexible learning system for wrapping ta-
+  bles and lists in html documents. In In International
+  World Wide Web Conference, pages 232–241.
+
+Doug Downey, Oren Etzioni, and Stephen Soderland.
+  2005. A probabilistic model of redundancy in infor-
+  mation extraction. In IJCAI, pages 1034–1041.
+
+O. Etzioni, M. Cafarella, D. Downey, A. Popescu,
+  T. Shaked, S. Soderland, D. Weld, and A. Yates.
+  2004. Methods for domain-independent informa-
+  tion extraction from the Web: An experimental com-
+  parison. In Proceedings of the Nineteenth National
+  Conference on Artificial Intelligence (AAAI-2004),
+  pages 391–398.
+
+Oren Etzioni, Michael Cafarella, Doug Downey,
+  Ana maria Popescu, Tal Shaked, Stephen Soderl,
+  Daniel S. Weld, and Er Yates. 2005. Unsupervised
+  named-entity extraction from the web: An experi-
+  mental study. Artificial Intelligence, 165:91–134.
+
+D. Freitag. 2000. Machine learning for information
+  extraction in informal domains. Machine Learning,
+  39(2-3):169–202.
+
+Marti A. Hearst. 1992. Automatic acquisition of hy-
+ ponyms from large text corpora. In COLING, pages
+ 539–545.
+
+Satoshi Sekine. 2006. On-demand information extrac-
+  tion. In Proceedings of the COLING/ACL on Main
+  conference poster sessions, pages 731–738, Morris-
+  town, NJ, USA. Association for Computational Lin-
+  guistics.
+
+
+                                                          290
+

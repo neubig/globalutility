@@ -1,0 +1,398 @@
+    Predicate Argument Structure Analysis using Transformation-based
+                               Learning
+
+        Hirotoshi Taira              Sanae Fujita            Masaaki Nagata
+                      NTT Communication Science Laboratories
+            2-4, Hikaridai, Seika-cho, Souraku-gun, Kyoto 619-0237, Japan
+{taira,sanae}@cslab.kecl.ntt.co.jp                nagata.masaaki@lab.ntt.co.jp
+
+
+                    Abstract                                     The construction of such large corpora is strenu-
+                                                             ous and time-consuming. Additionally, maintain-
+    Maintaining high annotation consistency                  ing high annotation consistency in such corpora
+    in large corpora is crucial for statistical              is crucial for statistical learning; however, such
+    learning; however, such work is hard,                    work is hard, especially for tasks containing se-
+    especially for tasks containing semantic                 mantic elements. For example, in Japanese cor-
+    elements. This paper describes predi-                    pora, distinguishing true dative (or indirect object)
+    cate argument structure analysis using                   arguments from time-type argument is difficult be-
+    transformation-based learning. An advan-                 cause the arguments of both types are often ac-
+    tage of transformation-based learning is                 companied with the ‘ni’ case marker.
+    the readability of learned rules. A dis-                     A problem with such statistical learners as SVM
+    advantage is that the rule extraction pro-               is the lack of interpretability; if accuracy is low, we
+    cedure is time-consuming. We present                     cannot identify the problems in the annotations.
+    incremental-based, transformation-based                      We are focusing on transformation-based learn-
+    learning for semantic processing tasks. As               ing (TBL). An advantage for such learning meth-
+    an example, we deal with Japanese pred-                  ods is that we can easily interpret the learned
+    icate argument analysis and show some                    model. The tasks in most previous research are
+    tendencies of annotators for constructing                such simple tagging tasks as part-of-speech tag-
+    a corpus with our method.                                ging, insertion and deletion of parentheses in syn-
+                                                             tactic parsing, and chunking (Brill, 1995; Brill,
+1   Introduction                                             1993; Ramshaw and Marcus, 1995). Here we ex-
+Automatic predicate argument structure analysis              periment with a complex task: Japanese PASs.
+(PAS) provides information of “who did what                  TBL can be slow, so we proposed an incremen-
+to whom” and is an important base tool for                   tal training method to speed up the training. We
+such various text processing tasks as machine                experimented with a Japanese PAS corpus with a
+translation information extraction (Hirschman et             graph-based TBL. From the experiments, we in-
+al., 1999), question answering (Narayanan and                terrelated the annotation tendency on the dataset.
+Harabagiu, 2004; Shen and Lapata, 2007), and                     The rest of this paper is organized as follows.
+summarization (Melli et al., 2005). Most re-                 Section 2 describes Japanese predicate structure,
+cent approaches to predicate argument structure              our graph expression of it, and our improved
+analysis are statistical machine learning methods            method. The results of experiments using the
+such as support vector machines (SVMs)(Pradhan               NAIST Text Corpus, which is our target corpus,
+et al., 2004). For predicate argument struc-                 are reported in Section 3, and our conclusion is
+ture analysis, we have the following represen-               provided in Section 4.
+tative large corpora: FrameNet (Fillmore et al.,
+                                                             2 Predicate argument structure and
+2001), PropBank (Palmer et al., 2005), and Nom-
+                                                               graph transformation learning
+Bank (Meyers et al., 2004) in English, the Chi-
+nese PropBank (Xue, 2008) in Chinese, the                    First, we illustrate the structure of a Japanese sen-
+GDA Corpus (Hashida, 2005), Kyoto Text Corpus                tence in Fig. 1. In Japanese, we can divide a sen-
+Ver.4.0 (Kawahara et al., 2002), and the NAIST               tence into bunsetsu phrases (BP). A BP usually
+Text Corpus (Iida et al., 2007) in Japanese.                 consists of one or more content words and zero,
+
+
+                                                       162
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 162–167,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+Sentence                                                                                      BP         BP          BP                   BP            BP         BP
+                      Syntactic dependency between bunsetsus
+                                                                                                                          a) `Add Pred Node’
+                                                                                                         PRED                                           PRED
+    BP            BP        BP      BP         BP                              BP                                         b) `Delete Pred Node’
+ CW FW         CW FW CW FW         CW      CW FW                            CW FW
+Kare no       tabe ta  okashi wa kinou     mise de                          kat ta                 ARG                     c) `Add Edge’          ARG
+  He ’s       eat PAST snack TOP yesterday shop at                          buy PAST                                                                     Nom.
+                                                                                                              PRED         d) `Delete Edge’                PRED
+   ARG                            ARG            ARG        ARG
+      Nom.              Acc.                                         Loc.
+                                        Time        Acc.                                           ARG         e) `Change Edge Label’             ARG
+                 PRED                                                        PRED                         Nom.                                            Acc.
+ Kareno tabeta okashiwa kinou misede katta.                                                                 PRED                                            PRED
+ The snack he ate is one I bought at the store yesterday.
+                                                 Argument Types
+                                                   Nom: Nominative                                        Figure 2: Transform types
+  BP: Bunsetsu phrase          PRED: Predicate     Acc: Accusative
+  CW: Content Word              ARG: Argument      Dat: Dative
+  FW: Functional Word                              Time: Time
+                                                   Loc: Location
+                                                                                          paring the current graphs with the gold standard
+           Figure 1: Graph expression for PAS                                             graph structure in the training data, we find the dif-
+                                                                                          ferent statuses of the nodes and edges among the
+                                                                                          graphs. We extract such transformation rule candi-
+one, or more than one functional words. Syn-                                              dates as ‘add node’ and ‘change edge label’ with
+tactic dependency between bunsetsu phrases can                                            constraints, including ‘the corresponding BP in-
+be defined. Japanese dependency parsers such as                                           cludes a verb’ and ‘the argument candidate and the
+Cabocha (Kudo and Matsumoto, 2002) can extract                                            predicate node have a syntactic dependency.’ The
+BPs and their dependencies with about 90% accu-                                           extractions are executed based on the rule tem-
+racy.                                                                                     plates given in advance. Each extracted rule is
+   Since predicates and arguments in Japanese are                                         evaluated for the current graphs, and error reduc-
+mainly annotated on the head content word in                                              tion is calculated. The best rule for the reduction
+each BP, we can deal with BPs as candidates of                                            is selected as a new rule and inserted at the bottom
+predicates or arguments. In our experiments, we                                           of the current rule list. The new rule is applied to
+mapped each BP to an argument candidate node                                              the current graphs, which are transferred to other
+of graphs. We also mapped each predicate to a                                             graph structures. This procedure is iterated until
+predicate node. Each predicate-argument relation                                          the total errors for the gold standard graphs be-
+is identified by an edge between a predicate and an                                       come zero. When the process is completed, the
+argument, and the argument type is mapped to the                                          rule list is the final model. In the test phase, we it-
+edge label. In our experiments below, we defined                                          eratively transform nodes and edges in the graphs
+five argument types: nominative (subjective), ac-                                         mapped from the test data, based on rules in the
+cusative (direct objective), dative (indirect objec-                                      model like decision lists. The last graph after all
+tive), time, and location. We use five transforma-                                        rule adaptations is the system output of the PAS.
+tion types: a) add or b) delete a predicate node, c)                                         In this procedure, the calculation of error reduc-
+add or d) delete an edge between an predicate and                                         tion is very time-consuming, because we have to
+an argument node, e) change a label (= an argu-                                           check many constraints from the candidate rules
+ment type) to another label (Fig. 2). We explain                                          for all training samples. The calculation order is
+the existence of an edge between a predicate and                                          O(M N ), where M is the number of articles and
+an argument labeled t candidate node as that the                                          N is the number of candidate rules. Additionally,
+predicate and the argument have a t type relation-                                        an edge rule usually has three types of constraints:
+ship.                                                                                     ‘pred node constraint,’ ‘argument candidate node
+   Transformation-based learning was proposed                                             constraint,’ and ‘relation constraint.’ The num-
+by (Brill, 1995). Below we explain our learn-                                             ber of combinations and extracted rules are much
+ing strategy when we directly adapt the learning                                          larger than one of the rules for the node rules.
+method to our graph expression of PASs. First, un-                                        Ramshaw et al. proposed an index-based efficient
+structured texts from the training data are inputted.                                     reduction method for the calculation of error re-
+After pre-processing, each text is mapped to an                                           duction (Ramshaw and Marcus, 1994). However,
+initial graph. In our experiments, the initial graph                                      in PAS tasks, we need to check the exclusiveness
+has argument candidate nodes with corresponding                                           of the argument types (for example, a predicate ar-
+BPs and no predicate nodes or edges. Next, com-                                           gument structure does not have two nominative ar-
+
+
+                                                                                    163
+
+
+guments), and we cannot directly use the method.
+                                                                                Table 1: Data distribution
+Jijkoun et al. only used candidate rules that hap-
+                                                                                               Training    Test
+pen in the current and gold standard graphs and                              # of Articles           95      74
+used SVM learning for constraint checks (Jijkoun                           # of Sentences         1,129     687
+and de Rijke, 2007). This method is effective                              # of Predicates        3,261   2,038
+                                                                           # of Arguments         3,877   2,468
+for achieving high accuracy; however, it loses the                              Nom.              1,717     971
+readability of the rules. This is contrary to our aim                            Acc.             1,012     701
+to extract readable rules.                                                       Dat.               632     376
+                                                                                 Time               371     295
+   To reduce the calculations while maintaining                                  Loc.               145     125
+readability, we propose an incremental method
+and describe its procedure below. In this proce-                  Table 4: Total performances (F1-measure (%))
+dure, we first have PAS graphs for only one arti-
+                                                                        Type       System       P      R      F1
+cle. After the total errors among the current and                       Pred.      Baseline    89.4   85.1   87.2
+gold standard graphs become zero in the article,                                  Our system   91.8   85.3   88.4
+we proceed to the next article. For the next article,                   Arg.       Baseline    79.3   59.5   68.0
+                                                                                  Our system   81.9   62.4   70.8
+we first adapt the rules learned from the previous
+article. After that, we extract new rules from the
+two articles until the total errors for the articles be-         3.2 Results
+come zero. We continue these processes until the
+                                                                 Our incremental method takes an hour. In com-
+last article. Additionally, we count the number of
+                                                                 parison, the original TBL cannot even extract one
+rule occurrences and only use the rule candidates
+                                                                 rule in a day. The results of predicate and argu-
+that happen more than once, because most such
+                                                                 ment type predictions are shown in Table 4. Here,
+rules harm the accuracy. We save and use these
+                                                                 ‘Baseline’ is the baseline system that predicts the
+rules again if the occurrence increases.
+                                                                 BSs that contain verbs, adjectives, and da form
+                                                                 nouns (‘to be’ in English) as predicates and pre-
+                                                                 dicts argument types for BSs having syntactical
+3   Experiments                                                  dependency with a predicted predicate BS, based
+                                                                 on the following rules: 1) BSs containing nomina-
+3.1 Experimental Settings                                        tive (ga) / accusative (wo) / dative (ni) case mark-
+                                                                 ers are predicted to be nominative, accusative, and
+We used the articles in the NAIST Text Cor-                      dative, respectively. 2) BSs containing a topic case
+pus version 1.4β (Iida et al., 2007) based on the                marker (wa) are predicted to be nominative. 3)
+Mainichi Shinbun Corpus (Mainichi, 1995), which                  When a word sense category from a Japanese on-
+were taken from news articles published in the                   tology of the head word in BS belongs to a ‘time’
+Japanese Mainichi Shinbun newspaper. We used                     or ‘location’ category, the BS is predicted to be a
+articles published on January 1st for training ex-               ‘time’ and ‘location’ type argument. In all preci-
+amples and on January 3rd for test examples.                     sion, recall, and F1-measure, our system outper-
+Three original argument types are defined in the                 formed the baseline system.
+NAIST Text Corpus: nominative (or subjective),                      Next, we show our system’s learning curve in
+accusative (or direct object), and dative (or indi-              Fig. 3. The number of final rules was 68. This
+rect object). For evaluation of the difficult anno-              indicates that the first twenty rules are mainly ef-
+tation cases, we also added annotations for ‘time’               fective rules for the performance. The curve also
+and ‘location’ types by ourselves. We show the                   shows that no overfitting happened. Next, we
+dataset distribution in Table 1. We extracted the                show the performance for every argument type in
+BP units and dependencies among these BPs from                   Table 5. ‘TBL,’ which stands for ‘transformation-
+the dataset using Cabocha, a Japanese dependency                 based learning,’ is our system. In this table,
+parser, as pre-processing. After that, we adapted                the performance of the dative and time types im-
+our incremental learning to the training data. We                proved, even though they are difficult to distin-
+used two constraint templates in Tables 2 and 3                  guish. On the other hand, the performance of the
+for predicate nodes and edges when extracting the                location type argument in our system is very low.
+rule candidates.                                                 Our method learns rules as decreasing errors of
+
+
+                                                           164
+
+
+                                       Table 2: Predicate node constraint templates
+              Pred. Node Constraint Template                                          Rule Example
+       Constraint    Description                                         Pred. Node Constraint                Operation
+         pos1        noun, verb, adjective, etc.                         pos1=‘ADJECTIVE’                   add pred node
+         pos2        independent, attached word, etc.                pos2=‘DEPENDENT WORD’                  del pred node
+      pos1 & pos2 above two features combination              pos1=‘VERB’ & pos2=‘ANCILLARY WORD’           add pred node
+          ‘da’       da form (copula)                                          ‘da form’                    add pred node
+        lemma        word base form                                           lemma=‘%’                     add pred node
+
+
+                                            Table 3: Edge constraint templates
+              Edge Constraint Template                                                 Rule Example
+   Arg. Cand.    Pred. Node      Relation
+                                                              Edge Constraint                               Operation
+   Const.        Const.          Const.
+   FW (=func. ∗                  dep(arg → pred)              FW of Arg. =‘wa(TOP)’ & dep(arg → pred)       add NOM edge
+   word)
+   ∗             FW              dep(arg ← pred)              FW of Pred. =‘na(ADNOMINAL)’ & dep(arg        add NOM edge
+                                                              ← pred)
+   SemCat          ∗                   dep(arg → pred)        SemCat of Arg. = ‘TIME’ & dep(arg → pred)     add TIME edge
+   (=semantic
+   category)
+   FW              passive form        dep(arg → pred)        FW of Arg. =‘ga(NOM) & Pred.: passive form    chg edge label
+                                                                                                            NOM → ACC
+   ∗               kform (= type       ∗                      kform of Pred. = continuative ‘ta’ form       add NOM edge
+                   of inflected
+                   form)
+   SemCat          Pred. SemCat        ∗                      SemCat of Arg. = ‘HUMAN’ & Pred. SemCat       add NOM edge
+                                                              = ‘PHYSICAL MOVE’
+
+
+                                                                        all arguments, and the performance of the location
+                                                                        type argument is probably sacrificed for total error
+                                                                        reduction because the number of location type ar-
+                                                                        guments is much smaller than the number of other
+                                                                        argument types (Table 1), and the improvement of
+                                                                        the performance-based learning for location type
+ F1-measure (%)                                                         arguments is relatively low. To confirm this, we
+  80
+                                                                        performed an experiment in which we gave the
+ 70
+                                                                        rules of the baseline system to our system as initial
+ 60
+                                                                        rules and subsequently performed our incremen-
+ 50
+                                                                        tal learning. ‘Base + TBL’ shows the experiment.
+ 40                                                                     The performance for the location type argument
+ 30                                                                     improved drastically. However, the total perfor-
+ 20                                                                     mance of the arguments was below the original
+ 10                                                                     TBL. Moreover, the ‘Base + TBL’ performance
+  0                                                                     surpassed the baseline system. This indicates that
+      0     10     20     30      40       50    60      70
+                                                      rules             our system learned a reasonable model.
+                                                                           Finally, we show some interesting extracted
+                                                                        rules in Fig. 4. The first rule stands for an ex-
+Figure 3: Learning curves: x-axis = number of                           pression where the sentence ends with the per-
+rules; y-axis: F1-measure (%)                                           formance of something, which is often seen in
+                                                                        Japanese newspaper articles. The second and third
+                                                                        rules represent that annotators of this dataset tend
+                                                                        to annotate time types for which the semantic cate-
+                                                                        gory of the argument is time, even if the argument
+                                                                        looks like the dat. type, and annotators tend to an-
+                                                                        notate dat. type for arguments that have an dat.
+
+
+                                                                  165
+
+
+                                     BP                        Example
+                   Rule No.20     CW                           `People who answered are 87%’
+                                   `%’                             BP        BP           BP
+                                    PRED                        CW FW CW FW            CW FW
+                                                                答え た          人 は               ８７％ で
+                   if BP contains the word `%’ ,                kotae-ta      hito-wa87%-de
+                   Add Pred. Node                               answer-ed people-TOP 87%-be
+                                                                                                PRED
+                    Rule No.15                                 Example
+                                 SemCat is `Time’
+                                                                      `will start on the 7th’
+
+
+
+
+                            ARG                                          BP           BP
+                                     Dat. / Time                      CW FW           CW
+                                      PRED                            7日 に スタート する
+                         Change Edge Label Dat. →Time                 7ka-ni staato-suru
+                                                                      7th DAT start will
+                   Rule No.16                                          ARG
+                               if func. wd. is `DAT’ case,
+                             ARG                                             Time PRED
+                                      Time / Dat.
+                                      PRED                                          Rule No.16 is applied
+                                                                       ARG
+                         Change Edge Label                                   Dat.    PRED
+
+
+                                         Figure 4: Examples of extracted rules
+
+
+                                                                     References
+Table 5: Results for every arg. type (F-measure
+(%))                                                                 Eric Brill. 1993. Transformation-based error-driven
+                                                                        parsing. In Proc. of the Third International Work-
+      System     Args.    Nom.    Acc.   Dat.      Time Loc.
+                                                                        shop on Parsing Technologies.
+       Base      68.0     65.8    79.6   70.5      51.5 38.0
+       TBL       70.8     64.9    86.4   74.8      59.6 1.7
+    Base + TBL   69.5     63.9    85.8   67.8      55.8 37.4
+                                                                     Eric Brill. 1995. Transformation-based error-driven
+                                                                        learning and natural language processing: A case
+                                                                        study in part-of-speech tagging. Computational Lin-
+                                                                        guistics, 21(4):543–565.
+type case marker.
+                                                                     Charles J. Fillmore, Charles Wooters, and Collin F.
+                                                                       Baker. 2001. Building a large lexical databank
+4     Conclusion                                                       which provides deep semantics. In Proc. of the Pa-
+                                                                       cific Asian Conference on Language, Information
+We performed experiments for Japanese predicate                        and Computation (PACLING).
+argument structure analysis using transformation-
+                                                                     Kouichi Hashida. 2005. Global document annotation
+based learning and extracted rules that indicate the                   (GDA) manual. http://i-content.org/GDA/.
+tendencies annotators have. We presented an in-
+cremental procedure to speed up rule extraction.                     Lynette Hirschman, Patricia Robinson, Lisa
+                                                                       Ferro,    Nancy       Chinchor,     Erica     Brown,
+The performance of PAS analysis improved, espe-                        Ralph    Grishman,        and    Beth     Sundheim.
+cially, the dative and time types, which are difficult                 1999.      Hub-4 Event’99 general guidelines.
+to distinguish. Moreover, when time expressions                        http://www.itl.nist.gov/iaui/894.02/related projects/muc/.
+are attached to the ‘ni’ case, the learned model
+                                                                     Ryu Iida, Mamoru Komachi, Kentaro Inui, and Yuji
+showed a tendency to annotate them as dative ar-                       Matsumoto. 2007. Annotating a Japanese text cor-
+guments in the used corpus. Our method has po-                         pus with predicate-argument and coreference rela-
+tential for dative predictions and interpreting the                    tions. In Proc. of ACL 2007 Workshop on Linguistic
+tendencies of annotator inconsistencies.                               Annotation, pages 132–139.
+
+                                                                     Valentin Jijkoun and Maarten de Rijke. 2007. Learn-
+Acknowledgments                                                        ing to transform linguistic graphs. In Proc. of
+                                                                       the Second Workshop on TextGraphs: Graph-
+                                                                       Based Algorithms for Natural Language Processing
+We thank Kevin Duh for his valuable comments.                          (TextGraphs-2), pages 53–60. Association for Com-
+                                                                       putational Linguistics.
+
+
+                                                               166
+
+
+Daisuke Kawahara, Sadao Kurohashi, and Koichi
+  Hashida.     2002.   Construction of a Japanese
+  relevance-tagged corpus (in Japanese). Proc. of the
+  8th Annual Meeting of the Association for Natural
+  Language Processing, pages 495–498.
+Taku Kudo and Yuji Matsumoto. 2002. Japanese
+  dependency analysis using cascaded chunking. In
+  Proc. of the 6th Conference on Natural Language
+  Learning 2002 (CoNLL 2002).
+Mainichi. 1995. CD Mainichi Shinbun 94. Nichigai
+ Associates Co.
+Gabor Melli, Yang Wang, Yudong Liu, Mehdi M.
+  Kashani, Zhongmin Shi, Baohua Gu, Anoop Sarkar,
+  and Fred Popowich.      2005.   Description of
+  SQUASH, the SFU question answering summary
+  handler for the DUC-2005 summarization task. In
+  Proc. of DUC 2005.
+Adam Meyers, Ruth Reeves, Catherine Macleod,
+  Rachel Szekely, Veronika Zielinska, Brian Young,
+  and Ralph Grishman. 2004. The NomBank project:
+  An interim report. In Proc. of HLT-NAACL 2004
+  Workshop on Frontiers in Corpus Annotation.
+Srini Narayanan and Sanda Harabagiu. 2004. Ques-
+   tion answering based on semantic structures. In
+   Proc. of the 20th International Conference on Com-
+   putational Linguistics (COLING).
+M. Palmer, P. Kingsbury, and D. Gildea. 2005. The
+  proposition bank: An annotated corpus of semantic
+  roles. Computational Linguistics, 31(1):71–106.
+Sameer Pradhan, Waybe Ward, Kadri Hacioglu, James
+  Martin, and Dan Jurafsky. 2004. Shallow semantic
+  parsing using support vector machines. In Proc. of
+  the Human Language Technology Conference/North
+  American Chapter of the Association of Computa-
+  tional Linguistics HLT/NAACL 2004.
+Lance Ramshaw and Mitchell Marcus. 1994. Explor-
+  ing the statistical derivation of transformational rule
+  sequences for part-of-speech tagging. In The Bal-
+  ancing Act: Proc. of the ACL Workshop on Com-
+  bining Symbolic and Statistical Approaches to Lan-
+  guage.
+Lance Ramshaw and Mitchell Marcus. 1995. Text
+  chunking using transformation-based learning. In
+  Proc. of the third workshop on very large corpora,
+  pages 82–94.
+Dan Shen and Mirella Lapata. 2007. Using se-
+  mantic roles to improve question answering. In
+  Proc. of the 2007 Joint Conference on Empir-
+  ical Methods in Natural Language Processing
+  and Computational Natural Language Learning
+  (EMNLP/CoNLL), pages 12–21.
+Nianwen Xue. 2008. Labeling Chinese predicates
+  with semantic roles. Computational Linguistics,
+  34(2):224–255.
+
+
+
+                                                            167
+

@@ -1,0 +1,794 @@
+                              Word representations:
+             A simple and general method for semi-supervised learning
+
+           Joseph Turian                Lev Ratinov                      Yoshua Bengio
+  Département d’Informatique et        Department of           Département d’Informatique et
+ Recherche Opérationnelle (DIRO)     Computer Science         Recherche Opérationnelle (DIRO)
+      Université de Montréal      University of Illinois at       Université de Montréal
+                                     Urbana-Champaign
+Montréal, Québec, Canada, H3T 1J4   Urbana, IL 61801        Montréal, Québec, Canada, H3T 1J4
+ lastname@iro.umontreal.ca ratinov2@uiuc.edu                    bengioy@iro.umontreal.ca
+
+
+                       Abstract                                 already been induced—plug these word features
+                                                                into an existing system, and observe a significant
+      If we take an existing supervised NLP sys-                increase in accuracy. But which word features are
+      tem, a simple and general way to improve                  good for what tasks? Should we prefer certain
+      accuracy is to use unsupervised word                      word features? Can we combine them?
+      representations as extra word features. We                   A word representation is a mathematical object
+      evaluate Brown clusters, Collobert and                    associated with each word, often a vector. Each
+      Weston (2008) embeddings, and HLBL                        dimension’s value corresponds to a feature and
+      (Mnih & Hinton, 2009) embeddings                          might even have a semantic or grammatical
+      of words on both NER and chunking.                        interpretation, so we call it a word feature.
+      We use near state-of-the-art supervised                   Conventionally, supervised lexicalized NLP ap-
+      baselines, and find that each of the three                proaches take a word and convert it to a symbolic
+      word representations improves the accu-                   ID, which is then transformed into a feature vector
+      racy of these baselines. We find further                  using a one-hot representation: The feature vector
+      improvements by combining different                       has the same length as the size of the vocabulary,
+      word representations. You can download                    and only one dimension is on. However, the
+      our word features, for off-the-shelf use                  one-hot representation of a word suffers from data
+      in existing NLP systems, as well as our                   sparsity: Namely, for words that are rare in the
+      code, here: http://metaoptimize.                          labeled training data, their corresponding model
+      com/projects/wordreprs/                                   parameters will be poorly estimated. Moreover,
+                                                                at test time, the model cannot handle words that
+  1   Introduction                                              do not appear in the labeled training data. These
+  By using unlabelled data to reduce data sparsity              limitations of one-hot word representations have
+  in the labeled training data, semi-supervised                 prompted researchers to investigate unsupervised
+  approaches improve generalization accuracy.                   methods for inducing word representations over
+  Semi-supervised models such as Ando and Zhang                 large unlabeled corpora. Word features can be
+  (2005), Suzuki and Isozaki (2008), and Suzuki                 hand-designed, but our goal is to learn them.
+  et al. (2009) achieve state-of-the-art accuracy.                 One common approach to inducing unsuper-
+  However, these approaches dictate a particular                vised word representation is to use clustering,
+  choice of model and training regime. It can be                perhaps hierarchical. This technique was used by
+  tricky and time-consuming to adapt an existing su-            a variety of researchers (Miller et al., 2004; Liang,
+  pervised NLP system to use these semi-supervised              2005; Koo et al., 2008; Ratinov & Roth, 2009;
+  techniques. It is preferable to use a simple and              Huang & Yates, 2009). This leads to a one-hot
+  general method to adapt existing supervised NLP               representation over a smaller vocabulary size.
+  systems to be semi-supervised.                                Neural language models (Bengio et al., 2001;
+     One approach that is becoming popular is                   Schwenk & Gauvain, 2002; Mnih & Hinton,
+  to use unsupervised methods to induce word                    2007; Collobert & Weston, 2008), on the other
+  features—or to download word features that have               hand, induce dense real-valued low-dimensional
+
+
+                                                          384
+         Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 384–394,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+word embeddings using unsupervised approaches.               (columns): The first or second W are counted if the
+(See Bengio (2008) for a more complete list of               word c occurs within a window of 10 to the left or
+references on neural language models.)                       right of the word w, respectively. f is chosen by
+   Unsupervised word representations have                    taking the 200 columns (out of 140K in F) with
+been used in previous NLP work, and have                     the highest variances. ICA is another technique to
+demonstrated improvements in generalization                  transform F into f . (Väyrynen & Honkela, 2004;
+accuracy on a variety of tasks. But different word           Väyrynen & Honkela, 2005; Väyrynen et al.,
+representations have never been systematically               2007). ICA is expensive, and the largest vocab-
+compared in a controlled way. In this work, we               ulary size used in these works was only 10K. As
+compare different techniques for inducing word               far as we know, ICA methods have not been used
+representations, evaluating them on the tasks of             when the size of the vocab W is 100K or more.
+named entity recognition (NER) and chunking.                    Explicitly storing cooccurrence matrix F can be
+   We retract former negative results published in           memory-intensive, and transforming F to f can
+Turian et al. (2009) about Collobert and Weston              be time-consuming. It is preferable that F never
+(2008) embeddings, given training improvements               be computed explicitly, and that f be constructed
+that we describe in Section 7.1.                             incrementally. Řehůřek and Sojka (2010) describe
+                                                             an incremental approach to inducing LSA and
+2   Distributional representations
+                                                             LDA topic models over 270 millions word tokens
+Distributional word representations are based                with a vocabulary of 315K word types. This is
+upon a cooccurrence matrix F of size W×C, where              similar in magnitude to our experiments.
+W is the vocabulary size, each row Fw is the ini-               Another incremental approach to constructing f
+tial representation of word w, and each column Fc            is using a random projection: Linear mapping g is
+is some context. Sahlgren (2006) and Turney and              multiplying F by a random matrix chosen a pri-
+Pantel (2010) describe a handful of possible de-             ori. This random indexing method is motivated
+sign decisions in contructing F, including choice            by the Johnson-Lindenstrauss lemma, which states
+of context types (left window? right window? size            that for certain choices of random matrix, if d is
+of window?) and type of frequency count (raw?                sufficiently large, then the original distances be-
+binary? tf-idf?). Fw has dimensionality W, which             tween words in F will be preserved in f (Sahlgren,
+can be too large to use Fw as features for word w in         2005). Kaski (1998) uses this technique to pro-
+a supervised model. One can map F to matrix f of             duce 100-dimensional representations of docu-
+size W × d, where d  C, using some function g,              ments. Sahlgren (2001) was the first author to use
+where f = g(F). fw represents word w as a vector             random indexing using narrow context. Sahlgren
+with d dimensions. The choice of g is another de-            (2006) does a battery of experiments exploring
+sign decision, although perhaps not as important             different design decisions involved in construct-
+as the statistics used to initially construct F.             ing F, prior to using random indexing. However,
+   The self-organizing semantic map (Ritter &                like all the works cited above, Sahlgren (2006)
+Kohonen, 1989) is a distributional technique                 only uses distributional representation to improve
+that maps words to two dimensions, such that                 existing systems for one-shot classification tasks,
+syntactically and semantically related words are             such as IR, WSD, semantic knowledge tests, and
+nearby (Honkela et al., 1995; Honkela, 1997).                text categorization. It is not well-understood
+   LSA (Dumais et al., 1988; Landauer et al.,                what settings are appropriate to induce distribu-
+1998), LSI, and LDA (Blei et al., 2003) induce               tional word representations for structured predic-
+distributional representations over F in which               tion tasks (like parsing and MT) and sequence la-
+each column is a document context. In most of the            beling tasks (like chunking and NER). Previous
+other approaches discussed, the columns represent            research has achieved repeated successes on these
+word contexts. In LSA, g computes the SVD of F.              tasks using clustering representations (Section 3)
+   Hyperspace Analogue to Language (HAL) is                  and distributed representations (Section 4), so we
+another early distributional approach (Lund et al.,          focus on these representations in our work.
+1995; Lund & Burgess, 1996) to inducing word
+representations. They compute F over a corpus of             3   Clustering-based word representations
+160 million word tokens with a vocabulary size W             Another type of word representation is to induce
+of 70K word types. There are 2·W types of context            a clustering over words. Clustering methods and
+
+
+                                                       385
+
+
+distributional methods can overlap. For example,              a baseline CRF chunker (Sha & Pereira, 2003).
+Pereira et al. (1993) begin with a cooccurrence               Goldberg et al. (2009) use an HMM to assign
+matrix and transform this matrix into a clustering.           POS tags to words, which in turns improves
+                                                              the accuracy of the PCFG-based Hebrew parser.
+3.1   Brown clustering
+                                                              Deschacht and Moens (2009) use a latent-variable
+The Brown algorithm is a hierarchical clustering              language model to improve semantic role labeling.
+algorithm which clusters words to maximize the
+                                                              4       Distributed representations
+mutual information of bigrams (Brown et al.,
+1992). So it is a class-based bigram language                 Another approach to word representation is to
+model. It runs in time O(V·K 2 ), where V is the size         learn a distributed representation. (Not to be
+of the vocabulary and K is the number of clusters.            confused with distributional representations.)
+   The hierarchical nature of the clustering means            A distributed representation is dense, low-
+that we can choose the word class at several                  dimensional, and real-valued. Distributed word
+levels in the hierarchy, which can compensate for             representations are called word embeddings. Each
+poor clusters of a small number of words. One                 dimension of the embedding represents a latent
+downside of Brown clustering is that it is based              feature of the word, hopefully capturing useful
+solely on bigram statistics, and does not consider            syntactic and semantic properties. A distributed
+word usage in a wider context.                                representation is compact, in the sense that it can
+   Brown clusters have been used successfully in              represent an exponential number of clusters in the
+a variety of NLP applications: NER (Miller et al.,            number of dimensions.
+2004; Liang, 2005; Ratinov & Roth, 2009), PCFG                   Word embeddings are typically induced us-
+parsing (Candito & Crabbé, 2009), dependency                 ing neural language models, which use neural
+parsing (Koo et al., 2008; Suzuki et al., 2009), and          networks as the underlying predictive model
+semantic dependency parsing (Zhao et al., 2009).              (Bengio, 2008). Historically, training and testing
+   Martin et al. (1998) presents algorithms for               of neural language models has been slow, scaling
+inducing hierarchical clusterings based upon word             as the size of the vocabulary for each model com-
+bigram and trigram statistics. Ushioda (1996)                 putation (Bengio et al., 2001; Bengio et al., 2003).
+presents an extension to the Brown clustering                 However, many approaches have been proposed
+algorithm, and learn hierarchical clusterings of              in recent years to eliminate that linear dependency
+words as well as phrases, which they apply to                 on vocabulary size (Morin & Bengio, 2005;
+POS tagging.                                                  Collobert & Weston, 2008; Mnih & Hinton, 2009)
+                                                              and allow scaling to very large training corpora.
+3.2   Other work on          cluster-based     word
+      representations                                         4.1       Collobert and Weston (2008) embeddings
+
+Lin and Wu (2009) present a K-means-like                      Collobert and Weston (2008) presented a neural
+non-hierarchical clustering algorithm for phrases,            language model that could be trained over billions
+which uses MapReduce.                                         of words, because the gradient of the loss was
+                                                              computed stochastically over a small sample of
+   HMMs can be used to induce a soft clustering,
+                                                              possible outputs, in a spirit similar to Bengio and
+specifically a multinomial distribution over pos-
+                                                              Sénécal (2003). This neural model of Collobert
+sible clusters (hidden states). Li and McCallum
+                                                              and Weston (2008) was refined and presented in
+(2005) use an HMM-LDA model to improve
+                                                              greater depth in Bengio et al. (2009).
+POS tagging and Chinese Word Segmentation.
+                                                                 The model is discriminative and non-
+Huang and Yates (2009) induce a fully-connected
+                                                              probabilistic.        For each training update, we
+HMM, which emits a multinomial distribution
+                                                              read an n-gram x = (w1 , . . . , wn ) from the corpus.
+over possible vocabulary words. They perform
+                                                              The model concatenates the learned embeddings
+hard clustering using the Viterbi algorithm.
+                                                              of the n words, giving e(w1 ) ⊕ . . . ⊕ e(wn ), where
+(Alternately, they could keep the soft clustering,
+                                                              e is the lookup table and ⊕ is concatenation.
+with the representation for a particular word token
+                                                              We also create a corrupted or noise n-gram
+being the posterior probability distribution over
+                                                              x̃ = (w1 , . . . , wn−q , w˜n ), where w˜n , wn is chosen
+the states.) However, the CRF chunker in Huang
+                                                              uniformly from the vocabulary.1 For convenience,
+and Yates (2009), which uses their HMM word
+clusters as extra features, achieves F1 lower than                1
+                                                                      In Collobert and Weston (2008), the middle word in the
+
+
+                                                        386
+
+
+we write e(x) to mean e(w1 ) ⊕ . . . ⊕ e(wn ). We                      5     Supervised evaluation tasks
+predict a score s(x) for x by passing e(x) through                     We evaluate the hypothesis that one can take an
+a single hidden layer neural network. The training                     existing, near state-of-the-art, supervised NLP
+criterion is that n-grams that are present in the                      system, and improve its accuracy by including
+training corpus like x must have a score at least                      word representations as word features. This
+some margin higher than corrupted n-grams like                         technique for turning a supervised approach into a
+x̃. Specifically: L(x) = max(0, 1 − s(x) + s( x̃)). We                 semi-supervised one is general and task-agnostic.
+minimize this loss stochastically over the n-grams                        However, we wish to find out if certain word
+in the corpus, doing gradient descent simultane-                       representations are preferable for certain tasks.
+ously over the neural network parameters and the                       Lin and Wu (2009) finds that the representations
+embedding lookup table.                                                that are good for NER are poor for search query
+    We implemented the approach of Collobert and                       classification, and vice-versa. We apply clus-
+Weston (2008), with the following differences:                         tering and distributed representations to NER
+• We did not achieve as low log-ranks on the                           and chunking, which allows us to compare our
+English Wikipedia as the authors reported in                           semi-supervised models to those of Ando and
+Bengio et al. (2009), despite initially attempting                     Zhang (2005) and Suzuki and Isozaki (2008).
+to have identical experimental conditions.
+• We corrupt the last word of each n-gram.                             5.1    Chunking
+• We had a separate learning rate for the em-                          Chunking is a syntactic sequence labeling task.
+beddings and for the neural network weights.                           We follow the conditions in the CoNLL-2000
+We found that the embeddings should have a                             shared task (Sang & Buchholz, 2000).
+learning rate generally 1000–32000 times higher                          The linear CRF chunker of Sha and Pereira
+than the neural network weights. Otherwise, the                        (2003) is a standard near-state-of-the-art baseline
+unsupervised training criterion drops slowly.                          chunker. In fact, many off-the-shelf CRF imple-
+• Although their sampling technique makes train-                       mentations now replicate Sha and Pereira (2003),
+ing fast, testing is still expensive when the size of                  including their choice of feature set:
+the vocabulary is large. Instead of cross-validating                   • CRF++ by Taku Kudo (http://crfpp.
+using the log-rank over the validation data as                           sourceforge.net/)
+they do, we instead used the moving average of                         • crfsgd by Léon Bottou (http://leon.
+the training loss on training examples before the                        bottou.org/projects/sgd)
+weight update.                                                         • CRFsuite by by Naoaki Okazaki (http://
+4.2   HLBL embeddings                                                    www.chokkan.org/software/crfsuite/)
+                                                                          We use CRFsuite because it makes it sim-
+The log-bilinear model (Mnih & Hinton, 2007) is
+                                                                       ple to modify the feature generation code,
+a probabilistic and linear neural model. Given an
+                                                                       so one can easily add new features.             We
+n-gram, the model concatenates the embeddings
+                                                                       use SGD optimization, and enable negative
+of the n − 1 first words, and learns a linear model
+                                                                       state features and negative transition fea-
+to predict the embedding of the last word. The
+                                                                       tures. (“feature.possible transitions=1,
+similarity between the predicted embedding and
+                                                                       feature.possible states=1”)
+the current actual embedding is transformed
+                                                                          Table 1 shows the features in the baseline chun-
+into a probability by exponentiating and then
+                                                                       ker. As you can see, the Brown and embedding
+normalizing. Mnih and Hinton (2009) speed up
+                                                                       features are unigram features, and do not partici-
+model evaluation during training and testing by
+                                                                       pate in conjunctions like the word features and tag
+using a hierarchy to exponentially filter down
+                                                                       features do. Koo et al. (2008) sees further accu-
+the number of computations that are performed.
+                                                                       racy improvements on dependency parsing when
+This hierarchical evaluation technique was first
+                                                                       using word representations in compound features.
+proposed by Morin and Bengio (2005). The
+                                                                          The data comes from the Penn Treebank, and
+model, combined with this optimization, is called
+                                                                       is newswire from the Wall Street Journal in 1989.
+the hierarchical log-bilinear (HLBL) model.
+                                                                       Of the 8936 training sentences, we used 1000
+n-gram is corrupted. In Bengio et al. (2009), the last word in         randomly sampled sentences (23615 words) for
+the n-gram is corrupted.                                               development. We trained models on the 7936
+
+
+                                                                 387
+
+
+• Word features: wi for i in {−2, −1, 0, +1, +2},              from Zhang and Johnson (2003):
+  wi ∧ wi+1 for i in {−1, 0}.                                  • Previous two predictions yi−1 and yi−2
+• Tag features: wi for i in {−2, −1, 0, +1, +2},               • Current word xi
+  ti ∧ ti+1 for i in {−2, −1, 0, +1}. ti ∧ ti+1 ∧ ti+2         • xi word type information: all-capitalized,
+  for i in {−2, −1, 0}.                                        is-capitalized, all-digits, alphanumeric, etc.
+• Embedding features [if applicable]: ei [d] for i             • Prefixes and suffixes of xi , if the word contains
+  in {−2, −1, 0, +1, +2}, where d ranges over the              hyphens, then the tokens between the hyphens
+  dimensions of the embedding ei .                             •      Tokens          in     the window   c       =
+• Brown features [if applicable]: substr(bi , 0, p)            (xi−2 , xi−1 , xi , xi+1 , xi+2 )
+  for i in {−2, −1, 0, +1, +2}, where substr takes             • Capitalization pattern in the window c
+  the p-length prefix of the Brown cluster bi .                • Conjunction of c and yi−1 .
+                                                               Word representation features, if present, are used
+  Table 1: Features templates used in the CRF chunker.         the same way as in Table 1.
+                                                                  When using the lexical features, we normalize
+                                                               dates and numbers. For example, 1980 becomes
+training partition sentences, and evaluated their
+                                                               *DDDD* and 212-325-4751 becomes *DDD*-
+F1 on the development set. After choosing hy-
+                                                               *DDD*-*DDDD*. This allows a degree of abstrac-
+perparameters to maximize the dev F1, we would
+                                                               tion to years, phone numbers, etc. This delexi-
+retrain the model using these hyperparameters on
+                                                               calization is performed separately from using the
+the full 8936 sentence training set, and evaluate
+                                                               word representation. That is, if we have induced
+on test. One hyperparameter was l2-regularization
+                                                               an embedding for 12/3/2008 , we will use the em-
+sigma, which for most models was optimal at 2 or
+                                                               bedding of 12/3/2008 , and *DD*/*D*/*DDDD*
+3.2. The word embeddings also required a scaling
+                                                               in the baseline features listed above.
+hyperparameter, as described in Section 7.2.
+                                                                  Unlike in our chunking experiments, after we
+5.2   Named entity recognition                                 chose the best model on the development set, we
+                                                               used that model on the test set too. (In chunking,
+NER is typically treated as a sequence prediction
+                                                               after finding the best hyperparameters on the
+problem. Following Ratinov and Roth (2009), we
+                                                               development set, we would combine the dev
+use the regularized averaged perceptron model.
+                                                               and training set and training a model over this
+Ratinov and Roth (2009) describe different
+                                                               combined set, and then evaluate on test.)
+sequence encoding like BILOU and BIO, and
+show that the BILOU encoding outperforms BIO,                     The standard evaluation benchmark for NER
+and the greedy inference performs competitively                is the CoNLL03 shared task dataset drawn from
+to Viterbi while being significantly faster. Ac-               the Reuters newswire. The training set contains
+cordingly, we use greedy inference and BILOU                   204K words (14K sentences, 946 documents), the
+text chunk representation. We use the publicly                 test set contains 46K words (3.5K sentences, 231
+available implementation from Ratinov and Roth                 documents), and the development set contains
+(2009) (see the end of this paper for the URL). In             51K words (3.3K sentences, 216 documents).
+our baseline experiments, we remove gazetteers                    We also evaluated on an out-of-domain (OOD)
+and non-local features (Krishnan & Manning,                    dataset, the MUC7 formal run (59K words).
+2006). However, we also run experiments that                   MUC7 has a different annotation standard than
+include these features, to understand if the infor-            the CoNLL03 data. It has several NE types that
+mation they provide mostly overlaps with that of               don’t appear in CoNLL03: money, dates, and
+the word representations.                                      numeric quantities. CoNLL03 has MISC, which
+   After each epoch over the training set, we                  is not present in MUC7. To evaluate on MUC7,
+measured the accuracy of the model on the                      we perform the following postprocessing steps
+development set. Training was stopped after the                prior to evaluation:
+accuracy on the development set did not improve                1. In the gold-standard MUC7 data, discard
+for 10 epochs, generally about 50–80 epochs                       (label as ‘O’) all NEs with type NUM-
+total. The epoch that performed best on the                       BER/MONEY/DATE.
+development set was chosen as the final model.                 2. In the predicted model output on MUC7 data,
+   We use the following baseline set of features                  discard (label as ‘O’) all NEs with type MISC.
+
+
+                                                         388
+
+
+These postprocessing steps will adversely affect              7     Experiments and Results
+all NER models across-the-board, nonetheless
+                                                              7.1    Details of inducing word representations
+allowing us to compare different models in a
+controlled manner.                                            The Brown clusters took roughly 3 days to induce,
+                                                              when we induced 1000 clusters, the baseline in
+6   Unlabled Data                                             prior work (Koo et al., 2008; Ratinov & Roth,
+Unlabeled data is used for inducing the word                  2009). We also induced 100, 320, and 3200
+representations. We used the RCV1 corpus, which               Brown clusters, for comparison. (Because Brown
+contains one year of Reuters English newswire,                clustering scales quadratically in the number of
+from August 1996 to August 1997, about 63                     clusters, inducing 10000 clusters would have
+millions words in 3.3 million sentences. We                   been prohibitive.) Because Brown clusters are
+left case intact in the corpus. By comparison,                hierarchical, we can use cluster supersets as
+Collobert and Weston (2008) downcases words                   features. We used clusters at path depth 4, 6, 10,
+and delexicalizes numbers.                                    and 20 (Ratinov & Roth, 2009). These are the
+                                                              prefixes used in Table 1.
+   We use a preprocessing technique proposed
+                                                                 The Collobert and Weston (2008) (C&W)
+by Liang, (2005, p. 51), which was later used
+                                                              embeddings were induced over the course of a
+by Koo et al. (2008): Remove all sentences that
+                                                              few weeks, and trained for about 50 epochs. One
+are less than 90% lowercase a–z. We assume
+                                                              of the difficulties in inducing these embeddings is
+that whitespace is not counted, although this
+                                                              that there is no stopping criterion defined, and that
+is not specified in Liang’s thesis. We call this
+                                                              the quality of the embeddings can keep improving
+preprocessing step cleaning.
+                                                              as training continues. Collobert (p.c.) simply
+   In Turian et al. (2009), we found that all
+                                                              leaves one computer training his embeddings
+word representations performed better on the
+                                                              indefinitely. We induced embeddings with 25, 50,
+supervised task when they were induced on the
+                                                              100, or 200 dimensions over 5-gram windows.
+clean unlabeled data, both embeddings and Brown
+                                                              In comparison to Turian et al. (2009), we use
+clusters. This is the case even though the cleaning
+                                                              improved C&W embeddings in this work:
+process was very aggressive, and discarded more
+                                                              • They were trained for 50 epochs, not just 20
+than half of the sentences. According to the
+                                                              epochs.
+evidence and arguments presented in Bengio et al.
+                                                              • We initialized all embedding dimensions uni-
+(2009), the non-convex optimization process for
+                                                              formly in the range [-0.01, +0.01], not [-1,+1].
+Collobert and Weston (2008) embeddings might
+                                                              For rare words, which are typically updated only
+be adversely affected by noise and the statistical
+                                                              143 times per epoch2 , and given that our embed-
+sparsity issues regarding rare words, especially
+                                                              ding learning rate was typically 1e-6 or 1e-7, this
+at the beginning of training. For this reason, we
+                                                              means that rare word embeddings will be concen-
+hypothesize that learning representations over the
+                                                              trated around zero, instead of spread out randomly.
+most frequent words first and gradually increasing
+                                                                 The HLBL embeddings were trained for 100
+the vocabulary—a curriculum training strategy
+                                                              epochs (7 days).3 Unlike our Collobert and We-
+(Elman, 1993; Bengio et al., 2009; Spitkovsky
+                                                              ston (2008) embeddings, we did not extensively
+et al., 2010)—would provide better results than
+                                                              tune the learning rates for HLBL. We used a learn-
+cleaning.
+                                                              ing rate of 1e-3 for both model parameters and
+   After cleaning, there are 37 million words (58%            embedding parameters. We induced embeddings
+of the original) in 1.3 million sentences (41% of             with 100 dimensions over 5-gram windows, and
+the original). The cleaned RCV1 corpus has 269K               embeddings with 50 dimensions over 5-gram win-
+word types. This is the vocabulary size, i.e. how             dows. Embeddings were induced over one pass
+many word representations were induced. Note
+                                                                  2
+that cleaning is applied only to the unlabeled data,                A rare word will appear 5 (window size) times per
+not to the labeled data used in the supervised tasks.         epoch as a positive example, and 37M (training examples per
+                                                              epoch) / 269K (vocabulary size) = 138 times per epoch as a
+   RCV1 is a superset of the CoNLL03 corpus.                  corruption example.
+                                                                  3
+For this reason, NER results that use RCV1                          The HLBL model updates require fewer matrix mul-
+                                                              tiplies than Collobert and Weston (2008) model updates.
+word representations are a form of transductive               Additionally, HLBL models were trained on a GPGPU,
+learning.                                                     which is faster than conventional CPU arithmetic.
+
+
+                                                        389
+
+
+approach using a random tree, not two passes with                            work. In Turian et al. (2009), we were not
+an updated tree and embeddings re-estimation.                                able to prescribe a default value for scaling the
+7.2   Scaling of Word Embeddings                                             embeddings. However, these curves demonstrate
+                                                                             that a reasonable choice of scale factor is such that
+Like many NLP systems, the baseline system con-                              the embeddings have a standard deviation of 0.1.
+tains only binary features. The word embeddings,
+however, are real numbers that are not necessarily                           7.3   Capacity of Word Representations
+in a bounded range. If the range of the word
+                                                                                                                # of embedding dimensions
+embeddings is too large, they will exert more
+                                                                                                           25         50          100        200
+influence than the binary features.                                                                 94.7
+   We generally found that embeddings had zero                                                      94.6
+mean. We can scale the embeddings by a hy-
+
+
+
+
+                                                                                    Validation F1
+                                                                                                    94.5
+perparameter, to control their standard deviation.
+                                                                             (a)                    94.4
+Assume that the embeddings are represented by a
+                                                                                                    94.3
+matrix E:                                                                                                                         C&W
+                                                                                                                                 HLBL
+                                                                                                    94.2                         Brown
+                          E ← σ · E/stddev(E)                    (1)                                94.1
+                                                                                                                               baseline
+                                                                                                        100         320          1000        3200
+σ is a scaling constant that sets the new standard                                                                 # of Brown clusters
+deviation after scaling the embeddings.                                                                         # of embedding dimensions
+                                                                                                           25         50          100        200
+                                                                                                    92.5
+                       94.8
+
+                       94.6                                                                          92
+                                                                                    Validation F1
+
+
+
+                                                                                                    91.5
+       Validation F1
+
+
+
+
+                       94.4
+                                                                             (b)
+                       94.2                                                                          91
+                                   C&W, 50-dim
+(a)                                HLBL, 50-dim                                                                                   C&W
+                        94        C&W, 200-dim                                                      90.5                         Brown
+                                  C&W, 100-dim                                                                                   HLBL
+                                  HLBL, 100-dim                                                                                baseline
+                       93.8                                                                          90
+                                   C&W, 25-dim
+                                        baseline                                                       100          320          1000        3200
+                       93.6                                                                                        # of Brown clusters
+                          0.001         0.01         0.1     1
+                                          Scaling factor σ
+                                                                             Figure 2: Effect as we vary the capacity of the word
+                       92.5                                                  representations on the validation set F1.               (a) Chunking
+                                                                             results. (b) NER results.
+                        92
+
+                       91.5                                                     There are capacity controls for the word
+       Validation F1
+
+
+
+
+                        91                                                   representations: number of Brown clusters, and
+                       90.5
+                                  C&W, 200-dim                               number of dimensions of the word embeddings.
+(b)                               C&W, 100-dim
+                                   C&W, 25-dim                               Figure 2 shows the effect on the validation F1 as
+                        90         C&W, 50-dim
+                                  HLBL, 100-dim                              we vary the capacity of the word representations.
+                       89.5        HLBL, 50-dim
+                                        baseline
+                                                                                In general, it appears that more Brown clusters
+                        89                                                   are better. We would like to induce 10000 Brown
+                         0.001          0.01         0.1     1
+                                          Scaling factor σ                   clusters, however this would take several months.
+                                                                                In Turian et al. (2009), we hypothesized on
+Figure 1: Effect as we vary the scaling factor σ (Equa-                      the basis of solely the HLBL NER curve that
+tion 1) on the validation set F1. We experiment with                         higher-dimensional word embeddings would give
+Collobert and Weston (2008) and HLBL embeddings of var-
+ious dimensionality. (a) Chunking results. (b) NER results.                  higher accuracy. Figure 2 shows that this hy-
+                                                                             pothesis is not true. For NER, the C&W curve is
+   Figure 1 shows the effect of scaling factor σ                             almost flat, and we were suprised to find the even
+on both supervised tasks. We were surprised                                  25-dimensional C&W word embeddings work so
+to find that on both tasks, across Collobert and                             well. For chunking, 50-dimensional embeddings
+Weston (2008) and HLBL embeddings of various                                 had the highest validation F1 for both C&W and
+dimensionality, that all curves had similar shapes                           HLBL. These curves indicates that the optimal
+and optima. This is one contributions of our                                 capacity of the word embeddings is task-specific.
+
+
+                                                                       390
+
+
+                   System                 Dev     Test                                                             250
+                  Baseline               94.16   93.79                                                                                C&W, 50-dim
+
+
+
+
+                                                                               # of per-token errors (test set)
+               HLBL, 50-dim              94.63   94.00                                                                         Brown, 3200 clusters
+                                                                                                                   200
+                C&W, 50-dim              94.66   94.10
+            Brown, 3200 clusters         94.67   94.11
+            Brown+HLBL, 37M              94.62   94.13                                                             150
+            C&W+HLBL, 37M                94.68   94.25
+         Brown+C&W+HLBL, 37M             94.72   94.15                 (a)                                         100
+            Brown+C&W, 37M               94.76   94.35
+        Ando and Zhang (2005), 15M         -     94.39                                                             50
+       Suzuki and Isozaki (2008), 15M      -     94.67
+        Suzuki and Isozaki (2008), 1B      -     95.15                                                              0
+                                                                                                                         0     1   10 100 1K 10K 100K 1M
+                                                                                                                             Frequency of word in unlabeled data
+Table 2: Final chunking F1 results. In the last section, we
+show how many unlabeled words were used.                                                                           250
+                                                                                                                                           C&W, 50-dim
+
+
+
+
+                                                                                # of per-token errors (test set)
+                                                                                                                                    Brown, 1000 clusters
+                System                    Dev     Test   MUC7                                                      200
+                Baseline                 90.03   84.39   67.48
+          Baseline+Nonlocal              91.91   86.52   71.80                                                     150
+            HLBL 100-dim                 92.00   88.13   75.25
+               Gazetteers                92.09   87.36   77.76         (b)                                         100
+             C&W 50-dim                  92.27   87.93   75.74
+         Brown, 1000 clusters            92.32   88.52   78.84
+                                                                                                                    50
+            C&W 200-dim                  92.46   87.96   75.51
+             C&W+HLBL                    92.52   88.56   78.64
+                                                                                                                     0
+            Brown+HLBL                   92.56   88.93   77.85                                                           0     1   10 100 1K 10K 100K 1M
+            Brown+C&W                    92.79   89.31   80.13
+                                                                                                                             Frequency of word in unlabeled data
+              HLBL+Gaz                   92.91   89.35   79.29
+              C&W+Gaz                    92.98   88.88   81.44
+              Brown+Gaz                  93.25   89.41   82.71         Figure 3: For word tokens that have different frequency
+       Lin and Wu (2009), 3.4B             -     88.44     -           in the unlabeled data, what is the total number of per-token
+     Ando and Zhang (2005), 27M          93.15   89.31     -           errors incurred on the test set? (a) Chunking results. (b) NER
+    Suzuki and Isozaki (2008), 37M       93.66   89.36     -           results.
+     Suzuki and Isozaki (2008), 1B       94.48   89.92     -
+All (Brown+C&W+HLBL+Gaz), 37M            93.17   90.04   82.50
+          All+Nonlocal, 37M              93.95   90.36   84.15         bining representations leads to small increases in
+       Lin and Wu (2009), 700B             -     90.90     -
+                                                                       the test F1. In comparison to chunking, combin-
+                                                                       ing different word representations on NER seems
+Table 3: Final NER F1 results, showing the cumulative
+effect of adding word representations, non-local features, and         gives larger improvements on the test F1.
+gazetteers to the baseline. To speed up training, in combined             On NER, Brown clusters are superior to the
+experiments (C&W plus another word representation),
+we used the 50-dimensional C&W embeddings, not the
+                                                                       word embeddings. Since much of the NER F1
+200-dimensional ones. In the last section, we show how                 is derived from decisions made over rare words,
+many unlabeled words were used.                                        we suspected that Brown clustering has a superior
+                                                                       representation for rare words. Brown makes
+                                                                       a single hard clustering decision, whereas the
+7.4   Final results
+                                                                       embedding for a rare word is close to its initial
+Table 2 shows the final chunking results and Ta-                       value since it hasn’t received many training
+ble 3 shows the final NER F1 results. We compare                       updates (see Footnote 2). Figure 3 shows the total
+to the state-of-the-art methods of Ando and Zhang                      number of per-token errors incurred on the test
+(2005), Suzuki and Isozaki (2008), and—for                             set, depending upon the frequency of the word
+NER—Lin and Wu (2009). Tables 2 and 3 show                             token in the unlabeled data. For NER, Figure 3 (b)
+that accuracy can be increased further by combin-                      shows that most errors occur on rare words, and
+ing the features from different types of word rep-                     that Brown clusters do indeed incur fewer errors
+resentations. But, if only one word representation                     for rare words. This supports our hypothesis
+is to be used, Brown clusters have the highest ac-                     that, for rare words, Brown clustering produces
+curacy. Given the improvements to the C&W em-                          better representations than word embeddings that
+beddings since Turian et al. (2009), C&W em-                           haven’t received sufficient training updates. For
+beddings outperform the HLBL embeddings. On                            chunking, Brown clusters and C&W embeddings
+chunking, there is only a minute difference be-                        incur almost identical numbers of errors, and
+tween Brown clusters and the embeddings. Com-                          errors are concentrated around the more common
+
+
+                                                                 391
+
+
+words. We hypothesize that non-rare words have              and that jointly learns the supervised and unsu-
+good representations, regardless of the choice              pervised tasks (Ando & Zhang, 2005; Suzuki &
+of word representation technique. For tasks like            Isozaki, 2008; Suzuki et al., 2009).
+chunking in which a syntactic decision relies upon             Unsupervised word representations have been
+looking at several token simultaneously, com-               used in previous NLP work, and have demon-
+pound features that use the word representations            strated improvements in generalization accuracy
+might increase accuracy more (Koo et al., 2008).            on a variety of tasks. Ours is the first work to
+   Using word representations in NER brought                systematically compare different word repre-
+larger gains on the out-of-domain data than on the          sentations in a controlled way. We found that
+in-domain data. We were surprised by this result,           Brown clusters and word embeddings both can
+because the OOD data was not even used during               improve the accuracy of a near-state-of-the-art
+the unsupervised word representation induction,             supervised NLP system. We also found that com-
+as was the in-domain data. We are curious to                bining different word representations can improve
+investigate this phenomenon further.                        accuracy further. Error analysis indicates that
+   Ando and Zhang (2005) present a semi-                    Brown clustering induces better representations
+supervised learning algorithm called alternating            for rare words than C&W embeddings that have
+structure optimization (ASO). They find a low-              not received many training updates.
+dimensional projection of the input features that              Another contribution of our work is a default
+gives good linear classifiers over auxiliary tasks.         method for setting the scaling parameter for
+These auxiliary tasks are sometimes specific                word embeddings. With this contribution, word
+to the supervised task, and sometimes general               embeddings can now be used off-the-shelf as
+language modeling tasks like “predict the missing           word features, with no tuning.
+word”. Suzuki and Isozaki (2008) present a semi-               Future work should explore methods for
+supervised extension of CRFs. (In Suzuki et al.             inducing phrase representations, as well as tech-
+(2009), they extend their semi-supervised ap-               niques for increasing in accuracy by using word
+proach to more general conditional models.) One             representations in compound features.
+of the advantages of the semi-supervised learning           Replicating our experiments
+approach that we use is that it is simpler and more
+general than that of Ando and Zhang (2005) and              You can visit http://metaoptimize.com/
+Suzuki and Isozaki (2008). Their methods dictate            projects/wordreprs/ to find: The word
+a particular choice of model and training regime            representations we induced, which you can
+and could not, for instance, be used with an NLP            download and use in your experiments; The code
+system based upon an SVM classifier.                        for inducing the word representations, which you
+   Lin and Wu (2009) present a K-means-like                 can use to induce word representations on your
+non-hierarchical clustering algorithm for phrases,          own data; The NER and chunking system, with
+which uses MapReduce. Since they can scale                  code for replicating our experiments.
+to millions of phrases, and they train over 800B            Acknowledgments
+unlabeled words, they achieve state-of-the-art              Thank you to Magnus Sahlgren, Bob Carpenter,
+accuracy on NER using their phrase clusters.                Percy Liang, Alexander Yates, and the anonymous
+This suggests that extending word representa-               reviewers for useful discussion. Thank you to
+tions to phrase representations is worth further            Andriy Mnih for inducing his embeddings on
+investigation.                                              RCV1 for us. Joseph Turian and Yoshua Bengio
+8   Conclusions                                             acknowledge the following agencies for re-
+                                                            search funding and computing support: NSERC,
+Word features can be learned in advance in an
+                                                            RQCHP, CIFAR. Lev Ratinov was supported by
+unsupervised, task-inspecific, and model-agnostic
+                                                            the Air Force Research Laboratory (AFRL) under
+manner. These word features, once learned, are
+                                                            prime contract no. FA8750-09-C-0181. Any
+easily disseminated with other researchers, and
+                                                            opinions, findings, and conclusion or recommen-
+easily integrated into existing supervised NLP
+                                                            dations expressed in this material are those of the
+systems. The disadvantage, however, is that ac-
+                                                            author and do not necessarily reflect the view of
+curacy might not be as high as a semi-supervised
+                                                            the Air Force Research Laboratory (AFRL).
+method that includes task-specific information
+
+
+                                                      392
+
+
+References                                                     fuzzy tag-set mapping, and EM-HMM-based
+Ando, R., & Zhang, T. (2005).        A high-                   lexical probabilities. EACL.
+ performance semi-supervised learning method                 Honkela, T. (1997). Self-organizing maps of
+ for text chunking. ACL.                                      words for natural language processing applica-
+                                                              tions. Proceedings of the International ICSC
+Bengio, Y. (2008). Neural net language models.
+                                                              Symposium on Soft Computing.
+  Scholarpedia, 3, 3881.
+                                                             Honkela, T., Pulkki, V., & Kohonen, T. (1995).
+Bengio, Y., Ducharme, R., & Vincent, P. (2001).
+                                                              Contextual relations of words in grimm tales,
+  A neural probabilistic language model. NIPS.
+                                                              analyzed by self-organizing map. ICANN.
+Bengio, Y., Ducharme, R., Vincent, P., & Jauvin,
+                                                             Huang, F., & Yates, A. (2009). Distributional rep-
+  C. (2003). A neural probabilistic language
+                                                              resentations for handling sparsity in supervised
+  model. Journal of Machine Learning Research,
+                                                              sequence labeling. ACL.
+  3, 1137–1155.
+                                                             Kaski, S. (1998). Dimensionality reduction by
+Bengio, Y., Louradour, J., Collobert, R., &                   random mapping: Fast similarity computation
+  Weston, J. (2009). Curriculum learning. ICML.               for clustering. IJCNN (pp. 413–418).
+Bengio, Y., & Sénécal, J.-S. (2003). Quick train-          Koo, T., Carreras, X., & Collins, M. (2008).
+  ing of probabilistic neural nets by importance              Simple semi-supervised dependency parsing.
+  sampling. AISTATS.                                          ACL (pp. 595–603).
+Blei, D. M., Ng, A. Y., & Jordan, M. I. (2003).              Krishnan, V., & Manning, C. D. (2006). An
+  Latent dirichlet allocation. Journal of Machine              effective two-stage model for exploiting non-
+  Learning Research, 3, 993–1022.                              local dependencies in named entity recognition.
+Brown, P. F., deSouza, P. V., Mercer, R. L., Pietra,           COLING-ACL.
+  V. J. D., & Lai, J. C. (1992). Class-based n-gram          Landauer, T. K., Foltz, P. W., & Laham, D. (1998).
+  models of natural language. Computational                    An introduction to latent semantic analysis.
+  Linguistics, 18, 467–479.                                    Discourse Processes, 259–284.
+Candito, M., & Crabbé, B. (2009). Improving gen-            Li, W., & McCallum, A. (2005). Semi-supervised
+  erative statistical parsing with semi-supervised             sequence modeling with syntactic topic models.
+  word clustering. IWPT (pp. 138–141).                         AAAI.
+Collobert, R., & Weston, J. (2008). A unified                Liang, P. (2005).       Semi-supervised learning
+ architecture for natural language processing:                 for natural language. Master’s thesis, Mas-
+ Deep neural networks with multitask learning.                 sachusetts Institute of Technology.
+ ICML.                                                       Lin, D., & Wu, X. (2009). Phrase clustering
+Deschacht, K., & Moens, M.-F. (2009). Semi-                    for discriminative learning. ACL-IJCNLP (pp.
+ supervised semantic role labeling using the                   1030–1038).
+ Latent Words Language Model. EMNLP (pp.                     Lund, K., & Burgess, C. (1996). Producing
+ 21–29).                                                       highdimensional semantic spaces from lexical
+Dumais, S. T., Furnas, G. W., Landauer, T. K.,                 co-occurrence. Behavior Research Methods,
+ Deerwester, S., & Harshman, R. (1988). Using                  Instrumentation, and Computers, 28, 203–208.
+ latent semantic analysis to improve access to               Lund, K., Burgess, C., & Atchley, R. A. (1995).
+ textual information. SIGCHI Conference on                     Semantic and associative priming in high-
+ Human Factors in Computing Systems (pp.                       dimensional semantic space. Cognitive Science
+ 281–285). ACM.                                                Proceedings, LEA (pp. 660–665).
+Elman, J. L. (1993). Learning and development                Martin, S., Liermann, J., & Ney, H. (1998). Algo-
+  in neural networks: The importance of starting              rithms for bigram and trigram word clustering.
+  small. Cognition, 48, 781–799.                              Speech Communication, 24, 19–37.
+Goldberg, Y., Tsarfaty, R., Adler, M., & Elhadad,            Miller, S., Guinness, J., & Zamanian, A. (2004).
+ M. (2009). Enhancing unlexicalized parsing                   Name tagging with word clusters and discrim-
+ performance using a wide coverage lexicon,                   inative training. HLT-NAACL (pp. 337–342).
+
+
+                                                       393
+
+
+Mnih, A., & Hinton, G. E. (2007).        Three               is more” in unsupervised dependency parsing.
+ new graphical models for statistical language               NAACL-HLT.
+ modelling. ICML.                                          Suzuki, J., & Isozaki, H. (2008). Semi-supervised
+Mnih, A., & Hinton, G. E. (2009). A scalable                 sequential labeling and segmentation using
+ hierarchical distributed language model. NIPS               giga-word scale unlabeled data. ACL-08: HLT
+ (pp. 1081–1088).                                            (pp. 665–673).
+Morin, F., & Bengio, Y. (2005). Hierarchical               Suzuki, J., Isozaki, H., Carreras, X., & Collins, M.
+ probabilistic neural network language model.                (2009). An empirical study of semi-supervised
+ AISTATS.                                                    structured conditional models for dependency
+                                                             parsing. EMNLP.
+Pereira, F., Tishby, N., & Lee, L. (1993). Distri-
+  butional clustering of english words. ACL (pp.           Turian, J., Ratinov, L., Bengio, Y., & Roth, D.
+  183–190).                                                  (2009). A preliminary evaluation of word
+                                                             representations for named-entity recognition.
+Ratinov, L., & Roth, D. (2009). Design chal-                 NIPS Workshop on Grammar Induction, Repre-
+  lenges and misconceptions in named entity                  sentation of Language and Language Learning.
+  recognition. CoNLL.
+                                                           Turney, P. D., & Pantel, P. (2010). From frequency
+Ritter, H., & Kohonen, T. (1989). Self-organizing            to meaning: Vector space models of semantics.
+  semantic maps.        Biological Cybernetics,              Journal of Artificial Intelligence Research.
+  241–254.
+                                                           Ushioda, A. (1996). Hierarchical clustering of
+Sahlgren, M. (2001). Vector-based semantic                  words. COLING (pp. 1159–1162).
+  analysis: Representing word meanings based               Väyrynen, J., & Honkela, T. (2005). Compar-
+  on random labels. Proceedings of the Semantic              ison of independent component analysis and
+  Knowledge Acquisition and Categorisation                   singular value decomposition in word context
+  Workshop, ESSLLI.                                          analysis. AKRR’05, International and Interdis-
+Sahlgren, M. (2005). An introduction to random               ciplinary Conference on Adaptive Knowledge
+  indexing. Methods and Applications of Seman-               Representation and Reasoning.
+  tic Indexing Workshop at the 7th International           Väyrynen, J. J., & Honkela, T. (2004). Word cat-
+  Conference on Terminology and Knowledge                    egory maps based on emergent features created
+  Engineering (TKE).                                         by ICA. Proceedings of the STeP’2004 Cogni-
+Sahlgren, M. (2006). The word-space model:                   tion + Cybernetics Symposium (pp. 173–185).
+  Using distributional analysis to represent syn-            Finnish Artificial Intelligence Society.
+  tagmatic and paradigmatic relations between              Väyrynen, J. J., Honkela, T., & Lindqvist, L.
+  words in high-dimensional vector spaces.                   (2007). Towards explicit semantic features
+  Doctoral dissertation, Stockholm University.               using independent component analysis. Pro-
+Sang, E. T., & Buchholz, S. (2000). Introduction             ceedings of the Workshop Semantic Content
+  to the CoNLL-2000 shared task: Chunking.                   Acquisition and Representation (SCAR). Stock-
+  CoNLL.                                                     holm, Sweden: Swedish Institute of Computer
+                                                             Science.
+Schwenk, H., & Gauvain, J.-L. (2002). Connec-
+                                                           Řehůřek, R., & Sojka, P. (2010). Software frame-
+  tionist language modeling for large vocabulary
+                                                              work for topic modelling with large corpora.
+  continuous speech recognition. International
+                                                              LREC.
+  Conference on Acoustics, Speech and Signal
+  Processing (ICASSP) (pp. 765–768). Orlando,              Zhang, T., & Johnson, D. (2003). A robust risk
+  Florida.                                                   minimization based named entity recognition
+                                                             system. CoNLL.
+Sha, F., & Pereira, F. C. N. (2003). Shal-
+  low parsing with conditional random fields.              Zhao, H., Chen, W., Kit, C., & Zhou, G.
+  HLT-NAACL.                                                 (2009). Multilingual dependency learning: a
+                                                             huge feature engineering method to semantic
+Spitkovsky, V., Alshawi, H., & Jurafsky, D.                  dependency parsing. CoNLL (pp. 55–60).
+  (2010). From baby steps to leapfrog: How “less
+
+
+                                                     394
+

@@ -1,0 +1,693 @@
+         Hindi-to-Urdu Machine Translation Through Transliteration
+
+      Nadir Durrani    Hassan Sajjad         Alexander Fraser   Helmut Schmid
+                      Institute for Natural Language Processing
+                                 University of Stuttgart
+          {durrani,sajjad,fraser,schmid}@ims.uni-stuttgart.de
+
+
+
+                      Abstract                                 Urdu words which originally came from Arabic
+    We present a novel approach to integrate                   and Farsi have also mixed into Hindi and are now
+    transliteration into Hindi-to-Urdu statisti-               part of the Hindi vocabulary. The spoken form of
+    cal machine translation. We propose two                    the two languages is very similar.
+    probabilistic models, based on conditional                     The extent of overlap between Hindi and Urdu
+    and joint probability formulations, that are               vocabulary depends upon the domain of the text.
+    novel solutions to the problem. Our mod-                   Text coming from the literary domain like novels
+    els consider both transliteration and trans-               or history tend to have more Sanskrit (for Hindi)
+    lation when translating a particular Hindi                 and Persian/Arabic (for Urdu) vocabulary. How-
+    word given the context whereas in pre-                     ever, news wire that contains text related to me-
+    vious work transliteration is only used                    dia, sports and politics, etc., is more likely to have
+    for translating OOV (out-of-vocabulary)                    common vocabulary.
+    words. We use transliteration as a tool                        In an initial study on a small news corpus of
+    for disambiguation of Hindi homonyms                       5000 words, randomly selected from BBC1 News,
+    which can be both translated or translit-                  we found that approximately 62% of the Hindi
+    erated or transliterated differently based                 types are also part of Urdu vocabulary and thus
+    on different contexts. We obtain final                     can be transliterated while only 38% have to be
+    BLEU scores of 19.35 (conditional prob-                    translated. This provides a strong motivation to
+    ability model) and 19.00 (joint probability                implement an end-to-end translation system which
+    model) as compared to 14.30 for a base-                    strongly relies on high quality transliteration from
+    line phrase-based system and 16.25 for a                   Hindi to Urdu.
+    system which transliterates OOV words in                       Hindi and Urdu have similar sound systems but
+    the baseline system. This indicates that                   transliteration from Hindi to Urdu is still very hard
+    transliteration is useful for more than only               because some phonemes in Hindi have several or-
+    translating OOV words for language pairs                   thographic equivalents in Urdu. For example the
+    like Hindi-Urdu.                                           “z” sound2 can only be written as         whenever it
+                                                               occurs in a Hindi word but can be written as ,
+1   Introduction                                                 ,     and     in an Urdu word. Transliteration
+Hindi is an official language of India and is writ-            becomes non-trivial in cases where the multiple
+ten in Devanagari script. Urdu is the national lan-            orthographic equivalents for a Hindi word are all
+guage of Pakistan, and also one of the state lan-              valid Urdu words. Context is required to resolve
+guages in India, and is written in Perso-Arabic                ambiguity in such cases. Our transliterator (de-
+script. Hindi inherits its vocabulary from Sanskrit            scribed in sections 3.1.2 and 4.1.3) gives an accu-
+while Urdu descends from several languages in-                 racy of 81.6% and a 25-best accuracy of 92.3%.
+cluding Arabic, Farsi (Persian), Turkish and San-                  Transliteration has been previously used only as
+skrit. Hindi and Urdu share grammatical structure              a back-off measure to translate NEs (Name Enti-
+and a large proportion of vocabulary that they both            ties) and OOV words in a pre- or post-processing
+inherited from Sanskrit. Most of the verbs and                 step. The problem we are solving is more difficult
+closed-class words (pronouns, auxiliaries, case-               than techniques aimed at handling OOV words,
+markers, etc) are the same. Because both lan-                     1
+                                                                      http://www.bbc.co.uk/hindi/index.shtml
+                                                                  2
+guages have lived together for centuries, some                        All sounds are represented using SAMPA notation.
+
+
+                                                         465
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 465–474,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ Hindi     Urdu          SAMPA       Gloss       (Papineni et al., 2001). Section 5 performs an er-
+             /          Am        Mango/Ordinary ror analysis showing interesting weaknesses in the
+                                                 initial formulations. We remedy the problems by
+                 /      d ZAli    Fake/Net       adding some heuristics and modifications to our
+               /        Ser       Lion/Verse     models which show improvements in the results as
+                                                 discussed in section 6. Section 7 gives two exam-
+Table 1: Hindi Words That Can Be Transliterated  ples illustrating how our model decides whether
+Differently in Different Contexts                to translate or transliterate and how it is able to
+                                                 choose among different valid transliterations given
+ Hindi Urdu             SAMPA Gloss              the context. Section 8 concludes the paper.
+                 /      simA      Border/Seema
+                   /     Amb@r       Sky/Ambar                 2   Previous Work
+               /         vId Ze      Victory/Vijay             There has been a significant amount of work on
+Table 2: Hindi Words That Can Be Translated or                 transliteration. We can break down previous work
+Transliterated in Different Contexts                           into three groups. The first group is generic
+                                                               transliteration work, which is evaluated outside of
+                                                               the context of translation. This work uses either
+which focus primarily on name transliteration, be-             grapheme or phoneme based models to translit-
+cause we need different transliterations in differ-            erate words lists (Knight and Graehl, 1998; Li
+ent contexts; in their case context is irrelevant. For         et al., 2004; Ekbal et al., 2006; Malik et al.,
+example: consider the problem of transliterating               2008). The work by Malik et al. addresses Hindi to
+the English word “read” to a phoneme represen-                 Urdu transliteration using hand-crafted rules and
+tation in the context “I will read” versus the con-            a phonemic representation; it ignores translation
+text “I have read”. An example of this for Hindi               context.
+to Urdu transliteration: the two Urdu words                       A second group deals with out-of-vocabulary
+(face/condition) and         (chapter of the Koran)            words for SMT systems built on large parallel cor-
+are both written as        (sur@t d) in Hindi. The             pora, and therefore focuses on name translitera-
+two are pronounced identically in Urdu but writ-               tion, which is largely independent of context. Al-
+ten differently. In such cases we hope to choose               Onaizan and Knight (2002) transliterate Arabic
+the correct transliteration by using context. Some             NEs into English and score them against their re-
+other examples are shown in Table 1.                           spective translations using a modified IBM Model
+   Sometimes there is also an ambiguity of                     1. The options are further re-ranked based on dif-
+whether to translate or transliterate a particular             ferent measures such as web counts and using co-
+word. The Hindi word             , for example, will           reference to resolve ambiguity. These re-ranking
+be translated to        (peace, s@kun) when it is a            methodologies can not be performed in SMT at
+common noun but transliterated to             (Shanti,         the decoding time. An efficient way to compute
+SAnt di) when it is a proper name. We try to                   and re-rank the transliterations of NEs and inte-
+model whether to translate or transliterate in a               grate them on the fly might be possible. However,
+given situation. Some other examples are shown                 this is not practical in our case as our model con-
+in Table 2.                                                    siders transliterations of all input words and not
+   The remainder of this paper is organized as fol-            just NEs. A log-linear block transliteration model
+lows. Section 2 provides a review of previous                  is applied to OOV NEs in Arabic to English SMT
+work. Section 3 introduces two probabilistic mod-              by Zhao et al. (2007). This work is also translit-
+els for integrating translations and transliterations          erating only NEs and not doing any disambigua-
+into a translation model which are based on condi-             tion. The best method proposed by Kashani et
+tional and joint probability distributions. Section 4          al. (2007) integrates translations provided by ex-
+discusses the training data, parameter optimization            ternal sources such as transliteration or rule-base
+and the initial set of experiments that compare our            translation of numbers and dates, for an arbitrary
+two models with a baseline Hindi-Urdu phrase-                  number of entries within the input text. Our work
+based system and with two transliteration-aided                is different from Kashani et al. (2007) in that our
+phrase-based systems in terms of BLEU scores                   model compares transliterations with translations
+
+
+                                                         466
+
+
+on the fly whereas transliterations in Kashani et al.              ematical formulation of our two models, Model-1
+do not compete with internal phrase tables. They                   and Model-2.
+only compete amongst themselves during a sec-
+                                                                   3.1   Model-1 : Conditional Probability Model
+ond pass of decoding. Hermjakob et al. (2008) use
+a tagger to identify good candidates for translit-                 Applying a noisy channel model to compute the
+eration (which are mostly NEs) in input text and                   most probable translation ûn1 , we get:
+add transliterations to the SMT phrase table dy-                     arg max p(un1 |hn1 ) = arg max p(un1 )p(hn1 |un1 )
+                                                                          nu1                    n   u1
+namically such that they can directly compete with
+translations during decoding. This is closer to                                                                           (1)
+our approach except that we use transliteration as                 3.1.1 Language Model
+an alternative to translation for all Hindi words.                 The language model (LM) p(un1 ) is implemented
+Our focus is disambiguation of Hindi homonyms                      as an n-gram model using the SRILM-Toolkit
+whereas they are concentrating only on translit-                   (Stolcke, 2002) with Kneser-Ney smoothing. The
+erating NE’s. Moreover, they are working with                      parameters of the language model are learned from
+a large bitext so they can rely on their transla-                  a monolingual Urdu corpus. The language model
+tion model and only need to transliterate NEs and                  is defined as:
+OOVs. Our translation model is based on data                                             n
+                                                                                         Y
+which is both sparse and noisy. Therefore we pit                               p(un1 ) =             i−1
+                                                                                           pLM (ui |ui−k )        (2)
+transliterations against translations for every input                                      i=1
+word. Sinha (2009) presents a rule-based MT sys-                   where k is a parameter indicating the amount of
+tem that uses Hindi as a pivot to translate from En-               context used (e.g., k = 4 means 5-gram model).
+glish to Urdu. This work also uses transliteration                 ui can be a single or a multi-word token. A
+only for the translation of unknown words. Their                   multi-word token consists of two or more Urdu
+work can not be used for direct translation from                   words. For a multi-word ui we do multiple lan-
+Hindi to Urdu (independently of English) “due to                   guage model look-ups, one for each uix in ui =
+various ambiguous mappings that have to be re-                     ui1 , . . . , uim and take their product to obtain the
+solved”.                                                           value pLM (ui |ui−1 i−k ).
+   The third group uses transliteration models in-
+side of a cross-lingual IR system (AbdulJaleel and                 Language Model for Unknown Words: Our
+Larkey, 2003; Virga and Khudanpur, 2003; Pirkola                   model generates transliterations that can be known
+et al., 2003). Picking a single best transliteration               or unknown to the language model and the trans-
+or translation in context is not important in an IR                lation model. We refer to the words known to
+system. Instead, all the options are used by giv-                  the language model and to the translation model
+ing them weights and context is typically not taken                as LM-known and TM-known words respectively
+into account.                                                      and to words that are unknown as LM-unknown
+                                                                   and TM-unknown respectively.
+3       Our Approach                                                  We assign a special value ψ to the LM-unknown
+                                                                   words. If one or more uix in a multi-word ui are
+Both of our models combine a character-based                       LM-unknown we assign a language model score
+transliteration model with a word-based transla-                              i−1
+                                                                   pLM (ui |ui−k  ) = ψ for the entire ui , meaning
+tion model. Our models look for the most probable                  that we consider partially known transliterations
+Urdu token sequence un1 for a given Hindi token                    to be as bad as fully unknown transliterations. The
+sequence hn1 . We assume that each Hindi token is                  parameter ψ controls the trade-off between LM-
+mapped to exactly one Urdu token and that there is                 known and LM-unknown transliterations. It does
+no reordering. The assumption of no reordering is                  not influence translation options because they are
+reasonable given the fact that Hindi and Urdu have                 always LM-known in our case. This is because our
+identical grammar structure and the same word or-                  monolingual corpus also contains the Urdu part of
+der. An Urdu token might consist of more than one                  translation corpus. The optimization of ψ is de-
+Urdu word3 . The following sections give a math-                   scribed in section 4.2.1.
+    3                                                              written as two words. For example         (beautiful ; xub-
+     This occurs frequently in case markers with nouns,
+derivational affixes and compounds etc. These are written          sur@t d) and        (your’s ; ApkA) are written as
+as single words in Hindi as opposed to Urdu where they are         and      respectively in Urdu.
+
+
+                                                             467
+
+
+3.1.2 Translation Model                                           language model:
+The translation model (TM) p(hn1 |un1 ) is approx-                                             m
+imated with a context-independent model:
+                                                                                               Y
+                                                                                   pc (u) =          p(ci |ci−1
+                                                                                                            i−k )             (7)
+                              n
+                              Y                                                                i=1
+             p(hn1 |un1 ) =         p(hi |ui )        (3)
+                              i=1                                    The parameters p(ci |ci−1
+                                                                                           i−k ) are estimated from
+                                                                  the Urdu part of the character-aligned translitera-
+where hi and ui are Hindi and Urdu tokens re-
+                                                                  tion corpus. Replacing (6) in (4) we get:
+spectively. Our model estimates the conditional
+probability p(hi |ui ) by interpolating a word-                                                                  pc (hi , ui )
+based model and a character-based (translitera-                    p(hi |ui ) = λpw (hi |ui ) + (1 − λ)                        (8)
+                                                                                                                  pc (ui )
+tion) model.
+                                                                     Having all the components of our model defined
+  p(hi |ui ) = λpw (hi |ui ) + (1 − λ)pc (hi |ui ) (4)            we insert (8) and (2) in (1) to obtain the final equa-
+                                                                  tion:
+   The parameters of the word-based translation
+model pw (h|u) are estimated from the word align-                                       n
+                                                                                        Y
+ments of a small parallel corpus. We only retain                    ûn1   = arg max
+                                                                                  n
+                                                                                              pLM (ui |ui−1
+                                                                                                        i−k )[λpw (hi |ui )
+                                                                                   u1
+1-1/1-N (1 Hindi word, 1 or more Urdu words)                                            i=1
+alignments and throw away N-1 and M-N align-                                                           pc (hi , ui )
+                                                                                        + (1 − λ)                    ]        (9)
+ments for our models. This is further discussed in                                                      pc (ui )
+section 4.1.1.
+   The character-based transliteration model                         The optimization of the interpolating factor λ is
+pc (h|u) is computed in terms of pc (h, u), a joint               discussed in section 4.2.1.
+character model, which is also used for Chinese-
+                                                                  3.2      Model-2 : Joint Probability Model
+English back-transliteration (Li et al., 2004) and
+Bengali-English name transliteration (Ekbal et al.,               This section briefly defines a variant of our model
+2006). The character-based transliteration proba-                 where we interpolate joint probabilities instead of
+bility is defined as follows:                                     conditional probabilities. Again, the translation
+                      X                                           model p(hn1 |un1 ) is approximated with a context-
+     pc (h, u) =              p(an1 )                             independent model:
+                  an
+                   1 ∈align(h,u)
+                                                                                     n                    n
+                                   n                                                 Y                    Y p(hi , ui )
+              =
+                      X            Y
+                                       p(ai |ai−1                   p(hn1 |un1 ) =         p(hi |ui ) =                      (10)
+                                              i−k )   (5)                                                         p(ui )
+                                                                                     i=1                  i=1
+                  an
+                   1 ∈align(h,u)
+                                 i=1
+
+where ai is a pair consisting of the i-th Hindi char-             The joint probability p(hi , ui ) of a Hindi and an
+acter hi and the sequence of 0 or more Urdu char-                 Urdu word is estimated by interpolating a word-
+acters that it is aligned with. A sample alignment                based model and a character-based model.
+is shown in Table 3(b) in section 4.1.3. Our best
+                                                                   p(hi , ui ) = λpw (hi , ui ) + (1 − λ)pc (hi , ui ) (11)
+results are obtained with a 5-gram model. The
+parameters p(ai |ai−1i−k ) are estimated from a small             and the prior probability p(ui ) is estimated as:
+transliteration corpus which we automatically ex-
+tracted from the translation corpus. The extrac-                           p(ui ) = λpw (ui ) + (1 − λ)pc (ui )              (12)
+tion details are also discussed in section 4.1.3. Be-
+cause our overall model is a conditional probabil-                The parameters of the translation model pw (hi , ui )
+ity model, joint-probabilities are marginalized us-               and the word-based prior probabilities pw (ui ) are
+ing character-based prior probabilities:                          estimated from the 1-1/1-N word-aligned corpus
+                               pc (h, u)                          (the one that we also used to estimate translation
+                  pc (h|u) =                          (6)         probabilities pw (hi |ui ) previously).
+                                pc (u)
+                                                                     The character-based transliteration probability
+  The prior probability pc (u) of the character se-               pc (hi , ui ) and the character-based prior probabil-
+quence u = cm1 is defined with a character-based                  ity pc (ui ) are defined by (5) and (7) respectively in
+
+
+                                                            468
+
+
+the previous section. Putting (11) and (12) in (10)               these we were able to sentence-align 7000 sen-
+we get                                                            tence pairs using the sentence alignment algorithm
+                                                                  given by Moore (2002).
+                 n
+                 Y λpw (hi , ui ) + (1 − λ)pc (hi , ui )             The word alignments for this task were ex-
+p(hn1 |un1 ) =
+                      λpw (ui ) + (1 − λ)pc (ui )                 tracted by using GIZA++ (Och and Ney, 2003) in
+                 i=1
+                                                 (13)             both directions. We extracted a total of 107323
+The idea is to interpolate joint probabilities and di-            alignment pairs (5743 N-1 alignments, 8404 M-
+vide them by the interpolated marginals. The final                N alignments and 93176 1-1/1-N alignments). Of
+equation for Model-2 is given as:                                 these alignments M-N and N-1 alignment pairs
+                                                                  were ignored. We manually inspected a sample of
+                            n
+                            Y                                     1000 instances of M-N/N-1 alignments and found
+      ûn1 = arg max              pLM (ui |ui−1
+                                            i−k )×
+                  n    u1                                         that more than 70% of these were (totally or par-
+                            i=1
+         λpw (hi , ui ) + (1 − λ)pc (hi , ui )                    tially) wrong. Of the 30% correct alignments,
+                                                     (14)         roughly one-third constitute N-1 alignments. Most
+           λpw (ui ) + (1 − λ)pc (ui )
+                                                                  of these are cases where the Urdu part of the align-
+3.3    Search                                                     ment actually consists of two (or three) words
+                                                                  but was written without space because of lack of
+The decoder performs a stack-based search using
+                                                                  standard writing convention in Urdu. For exam-
+a beam-search algorithm similar to the one used
+in Pharoah (Koehn, 2004a). It searches for an                     ple           (can go ; d ZA s@kt de) is alterna-
+Urdu string that maximizes the product of trans-                  tively written as         (can go ; d ZAs@kt de)
+lation probability and the language model proba-                  i.e. without space. We learned that these N-1
+bility (equation 1) by translating one Hindi word                 translations could be safely dropped because we
+at a time. It is implemented as a two-level pro-                  can generate a separate Urdu word for each Hindi
+cess. At the lower level, it computes n-best                      word. For valid M-N alignments we observed that
+transliterations for each Hindi word hi accord-                   these could be broken into 1-1/1-N alignments in
+ing to pc (h, u). The joint probabilities given by                most of the cases. We also observed that we usu-
+pc (h, u) are marginalized for each Urdu transliter-              ally have coverage of the resulting 1-1 and 1-N
+ation to give pc (h|u). At the higher level, translit-            alignments in our translation corpus. Looking at
+eration probabilities are interpolated with pw (h|u)              the noise in the incorrect alignments we decided
+and then multiplied with language model probabil-                 to drop N-1 and M-N cases. We do not model
+ities to give the probability of a hypothesis. We use             deletions and insertions so we ignored null align-
+20-best translations and 25-best transliterations for             ments. Also 1-N alignments with gaps were ig-
+pw (h|u) and pc (h|u) respectively and a 5-gram                   nored. Only the alignments with contiguous words
+language model.                                                   were kept.
+   To keep the search space manageable and time
+complexity polynomial we apply pruning and re-                    4.1.2      Monolingual Corpus
+combination. Since our model uses monotonic de-                   Our monolingual Urdu corpus consists of roughly
+coding we only need to recombine hypotheses that                  114K sentences. This comprises 108K sentences
+have the same context (last n-1 words). Next we                   from the data made available by the University of
+do histogram-based pruning, maintaining the 100-                  Leipzig4 + 5600 sentences from the training data
+best hypotheses for each stack.                                   of each fold during cross validation.
+
+4     Evaluation                                                  4.1.3      Transliteration Corpus
+
+4.1    Training                                                   The training corpus for transliteration is extracted
+                                                                  from the 1-1/1-N word-alignments of the EMILLE
+This section discusses the training of the different              corpus discussed in section 4.1.1. We use an edit
+model components.                                                 distance algorithm to align this training corpus at
+4.1.1 Translation Corpus                                          the character level and we eliminate translation
+                                                                  pairs with high edit distance which are unlikely to
+We used the freely available EMILLE Corpus
+                                                                  be transliterations.
+as our bilingual resource which contains roughly
+                                                                     4
+13,000 Urdu and 12,300 Hindi sentences. From                             http://corpora.informatik.uni-leipzig.de/
+
+
+                                                            469
+
+
+   We used our knowledge of the Hindi and Urdu                   able to native speakers as its diacritized counter
+scripts to define the initial character mapping. The             part. However leaving occasional diacritics in the
+mapping was further extended by looking into                     corpus can worsen the problem of data sparsity by
+available Hindi-Urdu transliteration systems[5,6]                creating spurious ambiguity7 .
+and other resources (Gupta, 2004; Malik et al.,                     There are a few Urdu characters that have mul-
+2008; Jawaid and Ahmed, 2009). Each pair in the                  tiple equivalent Unicodes. All such forms are nor-
+character map is assigned a cost. A Hindi charac-                malized to have only one representation8 .
+ter that always map to only one Urdu character is
+assigned a cost of 0 whereas the Hindi characters                4.2     Experimental Setup
+that map to different Urdu characters are assigned               We perform a 5-fold cross validation taking 4/5 of
+a cost of 0.2. The edit distance metric allows                   the data as training and 1/5 as test data. Each fold
+insert, delete and replace operations. The hand-                 comprises roughly 1400 test sentences and 5600
+crafted pairs define the cost of replace operations.             training sentences.
+We set a cost of 0.6 for deletions and insertions.
+These costs were optimized on held out data. The                 4.2.1    Parameter Optimization
+details of optimization are not mentioned due to                 Our model contains two parameters λ (the inter-
+limited space. Using this metric we filter out the               polating factor between translation and transliter-
+word pairs with high edit-distance to extract our                ation modules) and ψ (the factor that controls the
+transliteration corpus. We were able to extract                  trade-off between LM-known and LM-unknown
+roughly 2100 unique pairs along with their align-                transliterations). The interpolating factor λ is ini-
+ments. The resulting alignments are modified by                  tialized, inspired by Written-Bell smoothing, with
+merging unaligned ∅ → 1 (no character on source                  a value of NN      9
+                                                                                +B . We chose a very low value
+side, 1 character on target side) or ∅ → N align-                1e−40 for the factor ψ initially, favoring LM-
+ments with the preceding alignment pair. If there                known transliterations very strongly. Both of these
+is no preceding alignment pair then it is merged                 parameters are optimized as described below.
+with the following pair. Table 3 gives an example                   Because our training data is very sparse we do
+showing initial alignment (a) and the final align-               not use held-out data for parameter optimization.
+ment (b) after applying the merge operation. Our                 Instead we optimize these parameters by perform-
+model retains 1 → ∅ and N → ∅ alignments as                      ing a 2-fold optimization for each of the 5 folds.
+deletion operations.                                             Each fold is divided into two halves. The param-
+                                                                 eters λ and ψ are optimized on the first half and
+       a)    Hindi    ∅      b       c     ∅    e   f            the other half is used for testing, then optimiza-
+             Urdu     A     XY       C     D    ∅   F            tion is done on the second half and the first half is
+       b)    Hindi           b       c          e   f            used for testing. The optimal value for parameter
+             Urdu          AXY      CD          ∅   F            λ occurs between 0.7-0.84 and for the parameter
+                                                                 ψ between 1e−5 and 1e−10 .
+ Table 3: Alignment (a) Before (b) After Merge
+                                                                 4.2.2    Results
+  The parameters pc (h, u) and pc (u) are trained
+                                                                 Baseline P b0 : We ran Moses (Koehn et al., 2007)
+on the aligned corpus using the SRILM toolkit.
+                                                                 using Koehn’s training scripts10 , doing a 5-fold
+We use Add-1 smoothing for unigrams and
+                                                                 cross validation with no reordering11 . For the
+Kneser-Ney smoothing for higher n-grams.
+                                                                 other parameters we use the default values i.e.
+4.1.4       Diacritic Removal and Normalization                  5-gram language model and maximum phrase-
+In Urdu, short vowels are represented with diacrit-              length= 6. Again, the language model is imple-
+ics but these are rarely written in practice. In or-                7
+                                                                       It should be noted though that diacritics play a very im-
+der to keep the data consistent, all diacritics are              portant role when transliterating in the reverse direction be-
+                                                                 cause these are virtually always written in Hindi as dependent
+removed. This loss of information is not harm-                   vowels.
+ful when transliterating/translating from Hindi to                   8
+                                                                       www.crulp.org/software/langproc/urdunormalization.htm
+                                                                     9
+Urdu because undiacritized text is equally read-                       N is the number of aligned word pairs (tokens) and B is
+                                                                 the number of different aligned word pairs (types).
+   5                                                                10
+       CRULP: http://www.crulp.org/software/langproc.htm               http://statmt.org/wmt08/baseline.html
+   6                                                                11
+       Malerkotla.org: http://translate.malerkotla.co.in               Results are worse with reordering enabled.
+
+
+                                                           470
+
+
+    M         Pb0    Pb1       Pb2      M1       M2                5.1    Heuristic-1
+    BLEU      14.3   16.25     16.13    18.6     17.05             A lot of errors occur because our translation model
+Table 4: Comparing Model-1 and Model-2 with                        is built on very sparse and noisy data. The moti-
+Phrase-based Systems                                               vation for this heuristic is to counter wrong align-
+                                                                   ments at least in the case of verbs and functional
+                                                                   words (which are often transliterations). This
+mented as an n-gram model using the SRILM-                         heuristic favors translations that also appear in the
+Toolkit with Kneser-Ney smoothing. Each fold                       n-best transliteration list over only-translation and
+comprises roughly 1400 test sentences, 5000 in                     only-transliteration options. We modify the trans-
+training and 600 in dev12 . We also used two meth-                 lation model for both the conditional and the joint
+ods to incorporate transliterations in the phrase-                 model by adding another factor which strongly
+based system:                                                      weighs translation+transliteration options by tak-
+   Post-process P b1 : All the OOV words in the                    ing the square-root of the product of the translation
+phrase-based output are replaced with their top-                   and transliteration probabilities. Thus modifying
+candidate transliteration as given by our translit-                equations (8) and (11) in Model-1 and Model-2
+eration system.                                                    we obtain equations (15) and (16) respectively:
+   Pre-process P b2 : Instead of adding translit-
+erations as a post process we do a second pass                                                             pc (hi , ui )
+                                                                         p(hi |ui ) = λ1 pw (hi |ui ) + λ2
+by adding the unknown words with their top-                                                                  pc (ui )
+                                                                                        s
+candidate transliteration to the training corpus and                                                   pc (hi , ui )
+rerun Koehn’s training script with the new training                                 + λ3 pw (hi |ui )                    (15)
+                                                                                                         pc (ui )
+corpus. Table 4 shows results (taking arithmetic
+average over 5 folds) from Model-1 and Model-
+2 in comparison with three baselines discussed                           p(hi , ui ) = λ1 pw (hi , ui ) + λ2 pc (hi , ui )
+above.                                                                                   p
+                                                                                     + λ3 pw (hi , ui )pc (hi , ui )       (16)
+   Both our systems (Model-1 and Model-2) beat
+the baseline phrase-based system with a BLEU                       For the optimization of lambda parameters we
+point difference of 4.30 and 2.75 respectively. The                hold the value of the translation coefficient λ1 13
+transliteration aided phrase-based systems P b1                    and the transliteration coefficient λ2 constant (us-
+and P b2 are closer to our Model-2 results but are                 ing the optimized values as discussed in section
+way below Model-1 results. The difference of                       4.2.1) and optimize λ3 again using 2-fold opti-
+2.35 BLEU points between M1 and P b1 indicates                     mization on all the folds as described above14 .
+that transliteration is useful for more than only
+translating OOV words for language pairs like                      5.2    Heuristic-2
+Hindi-Urdu. Our models choose between trans-                       When an unknown Hindi word occurs for which
+lations and transliterations based on context un-                  all transliteration options are LM-unknown then
+like the phrase-based systems P b1 and P b2 which                  the best transliteration should be selected. The
+use transliteration only as a tool to translate OOV                problem in our original models is that a fixed LM
+words.                                                             probability ψ is used for LM-unknown transliter-
+                                                                   ations. Hence our model selects the translitera-
+5        Error Analysis                                            tion that has the best pcp(h   i ,ui )
+                                                                                               c (ui )
+                                                                                                          score i.e. we max-
+Based on preliminary experiments we found three                    imize pc (hi |ui ) instead of pc (ui |hi ) (or equiva-
+major flaws in our initial formulations. This sec-                 lently pc (hi , ui )). The reason is an inconsistency
+tion discusses each one of them and provides some                  in our models. The language model probabil-
+heuristics and modifications that we employ to try                 ity of unknown words is uniform (and equal to
+to correct deficiencies we found in the two models                 ψ) whereas the translation model uses the non-
+described in section 3.1 and 3.2.                                  uniform prior probability pc (ui ) for these words.
+                                                                   There is another reason why we can not use the
+    12
+     After having the MERT parameters, we add the 600 dev
+                                                                      13
+sentences back into the training corpus, retrain GIZA, and               The translation coefficient λ1 is same as λ used in previ-
+then estimate a new phrase table on all 5600 sentences. We         ous models and the transliteration coefficient λ2 = 1 − λ
+                                                                      14
+then use the MERT parameters obtained before together with               After optimization we normalize the lambdas to make
+the newer (larger) phrase-table set.                               their sum equal to 1.
+
+
+                                                             471
+
+
+value ψ in this case. Our transliterator model also                                     H1      H2       H12
+produces space inserted words. The value of ψ is                             M1         18.86   18.97    19.35
+very small because of which transliterations that                            M2         17.56   17.85    18.34
+are actually LM-unknown, but are mistakenly bro-
+                                                                            Table 5: Applying Heuristics 1 and 2 and their
+ken into constituents that are LM-known, will al-
+                                                                            Combinations to Model-1 and Model-2
+ways be preferred over their counter parts. An ex-
+ample of this is          (America) for which two                                       H3      H13      H23       H123
+possible transliterations as given by our model are                          M2         18.52   18.93    18.55     19.00
+       (AmerIkA, without space) and         (AmerI                          Table 6: Applying Heuristic 3 and its Combina-
+kA, with space). The latter version is LM-known                             tions with other Heuristics to Model-2
+as its constituents are LM-known. Our models al-
+ways favor the latter version. Space insertion is an
+                                                                            occurs anymore. As a result of this, translitera-
+important feature of our transliteration model. We
+                                                                            tions are sometimes incorrectly favored over their
+want our transliterator to tackle compound words,
+                                                                            translation alternatives.
+derivational affixes, case-markers with nouns that
+                                                                               In order to remedy this problem we assign a
+are written as one word in Hindi but as two or more
+                                                                            minimal probability β to the word-based prior
+words in Urdu. Examples were already shown in
+                                                                            pw (ui ) in case of TM-unknown transliterations,
+section 3’s footnote.
+                                                                            which prevents it from ever being zero. Because
+   We eliminate the inconsistency by using pc (ui )
+                                                                            of this addition the translation model probability
+as the 0-gram back-off probability distribution in
+                                                                            for LM-unknown words becomes:
+the language model. For an LM-unknown translit-
+erations we now get in Model-1:                                              (1 − λ)pc (hi , ui )                  1
+                                                                                                  where β =
+                                                                            λβ + (1 − λ)pc (ui )            Urdu Types in TM
+                                                    pc (hi , ui )
+  p(ui |ui−1
+         i−k )[λpw (hi |ui ) + (1 − λ)                            ]         6        Final Results
+                                                     pc (ui )
+                                  pc (hi , ui )                             This section shows the improvement in BLEU
+      = p(ui |ui−1
+               i−k )[(1 − λ)                    ]
+                                   pc (ui )                                 score by applying heuristics and combinations of
+          k                                                                 heuristics in both the models. Tables 5 and 6 show
+          Y                                 pc (hi , ui )
+      =         α(ui−1
+                   i−j )pc (ui )[(1 − λ)                  ]                 the improvements achieved by using the differ-
+                                             pc (ui )
+          j=0                                                               ent heuristics and modifications discussed in sec-
+          k
+          Y                                                                 tion 5. We refer to the results as Mx Hy where x
+      =         α(ui−1
+                   i−j )[(1 − λ)pc (hi , ui )]                              denotes the model number, 1 for the conditional
+          j=0                                                               probability model and 2 for the joint probability
+                                                                            model and y denotes a heuristic or a combination
+   where kj=0 α(ui−1
+            Q
+                     i−j ) is just the constant that                        of heuristics applied to that model15 .
+SRILM returns for unknown words. The last                                      Both heuristics (H1 and H2 ) show improve-
+line of the calculation shows that we simply drop                           ments over their base models M1 and M2 .
+Qc (u
+p
+   k
+     i ) if ui is LM-unknown and use the constant
+             i−1                                                            Heuristic-1 shows notable improvement for both
+   j=0 α(ui−j ) instead of ψ. A similar calculation                         models in parts of test data which has high num-
+for Model-2 gives kj=0 α(ui−1
+                    Q
+                               i−j )pc (hi , ui ).                          ber of common vocabulary words. Using heuris-
+                                                                            tic 2 we were able to properly score LM-unknown
+5.3       Heuristic-3
+                                                                            transliterations against each other. Using these
+This heuristic discusses a flaw in Model-2. For                             heuristics together we obtain a gain of 0.75 over
+transliteration options that are TM-unknown, the                            M-1 and a gain of 1.29 over M-2.
+pw (h, u) and pw (u) factors becomes zero and the                              Heuristic-3 remedies the flaw in M2 by assign-
+translation model probability as given by equation                          ing a special value to the word-based prior pw (ui )
+(13) becomes:                                                               for TM-unknown words which prevents the can-
+                (1 − λ)pc (hi , ui )   pc (hi , ui )                        celation of interpolating parameter λ. M2 com-
+                                     =                                      bined with heuristic 3 (M2 H3 ) results in a 1.47
+                  (1 − λ)pc (ui )       pc (ui )
+                                                                                15
+                                                                                 For example M1 H1 refers to the results when heuristic-
+In such cases the λ factor cancels out and no                               1 is applied to model-1 whereas M2 H12 refers to the results
+weighting of word translation vs. transliteration                           when heuristics 1 and 2 are together applied to model 2.
+
+
+                                                                      472
+
+
+BLEU point improvement and combined with all
+the heuristics (M2 H123 ) gives an overall gain of
+1.95 BLEU points and is close to our best results
+(M1 H12 ). We also performed significance test                           Ser d Z@ngl kA rAd ZA he
+by concatenating all the fold results. Both our best                     “Lion is the king of jungle”
+systems M1 H12 and M2 H123 are statistically sig-
+nificant (p < 0.05)16 over all the baselines dis-
+cussed in section 4.2.2.                                            AIqbAl kA Aek xub sur@t d Ser he
+   One important issue that has not been investi-                  “There is a beautiful verse from Iqbal”
+gated yet is that BLEU has not yet been shown
+to have good performance in morphologically rich              Figure 1: Different Transliterations in Different
+target languages like Urdu, but there is no metric            Contexts
+known to work better. We observed that some-
+times on data where the translators preferred to
+translate rather than doing transliteration our sys-
+tem is penalized by BLEU even though our out-
+put string is a valid translation. For other parts of             p hIr b hi vh s@kun se n@her̃h s@kt dA
+the data where the translators have heavily used                     “Even then he can’t live peacefully”
+transliteration, the system may receive a higher
+BLEU score. We feel that this is an interesting
+area of research for automatic metric developers,
+                                                              Aom SAnt di Aom frhA xAn ki d dusri fIl@m he
+and that a large scale task of translation to Urdu
+                                                               “Om Shanti Om is Farah Khan’s second film”
+which would involve a human evaluation cam-
+paign would be very interesting.                                   Figure 2: Translation or Transliteration
+7        Sample Output
+This section gives two examples showing how our               transliteration can be very effective in machine
+model (M 1H2) performs disambiguation. Given                  translation for more than just translating OOV
+below are some test sentences that have Hindi                 words. We have addressed two problems. First,
+homonyms (underlined in the examples) along                   transliteration helps overcome the problem of data
+with Urdu output given by our system. In the first            sparsity and noisy alignments. We are able to gen-
+                                                              erate word translations that are unseen in the trans-
+example (given in Figure 1) Hindi word         can be
+                                                              lation corpus but known to the language model.
+transliterated to     ( Lion) or     (Verse) depend-
+                                                              Additionally, we can generate novel translitera-
+ing upon the context. Our model correctly identi-
+                                                              tions (that are LM-Unknown). Second, generat-
+fies which transliteration to choose given the con-
+                                                              ing multiple transliterations for homograph Hindi
+text.
+                                                              words and using language model context helps us
+   In the second example (shown in Figure 2)
+                                                              solve the problem of disambiguation. We found
+Hindi word         can be translated to       (peace,
+                                                              that the joint probability model performs almost as
+s@kun) when it is a common noun but transliter-
+                                                              well as the conditional probability model but that
+ated to       (Shanti, SAnt di) when it is a proper
+                                                              it was more complex to make it work well.
+name. Our model successfully decides whether to
+translate or transliterate given the context.
+                                                              Acknowledgments
+8        Conclusion
+We have presented a novel way to integrate                    The first two authors were funded by the Higher
+transliterations into machine translation.     In             Education Commission (HEC) of Pakistan. The
+closely related language pairs such as Hindi-Urdu             third author was funded by Deutsche Forschungs-
+with a significant amount of vocabulary overlap,              gemeinschaft grants SFB 732 and MorphoSynt.
+                                                              The fourth author was funded by Deutsche
+    16
+     We       used       Kevin       Gimpel’s tester          Forschungsgemeinschaft grant SFB 732.
+(http://www.ark.cs.cmu.edu/MT/) which uses bootstrap
+resampling (Koehn, 2004b), with 1000 samples.
+
+
+                                                        473
+
+
+References                                                         Dekai Wu, editors, Proceedings of EMNLP 2004,
+                                                                   pages 388–395, Barcelona, Spain, July. Association
+Nasreen AbdulJaleel and Leah S. Larkey. 2003. Sta-                 for Computational Linguistics.
+  tistical transliteration for English-Arabic cross lan-
+  guage information retrieval. In CIKM 03: Proceed-              Haizhou Li, Zhang Min, and Su Jian. 2004. A joint
+  ings of the twelfth international conference on In-              source-channel model for machine transliteration.
+  formation and knowledge management, pages 139–                   In ACL ’04: Proceedings of the 42nd Annual Meet-
+  146.                                                             ing on Association for Computational Linguistics,
+                                                                   pages 159–166, Barcelona, Spain. Association for
+Yaser Al-Onaizan and Kevin Knight. 2002. Translat-                 Computational Linguistics.
+  ing named entities using monolingual and bilingual
+  resources. In Proceedings of the 40th Annual Meet-             M G Abbas Malik, Christian Boitet, and Pushpak Bhat-
+  ing of the Association for Computational Linguis-                tacharyya. 2008. Hindi Urdu machine translitera-
+  tics, pages 400–408.                                             tion using finite-state transducers. In Proceedings
+                                                                   of the 22nd International Conference on Computa-
+Asif Ekbal, Sudip Kumar Naskar, and Sivaji Bandy-                  tional Linguistics, Manchester, UK.
+  opadhyay. 2006. A modified joint source-channel
+  model for transliteration. In Proceedings of the               Robert C. Moore. 2002. Fast and accurate sentence
+  COLING/ACL poster sessions, pages 191–198, Syd-                  alignment of bilingual corpora. In Conference of the
+  ney, Australia. Association for Computational Lin-               Association for Machine Translation in the Ameri-
+  guistics.                                                        cas (AMTA).
+
+Swati Gupta. 2004. Aligning Hindi and Urdu bilin-                Franz J. Och and Hermann Ney. 2003. A systematic
+  gual corpora for robust projection. Masters project              comparison of various statistical alignment models.
+  dissertation, Department of Computer Science, Uni-               Computational Linguistics, 29(1):19–51.
+  versity of Sheffield.                                          Kishore A. Papineni, Salim Roukos, Todd Ward, and
+Ulf Hermjakob, Kevin Knight, and Hal Daumé III.                   Wei-Jing Zhu. 2001. BLEU: a method for auto-
+  2008. Name translation in statistical machine trans-             matic evaluation of machine translation. Technical
+  lation - learning when to transliterate. In Proceed-             Report RC22176 (W0109-022), IBM Research Di-
+  ings of ACL-08: HLT, pages 389–397, Columbus,                    vision, Thomas J. Watson Research Center, York-
+  Ohio. Association for Computational Linguistics.                 town Heights, NY.
+                                                                 Ari Pirkola, Jarmo Toivonen, Heikki Keskustalo, Kari
+Bushra Jawaid and Tafseer Ahmed. 2009. Hindi to
+                                                                   Visala, and Kalervo Järvelin. 2003. Fuzzy trans-
+  Urdu conversion: beyond simple transliteration. In
+                                                                   lation of cross-lingual spelling variants. In SIGIR
+  Conference on Language and Technology 2009, La-
+                                                                   ’03: Proceedings of the 26th annual international
+  hore, Pakistan.
+                                                                   ACM SIGIR conference on Research and develop-
+Mehdi M. Kashani, Eric Joanis, Roland Kuhn, George                 ment in informaion retrieval, pages 345–352, New
+ Foster, and Fred Popowich. 2007. Integration of an                York, NY, USA. ACM.
+ Arabic transliteration module into a statistical ma-            R. Mahesh K. Sinha. 2009. Developing English-Urdu
+ chine translation system. In Proceedings of the Sec-               machine translation via Hindi. In Third Workshop
+ ond Workshop on Statistical Machine Translation,                   on Computational Approaches to Arabic Script-
+ pages 17–24, Prague, Czech Republic. Association                   based Languages (CAASL3), MT Summit XII, Ot-
+ for Computational Linguistics.                                     tawa, Canada.
+Kevin Knight and Jonathan Graehl. 1998. Ma-                      Andreas Stolcke. 2002. SRILM - an extensible lan-
+  chine transliteration. Computational Linguistics,                guage modeling toolkit. In Intl. Conf. Spoken Lan-
+  24(4):599–612.                                                   guage Processing, Denver, Colorado.
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris                Paola Virga and Sanjeev Khudanpur. 2003. Translit-
+  Callison-Burch, Marcello Federico, Nicola Bertoldi,              eration of proper names in cross-lingual information
+  Brooke Cowan, Wade Shen, Christine Moran,                        retrieval. In Proceedings of the ACL 2003 workshop
+  Richard Zens, Chris Dyer, Ondrej Bojar, Alexandra                on Multilingual and mixed-language named entity
+  Constantin, and Evan Herbst. 2007. Moses: Open                   recognition, pages 57–64, Morristown, NJ, USA.
+  source toolkit for statistical machine translation. In           Association for Computational Linguistics.
+  Proceedings of the 45th Annual Meeting of the Asso-
+  ciation for Computational Linguistics, Demonstra-              Bing Zhao, Nguyen Bach, Ian Lane, and Stephan Vo-
+  tion Program, Prague, Czech Republic.                            gel. 2007. A log-linear block transliteration model
+                                                                   based on bi-stream HMMs. In Human Language
+Philipp Koehn. 2004a. Pharaoh: A beam search de-                   Technologies 2007: The Conference of the North
+  coder for phrase-based statistical machine transla-              American Chapter of the Association for Computa-
+  tion models. In AMTA, pages 115–124.                             tional Linguistics; Proceedings of the Main Confer-
+                                                                   ence, pages 364–371, Rochester, New York. Associ-
+Philipp Koehn. 2004b. Statistical significance tests for           ation for Computational Linguistics.
+  machine translation evaluation. In Dekang Lin and
+
+
+                                                           474
+

@@ -1,0 +1,738 @@
+                       How Many Words is a Picture Worth?
+                   Automatic Caption Generation for News Images
+
+                                Yansong Feng and Mirella Lapata
+                           School of Informatics, University of Edinburgh
+                            10 Crichton Street, Edinburgh EH8 9AB, UK
+                          Y.Feng-4@sms.ed.ac.uk, mlap@inf.ed.ac.uk
+
+
+                     Abstract                                do not coincide with textual data cannot be re-
+                                                             trieved), a great deal of work has focused on the
+    In this paper we tackle the problem of au-               development of methods that generate description
+    tomatic caption generation for news im-                  words for a picture automatically. The literature
+    ages. Our approach leverages the vast re-                is littered with various attempts to learn the as-
+    source of pictures available on the web                  sociations between image features and words us-
+    and the fact that many of them are cap-                  ing supervised classification (Vailaya et al., 2001;
+    tioned. Inspired by recent work in sum-                  Smeulders et al., 2000), instantiations of the noisy-
+    marization, we propose extractive and ab-                channel model (Duygulu et al., 2002), latent vari-
+    stractive caption generation models. They                able models (Blei and Jordan, 2003; Barnard et al.,
+    both operate over the output of a proba-                 2002; Wang et al., 2009), and models inspired by
+    bilistic image annotation model that pre-                information retrieval (Lavrenko et al., 2003; Feng
+    processes the pictures and suggests key-                 et al., 2004).
+    words to describe their content. Exper-                     In this paper we go one step further and gen-
+    imental results show that an abstractive                 erate captions for images rather than individual
+    model defined over phrases is superior to                keywords. Although image indexing techniques
+    extractive methods.                                      based on keywords are popular and the method of
+                                                             choice for image retrieval engines, there are good
+1   Introduction                                             reasons for using more linguistically meaningful
+                                                             descriptions. A list of keywords is often ambigu-
+Recent years have witnessed an unprecedented                 ous. An image annotated with the words blue,
+growth in the amount of digital information avail-           sky, car could depict a blue car or a blue sky,
+able on the Internet. Flickr, one of the best known          whereas the caption “car running under the blue
+photo sharing websites, hosts more than three bil-           sky” would make the relations between the words
+lion images, with approximately 2.5 million im-              explicit. Automatic caption generation could im-
+ages being uploaded every day.1 Many on-line                 prove image retrieval by supporting longer and
+news sites like CNN, Yahoo!, and BBC publish                 more targeted queries. It could also assist journal-
+images with their stories and even provide photo             ists in creating descriptions for the images associ-
+feeds related to current events. Browsing and find-          ated with their articles. Beyond image retrieval, it
+ing pictures in large-scale and heterogeneous col-           could increase the accessibility of the web for vi-
+lections is an important problem that has attracted          sually impaired (blind and partially sighted) users
+much interest within information retrieval.                  who cannot access the content of many sites in
+   Many of the search engines deployed on the                the same ways as sighted users can (Ferres et al.,
+web retrieve images without analyzing their con-             2006).
+tent, simply by matching user queries against col-              We explore the feasibility of automatic caption
+located textual information. Examples include                generation in the news domain, and create descrip-
+meta-data (e.g., the image’s file name and for-              tions for images associated with on-line articles.
+mat), user-annotated tags, captions, and gener-              Obtaining training data in this setting does not re-
+ally text surrounding the image. As this limits              quire expensive manual annotation as many ar-
+the applicability of search engines (images that             ticles are published together with captioned im-
+   1 http://www.techcrunch.com/2008/11/03/                   ages. Inspired by recent work in summarization,
+three-billion-photos-at-flickr/                              we propose extractive and abstractive caption gen-
+
+
+                                                       1239
+      Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1239–1249,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+eration models. The backbone for both approaches       A multi-sentence description is generated using a
+is a probabilistic image annotation model that sug-    document planner and a surface realizer.
+gests keywords for an image. We can then simply           Within natural language processing most previ-
+identify (and rank) the sentences in the documents     ous efforts have focused on generating captions to
+that share these keywords or create a new caption      accompany complex graphical presentations (Mit-
+that is potentially more concise but also informa-     tal et al., 1998; Corio and Lapalme, 1999; Fas-
+tive and fluent. Our abstractive model operates        ciano and Lapalme, 2000; Feiner and McKeown,
+over image description keywords and document           1990) or on using the captions accompanying in-
+phrases. Their combination gives rise to many          formation graphics to infer their intended mes-
+caption realizations which we select probabilisti-     sage, e.g., the author’s goal to convey ostensible
+cally by taking into account dependency and word       increase or decrease of a quantity of interest (Elzer
+order constraints. Experimental results show that      et al., 2005). Little emphasis is placed on image
+the model’s output compares favorably to hand-         processing; it is assumed that the data used to cre-
+written captions and is often superior to extractive   ate the graphics are available, and the goal is to
+methods.                                               enable users understand the information expressed
+                                                       in them.
+2   Related Work                                          The task of generating captions for news im-
+                                                       ages is novel to our knowledge. Instead of relying
+Although image understanding is a popular topic        on manual annotation or background ontological
+within computer vision, relatively little work has     information we exploit a multimodal database of
+focused on the interplay between visual and lin-       news articles, images, and their captions. The lat-
+guistic information. A handful of approaches gen-      ter is admittedly noisy, yet can be easily obtained
+erate image descriptions automatically following       from on-line sources, and contains rich informa-
+a two-stage architecture. The picture is first ana-    tion about the entities and events depicted in the
+lyzed using image processing techniques into an        images and their relations. Similar to previous
+abstract representation, which is then rendered        work, we also follow a two-stage approach. Us-
+into a natural language description with a text gen-   ing an image annotation model, we first describe
+eration engine. A common theme across differ-          the picture with keywords which are subsequently
+ent models is domain specificity, the use of hand-     realized into a human readable sentence. The
+labeled data, and reliance on background ontolog-      caption generation task bears some resemblance
+ical information.                                      to headline generation (Dorr et al., 2003; Banko
+   For example, Héde et al. (2004) generate de-       et al., 2000; Jin and Hauptmann, 2002) where the
+scriptions for images of objects shot in uniform       aim is to create a very short summary for a doc-
+background. Their system relies on a manually          ument. Importantly, we aim to create a caption
+created database of objects indexed by an image        that not only summarizes the document but is also
+signature (e.g., color and texture) and two key-       a faithful to the image’s content (i.e., the caption
+words (the object’s name and category). Images         should also mention some of the objects or indi-
+are first segmented into objects, their signature is   viduals depicted in the image). We therefore ex-
+retrieved from the database, and a description is      plore extractive and abstractive models that rely
+generated using templates. Kojima et al. (2002,        on visual information to drive the generation pro-
+2008) create descriptions for human activities in      cess. Our approach thus differs from most work in
+office scenes. They extract features of human mo-      summarization which is solely text-based.
+tion and interleave them with a concept hierarchy
+of actions to create a case frame from which a nat-    3   Problem Formulation
+ural language sentence is generated. Yao et al.
+(2009) present a general framework for generating      We formulate image caption generation as fol-
+text descriptions of image and video content based     lows. Given an image I, and a related knowl-
+on image parsing. Specifically, images are hierar-     edge database κ, create a natural language descrip-
+chically decomposed into their constituent visual      tion C which captures the main content of the im-
+patterns which are subsequently converted into a       age under κ. Specifically, in the news story sce-
+semantic representation using WordNet. The im-         nario, we will generate a caption C for an image I
+age parser is trained on a corpus, manually an-        and its accompanying document D. The training
+notated with graphs representing image structure.      data thus consists of document-image-caption tu-
+
+
+                                                   1240
+
+
+   Thousands of Tongans have                                     Contaminated Cadbury’s
+   attended the funeral of King                                  chocolate was the most
+   Taufa’ahau Tupou IV, who                                      likely cause of an outbreak
+   died last week at the age                                     of salmonella poisoning,
+   of 88.      Representatives                                   the     Health     Protection
+   from 30 foreign countries                                     Agency has said. About 36
+   watched as the king’s coffin                                  out of a total of 56 cases of
+   was carried by 1,000 men                                      the illness reported between
+   to the official royal burial   King Tupou, who was 88,        March and July could be         Cadbury will increase its
+   ground.                        died a week ago.               linked to the product.          contamination testing levels.
+
+
+   A Nasa satellite has doc-                                     A third of children in the
+   umented startling changes                                     UK use blogs and social
+   in Arctic sea ice cover be-                                   network websites but two
+   tween 2004 and 2005. The                                      thirds of parents do not
+   extent of “perennial” ice                                     even know what they
+   declined by 14%, losing an                                    are, a survey suggests.
+   area the size of Pakistan                                     The children’s charity
+   or Turkey. The last few                                       NCH said there was “an
+   decades have seen ice cover    Satellite instruments can      alarming gap” in techno-        Children were found to be
+   shrink by about 0.7% per       distinguish “old” Arctic       logical knowledge between       far more internet-wise than
+   year.                          ice from “new”.                generations.                    parents.
+
+     Table 1: Each entry in the BBC News database contains a document an image, and its caption.
+
+
+ples like the ones shown in Table 1. During test-             in an article. A good caption must be succinct and
+ing, we are given a document and an associated                informative, clearly identify the subject of the pic-
+image for which we must generate a caption.                   ture, establish the picture’s relevance to the arti-
+   Our experiments used the dataset created by                cle, provide context for the picture, and ultimately
+Feng and Lapata (2008).2 It contains 3,361 articles           draw the reader into the article. It is also worth
+downloaded from the BBC News website3 each of                 noting that journalists often write their own cap-
+which is associated with a captioned news image.              tions rather than simply extract sentences from the
+The latter is usually 203 pixels wide and 152 pix-            document. In doing so they rely on general world
+els high. The average caption length is 9.5 words,            knowledge but also expertise in current affairs that
+the average sentence length is 20.5 words, and                goes beyond what is described in the article or
+the average document length 421.5 words. The                  shown in the picture.
+caption vocabulary is 6,180 words and the docu-
+ment vocabulary is 26,795. The vocabulary shared              4     Image Annotation
+between captions and documents is 5,921 words.
+The captions tend to use half as many words as                As mentioned earlier, our approach relies on an
+the document sentences, and more than 50% of the              image annotation model to provide description
+time contain words that are not attested in the doc-          keywords for the picture. Our experiments made
+ument (even though they may be attested in the                use of the probabilistic model presented in Feng
+collection).                                                  and Lapata (2010). The latter is well-suited to our
+   Generating image captions is a challenging task            task as it has been developed with noisy, multi-
+even for humans, let alone computers. Journalists             modal data sets in mind. The model is based on the
+are given explicit instructions on how to write cap-          assumption that images and their surrounding text
+tions4 and laypersons do not always agree on what             are generated by mixtures of latent topics which
+a picture depicts (von Ahn and Dabbish, 2004).                are inferred from a concatenated representation of
+Along with the title, the lead, and section head-             words and visual features.
+ings, captions are the most commonly read words                  Specifically, images are preprocessed so that
+                                                              they are represented by word-like units. Lo-
+   2 Available from http://homepages.inf.ed.ac.uk/            cal image descriptors are computed using the
+s677528/data/                                                 Scale Invariant Feature Transform (SIFT) algo-
+   3 http://news.bbc.co.uk/
+   4 See http://www.theslot.com/captions.html and
+                                                              rithm (Lowe, 1999). The general idea behind the
+http://www.thenewsmanual.net/ for tips on how to write        algorithm is to first sample an image with the
+good captions.                                                difference-of-Gaussians point detector at different
+
+
+                                                          1241
+
+
+scales and locations. Importantly, this detector is,    to the above annotation model. Any probabilis-
+to some extent, invariant to translation, scale, ro-    tic model with broadly similar properties could
+tation and illumination changes. Each detected re-      serve our purpose. Examples include PLSA-based
+gion is represented with a SIFT descriptor which        approaches to image annotation (e.g., Monay
+is a histogram of edge directions at different lo-      and Gatica-Perez 2007) and correspondence LDA
+cations. Subsequently SIFT descriptors are quan-        (Blei and Jordan, 2003).
+tized into a discrete set of visual terms via a clus-
+tering algorithm such as K-means.                       5   Extractive Caption Generation
+   The model thus works with a bag-of-words rep-        Much work in summarization to date focuses on
+resentation and treats each article-image-caption       sentence extraction where a summary is created
+tuple as a single document dMix consisting of tex-      simply by identifying and subsequently concate-
+tual and visual words. Latent Dirichlet Allocation      nating the most important sentences in a docu-
+(LDA, Blei et al. 2003) is used to infer the latent     ment. Without a great deal of linguistic analysis, it
+topics assumed to have generated dMix . The ba-         is possible to create summaries for a wide range of
+sic idea underlying LDA, and topic models in gen-       documents, independently of style, text type, and
+eral, is that each document is composed of a prob-      subject matter. For our caption generation task, we
+ability distribution over topics, where each topic      need only extract a single sentence. And our guid-
+represents a probability distribution over words.       ing hypothesis is that this sentence must be max-
+The document-topic and topic-word distributions         imally similar to the description keywords gener-
+are learned automatically from the data and pro-        ated by the annotation model. We discuss below
+vide information about the semantic themes cov-         different ways of operationalizing similarity.
+ered in each document and the words associated
+with each semantic theme. The image annotation          Word Overlap Perhaps the simplest way of
+model takes the topic distributions into account        measuring the similarity between image keywords
+when finding the most likely keywords for an im-        and document sentences is word overlap:
+age and its associated document.                                                         |WI ∩ Sd |
+                                                                   Overlap(WI , Sd ) =                   (2)
+   More formally, given an image-caption-                                                |WI ∪ Sd |
+document tuple (I,C, D) the model finds the             where WI is the set of keywords and Sd a sentence
+subset of keywords WI (WI ⊆ W ) which appro-            in the document. The caption is then the sentence
+priately describe I. Assuming that keywords             that has the highest overlap with the keywords.
+are conditionally independent, and I, D are
+represented jointly by dMix , the model estimates:      Cosine Similarity Word overlap is admittedly
+                                                        a naive measure of similarity, based on lexical
+  WI∗ ≈ arg max       ∏     P(wt |dMix )         (1)    identity. We can overcome this by representing
+                 Wt w ∈W
+                     t  t
+                                                        keywords and sentences in vector space (Salton
+                             K
+                                                        and McGill, 1983). The latter is a word-sentence
+        = arg max     ∏ ∑ P(wt |zk )P(zk |dMix )
+                 Wt w ∈W                                co-occurrence matrix where each row represents
+                     t  t k=1
+                                                        a word, each column a sentence, and each en-
+Wt denotes a set of description keywords (the sub-
+                                                        try the frequency with which the word appeared
+script t is used to discriminate from the visual
+                                                        within the sentence. More precisely matrix cells
+words which are not part of the model’s output),
+                                                        are weighted by their tf-idf values. The similarity
+K the number of topics, P(wt |zk ) the multimodal                                                  −
+                                                                                                   →
+                                                        of the vectors representing the keywords WI and
+word distributions over topics, and P(zk |dMix ) the                         →
+                                                                             −
+estimated posterior of the topic proportions over       document sentence Sd can be quantified by mea-
+documents. Given an unseen image-document               suring the cosine of their angle:
+pair and trained multimodal word distributions                                         → →
+                                                                                       −    −
+                                                                          →→
+                                                                          −    −       WI · Sd
+over topics, it is possible to infer the posterior of                 sim(WI , Sd ) = −−−−→             (3)
+                                                                                            →
+                                                                                            −
+topic proportions over the new data by maximizing                                     |WI ||Sd |
+the likelihood. The model delivers a ranked list of     Probabilistic Similarity Recall that the back-
+textual words wt , the n-best of which are used as      bone of our image annotation model is a topic
+annotations for image I.                                model with images and documents represented as
+   It is important to note that the caption gener-      a probability distribution over latent topics. Un-
+ation models we propose are not especially tied         der this framework, the similarity between an im-
+
+
+                                                    1242
+
+
+age and a sentence can be broadly measured by the         word appearing in the corresponding document
+extent to which they share the same topic distribu-       and is independent from other words in the head-
+tions (Steyvers and Griffiths, 2007). For example,        line. The likelihood of different surface realiza-
+we may use the KL divergence to measure the dif-          tions is estimated using a bigram model. They also
+ference between the distributions p and q:                take the distribution of the length of the headlines
+                          K                               into account in an attempt to bias the model to-
+                                     pj
+              D(p, q) =   ∑ p j log2 q j           (4)    wards generating concise output:
+                          j=1                                                            n
+where p and q are shorthand for the image                    P(w1 , w2 , ..., wn ) =    ∏ P(wi ∈ H|wi ∈ D) (6)
+                                                                                        i=1
+topic distribution PdMix and sentence topic distri-                                    ·P(len(H) = n)
+bution PSd , respectively. When doing inference on                                          n
+the document sentence, we also take its neighbor-                                      · ∏ P(wi |wi−1 )
+                                                                                        i=2
+ing sentences into account to avoid estimating in-
+accurate topic proportions on short sentences.            where wi is a word that may appear in head-
+   The KL divergence is asymmetric and in many            line H, D the document being summarized,
+applications, it is preferable to apply a symmet-         and P(len(H) = n) a headline length distribution
+ric measure such as the Jensen Shannon (JS) di-           model.
+vergence. The latter measures the “distance” be-
+tween p and q through (p+q)  2 , the average of p
+and q:                                                       The above model can be easily adapted to the
+                                                        caption generation task. Content selection is now
+            1        (p + q)          (p + q)             the probability of a word appearing in the cap-
+JS(p, q) =      D(p,         ) + D(q,         ) (5)
+            2           2                2                tion given the image and its associated document
+                                                          which we obtain from the output of our image an-
+6   Abstractive Caption Generation                        notation model (see Section 4). In addition we re-
+Although extractive methods yield grammatical             place the bigram surface realizer with a trigram:
+captions and require relatively little linguistic                                       n
+                                                              P(w1 , w2 , ..., wn ) = ∏ P(wi ∈ C|I, D)           (7)
+analysis, there are a few caveats to consider.                                         i=1
+Firstly, there is often no single sentence in the doc-                                 ·P(len(C) = n)
+ument that uniquely describes the image’s content.                                       n
+In most cases the keywords are found in the doc-                                       · ∏ P(wi |wi−1 , wi−2 )
+                                                                                        i=3
+ument but interspersed across multiple sentences.
+Secondly, the selected sentences make for long            where C is the caption, I the image, D the accom-
+captions (sometimes longer than the average doc-          panying document, and P(wi ∈ C|I, D) the image
+ument sentence), are not concise and overall not          annotation probability.
+as catchy as human-written captions. For these
+reasons we turn to abstractive caption generation
+and present models based on single words but also            Despite its simplicity, the caption generation
+phrases.                                                  model in (7) has a major drawback. The content
+                                                          selection component will naturally tend to ignore
+Word-based Model Our first abstractive model              function words, as they are not descriptive of the
+builds on and extends a well-known probabilistic          image’s content. This will seriously impact the
+model of headline generation (Banko et al., 2000).        grammaticality of the generated captions, as there
+The task is related to caption generation, the aim is     will be no appropriate function words to glue the
+to create a short, title-like headline for a given doc-   content words together. One way to remedy this
+ument, without however taking visual information          is to revert to a content selection model that ig-
+into account. Like captions, headlines have to be         nores the image and simply estimates the prob-
+catchy to attract the reader’s attention.                 ability of a word appearing in the caption given
+   Banko et al. (2000) propose a bag-of-words             the same word appearing in the document. At the
+model for headline generation. It consists of con-        same time we modify our surface realization com-
+tent selection and surface realization components.        ponent so that it takes note of the image annotation
+Content selection is modeled as the probability of        probabilities. Specifically, we use an adaptive lan-
+a word appearing in the headline given the same           guage model (Kneser et al., 1997) that modifies an
+
+
+                                                      1243
+
+
+n-gram model with local unigram probabilities:               tion (8) as follows:
+                         n                                                                         m
+ P(w1 , w2 , ..., wn ) = ∏ P(wi ∈ C|wi ∈ D)            (8)      P(ρ1 , ρ2 , ..., ρm ) ≈        ∏ P(ρ j ∈ C|ρ j ∈ D)              (12)
+                        i=1                                                                    j=1
+                        ·P(len(C) = n)                                                                               m
+                          n                                                                    ·P(len(C) =           ∑ len(ρ j ))
+                        · ∏ Padap (wi |wi−1 , wi−2 )                                                                 j=1
+                         i=3
+                                                                                                   ∑mj=1 len(ρ j )
+
+where P(wi ∈ C|wi ∈ D) is the probability of wi ap-                                            ·        ∏ Padap (wi |wi−1 , wi−2 )
+                                                                                                        i=3
+pearing in the caption given that it appears in
+the document D, and Padap (wi |wi−1 , wi−2 ) the lan-        Here, P(ρ j ∈ C|ρ j ∈ D) models the probability of
+guage model adapted with probabilities from our              phrase ρ j appearing in the caption given that it also
+image annotation model:                                      appears in the document and is estimated as:
+                     α(w)                                    P(ρ j ∈ C|ρ j ∈ D) =              ∏        P(w j ∈ C|w j ∈ D) (13)
+        Padap (w|h) =      Pback (w|h)                 (9)                                  w j ∈ρ j
+                     z(h)
+                          Padap (w) β                        where w j is a word in the phrase ρ j .
+                 α(w) ≈ (           )              (10)
+                          Pback (w)                             One problem with the models discussed thus
+           z(h) = ∑ α(w) · Pback (w|h)             (11)      far is that words or phrases are independent of
+                   w                                         each other. It is up to the trigram model to en-
+                                                             force coarse ordering constraints. These may be
+where Pback (w|h) is the probability of w given              sufficient when considering isolated words, but
+the history h of preceding words (i.e., the orig-            phrases are longer and their combinations are sub-
+inal trigram model), Padap (w) the probability               ject to structural constraints that are not captured
+of w according to the image annotation model,                by sequence models. We therefore attempt to take
+Pback (w) the probability of w according to the orig-        phrase attachment constraints into account by es-
+inal model, and β a scaling parameter.                       timating the probability of phrase ρ j attaching to
+                                                             the right of phrase ρi as:
+                                                                 P(ρ j |ρi )=    ∑ ∑               p(w j |wi )                   (14)
+Phrase-based Model The model outlined in                                        wi ∈ρi w j ∈ρ j
+equation (8) will generate captions with function                               1                 f (wi , w j ) f (wi , w j )
+words. However, there is no guarantee that these                           =       ∑      ∑    {               +              }
+                                                                                2 wi ∈ρi w j ∈ρ j f (wi , −)     f (−, w j )
+will be compatible with their surrounding context
+or that the caption will be globally coherent be-            where p(w j |wi ) is the probability of a phrase con-
+yond the trigram horizon. To avoid these prob-               taining word w j appearing to the right of a phrase
+lems, we turn our attention to phrases which are             containing word wi , f (wi , w j ) indicates the num-
+naturally associated with function words and can             ber of times wi and w j are adjacent, f (wi , −) is
+potentially capture long-range dependencies.                 the number of times wi appears on the left of any
+                                                             phrase, and f (−, wi ) the number of times it ap-
+   Specifically, we obtain phrases from the out-
+                                                             pears on the right.5
+put of a dependency parser. A phrase is sim-
+ply a head and its dependents with the exception                After integrating the attachment probabilities
+of verbs, where we record only the head (other-              into equation (12), the caption generation model
+wise, an entire sentence could be a phrase). For             becomes:
+                                                                                           m
+example, from the first sentence in Table 1 (first           P(ρ1 , ρ2 , ..., ρm ) ≈ ∏ P(ρ j ∈ C|ρ j ∈ D)                           (15)
+row, left document) we would extract the phrases:                                         j=1
+thousands of Tongans, attended, the funeral, King                                          m
+                                                                                        · ∏ P(ρ j |ρ j−1 )
+Taufa‘ahau Tupou IV, last week, at the age, died,                                         j=2
+and so on. We only consider dependencies whose                                          ·P(len(C) = ∑mj=1 len(ρ j ))
+heads are nouns, verbs, and prepositions, as these                                             m
+constitute 80% of all dependencies attested in our                                             ∑ len(ρ j )
+                                                                                             j=1
+caption data. We define a bag-of-phrases model                                          · ∏i=3                Padap (wi |wi−1 , wi−2 )
+for caption generation by modifying the content
+selection and caption length components in equa-                  5 Equation   (14) is smoothed to avoid zero probabilities.
+
+
+                                                         1244
+
+
+On the one hand, the model in equation (15) takes      no less than five times in the corpus. For all
+long distance dependency constraints into ac-          models discussed here (extractive and abstractive)
+count, and has some notion of syntactic structure      we report results with the 15 best annotation key-
+through the use of attachment probabilities. On        words. For the abstractive models, we used a
+the other hand, it has a primitive notion of caption   trigram model trained with the SRI toolkit on a
+length estimated by P(len(C) = ∑mj=1 len(ρ j )) and    newswire corpus consisting of BBC and Yahoo!
+will therefore generate captions of the same           news documents (6.9 M words). The attachment
+(phrase) length. Ideally, we would like the model      probabilities (see equation (14)) were estimated
+to vary the length of its output depending on the      from the same corpus. We tuned the caption
+chosen context. However, we leave this to future       length parameter on the development set using a
+work.                                                  range of [5, 14] tokens for the word-based model
+                                                       and [2, 5] phrases for the phrase-based model. Fol-
+Search To generate a caption it is neces-
+                                                       lowing Banko et al. (2000), we approximated the
+sary to find the sequence of words that maxi-
+                                                       length distribution with a Gaussian. The scaling
+mizes P(w1 , w2 , ..., wn ) for the word-based model
+                                                       parameter β for the adaptive language model was
+(equation (8)) and P(ρ1 , ρ2 , ..., ρm ) for the
+                                                       also tuned on the development set using a range
+phrase-based model (equation (15)). We rewrite
+                                                       of [0.5,0.9]. We report results with β set to 0.5.
+both probabilities as the weighted sum of their log
+                                                       For the abstractive models the beam size was set
+form components and use beam search to find a
+                                                       to 500 (with at least 50 states for the word-based
+near-optimal sequence. Note that we can make
+                                                       model). For the phrase-based model, we also ex-
+search more efficient by reducing the size of the
+                                                       perimented with reducing the search scope, ei-
+document D. Using one of the models from Sec-
+                                                       ther by considering only the n most similar sen-
+tion 5, we may rank its sentences in terms of
+                                                       tences to the keywords (range [2, 10]), or simply
+their relevance to the image keywords and con-
+                                                       the single most similar sentence and its neighbors
+sider only the n-best ones. Alternatively, we could
+                                                       (range [2, 5]). The former method delivered better
+consider the single most relevant sentence together
+                                                       results with 10 sentences (and the KL divergence
+with its surrounding context under the assumption
+                                                       similarity function).
+that neighboring sentences are about the same or
+similar topics.
+                                                       Evaluation We evaluated the performance of
+7   Experimental Setup                                 our models automatically, and also by eliciting hu-
+                                                       man judgments. Our automatic evaluation was
+In this section we discuss our experimental design
+                                                       based on Translation Edit Rate (TER, Snover et al.
+for assessing the performance of the caption gen-
+                                                       2006), a measure commonly used to evaluate the
+eration models presented above. We give details
+                                                       quality of machine translation output. TER is de-
+on our training procedure, parameter estimation,
+                                                       fined as the minimum number of edits a human
+and present the baseline methods used for com-
+                                                       would have to perform to change the system out-
+parison with our models.
+                                                       put so that it exactly matches a reference transla-
+Data All our experiments were conducted on             tion. In our case, the original captions written by
+the corpus created by Feng and Lapata (2008),          the BBC journalists were used as reference:
+following their original partition of the data                            Ins + Del + Sub + Shft
+(2,881 image-caption-document tuples for train-            TER(E, Er ) =                              (16)
+                                                                                     Nr
+ing, 240 tuples for development and 240 for test-
+                                                       where E is the hypothetical system output, Er the
+ing). Documents and captions were parsed with
+                                                       reference caption, and Nr the reference length.
+the Stanford parser (Klein and Manning, 2003) in
+                                                       The number of possible edits include insertions
+order to obtain dependencies for the phrase-based
+                                                       (Ins), deletions (Del), substitutions (Sub) and
+abstractive model.
+                                                       shifts (Shft). TER is similar to word error rate,
+Model Parameters For the image annotation              the only difference being that it allows shifts. A
+model we extracted 150 (on average) SIFT fea-          shift moves a contiguous sequence to a different
+tures which were quantized into 750 visual             location within the the same system output and is
+terms. The underlying topic model was trained          counted as a single edit. The perfect TER score
+with 1,000 topics using only content words             is 0, however note that it can be higher than 1 due
+(i.e., nouns, verbs, and adjectives) that appeared     to insertions. The minimum translation edit align-
+
+
+                                                   1245
+
+
+      Model                 TER     AvgLen                     Model            Grammaticality         Relevance
+      Lead sentence        2.12†     21.0                 KL Divergence             6.42∗†              4.10∗†
+      Word Overlap         2.46∗†    24.3                 Abstract Words            2.08†               3.20†
+      Cosine               2.26†     22.0                 Abstract Phrases          4.80∗               4.96∗
+      KL Divergence        1.77∗†    18.4                 Gold Standard             6.39∗†              5.55∗
+      JS Divergence        1.77∗†    18.6
+      Abstract Words       1.11∗†    10.0              Table 3: Mean ratings on caption output elicited
+      Abstract Phrases     1.06∗†    10.1              by humans; ∗ : sig.        different from word-
+                                                       based abstractive system; †: sig. different from
+Table 2: TER results for extractive, abstractive       phrase-based abstractive system.
+models, and lead sentence baseline; ∗ : sig. dif-
+ferent from lead sentence; † : sig. different from
+KL and JS divergence.                                     As can be seen the probabilistic models (KL and
+                                                       JS divergence) outperform word overlap and co-
+                                                       sine similarity (all differences are statistically sig-
+ment is usually found through beam search. We          nificant, p < 0.01).6 They make use of the same
+used TER to compare the output of our extractive       topic model as the image annotation model, and
+and abstractive models and also for parameter tun-     are thus able to select sentences that cover com-
+ing (see the discussion above).                        mon content. They are also significantly better
+                                                       than the lead sentence which is a competitive base-
+   In our human evaluation study participants were
+                                                       line. It is well known that news articles are written
+presented with a document, an associated image,
+                                                       so that the lead contains the most important infor-
+and its caption, and asked to rate the latter on two
+                                                       mation in a story.7 This is an encouraging result
+dimensions: grammaticality (is the sentence flu-
+                                                       as it highlights the importance of the visual infor-
+ent or word salad?) and relevance (does it de-
+                                                       mation for the caption generation task. In general,
+scribe succinctly the content of the image and doc-
+                                                       word overlap is the worst performing model which
+ument?). We used a 1–7 rating scale, participants
+                                                       is not unexpected as it does not take any lexical
+were encouraged to give high ratings to captions
+                                                       variation into account. Cosine is slightly better
+that were grammatical and appropriate descrip-
+                                                       but not significantly different from the lead sen-
+tions of the image given the accompanying docu-
+                                                       tence. The abstractive models obtain the best TER
+ment. We randomly selected 12 document-image
+                                                       scores overall, however they generate shorter cap-
+pairs from the test set and generated captions for
+                                                       tions in comparison to the other models (closer to
+them using the best extractive system, and two ab-
+                                                       the length of the gold standard) and as a result TER
+stractive systems (word-based and phrase-based).
+                                                       treats them favorably, simply because the number
+We also included the original human-authored
+                                                       of edits is less. For this reason we turn to the re-
+caption as an upper bound. We collected ratings
+                                                       sults of our judgment elicitation study which as-
+from 23 unpaid volunteers, all self reported native
+                                                       sesses in more detail the quality of the generated
+English speakers. The study was conducted over
+                                                       captions.
+the Internet.
+                                                          Recall that participants judge the system out-
+                                                       put on two dimensions, grammaticality and rele-
+8   Results
+                                                       vance. Table 3 reports mean ratings for the out-
+Table 2 reports our results on the test set us-        put of the extractive system (based on the KL di-
+ing TER. We compare four extractive models             vergence), the two abstractive systems, and the
+based on word overlap, cosine similarity, and two      human-authored gold standard caption. We per-
+probabilistic similarity measures, namely KL and       formed an Analysis of Variance (A NOVA) to ex-
+JS divergence and two abstractive models based         amine the effect of system type on the generation
+on words (see equation (8)) and phrases (see equa-     task. Post-hot Tukey tests were carried out on the
+tion (15)). We also include a simple baseline that     mean of the ratings shown in Table 3 (for gram-
+selects the first document sentence as a caption       maticality and relevance).
+and show the average caption length (AvgLen) for
+                                                           6 We also note that mean length differences are not signif-
+each model. We examined whether performance
+                                                       icant among these models.
+differences among models are statistically signifi-        7 As a rule of thumb the lead should answer most or all of
+cant, using the Wilcoxon test.                         the five W’s (who, what, when, where, why).
+
+
+                                                   1246
+
+
+G: King Tupou, who was 88, died a week ago.                        9   Conclusions
+KL: Last year, thousands of Tongans took part in unprece-
+     dented demonstrations to demand greater democracy
+     and public ownership of key national assets.                  We have presented extractive and abstractive mod-
+AW : King Toupou IV died at the age of Tongans last week.          els that generate image captions for news articles.
+AP : King Toupou IV died at the age of 88 last week.               A key aspect of our approach is to allow both
+G: Cadbury will increase its contamination testing levels.
+KL: Contaminated Cadbury’s chocolate was the most                  the visual and textual modalities to influence the
+     likely cause of an outbreak of salmonella poisoning,          generation task. This is achieved through an im-
+     the Health Protection Agency has said.                        age annotation model that characterizes pictures
+AW : Purely dairy milk buttons Easter had agreed to work
+     has caused.                                                   in terms of description keywords that are subse-
+AP : The 105g dairy milk buttons Easter egg affected by            quently used to guide the caption generation pro-
+     the recall.                                                   cess. Our results show that the visual information
+G: Satellite instruments can distinguish “old” Arctic ice
+     from “new”.                                                   plays an important role in content selection. Sim-
+KL: So a planet with less ice warms faster, potentially turn-      ply extracting a sentence from the document often
+     ing the projected impacts of global warming into real-
+     ity sooner than anticipated.
+                                                                   yields an inferior caption. Our experiments also
+AW : Dr less winds through ice cover all over long time            show that a probabilistic abstractive model defined
+     when.                                                         over phrases yields promising results. It generates
+AP : The area of the Arctic covered in Arctic sea ice cover.
+G: Children were found to be far more internet-wise than
+                                                                   captions that are more grammatical than a closely
+     parents.                                                      related word-based system and manages to capture
+KL: That’s where parents come in.                                  the gist of the image (and document) as well as the
+AW : The survey found a third of children are about mobile
+     phones.                                                       captions written by journalists.
+AP : The survey found a third of children in the driving              Future extensions are many and varied. Rather
+     seat.                                                         than adopting a two-stage approach, where the im-
+Table 4: Captions written by humans (G) and gen-                   age processing and caption generation are carried
+erated by extractive (KL), word-based abstractive                  out sequentially, a more general model should in-
+(AW ), and phrase-based extractive (AP systems).                   tegrate the two steps in a unified framework. In-
+                                                                   deed, an avenue for future work would be to de-
+                                                                   fine a phrase-based model for both image annota-
+                                                                   tion and caption generation. We also believe that
+                                                                   our approach would benefit from more detailed
+   The word-based system yields the least gram-                    linguistic and non-linguistic information. For in-
+matical output. It is significantly worse than the                 stance, we could experiment with features related
+phrase-based abstractive system (α < 0.01), the                    to document structure such as titles, headings, and
+extractive system (α < 0.01), and the gold stan-                   sections of articles and also exploit syntactic infor-
+dard (α < 0.01). Unsurprisingly, the phrase-based                  mation more directly. The latter is currently used
+system is significantly less grammatical than the                  in the phrase-based model by taking attachment
+gold standard and the extractive system, whereas                   probabilities into account. We could, however, im-
+the latter is perceived as equally grammatical as                  prove grammaticality more globally by generating
+the gold standard (the difference in the means is                  a well-formed tree (or dependency graph).
+not significant). With regard to relevance, the
+word-based system is significantly worse than the                  References
+phrase-based system, the extractive system, and                    Banko, Michel, Vibhu O. Mittal, and Micheael J.
+the gold-standard. Interestingly, the phrase-based                   Witbrock. 2000. Headline generation based on
+system performs on the same level with the hu-                       statistical translation. In Proceedings of the 38th
+man gold standard (the difference in the means is                    Annual Meeting on Association for Computa-
+not significant) and significantly better than the ex-               tional Linguistics. Hong Kong, pages 318–325.
+tractive system. Overall, the captions generated by
+the phrase-based system, capture the same content                  Barnard, Kobus, Pinar Duygulu, David Forsyth,
+as the human-authored captions, even though they                     Nando de Freitas, David Blei, and Michael
+tend to be less grammatical. Examples of system                      Jordan. 2002. Matching words and pictures.
+output for the image-document pairs shown in Ta-                     Journal of Machine Learning Research 3:1107–
+ble 1 are given in Table 4 (the first row corresponds                1135.
+to the left picture (top row) in Table 1, the second               Blei, David and Michael Jordan. 2003. Modeling
+row to the right picture, and so on).                                annotated data. In Proceedings of the 26th An-
+
+
+                                                                1247
+
+
+  nual International ACM SIGIR Conference on          Feng, Yansong and Mirella Lapata. 2010. Topic
+  Research and Development in Information Re-           models for image annotation and text illustra-
+  trieval. Toronto, ON, pages 127–134.                  tion. In Proceedings of the 11th Annual Con-
+Blei, David, Andrew Ng, and Michael Jordan.             ference of the North American Chapter of the
+  2003. Latent Dirichlet allocation. Journal of         Association for Computational Linguistics. Los
+  Machine Learning Research 3:993–1022.                 Angeles, LA.
+
+Corio, Marc and Guy Lapalme. 1999. Generation         Ferres, Leo, Avi Parush, Shelley Roberts, and
+  of texts for information graphics. In Proceed-        Gitte Lindgaard. 2006. Helping people with
+  ings of the 7th European Workshop on Natural          visual impairments gain access to graphical in-
+  Language Generation. Toulouse, France, pages          formation through natural language: The graph
+  49–58.                                                system. In Proceedings of 11th International
+                                                        Conference on Computers Helping People with
+Dorr, Bonnie, David Zajic, and Richard Schwartz.        Special Needs. Linz, Austria, pages 1122–1130.
+  2003. Hedge trimmer: A parse-and-trim ap-
+                                                      Héde, Patrick, Pierre Allain Moëllic, Joël Bour-
+  proach to headline generation. In Proceed-
+                                                        geoys, Magali Joint, and Corinne Thomas.
+  ings of the HLT-NAACL 2003 Workshop on Text
+                                                        2004. Automatic generation of natural lan-
+  Summarization. Edmonton, Canada, pages 1–8.
+                                                        guage descriptions for images. In Proceed-
+Duygulu, Pinar, Kobus Barnard, Nando de Freitas,        ings of Computer-Assisted Information Re-
+  and David Forsyth. 2002. Object recognition as        trieval (Recherche d’Information et ses Appli-
+  machine translation: Learning a lexicon for a         cations Ordinateur) (RIAO). Avignon, France.
+  fixed image vocabulary. In Proceedings of the
+                                                      Jin, Rong and Alexander G. Hauptmann. 2002. A
+  7th European Conference on Computer Vision.
+                                                         new probabilistic model for title generation. In
+  Copenhagen, Denmark, pages 97–112.
+                                                         Proceedings of the 19th International Confer-
+Elzer, Stephanie, Sandra Carberry, Ingrid Zuker-         ence on Computational linguistics. Taipei, Tai-
+  man, Daniel Chester, Nancy Green, , and Seniz          wan, pages 1–7.
+  Demir. 2005. A probabilistic framework for rec-     Klein, Dan and Christopher D. Manning. 2003.
+  ognizing intention in information graphics. In        Accurate unlexicalized parsing. In Proceedings
+  Proceedings of the 19th International Confer-         of the 41st Annual Meeting of the Association
+  ence on Artificial Intelligence. Edinburgh, Scot-     of Computational Linguistics. Sapporo, Japan,
+  land, pages 1042–1047.                                pages 423–430.
+Fasciano, Massimo and Guy Lapalme. 2000. In-          Kneser, Reinhard, Jochen Peters, and Dietrich
+  tentions in the coordinated generation of graph-      Klakow. 1997. Language model adaptation
+  ics and text from tabular data. Knowledge In-         using dynamic marginals. In Proceedings of
+  formation Systems 2(3):310–339.                       5th European Conference on Speech Commu-
+Feiner, Steven and Kathleen McKeown. 1990. Co-          nication and Technology. Rhodes, Greece, vol-
+  ordinating text and graphics in explanation gen-      ume 4, pages 1971–1974.
+  eration. In Proceedings of National Conference      Kojima, Atsuhiro, Mamoru Takaya, Shigeki Aoki,
+  on Artificial Intelligence. Boston, MA, pages         Takao Miyamoto, and Kunio Fukunaga. 2008.
+  442–449.                                              Recognition and textual description of human
+Feng, Shaolei Feng, Victor Lavrenko, and R Man-         activities by mobile robot. In Proceedings of
+  matha. 2004. Multiple Bernoulli relevance             the 3rd International Conference on Innova-
+  models for image and video annotation. In             tive Computing Information and Control. IEEE
+  Proceedings of the International Conference           Computer Society, Washington, DC, pages 53–
+  on Computer Vision and Pattern Recognition.           56.
+  Washington, DC, pages 1002–1009.                    Kojima, Atsuhiro, Takeshi Tamura, and Kunio
+Feng, Yansong and Mirella Lapata. 2008. Au-             Fukunaga. 2002. Natural language description
+  tomatic image annotation using auxiliary text         of human activities from video images based
+  information. In Proceedings of the 46th An-           on concept hierarchy of actions. International
+  nual Meeting of the Association of Computa-           Journal of Computer Vision 50(2):171–184.
+  tional Linguistics: Human Language Technolo-        Lavrenko, Victor, R. Manmatha, and Jiwoon Jeon.
+  gies. Columbus, OH, pages 272–280.                    2003. A model for learning the semantics of
+
+
+                                                  1248
+
+
+  pictures. In Proceedings of the 16th Conference        ference on Computer Vision and Pattern Recog-
+  on Advances in Neural Information Processing           nition. Miami, FL, pages 1903–1910.
+  Systems. Vancouver, BC.                             Yao, Benjamin, Xiong Yang, Liang Lin, Mun Wai
+Lowe, David G. 1999. Object recognition from            Lee, and Song chun Zhu. 2009. I2t: Image pars-
+  local scale-invariant features. In Proceedings of     ing to text description. Proceedings of IEEE (in-
+  International Conference on Computer Vision.          vited for the special issue on Internet Vision) .
+  IEEE Computer Society, pages 1150–1157.
+Mittal, Vibhu O., Johanna D. Moore, Giuseppe
+ Carenini, and Steven Roth. 1998. Describing
+ complex charts in natural language: A caption
+ generation system. Computational Linguistics
+ 24:431–468.
+Monay, Florent and Daniel Gatica-Perez. 2007.
+ Modeling semantic aspects for cross-media
+ image indexing.     IEEE Transactions on
+ Pattern Analysis and Machine Intelligence
+ 29(10):1802–1817.
+Salton, Gerard and M.J. McGill. 1983.     In-
+  troduction to Modern Information Retrieval.
+  McGraw-Hill, New York.
+Smeulders, Arnols W.M., Marcel Worring, Si-
+  mone Santini, Amarnath Gupta, and Ramesh
+  Jain. 2000. Content-based image retrieval at
+  the end of the early years. IEEE Transactions
+  on Pattern Analysis and Machine Intelligence
+  22(12):1349–1380.
+Snover, Matthew, Bonnie Dorr, Richard Schwartz,
+  Linnea Micciulla, and John Makhoul. 2006. A
+  study of translation edit rate with targeted hu-
+  man annotation. In Proceedings of the 7th Con-
+  ference of the Association for Machine Trans-
+  lation in the Americas. Cambridge, pages 223–
+  231.
+Steyvers, Mark and Tom Griffiths. 2007. Proba-
+  bilistic topic models. In T. Landauer, D. Mc-
+  Namara, S Dennis, and W Kintsch, editors, A
+  Handbook of Latent Semantic Analysis, Psy-
+  chology Press.
+Vailaya, Aditya, Mário A. T. Figueiredo, Anil K.
+  Jain, and Hong-Jiang Zhang. 2001. Image clas-
+  sification for content-based indexing. IEEE
+  Transactions on Image Processing 10:117–130.
+von Ahn, Luis and Laura Dabbish. 2004. Labeling
+  images with a computer game. In ACM Confer-
+  ence on Human Factors in Computing Systems.
+  New York, NY, pages 319–326.
+Wang, Chong, David Blei, and Li Fei-Fei. 2009.
+ Simultaneous image classification and annota-
+ tion. In Proceedings of the International Con-
+
+
+                                                  1249
+

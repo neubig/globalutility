@@ -1,0 +1,685 @@
+     Kernel Based Discourse Relation Recognition with Temporal
+
+                                      Ordering Information
+
+
+               WenTing Wang1            Jian Su1                               Chew Lim Tan2
+      1                                                             2
+        Institute for Infocomm Research                                 Department of Computer Science
+   1 Fusionopolis Way, #21-01 Connexis                                     University of Singapore
+                Singapore 138632                                              Singapore 117417
+{wwang,sujian}@i2r.a-star.edu.sg                                         tacl@comp.nus.edu.sg
+
+
+
+                                                           1     Introduction
+                   Abstract
+                                                           Discourse relations capture the internal structure
+  Syntactic knowledge is important for dis-                and logical relationship of coherent text, includ-
+  course relation recognition. Yet only heu-               ing Temporal, Causal and Contrastive relations
+  ristically selected flat paths and 2-level               etc. The ability of recognizing such relations be-
+  production rules have been used to incor-                tween text units including identifying and classi-
+  porate such information so far. In this                  fying provides important information to other
+  paper we propose using tree kernel based                 natural language processing systems, such as
+  approach to automatically mine the syn-                  language generation, document summarization,
+  tactic information from the parse trees for              and question answering. For example, Causal
+  discourse analysis, applying kernel func-                relation can be used to answer more sophisti-
+  tion to the tree structures directly. These              cated, non-factoid ‘Why’ questions.
+  structural syntactic features, together                     Lee et al. (2006) demonstrates that modeling
+  with other normal flat features are incor-               discourse structure requires prior linguistic anal-
+  porated into our composite kernel to cap-                ysis on syntax. This shows the importance of
+  ture diverse knowledge for simultaneous                  syntactic knowledge to discourse analysis. How-
+  discourse identification and classification              ever, most of previous work only deploys lexical
+  for both explicit and implicit relations.                and semantic features (Marcu and Echihabi,
+  The experiment shows tree kernel ap-                     2002; Pettibone and PonBarry, 2003; Saito et al.,
+  proach is able to give statistical signifi-              2006; Ben and James, 2007; Lin et al., 2009; Pit-
+  cant improvements over flat syntactic                    ler et al., 2009) with only two exceptions (Ben
+  path feature. We also illustrate that tree               and James, 2007; Lin et al., 2009). Nevertheless,
+  kernel approach covers more structure in-                Ben and James (2007) only uses flat syntactic
+  formation than the production rules,                     path connecting connective and arguments in the
+  which allows tree kernel to further incor-               parse tree. The hierarchical structured informa-
+  porate information from a higher dimen-                  tion in the trees is not well preserved in their flat
+  sion space for possible better discrimina-               syntactic path features. Besides, such a syntactic
+  tion. Besides, we further propose to leve-               feature selected and defined according to linguis-
+  rage on temporal ordering information to                 tic intuition has its limitation, as it remains un-
+  constrain the interpretation of discourse                clear what kinds of syntactic heuristics are effec-
+  relation, which also demonstrate statistic-              tive for discourse analysis.
+  al significant improvements for discourse                   The more recent work from Lin et al. (2009)
+  relation recognition on PDTB 2.0 for                     uses 2-level production rules to represent parse
+  both explicit and implicit as well.                      tree information. Yet it doesn’t cover all the oth-
+                                                           er sub-trees structural information which can be
+                                                           also useful for the recognition.
+                                                              In this paper we propose using tree kernel
+                                                           based method to automatically mine the syntactic
+
+                                                       710
+      Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 710–719,
+               Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+information from the parse trees for discourse           Example (1) shows an explicit Contrast relation
+analysis, applying kernel function to the parse          signaled by the discourse connective ‘but’.
+tree structures directly. These structural syntactic
+features, together with other flat features are then         (1). Arg1. Yesterday, the retailing and finan-
+incorporated into our composite kernel to capture                cial services giant reported a 16% drop in
+diverse knowledge for simultaneous discourse                     third-quarter earnings to $257.5 million,
+identification and classification. The experiment                or 75 cents a share, from a restated $305
+shows that tree kernel is able to effectively in-                million, or 80 cents a share, a year earlier.
+corporate syntactic structural information and                     Arg2. But the news was even worse for
+produce statistical significant improvements over                Sears's core U.S. retailing operation, the
+flat syntactic path feature for the recognition of               largest in the nation.
+both explicit and implicit relation in Penn Dis-
+course Treebank (PDTB; Prasad et al., 2008).                In the PDTB, local implicit relations are also
+We also illustrate that tree kernel approach cov-        annotated. The annotators insert a connective
+ers more structure information than the produc-          expression that best conveys the inferred implicit
+tion rules, which allows tree kernel to further          relation between adjacent sentences within the
+work on a higher dimensional space for possible          same paragraph. In Example (2), the annotators
+better discrimination.                                   select ‘because’ as the most appropriate connec-
+   Besides, inspired by the linguistic study on          tive to express the inferred Causal relation be-
+tense and discourse anaphor (Webber, 1988), we           tween the sentences. There is one special label
+further propose to incorporate temporal ordering         AltLex pre-defined for cases where the insertion
+information to constrain the interpretation of dis-      of an Implicit connective to express an inferred
+course relation, which also demonstrates statis-         relation led to a redundancy in the expression of
+tical significant improvements for discourse rela-       the relation. In Example (3), the Causal relation
+tion recognition on PDTB v2.0 for both explicit          derived between sentences is alternatively lexi-
+and implicit relations.                                  calized by some non-connective expression
+   The organization of the rest of the paper is as       shown in square brackets, so no implicit connec-
+follows. We briefly introduce PDTB in Section            tive is inserted. In our experiments, we treat Alt-
+2. Section 3 gives the related work on tree kernel       Lex Relations the same way as normal Implicit
+approach in NLP and its difference with produc-          relations.
+tion rules, and also linguistic study on tense and
+discourse anaphor. Section 4 introduces the                  (2). Arg1. Some have raised their cash posi-
+frame work for discourse recognition, as well as                 tions to record levels.
+the baseline feature space and the SVM classifi-                   Arg2. Implicit = Because High cash po-
+er. We present our kernel-based method in Sec-                   sitions help buffer a fund when the market
+tion 5, and the usage of temporal ordering feature               falls.
+in Section 6. Section 7 shows the experiments
+and discussions. We conclude our works in Sec-               (3). Arg1. Ms. Bartlett’s previous work,
+tion 8.                                                          which earned her an international reputa-
+                                                                 tion in the non-horticultural art world, of-
+2    Penn Discourse Tree Bank                                    ten took gardens as its nominal subject.
+                                                                   Arg2. [Mayhap this metaphorical con-
+The Penn Discourse Treebank (PDTB) is the
+                                                                 nection made] the BPC Fine Arts Com-
+largest available annotated corpora of discourse
+                                                                 mittee think she had a literal green thumb.
+relations (Prasad et al., 2008) over 2,312 Wall
+Street Journal articles. The PDTB models dis-
+                                                            The PDTB also captures two non-implicit cas-
+course relation in the predicate-argument view,
+                                                         es: (a) Entity relation where the relation between
+where a discourse connective (e.g., but) is treated
+                                                         adjacent sentences is based on entity coherence
+as a predicate taking two text spans as its argu-
+                                                         (Knott et al., 2001) as in Example (4); and (b) No
+ments. The argument that the discourse connec-
+                                                         relation where no discourse or entity-based cohe-
+tive syntactically bounds to is called Arg2, and
+                                                         rence relation can be inferred between adjacent
+the other argument is called Arg1.
+                                                         sentences.
+   The PDTB provides annotations for both ex-
+plicit and implicit discourse relations. An explicit
+relation is triggered by an explicit connective.
+
+
+                                                       711
+
+
+    (4). But for South Garden, the grid was to be
+                                                                                       (𝑇𝑎 ) A             (𝑇𝑏 )
+        a 3-D network of masonry or hedge walls                 (𝑇1 ) A                                              D
+        with real plants inside them.
+          In a Letter to the BPCA, kelly/varnell                  B            C        B        C               E         F
+        called this “arbitrary and amateurish.”                                D       (𝑇𝑐 )         (𝑇𝑑 )               (𝑇𝑒 )
+                                                                                            C                E                   F
+   Each Explicit, Implicit and AltLex relation is                          E       F
+annotated with a sense. The senses in PDTB are                                              D                G                   H
+arranged in a three-level hierarchy. The top level                         G       H   (𝑇𝑓 ) D               (𝑇𝑔 ) A
+has four tags representing four major semantic
+classes: Temporal, Contingency, Comparison                                              E        F               B          C
+and Expansion. For each class, a second level of                 Decomposition
+types is defined to further refine the semantic of                                      G        H                          D
+the class levels. For example, Contingency has
+two types Cause and Condition. A third level of                       (𝑇𝑕 ) C          (𝑇𝑖 ) A                   (𝑇𝑗 ) C
+subtype specifies the semantic contribution of
+each argument. In our experiments, we use only                                 D        B        C                         D
+the top level of the sense annotations.
+                                                                       E           F             D                   E           F
+3     Related Work
+                                                                                            E          F             G           H
+Tree Kernel based Approach in NLP. While
+the feature based approach may not be able to                 Figure 1. Different sub-tree sets for 𝑇1 used by
+fully utilize the syntactic information in a parse            2-level production rules and convolution tree
+tree, an alternative to the feature-based methods,            kernel approaches. 𝑇𝑎 -𝑇𝑗 and 𝑇1 itself are cov-
+tree kernel methods (Haussler, 1999) have been                ered by tree kernel, while only 𝑇𝑎 -𝑇𝑒 are covered
+proposed to implicitly explore features in a high             by production rules.
+dimensional space by employing a kernel func-
+tion to calculate the similarity between two ob-
+                                                          on language modeling that N-gram beyond uni-
+jects directly. In particular, the kernel methods
+                                                          gram and bigram further improves the perfor-
+could be very effective at reducing the burden of
+                                                          mance in large corpus.
+feature engineering for structured objects in NLP
+                                                             Tense and Temporal Ordering Information.
+research (Culotta and Sorensen, 2004). This is
+                                                          Linguistic studies (Webber, 1988) show that a
+because a kernel can measure the similarity be-
+                                                          tensed clause 𝐶𝑏 provides two pieces of semantic
+tween two discrete structured objects by directly
+                                                          information: (a) a description of an event (or sit-
+using the original representation of the objects
+                                                          uation) 𝐸𝑏 ; and (b) a particular configuration of
+instead of explicitly enumerating their features.
+                                                          the point of event (𝐸𝑇), the point of reference
+   Indeed, using kernel methods to mine structur-
+                                                          (𝑅𝑇) and the point of speech (𝑆𝑇). Both the cha-
+al knowledge has shown success in some NLP
+applications like parsing (Collins and Duffy,             racteristics of 𝐸𝑏 and the configuration of 𝐸𝑇, 𝑅𝑇
+2001; Moschitti, 2004) and relation extraction            and 𝑆𝑇 are critical to interpret the relationship of
+(Zelenko et al., 2003; Zhang et al., 2006). How-          event 𝐸𝑏 with other events in the discourse mod-
+ever, to our knowledge, the application of such a         el. Our observation on temporal ordering infor-
+technique to discourse relation recognition still         mation is in line with the above, which is also
+remains unexplored.                                       incorporated in our discourse analyzer.
+   Lin et al. (2009) has explored the 2-level pro-
+                                                          4    The Recognition Framework
+duction rules for discourse analysis. However,
+Figure 1 shows that only 2-level sub-tree struc-          In the learning framework, a training or testing
+tures (e.g. 𝑇𝑎 - 𝑇𝑒 ) are covered in production           instance is formed by a non-overlapping
+rules. Other sub-trees beyond 2-level (e.g. 𝑇𝑓 - 𝑇𝑗 )     clause(s)/sentence(s) pair. Specifically, since im-
+are only captured in the tree kernel, which allows        plicit relations in PDTB are defined to be local,
+tree kernel to further leverage on information            only clauses from adjacent sentences are paired
+from higher dimension space for possible better           for implicit cases. During training, for each dis-
+discrimination. Especially, when there are                course relation encountered, a positive instance
+enough training data, this is similar to the study        is created by pairing the two arguments. Also a
+
+
+                                                        712
+
+
+set of negative instances is formed by paring             of a training instance and 𝑦𝑖 is its class label. The
+each argument with neighboring non-argument               classifier learned by SVM is:
+clauses or sentences. Based on the training in-
+stances, a binary classifier is generated for each                𝑓 𝑥 = 𝑠𝑔𝑛                  𝑦𝑖 𝑎𝑖 𝑥 ∗ 𝑥𝑖 + 𝑏
+                                                                                       𝑖=1
+type using a particular learning algorithm. Dur-
+                                                          where 𝑎𝑖 is the learned parameter for a feature
+ing resolution, (a) clauses within same sentence
+                                                          vector 𝑥𝑖 , and 𝑏 is another parameter which can
+and sentences within three-sentence spans are
+                                                          be derived from 𝑎𝑖 . A testing instance 𝑥 is clas-
+paired to form an explicit testing instance; and
+                                                          sified as positive if 𝑓 𝑥 > 01.
+(b) neighboring sentences within three-sentence
+                                                             One advantage of SVM is that we can use tree
+spans are paired to form an implicit testing in-
+                                                          kernel approach to capture syntactic parse tree
+stance. The instance is presented to each explicit
+                                                          information in a particular high-dimension space.
+or implicit relation classifier which then returns a
+                                                             In the next section, we will discuss how to use
+class label with a confidence value indicating the
+                                                          kernel to incorporate the more complex structure
+likelihood that the candidate pair holds a particu-
+                                                          feature.
+lar discourse relation. The relation with the high-
+est confidence value will be assigned to the pair.        5     Incorporating Structural                  Syntactic
+4.1      Base Features                                          Information
+In our system, the base features adopted include          A parse tree that covers both discourse argu-
+lexical pair, distance and attribution etc. as listed     ments could provide us much syntactic informa-
+in Table 1. All these base features have been             tion related to the pair. Both the syntactic flat
+proved effective for discourse analysis in pre-           path connecting connective and arguments and
+vious work.                                               the 2-level production rules in the parse tree used
+                                                          in previous study can be directly described by the
+  Feature       Description                               tree structure. Other syntactic knowledge that
+                                                          may be helpful for discourse resolution could
+  Names
+                                                          also be implicitly represented in the tree. There-
+  (F1)          cue phrase                                fore, by comparing the common sub-structures
+                                                          between two trees we can find out to which level
+  (F2)          neighboring punctuation
+                                                          two trees contain similar syntactic information,
+  (F3)          position of connective if                 which can be done using a convolution tree ker-
+                                                          nel.
+                presents                                     The value returned from the tree kernel re-
+  (F4)          extents of arguments                      flects the similarity between two instances in
+                                                          syntax. Such syntactic similarity can be further
+  (F5)          relative order of arguments               combined with other flat linguistic features to
+  (F6)          distance between arguments                compute the overall similarity between two in-
+                                                          stances through a composite kernel. And thus an
+  (F7)          grammatical role of arguments             SVM classifier can be learned and then used for
+  (F8)          lexical pairs                             recognition.
+
+  (F9)          attribution                               5.1     Structural Syntactic Feature
+                                                          Parsing is a sentence level processing. However,
+         Table 1. Base Feature Set                        in many cases two discourse arguments do not
+                                                          occur in the same sentence. To present their syn-
+                                                          tactic properties and relations in a single tree
+4.2      Support Vector Machine                           structure, we construct a syntax tree for each pa-
+In theory, any discriminative learning algorithm          ragraph by attaching the parsing trees of all its
+is applicable to learn the classifier for discourse       sentences to an upper paragraph node. In this
+analysis. In our study, we use Support Vector             paper, we only consider discourse relations with-
+Machine (Vapnik, 1995) to allow the use of ker-           in 3 sentences, which only occur within each pa-
+nels to incorporate the structure feature.
+   Suppose the training set 𝑆 consists of labeled         1
+                                                           In our task, the result of 𝑓 𝑥 is used as the confidence
+vectors { 𝑥𝑖 , 𝑦𝑖 }, where 𝑥𝑖 is the feature vector       value of the candidate argument pair 𝑥 to hold a particular
+                                                          discourse relation.
+
+
+                                                        713
+
+
+ragraph, thus paragraph parse trees are sufficient.
+Our 3-sentence spans cover 95% discourse rela-
+tion cases in PDTB v2.0.
+   Having obtained the parse tree of a paragraph,
+we shall consider how to select the appropriate
+portion of the tree as the structured feature for a
+given instance. As each instance is related to two
+arguments, the structured feature at least should
+be able to cover both of these two arguments.
+Generally, the more substructure of the tree is
+included, the more syntactic information would
+be provided, but at the same time the more noisy
+information would likely be introduced. In our
+study, we examine three structured features that
+contain different substructures of the paragraph            Figure 2. Min-Expansion tree built from gol-
+parse tree:                                                 den standard parse tree for the explicit dis-
+                                                            course relation in Example (5). Note that to
+  Min-Expansion This feature records the mi-
+                                                            distinguish from other words, we explicitly
+     nimal structure covering both arguments
+                                                            mark up in the structured feature the arguments
+     and connective word in the parse tree. It
+                                                            and connective, by appending a string tag
+     only includes the nodes occurring in the
+                                                            “Arg1”, “Arg2” and “Connective” respective-
+     shortest path connecting Arg1, Arg2 and
+                                                            ly.
+     connective, via the nearest commonly
+     commanding node. For example, consi-
+     dering Example (5), Figure 2 illustrates
+     the representation of the structured feature
+     for this relation instance. Note that the
+     two clauses underlined with dashed lines
+     are attributions which are not part of the
+     relation.
+
+   (5). Arg1. Suppression of the book, Judge
+       Oakes observed, would operate as a prior
+       restraint and thus involve the First
+       Amendment.
+         Arg2. Moreover, and here Judge Oakes
+       went to the heart of the question, “Respon-           Figure 3. Simple-Expansion tree for the expli-
+       sible biographers and historians constantly           cit discourse relation in Example (5).
+       use primary sources, letters, diaries and
+       memoranda.”
+                                                                these nodes 2 . Figure 3 illustrates such a
+  Simple-Expansion Min-Expansion could, to                      feature for Example (5). We can see that
+     some degree, describe the syntactic rela-                  the nodes “PRN” in both sentences are in-
+     tionships between the connective and ar-                   cluded in the feature.
+     guments. However, the syntactic proper-                Full-Expansion This feature focuses on the
+     ties of the argument pair might not be                     tree structure between two arguments. It
+     captured, because the tree structure sur-                  not only includes all the nodes in Simple-
+     rounding the argument is not taken into                    Expansion, but also the nodes (beneath
+     consideration. To incorporate such infor-                  the nearest commanding parent) that cov-
+     mation, Simple-Expansion not only con-                     er the words between the two arguments.
+     tains all the nodes in Min-Expansion, but                  Such a feature keeps the most information
+     also includes the first-level children of                  related to the argument pair. Figure 4
+
+                                                        2
+                                                          We will not expand the nodes denoting the sentences other
+                                                        than where the arguments occur.
+
+
+                                                      714
+
+
+       shows the structure for feature Full-              stance of convolution kernels over tree struc-
+       Expansion of Example (5). As illustrated,          tures, and can be computed in 𝑂( 𝑁1 , 𝑁2 ) by
+       different from in Simple-Expansion, each           the following recursive definitions:
+       sub-tree of “PRN” in each sentence is ful-                 ∆ 𝑛1 , 𝑛2 = 𝑖 𝐼𝑖 𝑛1 ∗ 𝐼𝑖 (𝑛2 )
+       ly expanded and all its children nodes are
+       included in Full-Expansion.                        (1) ∆ 𝑛1 , 𝑛2 = 0 if 𝑛1 and 𝑛2 do not have the
+                                                          same syntactic tag or their children are different;
+                                                          (2) else if both 𝑛1 and 𝑛2 are pre-terminals (i.e.
+                                                          POS tags), ∆ 𝑛1 , 𝑛2 = 1 × 𝜆;
+                                                          (3) else, ∆ 𝑛1 , 𝑛2 =
+                                                                       𝑛𝑐 (𝑛 )
+                                                                   𝜆 𝑗 =1 1 (1 + ∆(𝑐𝑕( 𝑛1 , 𝑗), 𝑐𝑕(𝑛2 , 𝑗))),
+                                                          where 𝑛𝑐(𝑛1 ) is the number of the children of
+                                                          𝑛1 , 𝑐𝑕(𝑛, 𝑗) is the 𝑗𝑡𝑕 child of node 𝑛 and 𝜆
+                                                          (0 < 𝜆 < 1) is the decay factor in order to make
+                                                          the kernel value less variable with respect to the
+                                                          sub-tree sizes. In addition, the recursive rule (3)
+                                                          holds because given two nodes with the same
+                                                          children, one can construct common sub-trees
+                                                          using these children and common sub-trees of
+  Figure 4. Full-Expansion tree for the explicit          further offspring.
+  discourse relation in Example (5).                         The parse tree kernel counts the number of
+                                                          common sub-trees as the syntactic similarity
+                                                          measure between two instances. The time com-
+5.2   Convolution Parse Tree Kernel                       plexity for computing this kernel is 𝑂( 𝑁1 ∙
+                                                           𝑁2 ).
+Given the parse tree defined above, we use the
+same convolution tree kernel as described in              5.3    Composite Tree Kernel
+(Collins and Duffy, 2002) and (Moschitti, 2004).
+                                                          Besides the above convolution parse tree kernel
+In general, we can represent a parse tree 𝑇 by a
+                                                          𝐾𝑡𝑟𝑒𝑒 𝑥1 , 𝑥2 = 𝐾(𝑇1 , 𝑇2 ) defined to capture the
+vector of integer counts of each sub-tree type
+                                                          syntactic information between two instances 𝑥1
+(regardless of its ancestors):
+   ∅ 𝑇 = (#𝑜𝑓 𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑠 𝑜𝑓 𝑡𝑦𝑝𝑒 1, … , # 𝑜𝑓                and 𝑥2 , we also use another kernel 𝐾𝑓𝑙𝑎𝑡 to cap-
+   𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑠 𝑜𝑓𝑡𝑦𝑝𝑒 𝐼, … , # 𝑜𝑓 𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑠 𝑜𝑓                ture other flat features, such as base features (de-
+   𝑡𝑦𝑝𝑒 𝑛).                                               scribed in Table 1) and temporal ordering infor-
+                                                          mation (described in Section 6). In our study, the
+   This results in a very high dimensionality             composite kernel is defined in the following
+since the number of different sub-trees is expo-          way:
+nential in its size. Thus, it is computational in-                 𝐾1 𝑥1 , 𝑥2 = 𝛼 ∙ 𝐾𝑓𝑙𝑎𝑡 𝑥1 , 𝑥2 +
+feasible to directly use the feature vector ∅(𝑇).                                  1 − 𝛼 ∙ 𝐾𝑡𝑟𝑒𝑒 𝑥1 , 𝑥2 .
+To solve the computational issue, a tree kernel
+function is introduced to calculate the dot prod-            Here, 𝐾 (∙,∙) can be normalized by 𝐾 𝑦, 𝑧 =
+uct between the above high dimensional vectors            𝐾 𝑦, 𝑧     𝐾 𝑦, 𝑦 ∙ 𝐾 𝑧, 𝑧 and 𝛼 is the coeffi-
+efficiently.                                              cient.
+   Given two tree segments 𝑇1 and 𝑇2 , the tree
+kernel function is defined:                               6     Using Temporal Ordering Informa-
+  𝐾 𝑇1 , 𝑇2 = < ∅ 𝑇1 , ∅ 𝑇2 >                                   tion
+             = 𝑖 ∅ 𝑇1 𝑖 , ∅ 𝑇2 [𝑖]                        In our discourse analyzer, we also add in tem-
+             = 𝑛 1 ∈𝑁1 𝑛 2 ∈𝑁2 𝑖 𝐼𝑖 𝑛1 ∗ 𝐼𝑖 (𝑛2 )         poral information to be used as features to pre-
+where 𝑁1 and 𝑁2 are the sets of all nodes in trees        dict discourse relations. This is because both our
+                                                          observations and some linguistic studies (Web-
+𝑇1 and 𝑇2 , respectively; and 𝐼𝑖 (𝑛) is the indicator
+                                                          ber, 1988) show that temporal ordering informa-
+function that is 1 iff a subtree of type 𝑖 occurs
+                                                          tion including tense, aspectual and event orders
+with root at node 𝑛 or zero otherwise. (Collins
+                                                          between two arguments may constrain the dis-
+and Duffy, 2002) shows that 𝐾(𝑇1 , 𝑇2 ) is an in-
+                                                          course relation type. For example, the connective
+
+                                                        715
+
+
+word is the same in both Example (6) and (7),            7      Experiments and Results
+but the tense shift from progressive form in
+clause 6.a to simple past form in clause 6.b, indi-      In this section we provide the results of a set of
+cating that the twisting occurred during the state       experiments focused on the task of simultaneous
+of running the marathon, usually signals a tem-          discourse identification and classification.
+poral discourse relation; while in Example (7),          7.1     Experimental Settings
+both clauses are in past tense and it is marked as
+a Causal relation.                                       We experiment on PDTB v2.0 corpus. Besides
+                                                         four top-level discourse relations, we also con-
+         (6). a. Yesterday Holly was running a mara-     sider Entity and No relations described in Section
+          thon                                           2. We directly use the golden standard parse
+              b. when she twisted her ankle.             trees in Penn TreeBank. We employ an SVM
+                                                         coreference resolver trained and tested on ACE
+          (7). a. Use of dispersants was approved        2005 with 79.5% Precision, 66.7% Recall and
+              b. when a test on the third day showed     72.5% F1 to label coreference mentions of the
+           some positive results.                        same named entity in an article. For learning, we
+                                                         use the binary SVMLight developed by (Joa-
+   Inspired by the linguistic model from Webber          chims, 1998) and Tree Kernel Toolkits devel-
+(1988) as described in Section 3, we explore the         oped by (Moschitti, 2004). All classifiers are
+temporal order of events in two adjacent sen-            trained with default learning parameters.
+tences for discourse relation interpretation. Here          The performance is evaluated using Accuracy
+event is represented by the head of verb, and the        which is calculated as follow:
+temporal order refers to the logical occurrence                             𝑇𝑟𝑢𝑒𝑃𝑜𝑠𝑖𝑡𝑖𝑣𝑒 + 𝑇𝑟𝑢𝑒𝑁𝑒𝑔𝑎𝑡𝑖𝑣𝑒
+                                                               𝐴𝑐𝑐𝑢𝑟𝑎𝑐𝑦 =
+(i.e. before/at/after) between events. For in-                                         𝐴𝑙𝑙
+stance, the event ordering in Example (8) can be            Sections 2-22 are used for training and Sec-
+interpreted as:                                          tions 23-24 for testing. In this paper, we only
+      𝐸𝑣𝑒𝑛𝑡 𝑏𝑟𝑜𝑘𝑒𝑛 ≺𝑏𝑒𝑓𝑜𝑟𝑒 𝐸𝑣𝑒𝑛𝑡(𝑤𝑒𝑛𝑡) .                 consider any non-overlapping clauses/sentences
+                                                         pair in 3-sentence spans. For training, there were
+         8. a. John went to the hospital.                14812, 12843 and 4410 instances for Explicit,
+            b. He had broken his ankle on a patch of     Implicit and Entity+No relations respectively;
+          ice.                                           while for testing, the number was 1489, 1167 and
+                                                         380.
+  We notice that the feasible temporal order of
+                                                         7.2     System with Structural Kernel
+events differs for different discourse relations.
+For example, in causal relations, cause event            Table 2 lists the performance of simultaneous
+usually happens before effect event, i.e.                identification and classification on level-1 dis-
+     𝐸𝑣𝑒𝑛𝑡 𝑐𝑎𝑢𝑠𝑒 ≺𝑏𝑒𝑓𝑜𝑟𝑒 𝐸𝑣𝑒𝑛𝑡(𝑒𝑓𝑓𝑒𝑐𝑡).                  course senses. In the first row, only base features
+                                                         described in Section 4 are used. In the second
+   So it is possible to infer a causal relation in       row, we test Ben and James (2007)’s algorithm
+Example (8) if and only if 8.b is taken to be the        which uses heuristically defined syntactic paths
+cause event and 8.a is taken to be the effect            and acts as a good baseline to compare with our
+event. That is, 8.b is taken as happening prior to       learned-based approach using the structured in-
+his going into hospital.                                 formation. The last three rows of Table 2 reports
+   In our experiments, we use the TARSQI3 sys-           the results combining base features with three
+tem to identify event, analyze tense and aspectual       syntactic structured features (i.e. Min-Expansion,
+information, and label the temporal order of             Simple-Expansion and Full-Expansion) de-
+events. Then the tense and temporal ordering             scribed in Section 5.
+information is extracted as features for discourse          We can see that all our tree kernels outperform
+relation recognition.                                    the manually constructed flat path feature in all
+                                                         three groups including Explicit only, Implicit
+                                                         only and All relations, with the accuracy increas-
+                                                         ing by 1.8%, 6.7% and 3.1% respectively. Espe-
+                                                         cially, it shows that structural syntactic informa-
+                                                         tion is more helpful for Implicit cases which is
+3
+    http://www.isi.edu/tarsqi/                           generally much harder than Explicit cases. We
+
+                                                       716
+
+
+     Features                  Accuracy                 tactic information is more helpful for inter-
+                       Explicit Implicit      All       sentential discourse analysis.
+Base Features           67.1        29        48.6         We also concern about how the structured in-
+Base + Manually         70.3        32        52.6      formation works for identification and classifica-
+selected flat path                                      tion respectively. Table 4 lists the results for the
+features                                                two sub-tasks. As shown, with the structured in-
+Base + Tree kernel      71.9        38.6      55.6      formation incorporated, the system (Base + Tree
+(Min-Expansion)                                         Kernel) can boost the performance of the two
+Base + Tree kernel      72.1        38.7      55.7      baselines (Base Features in the first row andBase
+(Simple-Expansion)                                      + Manually selected paths in the second row), for
+Base + Tree kernel      71.8        38.4      55.4      both identification and classification respective-
+(Full-Expansion)                                        ly. We also observe that the structural syntactic
+                                                        information is more helpful for classification task
+Table 2. Results of the syntactic structured ker-       which is generally harder than identification.
+nels on level-1 discourse relation recognition.         This is in line with the intuition that classifica-
+                                                        tion is generally a much harder task. We find that
+conduct chi square statistical significance test on     due to the weak modeling of Entity relations,
+All relations between flat path approach and            many Entity relations which are non-discourse
+Simple-Expansion approach, which shows the              relation instances are mis-identified as implicit
+performance improvements are statistical signifi-       Expansion relations. Nevertheless, it clearly di-
+cant (𝜌 < 0.05) through incorporating tree ker-         rects our future work.
+nel. This proves that structural syntactic informa-
+tion has good predication power for discourse                   Sentence Dis-         0         1           2
+analysis in both explicit and implicit relations.                   tance           (959)    (1746)       (331)
+We also observe that among the three syntactic                  Base Features         52      49.2         35.5
+structured features, Min-Expansion and Simple-                Base + Manually       56.7         52       43.8
+Expansion achieve similar performances which                  selected flat path
+are better than the result for Full-Expansion. This                features
+may be due to that most significant information
+                                                                 Base + Tree        58.3         55.6     49.7
+is with the arguments and the shortest path con-
+                                                                    Kernel
+necting connectives and arguments. However,
+Full-Expansion that includes more information
+                                                            Table 3. Results of the syntactic structured kernel
+in other branches may introduce too many details
+                                                            for discourse relations recognition with argu-
+which are rather tangential to discourse recogni-
+                                                            ments in different sentences apart.
+tion. Our subsequent reports will focus on Sim-
+ple-Expansion, unless otherwise specified.
+   As described in Section 5, to compute the                       Tasks           Identifica-      Classifica-
+structural information, parse trees for different                                     tion             tion
+sentences are connected to form a large tree for a             Base Features          58.6             50.5
+paragraph. It would be interesting to find how
+the structured information works for discourse               Base + Manually          59.7              52.6
+relations whose arguments reside in different                selected flat path
+sentences. For this purpose, we test the accuracy                 features
+for discourse relations with the two arguments                 Base + Tree            63.3              59.3
+occurring in the same sentence, one-sentence                      Kernel
+apart, and two-sentence apart. Table 3 compares
+                                                            Table 4. Results of the syntactic structured ker-
+the learning systems with/without the structured
+                                                            nel for simultaneous discourse identification and
+feature present. From the table, for all three cas-
+                                                            classification subtasks.
+es, the accuracies drop with the increase of the
+distances between the two arguments. However,
+adding the structured information would bring           7.3      System with Temporal Ordering Infor-
+consistent improvement against the baselines                     mation
+regardless of the number of sentence distance.
+This observation suggests that the structured syn-      To examine the effectiveness of our temporal
+                                                        ordering information, we perform experiments
+
+                                                      717
+
+
+on simultaneous identification and classification
+of level-1 discourse relations to compare with                     Relations       Accuracy
+using only base feature set as baseline. The re-                   Explicit          74.2
+sults are shown in Table 5. We observe that the                     Implicit          40.0
+use of temporal ordering information increases
+the accuracy by 3%, 3.6% and 3.2% for Explicit,                       All             57.3
+Implicit and All groups respectively. We conduct
+chi square statistical significant test on All rela-         Table 6. Overall results for combined model
+tions, which shows the performance improve-                  (Base + Tree Kernel + Tense/Temporal).
+ment is statistical significant (𝜌 < 0.05). It indi-
+cates that temporal ordering information can             8      Conclusions and Future Works
+constrain the discourse relation types inferred
+                                                         The purpose of this paper is to explore how to
+within a clause(s)/sentence(s) pair for both expli-
+                                                         make use of the structural syntactic knowledge to
+cit and implicit relations.
+                                                         do discourse relation recognition. In previous
+                                                         work, syntactic information from parse trees is
+      Features              Accuracy
+                                                         represented as a set of heuristically selected flat
+                    Explicit Implicit All                paths or 2-level production rules. However, the
+Base Features         67.1      29    48.6               features defined this way may not necessarily
+                                                         capture all useful syntactic information provided
+Base + Tem-            70.1       32.6     51.8
+                                                         by the parse trees for discourse analysis. In the
+poral Ordering
+                                                         paper, we propose a kernel-based method to in-
+Information
+                                                         corporate the structural information embedded in
+ Table 5. Results of tense and temporal order            parse trees. Specifically, we directly utilize the
+ information on level-1 discourse relations.             syntactic parse tree as a structure feature, and
+                                                         then apply kernels to such a feature, together
+                                                         with other normal features. The experimental
+   We observe that although temporal ordering
+                                                         results on PDTB v2.0 show that our kernel-based
+information is useful in both explicit and implicit
+                                                         approach is able to give statistical significant
+relation recognition, the contributions of the spe-
+                                                         improvement over flat syntactic path method. In
+cific information are quite different for the two
+                                                         addition, we also propose to incorporate tempor-
+cases. In our experiments, we use tense and as-
+                                                         al ordering information to constrain the interpre-
+pectual information for explicit relations, while
+                                                         tation of discourse relations, which also demon-
+event ordering information is used for implicit
+                                                         strate statistical significant improvements for
+relations. The reason is explicit connective itself
+                                                         discourse relation recognition, both explicit and
+provides a strong hint for explicit relation, so
+                                                         implicit.
+tense and aspectual analysis which yields a relia-
+                                                            In future, we plan to model Entity relations
+ble result can provide additional constraints, thus
+                                                         which constitute 24% of Implicit+Entity+No re-
+can help explicit relation recognition. However,
+                                                         lation cases, thus to improve the accuracy of re-
+event ordering which would inevitably involve
+                                                         lation detection.
+more noises will adversely affect the explicit re-
+lation recognition performance. On the other
+                                                         Reference
+hand, for implicit relations with no explicit con-
+nective words, tense and aspectual information           Ben W. and James P. 2007. Automatically Identifying
+alone is not enough for discourse analysis. Event          the Arguments of Discourse Connectives. In Pro-
+ordering can provide more necessary information            ceedings of the 2007 Joint Conference on Empiri-
+to further constrain the inferred relations.               cal Methods in Natural Language Processing and
+                                                           Computational Natural Language Learning, pages
+7.4     Overall Results                                    92-101.
+
+We also evaluate our model which combines                Culotta A. and Sorensen J. 2004. Dependency Tree
+base features, tree kernel and tense/temporal or-          Kernel for Relation Extraction. In Proceedings of
+                                                           the 40th Annual Meeting of the Association for
+dering information together on Explicit, Implicit
+                                                           Computational Linguistics (ACL 2004), pages 423-
+and All Relations respectively. The overall re-            429.
+sults are shown in Table 6.
+                                                         Collins M. and Duffy N. 2001. New Ranking Algo-
+                                                           rithms for Parsing and Tagging: Kernels over Dis-
+
+
+                                                       718
+
+
+  crete Structures and the Voted Perceptron. In Pro-            ternational Conference on Language Resources and
+  ceedings of the 40th Annual Meeting of the Associ-            Evaluation (LREC 2008).
+  ation for Computational Linguistics (ACL 2002),
+                                                            Saito M., Yamamoto K. and Sekine S. 2006. Using
+  pages 263-270.
+                                                               phrasal patterns to identify discourse relations. In
+Collins M. and Duffy N. 2002. Convolution Kernels              Proceedings of the Human Language Technology
+  for Natural Language. NIPS-2001.                             Conference of the North American Chapter of the
+                                                               Association for Computational Linguistics (HLT-
+Haussler D. 1999. Convolution Kernels on Discrete
+                                                               NAACL 2006), pages 133–136, New York, USA.
+  Structures. Technical Report UCS-CRL-99-10,
+  University of California, Santa Cruz.                     Vapnik V. 1995. The Nature of Statistical Learning
+                                                              Theory. Springer-Verlag, New York.
+Joachims T. 1999. Making Large-scale SVM Learn-
+   ing Practical. In Advances in Kernel Methods –           Webber Bonnie. 1988. Tense as Discourse Anaphor.
+   Support Vector Learning. MIT Press.                       Computational Linguistics, 14:61–73.
+Knott, A., Oberlander, J., O’Donnel, M., and Mellish,       Zelenko D., Aone C. and Richardella A. 2003. Ker-
+  C. 2001. Beyond elaboration: the interaction of re-         nel Methods for Relation Extraction. Journal of
+  lations and focus in coherent text. In T. Sanders, J.       Machine Learning Research, 3(6):1083-1106.
+  Schilperoord, and W. Spooren, editors, Text Re-
+                                                            Zhang M., Zhang J. and Su J. Exploring Syntactic
+  presentation: Linguistic and Psycholinguistics As-
+                                                              Features for Relation Extraction using a Convolu-
+  pects, pages 181-196. Benjamins, Amsterdam.
+                                                              tion Tree Kernel. In Proceedings of the Human
+Lee A., Prasad R., Joshi A., Dinesh N. and Webber             Language Technology conference - North Ameri-
+  B. 2006. Complexity of dependencies in discourse:           can chapter of the Association for Computational
+  are dependencies in discourse more complex than             Linguistics annual meeting (HLT-NAACL 2006),
+  in syntax? In Proceedings of the 5th International          New York, USA.
+  Workshop on Treebanks and Linguistic Theories.
+  Prague, Czech Republic, December.
+Lin Z., Kan M. and Ng H. 2009. Recognizing Implicit
+   Discourse Relations in the Penn Discourse Tree-
+   bank. In Proceedings of the 2009 Conference on
+   Empirical Methods in Natural Language
+   Processing (EMNLP 2009), Singapore, August.
+Marcu D. and Echihabi A. 2002. An Unsupervised
+  Approach to Recognizing Discourse Relations. In
+  Proceedings of the 40th Annual Meeting of ACL,
+  pages 368-375.
+Moschitti A. 2004. A Study on Convolution Kernels
+  for Shallow Semantic Parsing. In Proceedings of
+  the 42th Annual Meeting of the Association for
+  Computational Linguistics (ACL 2004), pages 335-
+  342.
+Pettibone J. and Pon-Barry H. 2003. A Maximum En-
+   tropy Approach to Recognizing Discourse Rela-
+   tions in Spoken Language. Working Paper. The
+   Stanford Natural Language Processing Group, June
+   6.
+Pitler E., Louis A. and Nenkova A. 2009. Automatic
+   Sense Predication for Implicit Discourse Relations
+   in Text. In Proceedings of the Joint Conference of
+   the 47th Annual Meeting of the Association for
+   Computational Linguistics and the 4th International
+   Joint Conference on Natural Language Processing
+   of the Asian Federation of Natural Language
+   Processing (ACL-IJCNLP 2009).
+Prasad R., Dinesh N., Lee A., Miltsakaki E., Robaldo
+   L., Joshi A. and Webber B. 2008. The Penn Dis-
+   course TreeBank 2.0. In Proceedings of the 6th In-
+
+
+
+                                                          719
+

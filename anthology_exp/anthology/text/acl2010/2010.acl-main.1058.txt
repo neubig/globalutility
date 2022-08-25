@@ -1,0 +1,740 @@
+                         Automatic Generation of Story Highlights
+
+                               Kristian Woodsend and Mirella Lapata
+                             School of Informatics, University of Edinburgh
+                                Edinburgh EH8 9AB, United Kingdom
+                             k.woodsend@ed.ac.uk, mlap@inf.ed.ac.uk
+
+
+
+                      Abstract                                 and contain much redundant information. This is
+    In this paper we present a joint con-                      in marked contrast with hand-written summaries
+    tent selection and compression model                       which often combine several pieces of informa-
+    for single-document summarization. The                     tion from the original document (Jing, 2002) and
+    model operates over a phrase-based rep-                    exhibit many rewrite operations such as substitu-
+    resentation of the source document which                   tions, insertions, deletions, or reorderings.
+    we obtain by merging information from                         Sentence compression is often regarded as a
+    PCFG parse trees and dependency graphs.                    promising first step towards ameliorating some of
+    Using an integer linear programming for-                   the problems associated with extractive summa-
+    mulation, the model learns to select and                   rization. The task is commonly expressed as a
+    combine phrases subject to length, cover-                  word deletion problem. It involves creating a short
+    age and grammar constraints. We evalu-                     grammatical summary of a single sentence, by re-
+    ate the approach on the task of generat-                   moving elements that are considered extraneous,
+    ing “story highlights”—a small number of                   while retaining the most important information
+    brief, self-contained sentences that allow                 (Knight and Marcu, 2002). Interfacing extractive
+    readers to quickly gather information on                   summarization with a sentence compression mod-
+    news stories. Experimental results show                    ule could improve the conciseness of the gener-
+    that the model’s output is comparable to                   ated summaries and render them more informative
+    human-written highlights in terms of both                  (Jing, 2000; Lin, 2003; Zajic et al., 2007).
+    grammaticality and content.                                   Despite the bulk of work on sentence compres-
+                                                               sion and summarization (see Clarke and Lapata
+1   Introduction                                               2008 and Mani 2001 for overviews) only a handful
+Summarization is the process of condensing a                   of approaches attempt to do both in a joint model
+source text into a shorter version while preserving            (Daumé III and Marcu, 2002; Daumé III, 2006;
+its information content. Humans summarize on                   Lin, 2003; Martins and Smith, 2009). One rea-
+a daily basis and effortlessly, but producing high             son for this might be the performance of sentence
+quality summaries automatically remains a chal-                compression systems which falls short of attaining
+lenge. The difficulty lies primarily in the nature             grammaticality levels of human output. For ex-
+of the task which is complex, must satisfy many                ample, Clarke and Lapata (2008) evaluate a range
+constraints (e.g., summary length, informative-                of state-of-the-art compression systems across dif-
+ness, coherence, grammaticality) and ultimately                ferent domains and show that machine generated
+requires wide-coverage text understanding. Since               compressions are consistently perceived as worse
+the latter is beyond the capabilities of current NLP           than the human gold standard. Another reason is
+technology, most work today focuses on extractive              the summarization objective itself. If our goal is
+summarization, where a summary is created sim-                 to summarize news articles, then we may be bet-
+ply by identifying and subsequently concatenating              ter off selecting the first n sentences of the docu-
+the most important sentences in a document.                    ment. This “lead” baseline may err on the side of
+   Without a great deal of linguistic analysis, it             verbosity but at least will be grammatical, and it
+is possible to create summaries for a wide range               has indeed proved extremely hard to outperform
+of documents. Unfortunately, extracts are of-                  by more sophisticated methods (Nenkova, 2005).
+ten documents of low readability and text quality                 In this paper we propose a model for sum-
+
+
+                                                         565
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 565–574,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+marization that incorporates compression into the             move redundant phrases, and use (manual) recom-
+task. A key insight in our approach is to formulate           bination rules to produce coherent output. Wan
+summarization as a phrase rather than sentence                and Paris (2008) segment sentences heuristically
+extraction problem. Compression falls naturally               into clauses before extraction takes place, and
+out of this formulation as only phrases deemed                show that this improves summarization quality.
+important should appear in the summary. Ob-                   In the context of multiple-document summariza-
+viously, our output summaries must meet addi-                 tion, heuristics have also been used to remove par-
+tional requirements such as sentence length, over-            enthetical information (Conroy et al., 2004; Sid-
+all length, topic coverage and, importantly, gram-            dharthan et al., 2004). Witten et al. (1999) (among
+maticality. We combine phrase and dependency                  others) extract keyphrases to capture the gist of the
+information into a single data structure, which al-           document, without however attempting to recon-
+lows us to express grammaticality as constraints              struct sentences or generate summaries.
+across phrase dependencies. We encode these con-
+                                                                 A few previous approaches have attempted to
+straints through the use of integer linear program-
+                                                              interface sentence compression with summariza-
+ming (ILP), a well-studied optimization frame-
+                                                              tion. A straightforward way to achieve this is by
+work that is able to search the entire solution space
+                                                              adopting a two-stage architecture (e.g., Lin 2003)
+efficiently.
+                                                              where the sentences are first extracted and then
+   We apply our model to the task of generat-                 compressed or the other way round. Other work
+ing highlights for a single document. Examples                implements a joint model where words and sen-
+of CNN news articles with human-authored high-                tences are deleted simultaneously from a docu-
+lights are shown in Table 1. Highlights give a                ment. Using a noisy-channel model, Daumé III
+brief overview of the article to allow readers to             and Marcu (2002) exploit the discourse structure
+quickly gather information on stories, and usually            of a document and the syntactic structure of its
+appear as bullet points. Importantly, they repre-             sentences in order to decide which constituents to
+sent the gist of the entire document and thus of-             drop but also which discourse units are unimpor-
+ten differ substantially from the first n sentences           tant. Martins and Smith (2009) formulate a joint
+in the article (Svore et al., 2007). They are also            sentence extraction and summarization model as
+highly compressed, written in a telegraphic style             an ILP. The latter optimizes an objective func-
+and thus provide an excellent testbed for models              tion consisting of two parts: an extraction com-
+that generate compressed summaries. Experimen-                ponent, essentially a non-greedy variant of max-
+tal results show that our model’s output is compa-            imal marginal relevance (McDonald, 2007), and
+rable to hand-written highlights both in terms of             a sentence compression component, a more com-
+grammaticality and informativeness.                           pact reformulation of Clarke and Lapata (2008)
+                                                              based on the output of a dependency parser. Com-
+2   Related work                                              pression and extraction models are trained sepa-
+Much effort in automatic summarization has been               rately in a max-margin framework and then inter-
+devoted to sentence extraction which is often for-            polated. In the context of multi-document summa-
+malized as a classification task (Kupiec et al.,              rization, Daumé III’s (2006) vine-growth model
+1995). Given appropriately annotated training                 creates summaries incrementally, either by start-
+data, a binary classifier learns to predict for               ing a new sentence or by growing already existing
+each document sentence if it is worth extracting.             ones.
+Surface-level features are typically used to sin-                Our own work is closest to Martins and Smith
+gle out important sentences. These include the                (2009). We also develop an ILP-based compres-
+presence of certain key phrases, the position of              sion and summarization model, however, several
+a sentence in the original document, the sentence             key differences set our approach apart. Firstly,
+length, the words in the title, the presence of               content selection is performed at the phrase rather
+proper nouns, etc. (Mani, 2001; Sparck Jones,                 than sentence level. Secondly, the combination of
+1999).                                                        phrase and dependency information into a single
+   Relatively little work has focused on extraction           data structure is new, and important in allowing
+methods for units smaller than sentences. Jing and            us to express grammaticality as constraints across
+McKeown (2000) first extract sentences, then re-              phrase dependencies, rather than resorting to a lan-
+
+
+                                                        566
+
+
+Most blacks say MLK’s vision fulfilled, poll finds                9/11 billboard draws flak from Florida Democrats, GOP
+WASHINGTON (CNN) – More than two-thirds of African-               (CNN) – A Florida man is using billboards with an image of
+Americans believe Martin Luther King Jr.’s vision for race        the burning World Trade Center to encourage votes for a Re-
+relations has been fulfilled, a CNN poll found – a figure up      publican presidential candidate, drawing criticism for politi-
+sharply from a survey in early 2008.                              cizing the 9/11 attacks.
+The CNN-Opinion Research Corp. survey was released                ‘Please Don’t Vote for a Democrat’ reads the type over the
+Monday, a federal holiday honoring the slain civil rights         picture of the twin towers after hijacked airliners hit them on
+leader and a day before Barack Obama is to be sworn in as         September, 11, 2001.
+the first black U.S. president.
+                                                                  Mike Meehan, a St. Cloud, Florida, businessman who paid to
+The poll found 69 percent of blacks said King’s vision has        post the billboards in the Orlando area, said former President
+been fulfilled in the more than 45 years since his 1963 ’I have   Clinton should have put a stop to Osama bin Laden and al
+a dream’ speech – roughly double the 34 percent who agreed        Qaeda before 9/11. He said a Republican president would
+with that assessment in a similar poll taken last March.          have done so.
+But whites remain less optimistic, the survey found.
+• 69 percent of blacks polled say Martin Luther King Jr’s         • Billboards use image from 9/11 to encourage GOP votes.
+  vision realized.                                                • 9/11 image wrong for ad, say Florida political parties.
+• Slim majority of whites say King’s vision not fulfilled.        • Floridian praises President Bush, says ex-President Clin-
+• King gave his “I have a dream” speech in 1963.                    ton failed to stop al Qaeda.
+
+Table 1: Two example CNN news articles, showing the title and the first few paragraphs, and below, the
+original highlights that accompanied each story.
+
+
+guage model. Lastly, our model is more com-                                                   Documents            Highlights
+pact, has fewer parameters, and does not require                     Sentences                37.2 ± 39.6           3.5 ± 0.5
+two training procedures. Our approach bears some                     Tokens                  795.0 ± 744.8         47.0 ± 9.6
+resemblance to headline generation (Dorr et al.,                     Tokens/sentence          22.4 ± 4.2           13.3 ± 1.7
+2003; Banko et al., 2000), although we output sev-
+eral sentences rather than a single one. Head-                      Table 2: Overview statistics on the corpus of doc-
+line generation models typically extract individual                 uments and highlights (mean and standard devia-
+words from a document to produce a very short                       tion). A minority of documents are transcripts of
+summary, whereas we extract phrases and ensure                      interviews and speeches, and can be very long; this
+that they are combined into grammatical sentences                   accounts for the very large standard deviation.
+through our ILP constraints.
+   Svore et al. (2007) were the first to foreground
+                                                                       Two examples of a news story and its associ-
+the highlight generation task which we adopt as an
+                                                                    ated highlights, are shown in Table 1. As can be
+evaluation testbed for our model. Their approach
+                                                                    seen, the highlights are written in a compressed,
+is however a purely extractive one. Using an al-
+                                                                    almost telegraphic manner. Articles, auxiliaries
+gorithm based on neural networks and third-party
+                                                                    and forms of the verb be are often deleted. Com-
+resources (e.g., news query logs and Wikipedia en-
+                                                                    pression is also achieved through paraphrasing,
+tries) they rank sentences and select the three high-
+                                                                    e.g., substitutions and reorderings. For example,
+est scoring ones as story highlights. In contrast,
+                                                                    the document sentence “The poll found 69 percent
+we aim to generate rather than extract highlights.
+                                                                    of blacks said King’s vision has been fulfilled.” is
+As a first step we focus on deleting extraneous ma-
+                                                                    rephrased in the highlight as “69 percent of blacks
+terial, but other more sophisticated rewrite opera-
+                                                                    polled say Martin Luther King Jr’s vision real-
+tions (e.g., Cohn and Lapata 2009) could be incor-
+                                                                    ized.”. In general, there is a fair amount of lexi-
+porated into our framework.
+                                                                    cal overlap between document sentences and high-
+3   The Task                                                        lights (42.44%) but the correspondence between
+                                                                    document sentences and highlights is not always
+Given a document, we aim to produce three or four                   one-to-one. In the first example in Table 1, the sec-
+short sentences covering its main topics, much like                 ond paragraph gives rise to two highlights. Also
+the “Story Highlights” accompanying the (online)                    note that the highlights need not form a coherent
+CNN news articles. CNN highlights are written by                    summary, each of them is relatively stand-alone,
+humans; we aim to do this automatically.                            and there is little co-referencing between them.
+
+
+                                                              567
+
+
+                                                           S
+                                                                                                          TOP
+                 S                             ,          NP                VP          .
+                                               ,                                        .              found
+          CC    NP               VP                DT             NN       VBD
+
+
+
+
+                                                                                                      p
+
+                                                                                                                ns
+                                                                                                    om
+
+
+                                                                                                                  ub
+                                                                                                cc
+
+
+
+                                                                                                                    j
+          But NNS       VBP         ADJP           the          survey    found                                  survey
+                                                                                            optimistic
+
+
+
+
+                                                                                                     ad
+                                                                                         j
+                                                                                     ub
+                                                                                              cop
+
+                                                                                                        v
+               whites remain RBR          JJ
+
+
+
+
+                                                                                                                  det
+                                                                                                          mo
+                                                                                    ns
+
+
+
+
+                                                                                                            d
+                                 less optimistic
+    (a)                                                                    (b) whites        remain         less the
+
+Figure 1: An example phrase structure (a) and dependency (b) tree for the sentence “But whites remain
+less optimistic, the survey found.”.
+
+
+   In order to train and evaluate the model pre-                dependency labels. We first describe how we ob-
+sented in the following sections we created a cor-              tain this representation and then move on to dis-
+pus of document-highlight pairs (approximately                  cuss the model in more detail.
+9,000) which we downloaded from the CNN.com
+                                                                Sentence Representation We obtain syntactic
+website.1 The articles were randomly sampled
+                                                                information by parsing every sentence twice, once
+from the years 2007–2009 and covered a wide
+                                                                with a phrase structure parser and once with a
+range of topics such as business, crime, health,
+                                                                dependency parser. The phrase structure and
+politics, showbiz, etc. The majority were news
+                                                                dependency-based representations for the sen-
+articles, but the set also contained a mixture of
+                                                                tence “But whites remain less optimistic, the sur-
+editorials, commentary, interviews and reviews.
+                                                                vey found.” (from Table 1) are shown in Fig-
+Some overview statistics of the corpus are shown
+                                                                ures 1(a) and 1(b), respectively.
+in Table 2. Overall, we observe a high degree of
+                                                                   We then combine the output from the two
+compression both at the document and sentence
+                                                                parsers, by mapping the dependencies to the edges
+level. The highlights summary tends to be ten
+                                                                of the phrase structure tree in a greedy fashion,
+times shorter than the corresponding article. Fur-
+                                                                shown in Figure 2(a). Starting at the top node of
+thermore, individual highlights have almost half
+                                                                the dependency graph, we choose a node i and a
+the length of document sentences.
+                                                                dependency arc to node j. We locate the corre-
+4   Modeling                                                    sponding words i and j on the phrase structure
+                                                                tree, and locate their nearest shared ancestor p. We
+The objective of our model is to create the most in-            assign the label of the dependency i → j to the first
+formative story highlights possible, subject to con-            unlabeled edge from p to j in the phrase structure
+straints relating to sentence length, overall sum-              tree. Edges assigned with dependency labels are
+mary length, topic coverage, and grammaticality.                shown as dashed lines. These edges are important
+These constraints are global in their scope, and                to our formulation, as they will be represented by
+cannot be adequately satisfied by optimizing each               binary decision variables in the ILP. Further edges
+one of them individually. Our approach therefore                from p to j, and all the edges from p to i, are
+uses an ILP formulation which will provide a glob-              marked as fixed and shown as solid lines. In this
+ally optimal solution, and which can be efficiently             way we keep the correct ordering of leaf nodes.
+solved using standard optimization tools. Specif-               Finally, leaf nodes are merged into parent phrases,
+ically, the model selects phrases from which to                 until each phrase node contains a minimum of two
+form the highlights, and each highlight is created              tokens, shown in Figure 2(b). Because of this min-
+from a single sentence through phrase deletion.                 imum length rule, it is possible for a merged node
+The model operates on parse trees augmented with                to be a clause rather than a phrase, but in the sub-
+   1 The corpus is available from http://homepages.inf.         sequent description we will use the term phrase
+ed.ac.uk/mlap/resources/index.html.                             rather loosely to describe any merged leaf node.
+
+
+                                                          568
+
+
+                                                          S
+                                   p
+                              ccom
+
+
+
+
+                                                          nsubj
+           S                                    ,     NP               VP           .
+         nsubj
+
+
+
+
+                                                    det
+                                                ,                                   .
+                                                                                                            S
+ CC       NP                 VP                     DT NN             VBD                          p
+
+
+
+
+                                                                                                                nsubj
+                       co
+                         p                                                                    c om
+                                                                                            c
+ But     NNS       VBP          d        ADJP the survey found                          S              ,        NP          VBD
+                             mo
+                         adv                                                                           ,
+        whites remain RBR                  JJ                                But whites remain             the survey found .
+                             less      optimistic                            less optimistic
+(a)                                                                    (b)
+
+Figure 2: Dependencies are mapped onto phrase structure tree (a) and leaf nodes are merged with parent
+phrases (b).
+
+
+ILP model The merged phrase structure tree,                       in Equations (1b)–(1j). The latter provide a nat-
+such as shown in Figure 2(b), is the actual input to              ural way of describing the requirements the output
+our model. Each phrase in the document is given                   must meet.
+a salience score. We obtain these scores from the
+output of a supervised machine learning algorithm
+                                                                     max     ∑ f i xi                                       (1a)
+that predicts for each phrase whether it should be                     x
+                                                                             i∈P
+included in the highlights or not (see Section 5 for
+details). Let S be the set of sentences in a docu-
+                                                                      s.t.   ∑ li xi ≤ LT                                   (1b)
+                                                                             i∈P
+ment, P be the set of phrases, and Ps ⊂ P be the
+                                                                             ∑ li xi ≤ LM ys                     ∀s ∈ S     (1c)
+set of phrases in each sentence s ∈ S . T is the set                         i∈Ps
+of words with the highest tf.idf scores, and Pt ⊂ P
+                                                                             ∑ li x i ≥ L m y s                  ∀s ∈ S     (1d)
+is the set of phrases containing the token t ∈ T .                           i∈Ps
+Let fi denote the salience score for phrase i, deter-
+                                                                             ∑ xi ≥ 1                            ∀t ∈ T     (1e)
+mined by the machine learning algorithm, and li is                           i∈Pt
+its length in tokens.
+                                                                             x j → xi                  ∀i ∈ P , j ∈ Di      (1f)
+   We use a vector of binary variables x ∈ {0, 1}|P |                        xi → ys                   ∀s ∈ S , i ∈ Ps      (1g)
+to indicate if each phrase is to be within a high-                           ∑ ys ≤ NS                                      (1h)
+light. These are either top-level nodes in our                               s∈S
+
+merged tree representation, or nodes whose edge                              xi ∈ {0, 1}                         ∀i ∈ P      (1i)
+to the parent has a dependency label (the dashed                             ys ∈ {0, 1}                         ∀s ∈ S .    (1j)
+lines). Referring to our example in Figure 2(b), bi-
+nary variables would be allocated to the top-level S
+node, the child S node and the NP node. The vec-                     Constraint (1b) ensures that the generated high-
+tor of auxiliary binary variables y ∈ {0, 1}|S | in-              lights do not exceed a total budget of LT tokens.
+dicates from which sentences the chosen phrases                   This constraint may vary depending on the appli-
+come (see Equations (1i) and (1j)). Let the sets                  cation or task at hand. Highlights on a small screen
+Di ⊂ P , ∀i ∈ P capture the phrase dependency in-                 device would presumably be shorter than high-
+formation for each phrase i, where each set Di                    lights for news articles on the web. It is also possi-
+contains the phrases that depend on the presence                  ble to set the length of each highlight to be within
+of i. Our objective function function is given in                 the range [Lm , LM ]. Constraints (1c) and (1d) en-
+Equation (1a): it is the sum of the salience scores               force this requirement. In particular, these con-
+of all the phrases chosen to form the highlights                  straints stop highlights formed from sentences at
+of a given document, subject to the constraints                   the beginning of the document (which tend to have
+
+
+                                                          569
+
+
+high salience scores) from being too long. Equa-               depends on the scores of the phrases involved, and
+tion (1e) is a set-covering constraint, requiring that         the influence of the other constraints.
+each of the words in T appears at least once in                   Constraint (1g) tells the ILP to create a highlight
+the highlights. We assume that words with high                 if one of its constituent phrases is chosen. Finally,
+tf.idf scores reveal to a certain extent what the doc-         note that a maximum number of highlights NS can
+ument is about. Constraint (1e) ensures that some              be set beforehand, and (1h) limits the highlights to
+of these words will be present in the highlights.              this maximum.
+   We enforce grammatical correctness through
+constraint (1f) which ensures that the phrase de-              5   Experimental Set-up
+pendencies are respected. Phrases that depend on               Training We obtained phrase-based salience
+phrase i are contained in the set Di . Variable xi is          scores using a supervised machine learning algo-
+true, and therefore phrase i will be included, if any          rithm. 210 document-highlight pairs were chosen
+of its dependents x j ∈ Di are true. The phrase de-            randomly from our corpus (see Section 3). Two
+pendency constraints, contained in the set Di and              annotators manually aligned the highlights and
+enforced by (1f), are the result of two rules based            document sentences. Specifically, each sentence
+on the typed dependency information:                           in the document was assigned one of three align-
+  1. Any child node j of the current node i,                   ment labels: must be in the summary (1), could be
+     whose connecting edge i → j is of type                    in the summary (2), and is not in the summary (3).
+     nsubj (nominal subject), nsubjpass (passive               The annotators were asked to label document sen-
+     nominal subject), dobj (direct object), pobj              tences whose content was identical to the high-
+     (preposition object), infmod (infinitival mod-            lights as “must be in the summary”, sentences
+     ifier), ccomp (clausal complement), xcomp                 with partially overlapping content as “could be in
+     (open clausal complement), measure (mea-                  the summary” and the remainder as “should not
+     sure phrase modifier) and num (numeric                    be in the summary”. Inter-annotator agreement
+     modifier) must be included if node i is in-               was .82 (p < 0.01, using Spearman’s ρ rank corre-
+     cluded.                                                   lation). The mapping of sentence labels to phrase
+                                                               labels was unsupervised: if the phrase came from
+  2. The parent node p of the current node i must              a sentence labeled (1), and there was a unigram
+     always be included if i is, unless the edge               overlap (excluding stop words) between the phrase
+     p → i is of type ccomp (clausal complement)               and any of the original highlights, we marked this
+     or advcl (adverbial clause), in which case it             phrase with a positive label. All other phrases
+     is possible to include i without including p.             were marked negative.
+                                                                   Our feature set comprised surface features such
+   Consider again the example in Figure 2(b).
+                                                               as sentence and paragraph position information,
+There are only two possible outputs from this sen-
+                                                               POS tags, unigram and bigram overlap with the
+tence. If the phrase “the survey” is chosen, then
+                                                               title, and whether high-scoring tf.idf words were
+the parent node “found” will be included, and from
+                                                               present in the phrase (66 features in total). The
+our first rule the ccomp phrase must also be in-
+                                                               210 documents produced a training set of 42,684
+cluded, which results in the output: “But whites
+                                                               phrases (3,334 positive and 39,350 negative). We
+remain less optimistic, the survey found.” If, on
+                                                               learned the feature weights with a linear SVM,
+the other hand, the clause “But whites remain less
+                                                               using the software SVM-OOPS (Woodsend and
+optimistic” is chosen, then due to our second rule
+                                                               Gondzio, 2009). This tool gave us directly the fea-
+there is no constraint that forces the parent phrase
+                                                               ture weights as well as support vector values, and
+“found” to be included in the highlights. Without
+                                                               it allowed different penalties to be applied to pos-
+other factors influencing the decision, this would
+                                                               itive and negative misclassifications, enabling us
+give the output: “But whites remain less opti-
+                                                               to compensate for the unbalanced data set. The
+mistic.” We can see from this example that encod-
+                                                               penalty hyper-parameters chosen were the ones
+ing the possible outputs as decisions on branches
+                                                               that gave the best F-scores, using 10-fold valida-
+of the phrase structure tree provides a more com-
+                                                               tion.
+pact representation of many options than would be
+possible with an explicit enumeration of all possi-            Highlight generation We generated highlights
+ble compressions. Which output is chosen (if any)              for a test set of 600 documents. We created and
+
+
+                                                         570
+
+
+solved an ILP for each document. Sentences were                      highlights (2c) which we set to 3. There are no
+first tokenized to separate words and punctuation,                   sentence length or grammaticality constraints, as
+then parsed to obtain phrases and dependencies as                    there is no sentence compression.
+described in Section 4 using the Stanford parser
+(Klein and Manning, 2003). For each phrase, fea-                           max      ∑ f i xi                                (2a)
+                                                                             x
+tures were extracted and salience scores calcu-                                     i∈S
+
+lated from the feature weights determined through                            s.t.   ∑ xi ≥ 1                ∀t ∈ T          (2b)
+SVM training. The distance from the SVM hyper-                                      i∈St
+
+plane represents the salience score. The ILP model                                  ∑ xi ≤ NS                               (2c)
+(see Equation (1)) was parametrized as follows:                                     i∈S
+
+the maximum number of highlights NS was 4,                                          xi ∈ {0, 1}             ∀i ∈ S .        (2d)
+the overall limit on length LT was 75 tokens, the
+length of each highlight was in the range of [8, 28]                 The SVM was trained with the same features used
+tokens, and the topic coverage set T contained the                   to obtain phrase-based salience scores, but with
+top 5 tf.idf words. These parameters were chosen                     sentence-level labels (labels (1) and (2) positive,
+to capture the properties seen in the majority of                    (3) negative).
+the training set; they were also relaxed enough to
+                                                                     Evaluation We evaluated summarization qual-
+allow a feasible solution of the ILP model (with
+                                                                     ity using ROUGE (Lin and Hovy, 2003). For the
+hard constraints) for all the documents in the test
+                                                                     highlight generation task, the original CNN high-
+set. To solve the ILP model we used the ZIB Opti-
+                                                                     lights were used as the reference. We report un-
+mization Suite software (Achterberg, 2007; Koch,
+                                                                     igram overlap (ROUGE -1) as a means of assess-
+2004; Wunderling, 1996). The solution was con-
+                                                                     ing informativeness and the longest common sub-
+verted into highlights by concatenating the chosen
+                                                                     sequence (ROUGE -L) as a means of assessing flu-
+leaf nodes in order. The ILP problems we created
+                                                                     ency.
+had on average 290 binary variables and 380 con-
+                                                                        In addition, we evaluated the generated high-
+straints. The mean solve time was 0.03 seconds.
+                                                                     lights by eliciting human judgments. Participants
+Summarization In order to examine the gen-                           were presented with a news article and its corre-
+erality of our model and compare with previous                       sponding highlights and were asked to rate the lat-
+work, we also evaluated our system on a vanilla                      ter along three dimensions: informativeness (do
+summarization task. Specifically, we used the                        the highlights represent the article’s main topics?),
+same model (trained on the CNN corpus) to gen-                       grammaticality (are they fluent?), and verbosity
+erate summaries for the DUC-2002 corpus2 . We                        (are they overly wordy and repetitive?). The sub-
+report results on the entire dataset and on a subset                 jects used a seven point rating scale. An ideal
+containing 140 documents. This is the same parti-                    system would receive high numbers for grammat-
+tion used by Martins and Smith (2009) to evaluate                    icality and informativeness and a low number for
+their ILP model.3                                                    verbosity. We randomly selected nine documents
+                                                                     from the test set and generated highlights with our
+Baselines We compared the output of our model                        model and the sentence-based ILP baseline. We
+to two baselines. The first one simply selects                       also included the original highlights as a gold stan-
+the “leading” three sentences from each document                     dard. We thus obtained ratings for 27 (9 × 3)
+(without any compression). The second baseline                       document-highlights pairs.4 The study was con-
+is the output of a sentence-based ILP model, sim-                    ducted over the Internet using WebExp (Keller
+ilar to our own, but simpler. The model is given                     et al., 2009) and was completed by 34 volunteers,
+in (2). The binary decision variables x ∈ {0, 1}|S |                 all self reported native English speakers.
+now represent sentences, and fi the salience score
+                                                                        With regard to the summarization task, follow-
+for each sentence. The objective again is to max-
+                                                                     ing Martins and Smith (2009), we used ROUGE -1
+imize the total score, but now subject only to
+                                                                     and ROUGE -2 to evaluate our system’s output.
+tf.idf coverage (2b) and a limit on the number of
+                                                                     We also report results with ROUGE -L. Each doc-
+   2 http://www-nlpir.nist.gov/projects/duc/                         ument in the DUC-2002 dataset is paired with
+guidelines/2002.html
+   3 We are grateful to André Martins for providing us with            4 A Latin square design ensured that subjects did not see
+details of their testing partition.                                  two different highlights of the same document.
+
+
+                                                               571
+
+
+         0.5                                                                                       s      toks/s         C.R.
+                                          Leading-3
+        0.45                              ILP sentence                    Articles              36.5    22.2 ± 4.0      100%
+                                          ILP phrase
+                                                                          CNN highlights         3.5    13.3 ± 1.7      5.8%
+         0.4
+                                                                          ILP phrase             3.8    18.0 ± 2.9      8.4%
+        0.35                                                              Leading-3              3.0    25.1 ± 7.4      9.3%
+                                                                                                        31.3 ± 7.9
+Score
+
+
+
+
+         0.3
+                                                                          ILP sentence           3.0                   11.6%
+        0.25                                                            Table 3: Comparison of output lengths: number
+         0.2                                                            of sentences, tokens per sentence, and compres-
+                                                                        sion rate, for CNN articles, their highlights, the
+        0.15
+                                                                        ILP phrase model, and two baselines.
+         0.1
+               Recall Precision F-score    Recall Precision F-score
+                      Rouge-1                     Rouge-L               Model          Grammar Importance Verbosity
+                                                                        CNN highlights   4.85     4.88      3.14
+Figure 3: ROUGE -1 and ROUGE -L results for                             ILP sentence     6.41     5.47      3.97
+phrase-based ILP model and two baselines, with                          ILP phrase       5.53     5.05      3.38
+error bars showing 95% confidence levels.
+                                                                        Table 4: Average human ratings for original CNN
+                                                                        highlights, and two ILP models.
+a human-authored summary (approximately 100
+words) which we used as reference.
+                                                                        systems performed on a similar level with respect
+                                                                        to importance (differences in the means were not
+6         Results
+                                                                        significant). The highlights created by the sen-
+We report results on the highlight generation task                      tence ILP were considered significantly more ver-
+in Figure 3 with ROUGE -1 and ROUGE -L (error                           bose (α < 0.05) than those created by the phrase-
+bars indicate the 95% confidence interval). In                          based system and the CNN abstractors. Overall,
+both measures, the ILP sentence baseline has the                        the highlights generated by the phrase ILP model
+best recall, while the ILP phrase model has the                         were not significantly different from those written
+best precision (the differences are statistically sig-                  by humans. They capture the same content as the
+nificant). F-score is higher for the phrase-based                       full sentences, albeit in a more succinct manner.
+system but not significantly. This can be at-                           Table 5 shows the output of the phrase-based sys-
+tributed to the fact that the longer output of the                      tem for the documents in Table 1.
+sentence-based model makes the recall task easier.                         Our results on the complete DUC-2002 cor-
+Average highlight lengths are shown in Table 3,                         pus are shown in Table 6. Despite the fact that
+and the compression rates they represent. Our                           our model has not been optimized for the original
+phrase model achieves the highest compression                           task of generating 100-word summaries—instead
+rates, whereas the sentence-based model tends to                        it is trained on the CNN corpus, and generates
+select long sentences even in comparison to the                         highlights—the results are comparable with the
+lead baseline. The sentence ILP model outper-                           best of the original participants5 in each of the
+forms the lead baseline with respect to recall but                      ROUGE measures. Our model is also significantly
+not precision or F-score. The phrase ILP achieves                       better than the lead sentences baseline.
+a significantly better F-score over the lead baseline                      Table 7 presents our results on the same
+with both ROUGE -1 and ROUGE -L.                                        DUC-2002 partition (140 documents) used by
+   The results of our human evaluation study are                        Martins and Smith (2009). The phrase ILP model
+summarized in Table 4. There was no sta-                                achieves a significantly better F-score (for both
+tistically significant difference in the grammat-                       ROUGE -1 and ROUGE -2) over the lead baseline,
+icality between the highlights generated by the                         the sentence ILP model, and Martins and Smith.
+phrase ILP system and the original CNN high-                            We should point out that the latter model is not a
+lights (means differences were compared using a                         straw man. It significantly outperforms a pipeline
+Post-hoc Tukey test). The grammaticality of the                            5 The  list of participants is on page 12 of the slides
+sentence ILP was significantly higher overall as                        available from http://duc.nist.gov/pubs/2002slides/
+no compression took place (α < 0.05). All three                         overview.02.pdf.
+
+
+                                                                  572
+
+
+ • More than two-thirds of African-Americans believe                                   ROUGE -1        ROUGE -2        ROUGE -L
+   Martin Luther King Jr.’s vision for race relations has            Leading-3        .400 ± .018     .184 ± .015     .374 ± .017
+   been fulfilled.                                                   M&S (2009)       .403 ± .076     .180 ± .076          —
+                                                                     ILP sentence     .430 ± .014     .191 ± .015     .401 ± .014
+ • 69 percent of blacks said King’s vision has been ful-
+                                                                     ILP phrase       .445 ± .014     .200 ± .014     .419 ± .014
+   filled in the more than 45 years since his 1963 ‘I have a
+   dream’ speech.
+ • But whites remain less optimistic, the survey found.              Table 7: ROUGE results on DUC-2002 cor-
+                                                                     pus (140 documents). —: only ROUGE -1 and
+ • A Florida man is using billboards with an image of the
+   burning World Trade Center to encourage votes for a               ROUGE -2 results are given in Martins and Smith
+   Republican presidential candidate, drawing criticism.             (2009).
+ • ‘Please Don’t Vote for a Democrat’ reads the type over
+   the picture of the twin towers.
+ • Mike Meehan said former President Clinton should                  confirm that our system manages to create sum-
+   have put a stop to Osama bin Laden and al Qaeda be-               maries at a high compression rate and yet maintain
+   fore 9/11.
+                                                                     the informativeness and grammaticality of a com-
+                                                                     petitive extractive system. The model itself is rel-
+Table 5: Generated highlights for the stories in Ta-
+                                                                     atively simple and knowledge-lean, and achieves
+ble 1 using the phrase ILP model.
+                                                                     good performance without reference to any re-
+    Participant     ROUGE -1     ROUGE -2      ROUGE -L              sources outside the corpus collection.
+        28           0.464         0.222         0.432                  Future extensions are many and varied. An ob-
+        19           0.459         0.221         0.431               vious next step is to examine how the model gen-
+        21           0.458         0.216         0.426               eralizes to other domains and text genres. Al-
+        29           0.449         0.208         0.419               though coherence is not so much of an issue for
+        27           0.445         0.209         0.417               highlights, it certainly plays a role when generat-
+    Leading-3        0.416         0.200         0.390               ing standard summaries. The ILP model can be
+    ILP phrase       0.454         0.213         0.428               straightforwardly augmented with discourse con-
+                                                                     straints similar to those proposed in Clarke and
+Table 6: ROUGE results on the complete                               Lapata (2007). We would also like to generalize
+DUC-2002 corpus, including the top 5 original                        the model to arbitrary rewrite operations, as our
+participants. For all results, the 95% confidence                    results indicate that compression rates are likely
+interval is ±0.008.                                                  to improve with more sophisticated paraphrasing.
+
+                                                                     Acknowledgments
+approach that first creates extracts and then com-
+presses them. Furthermore, as a standalone sen-                      We would like to thank Andreas Grothey and
+tence compression system it yields state of the art                  members of ICCS at the School of Informatics for
+performance, comparable to McDonald’s (2006)                         the valuable discussions and comments through-
+discriminative model and superior to Hedge Trim-                     out this work. We acknowledge the support of EP-
+mer (Zajic et al., 2007), a less sophisticated deter-                SRC through project grants EP/F055765/1 and
+ministic system.                                                     GR/T04540/01.
+
+7    Conclusions                                                     References
+                                                                     Achterberg, Tobias. 2007. Constraint Integer Programming.
+In this paper we proposed a joint content selection                     Ph.D. thesis, Technische Universität Berlin.
+and compression model for single-document sum-                       Banko, Michele, Vibhu O. Mittal, and Michael J. Witbrock.
+                                                                        2000. Headline generation based on statistical translation.
+marization. A key aspect of our approach is the                         In Proceedings of the 38th ACL. Hong Kong, pages 318–
+representation of content by phrases rather than                        325.
+entire sentences. Salient phrases are selected to                    Clarke, James and Mirella Lapata. 2007. Modelling com-
+form the summary. Grammaticality, length and                            pression with discourse constraints. In Proceedings of
+                                                                        EMNLP-CoNLL. Prague, Czech Republic, pages 1–11.
+coverage requirements are encoded as constraints                     Clarke, James and Mirella Lapata. 2008. Global inference
+in an integer linear program. Applying the model                        for sentence compression: An integer linear program-
+to the generation of “story highlights” (and sin-                       ming approach. Journal of Artificial Intelligence Research
+                                                                        31:399–429.
+gle document summaries) shows that it is a vi-
+                                                                     Cohn, Trevor and Mirella Lapata. 2009. Sentence compres-
+able alternative to extraction-based systems. Both                      sion as tree transduction. Journal of Artificial Intelligence
+ROUGE scores and the results of our human study                         Research 34:637–674.
+
+
+                                                               573
+
+
+Conroy, J. M., J. D. Schlesinger, J. Goldstein, and D. P.                 ceedings of the 20th International Conference on Compu-
+   O’Leary. 2004. Left-brain/right-brain multi-document                   tational Linguistics (COLING 2004). pages 896–902.
+   summarization. In DUC 2004 Conference Proceedings.                  Sparck Jones, Karen. 1999. Automatic summarizing: Factors
+Daumé III, Hal. 2006. Practical Structured Learning Tech-                and directions. In Inderjeet Mani and Mark T. Maybury,
+   niques for Natural Language Processing. Ph.D. thesis,                  editors, Advances in Automatic Text Summarization, MIT
+   University of Southern California.                                     Press, Cambridge, pages 1–33.
+Daumé III, Hal and Daniel Marcu. 2002. A noisy-channel                Svore, Krysta, Lucy Vanderwende, and Christopher Burges.
+   model for document compression. In Proceedings of the                  2007. Enhancing single-document summarization by
+   40th ACL. Philadelphia, PA, pages 449–456.                             combining RankNet and third-party sources. In Proceed-
+Dorr, Bonnie, David Zajic, and Richard Schwartz. 2003.                    ings of EMNLP-CoNLL. Prague, Czech Republic, pages
+   Hedge trimmer: A parse-and-trim approach to headline                   448–457.
+   generation. In Proceedings of the HLT-NAACL 2003                    Wan, Stephen and Cécile Paris. 2008. Experimenting with
+   Workshop on Text Summarization. pages 1–8.                             clause segmentation for text summarization. In Proceed-
+Jing, Hongyan. 2000. Sentence reduction for automatic text                ings of the 1st TAC. Gaithersburg, MD.
+   summarization. In Proceedings of the 6th ANLP. Seattle,             Witten, Ian H., Gordon Paynter, Eibe Frank, Carl Gutwin, and
+   WA, pages 310–315.                                                     Craig G. Nevill-Manning. 1999. KEA: Practical automatic
+Jing, Hongyan. 2002. Using hidden Markov modeling to de-                  keyphrase extraction. In Proceedings of the 4th ACM
+   compose human-written summaries. Computational Lin-                    International Conference on Digital Libraries. Berkeley,
+   guistics 28(4):527–544.                                                CA, pages 254–255.
+Jing, Hongyan and Kathleen McKeown. 2000. Cut and paste                Woodsend, Kristian and Jacek Gondzio. 2009. Exploiting
+   summarization. In Proceedings of the 1st NAACL. Seattle,               separability in large-scale linear support vector machine
+   WA, pages 178–185.                                                     training. Computational Optimization and Applications .
+Keller, Frank, Subahshini Gunasekharan, Neil Mayo, and                 Wunderling, Roland. 1996. Paralleler und objektorientierter
+   Martin Corley. 2009. Timing accuracy of web experi-                    Simplex-Algorithmus. Ph.D. thesis, Technische Univer-
+   ments: A case study using the WebExp software package.                 sität Berlin.
+   Behavior Research Methods 41(1):1–12.                               Zajic, David, Bonnie J. Door, Jimmy Lin, and Richard
+Klein, Dan and Christopher D. Manning. 2003. Accurate un-                 Schwartz. 2007. Multi-candidate reduction: Sentence
+   lexicalized parsing. In Proceedings of the 41st ACL. Sap-              compression as a tool for document summarization tasks.
+   poro, Japan, pages 423–430.                                            Information Processing Management Special Issue on
+                                                                          Summarization 43(6):1549–1570.
+Knight, Kevin and Daniel Marcu. 2002. Summarization be-
+   yond sentence extraction: a probabilistic approach to sen-
+   tence compression. Artificial Intelligence 139(1):91–107.
+Koch, Thorsten. 2004. Rapid Mathematical Prototyping.
+   Ph.D. thesis, Technische Universität Berlin.
+Kupiec, Julian, Jan O. Pedersen, and Francine Chen. 1995. A
+   trainable document summarizer. In Proceedings of SIGIR-
+   95. Seattle, WA, pages 68–73.
+Lin, Chin-Yew. 2003. Improving summarization performance
+   by sentence compression — a pilot study. In Proceed-
+   ings of the 6th International Workshop on Information Re-
+   trieval with Asian Languages. Sapporo, Japan, pages 1–8.
+Lin, Chin-Yew and Eduard H. Hovy. 2003. Automatic evalu-
+   ation of summaries using n-gram co-occurrence statistics.
+   In Proceedings of HLT NAACL. Edmonton, Canada, pages
+   71–78.
+Mani, Inderjeet. 2001. Automatic Summarization. John Ben-
+   jamins Pub Co.
+Martins, André and Noah A. Smith. 2009. Summarization
+   with a joint model for sentence extraction and compres-
+   sion. In Proceedings of the Workshop on Integer Linear
+   Programming for Natural Language Processing. Boulder,
+   Colorado, pages 1–9.
+McDonald, Ryan. 2006. Discriminative sentence compres-
+   sion with soft syntactic constraints. In Proceedings of the
+   11th EACL. Trento, Italy.
+McDonald, Ryan. 2007. A study of global inference algo-
+   rithms in multi-document summarization. In Proceedings
+   of the 29th ECIR. Rome, Italy.
+Nenkova, Ani. 2005. Automatic text summarization of
+   newswire: Lessons learned from the Document Under-
+   standing Conference. In Proceedings of the 20th AAAI.
+   Pittsburgh, PA, pages 1436–1441.
+Siddharthan, Advaith, Ani Nenkova, and Kathleen McKe-
+   own. 2004. Syntactic simplification for improving con-
+   tent selection in multi-document summarization. In Pro-
+
+
+                                                                 574
+

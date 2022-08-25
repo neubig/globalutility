@@ -1,0 +1,835 @@
+                      Open Information Extraction using Wikipedia
+
+                        Fei Wu                                           Daniel S. Weld
+               University of Washington                              University of Washington
+                  Seattle, WA, USA                                      Seattle, WA, USA
+            wufei@cs.washington.edu                                weld@cs.washington.edu
+
+
+
+                       Abstract                                 high precision and recall, they are limited by the
+                                                                availability of training data and are unlikely to
+    Information-extraction (IE) systems seek                    scale to the thousands of relations found in text
+    to distill semantic relations from natural-                 on the Web.
+    language text, but most systems use super-
+                                                                   An alternative paradigm, Open IE, pioneered
+    vised learning of relation-specific examples
+                                                                by the TextRunner system (Banko et al., 2007)
+    and are thus limited by the availability of
+                                                                and the “preemptive IE” in (Shinyama and Sekine,
+    training data. Open IE systems such as
+                                                                2006), aims to handle an unbounded number of
+    TextRunner, on the other hand, aim to handle
+                                                                relations and run quickly enough to process Web-
+    the unbounded number of relations found
+                                                                scale corpora. Domain independence is achieved
+    on the Web. But how well can these open
+                                                                by extracting the relation name as well as its
+    systems perform?
+                                                                two arguments. Most open IE systems use self-
+    This paper presents WOE, an open IE system                  supervised learning, in which automatic heuristics
+    which improves dramatically on TextRunner’s                 generate labeled data for training the extractor. For
+    precision and recall. The key to WOE’s per-                 example, TextRunner uses a small set of hand-
+    formance is a novel form of self-supervised                 written rules to heuristically label training exam-
+    learning for open extractors — using heuris-                ples from sentences in the Penn Treebank.
+    tic matches between Wikipedia infobox at-                      This paper presents WOE (Wikipedia-based
+    tribute values and corresponding sentences to               Open Extractor), the first system that au-
+    construct training data. Like TextRunner,                   tonomously transfers knowledge from random ed-
+    WOE ’s extractor eschews lexicalized features               itors’ effort of collaboratively editing Wikipedia to
+    and handles an unbounded set of semantic                    train an open information extractor. Specifically,
+    relations. WOE can operate in two modes:                    WOE generates relation-specific training examples
+    when restricted to POS tag features, it runs                by matching Infobox1 attribute values to corre-
+    as quickly as TextRunner, but when set to use               sponding sentences (as done in Kylin (Wu and
+    dependency-parse features its precision and                 Weld, 2007) and Luchs (Hoffmann et al., 2010)),
+    recall rise even higher.                                    but WOE abstracts these examples to relation-
+                                                                independent training data to learn an unlexical-
+1     Introduction
+                                                                ized extractor, akin to that of TextRunner. WOE
+The problem of information-extraction (IE), gen-                can operate in two modes: when restricted to
+erating relational data from natural-language text,             shallow features like part-of-speech (POS) tags, it
+has received increasing attention in recent years.              runs as quickly as Textrunner, but when set to use
+A large, high-quality repository of extracted tu-               dependency-parse features its precision and recall
+ples can potentially benefit a wide range of NLP                rise even higher. We present a thorough experi-
+tasks such as question answering, ontology learn-               mental evaluation, making the following contribu-
+ing, and summarization. The vast majority of                    tions:
+IE work uses supervised learning of relation-                     • We present WOE, a new approach to open IE
+specific examples. For example, the WebKB                           that uses Wikipedia for self-supervised learn-
+project (Craven et al., 1998) used labeled exam-
+                                                                    1
+ples of the courses-taught-by relation to in-                         An infobox is a set of tuples summarizing the key at-
+                                                                tributes of the subject in a Wikipedia article. For example,
+duce rules for identifying additional instances of              the infobox in the article on “Sweden” contains attributes like
+the relation. While these methods can achieve                   Capital, Population and GDP.
+
+
+                                                          118
+         Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 118–127,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   ing of unlexicalized extractors. Compared                                              Sentence Splitting
+                                                                                           NLP Annotating          Preprocessor
+   with TextRunner (the state of the art) on three                                       Synonyms Compiling
+   corpora, WOE yields between 72% and 91%
+   improved F-measure — generalizing well be-                                            Primary Entity Matching
+                                                                                                                      Matcher
+                                                                                            Sentence Matching
+   yond Wikipedia.
+                                                                   Triples
+ • Using the same learning algorithm and fea-                                     Pattern Classifier over Parser Features
+   tures as TextRunner, we compare four dif-                                       CRF Extractor over Shallow Features      Learner
+   ferent ways to generate positive and negative
+   training data with TextRunner’s method, con-                              Figure 1: Architecture of WOE.
+   cluding that our Wikipedia heuristic is respon-
+   sible for the bulk of WOE’s improved accuracy.
+                                                                 an unlexicalized, relation-independent (open) ex-
+ • The biggest win arises from using parser fea-                 tractor. As shown in Figure 1, WOE has three main
+   tures. Previous work (Jiang and Zhai, 2007)                   components: preprocessor, matcher, and learner.
+   concluded that parser-based features are un-
+   necessary for information extraction, but that                3.1   Preprocessor
+   work assumed the presence of lexical features.                The preprocessor converts the raw Wikipedia text
+   We show that abstract dependency paths are                    into a sequence of sentences, attaches NLP anno-
+   a highly informative feature when performing                  tations, and builds synonym sets for key entities.
+   unlexicalized extraction.                                     The resulting data is fed to the matcher, described
+2   Problem Definition                                           in Section 3.2, which generates the training set.
+                                                                 Sentence Splitting: The preprocessor first renders
+An open information extractor is a function
+                                                                 each Wikipedia article into HTML, then splits the
+from a document, d, to a set of triples,
+                                                                 article into sentences using OpenNLP.
+{harg1 , rel, arg2 i}, where the args are noun
+phrases and rel is a textual fragment indicat-                   NLP Annotation: As we discuss fully in Sec-
+ing an implicit, semantic relation between the two               tion 4 (Experiments), we consider several varia-
+noun phrases. The extractor should produce one                   tions of our system; one version, WOEparse , uses
+triple for every relation stated explicitly in the text,         parser-based features, while another, WOEpos , uses
+but is not required to infer implicit facts. In this             shallow features like POS tags, which may be
+paper, we assume that all relational instances are               more quickly computed. Depending on which
+stated within a single sentence. Note the dif-                   version is being trained, the preprocessor uses
+ference between open IE and the traditional ap-                  OpenNLP to supply POS tags and NP-chunk an-
+proaches (e.g., as in WebKB), where the task is                  notations — or uses the Stanford Parser to create a
+to decide whether some pre-defined relation holds                dependency parse. When parsing, we force the hy-
+between (two) arguments in the sentence.                         perlinked anchor texts to be a single token by con-
+   We wish to learn an open extractor without di-                necting the words with an underscore; this trans-
+rect supervision, i.e. without annotated training                formation improves parsing performance in many
+examples or hand-crafted patterns. Our input is                  cases.
+Wikipedia, a collaboratively-constructed encyclo-                Compiling Synonyms: As a final step, the pre-
+pedia2 . As output, WOE produces an unlexicalized                processor builds sets of synonyms to help the
+and relation-independent open extractor. Our ob-                 matcher find sentences that correspond to infobox
+jective is an extractor which generalizes beyond                 relations. This is useful because Wikipedia edi-
+Wikipedia, handling other corpora such as the gen-               tors frequently use multiple names for an entity;
+eral Web.                                                        for example, in the article titled “University of
+                                                                 Washington” the token “UW” is widely used to
+3   Wikipedia-based Open IE
+                                                                 refer the university. Additionally, attribute values
+The key idea underlying WOE is the automatic                     are often described differently within the infobox
+construction of training examples by heuristically               than they are in surrounding text. Without knowl-
+matching Wikipedia infobox values and corre-                     edge of these synonyms, it is impossible to con-
+sponding text; these examples are used to generate               struct good matches. Following (Wu and Weld,
+    2
+      We also use DBpedia (Auer and Lehmann, 2007) as a          2007; Nakayama and Nishio, 2008), the prepro-
+collection of conveniently parsed Wikipedia infoboxes            cessor uses Wikipedia redirection pages and back-
+
+
+                                                           119
+
+
+ward links to automatically construct synonym                           denotes the primary entity, e.g., “he” for the
+sets. Redirection pages are a natural choice, be-                       page on “Albert Einstein.” This heuristic is
+cause they explicitly encode synonyms; for ex-                          dropped when “it” is most common, because
+ample, “USA” is redirected to the article on the                        the word is used in too many other ways.
+“United States.” Backward links for a Wiki-                         When there are multiple matches to the primary
+pedia entity such as the “Massachusetts Institute of              entity in a sentence, the matcher picks the one
+Technology” are hyperlinks pointing to this entity                which is closest to the matched infobox attribute
+from other articles; the anchor text of such links                value in the parser dependency graph.
+(e.g., “MIT”) forms another source of synonyms.
+                                                                  Matching Sentences: The matcher seeks a unique
+3.2   Matcher                                                     sentence to match the attribute value. To produce
+                                                                  the best training set, the matcher performs three
+The matcher constructs training data for the
+                                                                  filterings. First, it skips the attribute completely
+learner component by heuristically matching
+                                                                  when multiple sentences mention the value or its
+attribute-value pairs from Wikipedia articles con-
+                                                                  synonym. Second, it rejects the sentence if the
+taining infoboxes with corresponding sentences in
+                                                                  subject and/or attribute value are not heads of the
+the article. Given the article on “Stanford Univer-
+                                                                  noun phrases containing them. Third, it discards
+sity,” for example, the matcher should associate
+                                                                  the sentence if the subject and the attribute value
+hestablished, 1891i with the sentence “The
+                                                                  do not appear in the same clause (or in parent/child
+university was founded in 1891 by . . . ” Given a
+                                                                  clauses) in the parse tree.
+Wikipedia page with an infobox, the matcher iter-
+                                                                      Since Wikipedia’s Wikimarkup language is se-
+ates through all its attributes looking for a unique
+                                                                  mantically ambiguous, parsing infoboxes is sur-
+sentence that contains references to both the sub-
+                                                                  prisingly complex. Fortunately, DBpedia (Auer
+ject of the article and the attribute value; these
+                                                                  and Lehmann, 2007) provides a cleaned set of in-
+noun phrases will be annotated arg1 and arg2
+                                                                  foboxes from 1,027,744 articles. The matcher uses
+in the training set. The matcher considers a sen-
+                                                                  this data for attribute values, generating a training
+tence to contain the attribute value if the value or
+                                                                  dataset with a total of 301,962 labeled sentences.
+its synonym is present. Matching the article sub-
+ject, however, is more involved.                                  3.3    Learning Extractors
+Matching Primary Entities: In order to match                      We learn two kinds of extractors, one (WOEparse )
+shorthand terms like “MIT” with more complete                     using features from dependency-parse trees and
+names, the matcher uses an ordered set of heuris-                 the other (WOEpos ) limited to shallow features like
+tics like those of (Wu and Weld, 2007; Nguyen et                  POS tags. WOEparse uses a pattern learner to
+al., 2007):                                                       classify whether the shortest dependency path be-
+  • Full match: strings matching the full name of                 tween two noun phrases indicates a semantic rela-
+     the entity are selected.                                     tion. In contrast, WOEpos (like TextRunner) trains
+                                                                  a conditional random field (CRF) to output certain
+  • Synonym set match: strings appearing in the
+                                                                  text between noun phrases when the text denotes
+     entity’s synonym set are selected.
+                                                                  such a relation. Neither extractor uses individual
+  • Partial match: strings matching a prefix or suf-              words or lexical information for features.
+     fix of the entity’s name are selected. If the
+     full name contains punctuation, only a prefix                3.3.1 Extraction with Parser Features
+     is allowed. For example, “Amherst” matches                   Despite some evidence that parser-based features
+     “Amherst, Mass,” but “Mass” does not.                        have limited utility in IE (Jiang and Zhai, 2007),
+  • Patterns of “the <type>”: The matcher first                   we hoped dependency paths would improve preci-
+     identifies the type of the entity (e.g., “city” for          sion on long sentences.
+     “Ithaca”), then instantiates the pattern to create           Shortest Dependency Path as Relation: Unless
+     the string “the city.” Since the first sentence of           otherwise noted, WOE uses the Stanford Parser
+     most Wikipedia articles is stylized (e.g. “The               to create dependencies in the “collapsedDepen-
+     city of Ithaca sits . . . ”), a few patterns suffice         dency” format. Dependencies involving preposi-
+     to extract most entity types.                                tions, conjuncts as well as information about the
+  • The most frequent pronoun: The matcher as-                    referent of relative clauses are collapsed to get
+     sumes that the article’s most frequent pronoun               direct dependencies between content words. As
+
+
+                                                            120
+
+
+noted in (de Marneffe and Manning, 2008), this               nate distinctions which are irrelevant for recog-
+collapsed format often yields simplified patterns            nizing (domain-independent) relations. Lexical
+which are useful for relation extraction. Consider           words in corePaths are replaced with their POS
+the sentence:                                                tags. Further, all Noun POS tags and “PRP”
+      Dan was not born in Berkeley.                          are abstracted to “N”, all Verb POS tags to “V”,
+   The Stanford Parser dependencies are:                     all Adverb POS tags to “RB” and all Adjective
+      nsubjpass(born-4, Dan-1)                               POS tags to “J”. The preposition dependencies
+      auxpass(born-4, was-2)                                 such as “prep in” are generalized to “prep”. Take
+                                                                                 −−−−−−−−−→          ←−−−−−−
+      neg(born-4, not-3)                                     the corePath “Dan nsubjpass born prep in
+      prep in(born-4, Berkeley-6)                            Berkeley” for example, its generalized-corePath
+                                                                    −−−−−−−−−→
+where each atomic formula represents a binary de-            is “N nsubjpass V ←prep   −−−− N”. We call such
+pendence from dependent token to the governor                a generalized-corePath an extraction pattern. In
+token.                                                       total, WOE builds a database (named DBp ) of
+   These dependencies form a directed graph,                 15,333 distinct patterns and each pattern p is asso-
+hV, Ei, where each token is a vertex in V , and E            ciated with a frequency — the number of matching
+is the set of dependencies. For any pair of tokens,          sentences containing p. Specifically, 185 patterns
+such as “Dan” and “Berkeley”, we use the shortest            have fp ≥ 100 and 1929 patterns have fp ≥ 5.
+connecting path to represent the possible relation           Learning a Pattern Classifier: Given the large
+between them:                                                number of patterns in DBp , we assume few valid
+        −−−−−−−−−→          ←−−−−−−
+   Dan nsubjpass born prep in Berkeley                       open extraction patterns are left behind. The
+   We call such a path a corePath. While we will             learner builds a simple pattern classifier, named
+see that corePaths are useful for indicating when            WOE parse , which checks whether the generalized-
+a relation exists between tokens, they don’t neces-          corePath from a test triple is present in DBp , and
+sarily capture the semantics of that relation. For           computes the normalized logarithmic frequency as
+example, the path shown above doesn’t indicate               the probability3 :
+the existence of negation! In order to capture the                            max(log(fp ) − log(fmin ), 0)
+meaning of the relation, the learner augments the                    w(p) =
+                                                                                log(fmax ) − log(fmin )
+corePath into a tree by adding all adverbial and
+adjectival modifiers as well as dependencies like            where fmax (50,259 in this paper) is the maximal
+“neg” and “auxpass”. We call the result an ex-               frequency of pattern in DBp , and fmin (set 1 in
+pandPath as shown below:                                     this work) is the controlling threshold that deter-
+                                                             mines the minimal frequency of a valid pattern.
+                                                                Take the previous sentence “Dan was not born
+                                                             in Berkeley” for example. WOEparse first identi-
+                                                             fies Dan as arg1 and Berkeley as arg2 based
+WOE   traverses the expandPath with respect to the           on NP-chunking. It then computes the corePath
+                                                                     −−−−−−−−−→           ←−−−−−−
+token orders in the original sentence when out-              “Dan nsubjpass born prep in Berkeley”
+                                                                                      −−−−−−−−−→
+putting the final expression of rel.                         and abstracts to p=“N nsubjpass V ←prep      −−−−
+                                                             N”. It then queries DBp to retrieve the fre-
+Building a Database of Patterns: For each of the             quency fp = 29112 and assigns a probabil-
+301,962 sentences selected and annotated by the              ity of 0.95. Finally, WOEparse traverses the
+matcher, the learner generates a corePath between            triple’s expandPath to output the final expression
+the tokens denoting the subject and the infobox at-          hDan, wasN otBornIn, Berkeleyi. As shown
+tribute value. Since we are interested in eventu-            in the experiments on three corpora, WOEparse
+ally extracting “subject, relation, object” triples,         achieves an F-measure which is between 72% to
+the learner rejects corePaths that don’t start with          91% greater than TextRunner’s.
+subject-like dependencies, such as nsubj, nsubj-
+pass, partmod and rcmod. This leads to a collec-             3.3.2 Extraction with Shallow Features
+tion of 259,046 corePaths.                                   WOE parsehas a dramatic performance improve-
+   To combat data sparsity and improve learn-                ment over TextRunner. However, the improve-
+ing performance, the learner further generalizes             ment comes at the cost of speed — TextRunner
+the corePaths in this set to create a smaller set                3
+                                                                   How to learn a more sophisticated weighting function is
+of generalized-corePaths. The idea is to elimi-              left as a future topic.
+
+
+                                                       121
+
+
+                              P/R Curve on WSJ                                              P/R Curve on Web                                        P/R Curve on Wikipedia
+            1.0
+
+
+
+
+                                                                          1.0
+
+
+
+
+                                                                                                                                        1.0
+            0.8
+
+
+
+
+                                                                          0.8
+
+
+
+
+                                                                                                                                        0.8
+precision
+
+
+
+
+                                                              precision
+
+
+
+
+                                                                                                                            precision
+            0.6
+
+
+
+
+                                                                          0.6
+
+
+
+
+                                                                                                                                        0.6
+            0.4
+
+
+
+
+                                                                          0.4
+
+
+
+
+                                                                                                                                        0.4
+                                                 WOEparse                                                      WOEparse                                                     WOEparse
+            0.2
+
+
+
+
+                                                                          0.2
+
+
+
+
+                                                                                                                                        0.2
+                                                 WOEpos                                                        WOEpos                                                       WOEpos
+                                                 TextRunner                                                    TextRunner                                                   TextRunner
+            0.0
+
+
+
+
+                                                                          0.0
+
+
+
+
+                                                                                                                                        0.0
+                  0.0   0.1    0.2   0.3   0.4    0.5   0.6                     0.0   0.1    0.2   0.3   0.4    0.5   0.6                     0.0   0.1   0.2   0.3   0.4    0.5   0.6
+                                     recall                                                        recall                                                       recall
+
+
+
+Figure 2: WOEpos performs better than TextRunner, especially on precision. WOEparse dramatically im-
+proves performance, especially on recall.
+
+
+runs about 30X faster by only using shallow fea-                                                         triples are mixed with pseudo-negative ones and
+tures. Since high speed can be crucial when pro-                                                         submitted to Amazon Mechanical Turk for veri-
+cessing Web-scale corpora, we additionally learn a                                                       fication. Each triple was examined by 5 Turk-
+CRF extractor WOEpos based on shallow features                                                           ers. We mark a triple’s final label as positive when
+like POS-tags. In both cases, however, we gen-                                                           more than 3 Turkers marked them as positive.
+erate training data from Wikipedia by matching
+sentences with infoboxes, while TextRunner used                                                          4.1      Overall Performance Analysis
+a small set of hand-written rules to label training                                                      In this section, we compare the overall perfor-
+examples from the Penn Treebank.                                                                         mance of WOEparse , WOEpos and TextRunner
+   We use the same matching sentence set behind                                                          (shared by the Turing Center at the University of
+DBp to generate positive examples for WOEpos .                                                           Washington). In particular, we are going to answer
+Specifically, for each matching sentence, we label                                                       the following questions: 1) How do these systems
+the subject and infobox attribute value as arg1                                                          perform against each other? 2) How does perfor-
+and arg2 to serve as the ends of a linear CRF                                                            mance vary w.r.t. sentence length? 3) How does
+chain. Tokens involved in the expandPath are la-                                                         extraction speed vary w.r.t. sentence length?
+beled as rel. Negative examples are generated                                                            Overall Performance Comparison
+from random noun-phrase pairs in other sentences                                                           The detailed P/R curves are shown in Figure 2.
+when their generalized-CorePaths are not in DBp .                                                        To have a close look, for each corpus, we ran-
+   WOE pos uses the same learning algorithm and                                                          domly divided the 300 sentences into 5 groups and
+selection of features as TextRunner: a two-order                                                         compared the best F-measures of three systems in
+CRF chain model is trained with the Mallet pack-                                                         Figure 3. We can see that:
+age (McCallum, 2002). WOEpos ’s features include                                                          • WOEpos is better than TextRunner, especially
+POS-tags, regular expressions (e.g., for detecting                                                           on precision. This is due to better training
+capitalization, punctuation, etc..), and conjunc-                                                            data from Wikipedia via self-supervision. Sec-
+tions of features occurring in adjacent positions                                                            tion 4.2 discusses this in more detail.
+within six words to the left and to the right of the
+                                                                                                          • WOEparse achieves the best performance, es-
+current word.
+                                                                                                             pecially on recall. This is because the parser
+   As shown in the experiments, WOEpos achieves
+                                                                                                             features help to handle complicated and long-
+an improved F-measure over TextRunner between
+                                                                                                             distance relations in difficult sentences. In par-
+18% to 34% on three corpora, and this is mainly
+                                                                                                             ticular, WOEparse outputs 1.42 triples per sen-
+due to the increase on precision.
+                                                                                                             tence on average, while WOEpos outputs 1.05
+                                                                                                             and TextRunner outputs 0.75.
+4                 Experiments
+                                                                                                           Note that we measure TextRunner’s precision
+We used three corpora for experiments: WSJ from                                                          & recall differently than (Banko et al., 2007)
+Penn Treebank, Wikipedia, and the general Web.                                                           did. Specifically, we compute the precision & re-
+For each dataset, we randomly selected 300 sen-                                                          call based on all extractions, while Banko et al.
+tences. Each sentence was examined by two peo-                                                           counted only concrete triples where arg1 is a
+ple to label all reasonable triples. These candidate                                                     proper noun, arg2 is a proper noun or date, and
+
+
+                                                                                                   122
+
+
+                                                                      Figure 4: WOEparse ’s F-measure decreases more
+Figure 3: WOEpos achieves an F-measure, which is                      slowly with sentence length than WOEpos and Tex-
+between 18% and 34% better than TextRunner’s.                         tRunner, due to its better handling of difficult sen-
+WOE parse achieves an improvement between 72%                         tences using parser features.
+and 91% over TextRunner. The error bar indicates
+one standard deviation.
+                                                                      he sold the company”, where “Sources” is
+                                                                      wrongly treated as the subject of the object
+the frequency of rel is over a threshold. Our ex-                     clause. A sample error of the second type is
+periments show that focussing on concrete triples                     hthisY ear, willStarIn, theM oviei       extracted
+generally improves precision at the expense of re-                    from the sentence “Coming up this year, Long
+call.4 Of course, one can apply a concreteness fil-                   will star in the new movie.”, where “this year” is
+ter to any open extractor in order to trade recall for                wrongly treated as part of a compound subject.
+precision.                                                            Taking the WSJ corpus for example, at the dip
+   The extraction errors by WOEparse can be cat-                      point with recall=0.002 and precision=0.059,
+egorized into four classes. We illustrate them                        these two types of errors account for 70% of all
+with the WSJ corpus. In total, WOEparse got                           errors.
+85 wrong extractions on WSJ, and they are
+                                                                      Extraction Performance vs. Sentence Length
+caused by: 1) Incorrect arg1 and/or arg2
+                                                                         We tested how extractors’ performance varies
+from NP-Chunking (18.6%); 2) A erroneous de-
+                                                                      with sentence length; the results are shown in Fig-
+pendency parse from Stanford Parser (11.9%);
+                                                                      ure 4. TextRunner and WOEpos have good perfor-
+3) Inaccurate meaning (27.1%) — for exam-
+                                                                      mance on short sentences, but their performance
+ple, hshe, isN ominatedBy, P residentBushi is
+                                                                      deteriorates quickly as sentences get longer. This
+wrongly extracted from the sentence “If she is
+                                                                      is because long sentences tend to have compli-
+nominated by President Bush ...”5 ; 4) A pattern
+                                                                      cated and long-distance relations which are diffi-
+inapplicable for the test sentence (42.4%).
+                                                                      cult for shallow features to capture. In contrast,
+   Note WOEparse is worse than WOEpos in the low
+                                                                      WOE parse ’s performance decreases more slowly
+recall region. This is mainly due to parsing er-
+                                                                      w.r.t. sentence length. This is mainly because
+rors (especially on long-distance dependencies),
+                                                                      parser features are more useful for handling diffi-
+which misleads WOEparse to extract false high-
+                                                                      cult sentences and they help WOEparse to maintain
+confidence triples. WOEpos won’t suffer from such
+                                                                      a good recall with only moderate loss of precision.
+parsing errors. Therefore it has better precision on
+high-confidence extractions.                                          Extraction Speed vs. Sentence Length
+   We noticed that TextRunner has a dip point                            We also tested the extraction speed of different
+in the low recall region. There are two typical                       extractors. We used Java for implementing the
+errors responsible for this. A sample error of                        extractors, and tested on a Linux platform with
+the first type is hSources, sold, theCompanyi                         a 2.4GHz CPU and 4G memory. On average, it
+extracted from the sentence “Sources said                             takes WOEparse 0.679 seconds to process a sen-
+   4                                                                  tence. For TextRunner and WOEpos , it only takes
+     For example, consider the Wikipedia corpus. From
+our 300 test sentences, TextRunner extracted 257 triples (at          0.022 seconds — 30X times faster. The detailed
+72.0% precision) but only extracted 16 concrete triples (with         extraction speed vs. sentence length is in Figure 5,
+87.5% precision).                                                     showing that TextRunner and WOEpos ’s extraction
+   5
+     These kind of errors might be excluded by monitor-
+ing whether sentences contain words such as ‘if,’ ‘suspect,’          time grows approximately linearly with sentence
+‘doubt,’ etc.. We leave this as a topic for the future.               length, while WOEparse ’s extraction time grows
+
+
+                                                                123
+
+
+                                                                  and the Stanford parse on Wikipedia is less accu-
+                                                                  rate than the gold parse on WSJ.
+
+                                                                  4.3    Design Desiderata of WOEparse
+                                                                  There are two interesting design choices in
+                                                                  WOE parse : 1) whether to require arg1 to appear
+                                                                  before arg2 (denoted as 1≺2) in the sentence;
+                                                                  2) whether to allow corePaths to contain prepo-
+                                                                  sitional phrase (PP) attachments (denoted as PPa).
+                                                                  We tested how they affect the extraction perfor-
+Figure 5: Textrnner and WOEpos ’s running time
+                                                                  mance; the results are shown in Figure 7.
+seems to grow linearly with sentence length, while
+                                                                     We can see that filtering PP attachments (PPa)
+WOE parse ’s time grows quadratically.
+                                                                  gives a large precision boost with a noticeable loss
+                                                                  in recall; enforcing a lexical ordering of relation
+quadratically (R2 = 0.935) due to its reliance on                 arguments (1≺2) yields a smaller improvement in
+parsing.                                                          precision with small loss in recall. Take the WSJ
+                                                                  corpus for example: setting 1≺2 and PPa achieves
+4.2    Self-supervision with Wikipedia Results                    a precision of 0.792 (with recall of 0.558). By
+       in Better Training Data                                    changing 1≺2 to 1∼2, the precision decreases to
+                                                                  0.773 (with recall of 0.595). By changing PPa to
+In this section, we consider how the process of
+                                                                  PPa and keeping 1≺2, the precision decreases to
+matching Wikipedia infobox values to correspond-
+                                                                  0.642 (with recall of 0.687) — in particular, if we
+ing sentences results in better training data than
+                                                                  use gold parse, the precision decreases to 0.672
+the hand-written rules used by TextRunner.
+                                                                  (with recall of 0.685). We set 1≺2 and PPa as de-
+   To compare with TextRunner, we tested four
+                                                                  fault in WOEparse as a logical consequence of our
+different ways to generate training examples from
+                                                                  preference for high precision over high recall.
+Wikipedia for learning a CRF extractor. Specif-
+ically, positive and/or negative examples are se-                 4.3.1 Different parsing options
+lected by TextRunner’s hand-written rules (tr for                 We also tested how different parsing might ef-
+short), by WOE’s heuristic of matching sentences                  fect WOEparse ’s performance. We used three pars-
+with infoboxes (w for short), or randomly (r for                  ing options on the WSJ dataset: Stanford parsing,
+short). We use CRF+h1 −h2 to denote a particu-                    CJ50 parsing (Charniak and Johnson, 2005), and
+lar approach, where “+” means positive samples,                   the gold parses from the Penn Treebank. The Stan-
+“-” means negative samples, and hi ∈ {tr, w, r}.                  ford Parser is used to derive dependencies from
+In particular, “+w” results in 221,205 positive ex-               CJ50 and gold parse trees. Figure 8 shows the
+amples based on the matching sentence set6 . All                  detailed P/R curves. We can see that although
+extractors are trained using about the same num-                  today’s statistical parsers make errors, they have
+ber of positive and negative examples. In contrast,               negligible effect on the accuracy of WOE.
+TextRunner was trained with 91,687 positive ex-
+amples and 96,795 negative examples generated                     5     Related Work
+from the WSJ dataset in Penn Treebank.                            Open or Traditional Information Extraction:
+   The CRF extractors are trained using the same                  Most existing work on IE is relation-specific.
+learning algorithm and feature selection as Tex-                  Occurrence-statistical models (Agichtein and Gra-
+tRunner. The detailed P/R curves are in Fig-                      vano, 2000; M. Ciaramita, 2005), graphical mod-
+ure 6, showing that using WOE heuristics to la-                   els (Peng and McCallum, 2004; Poon and Domin-
+bel positive examples gives the biggest perfor-                   gos, 2008), and kernel-based methods (Bunescu
+mance boost. CRF+tr−tr (trained using TextRun-                    and R.Mooney, 2005) have been studied. Snow
+ner’s heuristics) is slightly worse than TextRunner.              et al. (Snow et al., 2005) utilize WordNet to
+Most likely, this is because TextRunner’s heuris-                 learn dependency path patterns for extracting the
+tics rely on parse trees to label training examples,              hypernym relation from text. Some seed-based
+   6
+                                                                  frameworks are proposed for open-domain extrac-
+     This number is smaller than the total number of
+corePaths (259,046) because we require arg1 to appear be-         tion (Pasca, 2008; Davidov et al., 2007; Davi-
+fore arg2 in a sentence — as specified by TextRunner.             dov and Rappoport, 2008). These works focus
+
+
+                                                            124
+
+
+                            P/R Curve on WSJ                                                 P/R Curve on Web                                        P/R Curve on Wikipedia
+
+             1.0
+
+
+
+
+                                                                          1.0
+
+
+
+
+                                                                                                                                         1.0
+             0.8
+
+
+
+
+                                                                          0.8
+
+
+
+
+                                                                                                                                         0.8
+             0.6
+
+
+
+
+                                                                          0.6
+
+
+
+
+                                                                                                                                         0.6
+ precision
+
+
+
+
+                                                              precision
+
+
+
+
+                                                                                                                             precision
+             0.4
+
+
+
+
+                                                                          0.4
+
+
+
+
+                                                                                                                                         0.4
+                                           CRF+w−w=WOEpos                                                  CRF+w−w=WOEpos                                             CRF+w−w=WOEpos
+                                           CRF+w−tr                                                        CRF+w−tr                                                   CRF+w−tr
+             0.2
+
+
+
+
+                                                                          0.2
+
+
+
+
+                                                                                                                                         0.2
+                                           CRF+w−r                                                         CRF+w−r                                                    CRF+w−r
+                                           CRF+tr−tr                                                       CRF+tr−tr                                                  CRF+tr−tr
+                                           TextRunner                                                      TextRunner                                                 TextRunner
+             0.0
+
+
+
+
+                                                                          0.0
+
+
+
+
+                                                                                                                                         0.0
+                   0.0     0.1     0.2         0.3      0.4                     0.0         0.1    0.2         0.3     0.4                     0.0   0.1      0.2         0.3     0.4
+                                  recall                                                          recall                                                     recall
+
+
+
+Figure 6: Matching sentences with Wikipedia infoboxes results in better training data than the hand-
+written rules used by TextRunner.
+
+
+
+
+Figure 7: Filtering prepositional phrase attachments (PPa) shows a strong boost to precision, and we see
+a smaller boost from enforcing a lexical ordering of relation arguments (1≺2).
+
+
+                                    P/R Curve on WSJ                                                     posed the “preemptive IE” framework to avoid
+                                                                                                         relation-specificity (Shinyama and Sekine, 2006).
+              1.0
+
+
+
+
+                                                                                                         They first group documents based on pairwise
+                                                                                                         vector-space clustering, then apply an additional
+              0.8
+precision
+
+
+
+
+                                                                                                         clustering to group entities based on documents
+                                   parse
+                             WOEstanford=WOEparse                                                        clusters. The two clustering steps make it dif-
+              0.6
+
+
+
+
+                                parse
+                             WOECJ50                                                                     ficult to meet the scalability requirement neces-
+                                parse
+                             WOEgold                                                                     sary to process the Web. Mintz et al. (Mintz et
+              0.4
+
+
+
+
+                     0.0    0.1     0.2        0.3      0.4    0.5                    0.6                al., 2009) uses Freebase to provide distant su-
+                                               recall                                                    pervision for relation extraction. They applied
+Figure 8: Although today’s statistical parsers                                                           a similar heuristic by matching Freebase tuples
+make errors, they have negligible effect on the                                                          with unstructured sentences (Wikipedia articles in
+accuracy of WOE compared to operation on gold                                                            their experiments) to create features for learning
+standard, human-annotated data.                                                                          relation extractors. Matching Freebase with ar-
+                                                                                                         bitrary sentences instead of matching Wikipedia
+                                                                                                         infobox with corresponding Wikipedia articles
+on identifying general relations such as class at-                                                       will potentially increase the size of matched sen-
+tributes, while open IE aims to extract relation                                                         tences at a cost of accuracy. Also, their learned
+instances from given sentences. Another seed-                                                            extractors are relation-specific. Alan Akbik et
+based system StatSnowball (Zhu et al., 2009)                                                             al. (Akbik and Broß, 2009) annotated 10,000 sen-
+can perform both relation-specific and open IE                                                           tences parsed with LinkGrammar and selected 46
+by iteratively generating weighted extraction pat-                                                       general linkpaths as patterns for relation extrac-
+terns. Different from WOE, StatSnowball only em-                                                         tion. In contrast, WOE learns 15,333 general pat-
+ploys shallow features and uses L1-normalization                                                         terns based on an automatically annotated set of
+to weight patterns. Shinyama and Sekine pro-
+
+
+                                                                                                  125
+
+
+301,962 Wikipedia sentences. The KNext sys-                    between Wikipedia infoboxes and corresponding
+tem (Durme and Schubert, 2008) performs open                   text. WOE can run in two modes: a CRF extrac-
+knowledge extraction via significant heuristics. Its           tor (WOEpos ) trained with shallow features like
+output is knowledge represented as logical state-              POS tags; a pattern classfier (WOEparse ) learned
+ments instead of information represented as seg-               from dependency path patterns. Comparing with
+mented text fragments.                                         TextRunner, WOEpos runs at the same speed, but
+Information Extraction with Wikipedia: The                     achieves an F-measure which is between 18% and
+YAGO system (Suchanek et al., 2007) extends                    34% greater on three corpora; WOEparse achieves
+WordNet using facts extracted from Wikipedia                   an F-measure which is between 72% and 91%
+categories. It only targets a limited number of pre-           higher than that of TextRunner, but runs about
+defined relations. Nakayama et al. (Nakayama and               30X times slower due to the time required for
+Nishio, 2008) parse selected Wikipedia sentences               parsing.
+and perform extraction over the phrase structure                  Our experiments uncovered two sources of
+trees based on several handcrafted patterns. Wu                WOE ’s strong performance: 1) the Wikipedia
+and Weld proposed the K YLIN system (Wu and                    heuristic is responsible for the bulk of WOE’s im-
+Weld, 2007; Wu et al., 2008) which has the same                proved accuracy, but 2) dependency-parse features
+spirit of matching Wikipedia sentences with in-                are highly informative when performing unlexi-
+foboxes to learn CRF extractors. However, it                   calized extraction. We note that this second con-
+only works for relations defined in Wikipedia in-              clusion disagrees with the findings in (Jiang and
+foboxes.                                                       Zhai, 2007).
+Shallow or Deep Parsing: Shallow features, like                   In the future, we plan to run WOE over the bil-
+POS tags, enable fast extraction over large-scale              lion document CMU ClueWeb09 corpus to com-
+corpora (Davidov et al., 2007; Banko et al., 2007).            pile a giant knowledge base for distribution to the
+Deep features are derived from parse trees with                NLP community. There are several ways to further
+the hope of training better extractors (Zhang et               improve WOE’s performance. Other data sources,
+al., 2006; Zhao and Grishman, 2005; Bunescu                    such as Freebase, could be used to create an ad-
+and Mooney, 2005; Wang, 2008). Jiang and                       ditional training dataset via self-supervision. For
+Zhai (Jiang and Zhai, 2007) did a systematic ex-               example, Mintz et al. consider all sentences con-
+ploration of the feature space for relation extrac-            taining both the subject and object of a Freebase
+tion on the ACE corpus. Their results showed lim-              record as matching sentences (Mintz et al., 2009);
+ited advantage of parser features over shallow fea-            while they use this data to learn relation-specific
+tures for IE. However, our results imply that ab-              extractors, one could also learn an open extrac-
+stracted dependency path features are highly in-               tor. We are also interested in merging lexical-
+formative for open IE. There might be several rea-             ized and open extraction methods; the use of some
+sons for the different observations. First, Jiang and          domain-specific lexical features might help to im-
+Zhai’s results are tested for traditional IE where lo-         prove WOE’s practical performance, but the best
+cal lexicalized tokens might contain sufficient in-            way to do this is unclear. Finally, we wish to com-
+formation to trigger a correct classification. The             bine WOEparse with WOEpos (e.g., with voting) to
+situation is different when features are completely            produce a system which maximizes precision at
+unlexicalized in open IE. Second, as they noted,               low recall.
+many relations defined in the ACE corpus are                   Acknowledgements
+short-range relations which are easier for shallow
+                                                               We thank Oren Etzioni and Michele Banko from
+features to capture. In practical corpora like the
+                                                               Turing Center at the University of Washington for
+general Web, many sentences contain complicated
+                                                               providing the code of their software and useful dis-
+long-distance relations. As we have shown ex-
+                                                               cussions. We also thank Alan Ritter, Mausam,
+perimentally, parser features are more powerful in
+                                                               Peng Dai, Raphael Hoffmann, Xiao Ling, Ste-
+handling such cases.
+                                                               fan Schoenmackers, Andrey Kolobov and Daniel
+6   Conclusion                                                 Suskin for valuable comments. This material is
+                                                               based upon work supported by the WRF / TJ Cable
+This paper introduces WOE, a new approach to                   Professorship, a gift from Google and by the Air
+open IE that uses self-supervised learning over un-            Force Research Laboratory (AFRL) under prime
+lexicalized features, based on a heuristic match               contract no. FA8750-09-C-0181. Any opinions,
+
+
+                                                         126
+
+
+findings, and conclusion or recommendations ex-                  A. Gangemi M. Ciaramita. 2005. Unsupervised learn-
+pressed in this material are those of the author(s)                ing of semantic relations between concepts of a
+and do not necessarily reflect the view of the Air                 molecular biology ontology. In IJCAI.
+Force Research Laboratory (AFRL).                                Andrew Kachites McCallum.      2002.    Mallet:
+                                                                   A machine learning for language toolkit.  In
+                                                                   http://mallet.cs.umass.edu.
+References                                                       Mike Mintz, Steven Bills, Rion Snow, and Dan Juraf-
+E. Agichtein and L. Gravano. 2000. Snowball: Ex-                   sky. 2009. Distant supervision for relation extrac-
+   tracting relations from large plain-text collections.           tion without labeled data. In ACL-IJCNLP.
+   In ICDL.
+                                                                 T. H. Kotaro Nakayama and S. Nishio. 2008. Wiki-
+Alan Akbik and Jügen Broß. 2009. Wanderlust: Ex-                   pedia link structure and text mining for semantic re-
+  tracting semantic relations from natural language                 lation extraction. In CEUR Workshop.
+  text using dependency grammar patterns. In WWW
+                                                                 Dat P.T Nguyen, Yutaka Matsuo, and Mitsuru Ishizuka.
+  Workshop.
+                                                                   2007. Exploiting syntactic and semantic informa-
+Sören Auer and Jens Lehmann. 2007. What have inns-                tion for relation extraction from wikipedia. In
+   bruck and leipzig in common? extracting semantics               IJCAI07-TextLinkWS.
+   from wiki content. In ESWC.                                   Marius Pasca. 2008. Turning web text and search
+                                                                  queries into factual knowledge: Hierarchical class
+M. Banko, M. Cafarella, S. Soderland, M. Broadhead,
+                                                                  attribute extraction. In AAAI.
+  and O. Etzioni. 2007. Open information extraction
+  from the Web. In Procs. of IJCAI.                              Fuchun Peng and Andrew McCallum. 2004. Accurate
+                                                                   Information Extraction from Research Papers using
+Razvan C. Bunescu and Raymond J. Mooney. 2005.                     Conditional Random Fields. In HLT-NAACL.
+  Subsequence kernels for relation extraction. In
+  NIPS.                                                          Hoifung Poon and Pedro Domingos. 2008. Joint Infer-
+                                                                   ence in Information Extraction. In AAAI.
+R. Bunescu and R.Mooney.        2005.    A shortest
+  path dependency kernel for relation extraction. In             Y. Shinyama and S. Sekine. 2006. Preemptive infor-
+  HLT/EMNLP.                                                        mation extraction using unristricted relation discov-
+                                                                    ery. In HLT-NAACL.
+Eugene Charniak and Mark Johnson. 2005. Coarse-
+  to-fine n-best parsing and maxent discriminative               Rion Snow, Daniel Jurafsky, and Andrew Y. Ng. 2005.
+  reranking. In ACL.                                               Learning syntactic patterns for automatic hypernym
+                                                                   discovery. In NIPS.
+M. Craven, D. DiPasquo, D. Freitag, A. McCallum,
+  T. Mitchell, K. Nigam, and S. Slattery. 1998. Learn-           Fabian M. Suchanek, Gjergji Kasneci, and Gerhard
+  ing to extract symbolic knowledge from the world                 Weikum. 2007. Yago: A core of semantic knowl-
+  wide web. In AAAI.                                               edge - unifying WordNet and Wikipedia. In WWW.
+
+Dmitry Davidov and Ari Rappoport. 2008. Unsuper-                 Mengqiu Wang. 2008. A re-examination of depen-
+ vised discovery of generic relationships using pat-              dency path kernels for relation extraction. In IJC-
+ tern clusters and its evaluation by automatically gen-           NLP.
+ erated sat analogy questions. In ACL.                           Fei Wu and Daniel Weld. 2007. Autonomouslly Se-
+Dmitry Davidov, Ari Rappoport, and Moshe Koppel.                   mantifying Wikipedia. In CIKM.
+ 2007. Fully unsupervised discovery of concept-                  Fei Wu, Raphael Hoffmann, and Danel S. Weld. 2008.
+ specific relationships by web mining. In ACL.                     Information extraction from Wikipedia: Moving
+                                                                   down the long tail. In KDD.
+Marie-Catherine de Marneffe and Christopher D. Man-
+ ning. 2008. Stanford typed dependencies manual.                 Min Zhang, Jie Zhang, Jian Su, and Guodong Zhou.
+ http://nlp.stanford.edu/downloads/lex-parser.shtml.               2006. A composite kernel to extract relations be-
+                                                                   tween entities with both flat and structured features.
+Benjamin Van Durme and Lenhart K. Schubert. 2008.                  In ACL.
+  Open knowledge extraction using compositional
+  language processing. In STEP.                                  Shubin Zhao and Ralph Grishman. 2005. Extracting
+                                                                   relations with integrated information using kernel
+R. Hoffmann, C. Zhang, and D. Weld. 2010. Learning                 methods. In ACL.
+   5000 relational extractors. In ACL.
+                                                                 Jun Zhu, Zaiqing Nie, Xiaojiang Liu, Bo Zhang, and
+Jing Jiang and ChengXiang Zhai. 2007. A systematic                 Ji-Rong Wen. 2009. Statsnowball: a statistical ap-
+   exploration of the feature space for relation extrac-           proach to extracting entity relationships. In WWW.
+   tion. In HLT/NAACL.
+
+
+                                                           127
+

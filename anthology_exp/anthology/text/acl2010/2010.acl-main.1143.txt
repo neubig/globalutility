@@ -1,0 +1,809 @@
+Unsupervised Event Coreference Resolution with Rich Linguistic Features
+
+                Cosmin Adrian Bejan                                  Sanda Harabagiu
+          Institute for Creative Technologies                Human Language Technology Institute
+           University of Southern California                    University of Texas at Dallas
+           Marina del Rey, CA 90292, USA                        Richardson, TX 75083, USA
+
+
+
+                      Abstract                                or domain of interest requires a substantial amount
+                                                              of manual effort. Also, since these models are de-
+    This paper examines how a new class of                    pendent on local pairwise decisions, they are un-
+    nonparametric Bayesian models can be ef-                  able to capture a global event distribution at topic
+    fectively applied to an open-domain event                 or document collection level.
+    coreference task. Designed with the pur-                     To address these limitations and to provide a
+    pose of clustering complex linguistic ob-                 more flexible representation for modeling observ-
+    jects, these models consider a potentially                able data with rich properties, we present two
+    infinite number of features and categorical               novel, fully generative, nonparametric Bayesian
+    outcomes. The evaluation performed for                    models for unsupervised within- and cross-
+    solving both within- and cross-document                   document event coreference resolution. The first
+    event coreference shows significant im-                   model extends the hierarchical Dirichlet process
+    provements of the models when compared                    (Teh et al., 2006) to take into account additional
+    against two baselines for this task.                      properties associated with observable objects (i.e.,
+                                                              event mentions). The second model overcomes
+1 Introduction                                                some of the limitations of the first model. It
+The event coreference task consists of finding                uses the infinite factorial hidden Markov model
+clusters of event mentions that refer to the same             (Van Gael et al., 2008b) coupled to the infinite
+event. Although it has not been extensively stud-             hidden Markov model (Beal et al., 2002) in or-
+ied in comparison with the related problem of en-             der to (1) consider a potentially infinite number
+tity coreference resolution, solving event coref-             of features associated with observable objects, (2)
+erence has already proved its usefulness in vari-             perform an automatic selection of the most salient
+ous applications such as topic detection and track-           features, and (3) capture the structural dependen-
+ing (Allan et al., 1998), information extraction              cies of observable objects at the discourse level.
+(Humphreys et al., 1997), question answering                  Furthermore, both models are designed to account
+(Narayanan and Harabagiu, 2004), textual entail-              for a potentially infinite number of categorical out-
+ment (Haghighi et al., 2005), and contradiction de-           comes (i.e., events). These models provide addi-
+tection (de Marneffe et al., 2008).                           tional details and experimental results to our pre-
+   Previous approaches for solving event corefer-             liminary work on unsupervised event coreference
+ence relied on supervised learning methods that               resolution (Bejan et al., 2009).
+explore various linguistic properties in order to de-
+                                                              2 Event Coreference
+cide if a pair of event mentions is coreferential
+or not (Humphreys et al., 1997; Bagga and Bald-               The problem of determining if two events are iden-
+win, 1999; Ahn, 2006; Chen and Ji, 2009). In                  tical was originally studied in philosophy. One
+spite of being successful for a particular labeled            relevant theory on event identity was proposed by
+corpus, these pairwise models are dependent on                Davidson (1969) who argued that two events are
+the domain or language that they are trained on.              identical if they have the same causes and effects.
+Moreover, since event coreference resolution is a             Later on, a different theory was proposed by Quine
+complex task that involves exploring a rich set of            (1985) who considered that each event refers to
+linguistic features, annotating a large corpus with           a physical object (which is well defined in space
+event coreference information for a new language              and time), and therefore, two events are identical
+
+
+                                                        1412
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1412–1422,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+if they have the same spatiotemporal location. In          Topic 43
+                                                             Document 3
+(Davidson, 1985), Davidson abandoned his sug-                 s4 : AMD agreed to [buy]em1 Markham, Ontario-based
+gestion to embrace the Quinean theory on event                     ATI for around $5.4 billion in cash and stock, the
+identity (Malpas, 2009).                                           companies announced Monday.
+                                                              s5 : The [acquisition]em2 would turn AMD into one of
+                                                                   the world’s largest providers of graphics chips.
+2.1   An Example
+                                                           Topic 44
+In accordance with the Quinean theory, we con-               Document 2
+                                                              s1 : Hewlett-Packard is negotiating to [buy]em3 technol-
+sider that two event mentions are coreferential if                 ogy services provider Electronic Data Systems.
+they have the same event properties and share the             s8 : With a market value of about $115 billion, HP
+                                                                   could easily use its own stock to finance the [pur-
+same event participants. For instance, the sen-                    chase]em4 .
+tences from Example 1 encode event mentions that              s9 : If the [deal]em5 is completed, it would be HP’s
+refer to several individuated events. These sen-                   biggest [acquisition]em6 since it [bought]em7 Com-
+                                                                   paq Computer Corp. for $19 billion in 2002.
+tences are extracted from a newly annotated cor-
+                                                             Document 5
+pus with event coreference information (see Sec-              s2 : Industry sources have confirmed to eWEEK that
+tion 4). In this corpus, we organize documents                     Hewlett-Packard will [acquire]em8 Electronic Data
+that describe the same seminal event into topics.                  Systems for about $13 billion.
+In particular, the topics shown in this example de-           Example 1: Examples of event mention annotations.
+scribe the seminal event of buying ATI by AMD                                         buy
+(topic 43) and the seminal event of buying EDS
+by HP (topic 44).                                               e1                          e2                     e3
+   Although all the event mentions of interest em-
+phasized in boldface in Example 1 evoke the same        em1          em2   em3    em4     em5     em6    em8     em7
+generic event buy, they refer to three individu-
+                                                                  Figure 1: Fragment from the event hierarchy.
+ated events: e1 = {em1 , em2 }, e2 = {em3−6 ,
+em8 }, and e3 = {em7 }. For example, em1 (buy)
+and em3 (buy) correspond to different individuated      5, we discuss additional aspects of the event coref-
+events since they have a different AGENT ([B U -        erence problem that are not revealed in Example 1.
+YER (em1 )=AMD] 6= [B UYER (em3 )=HP]). This
+organization of event mentions leads to the idea of     2.2 Linguistic Features
+creating an event hierarchy which has on the first      The events representing coreference clusters of
+level, event mentions, on the second level, individ-    event mentions are characterized by a large set of
+uated events, and on the third level, generic events.   linguistic features. To compute an accurate event
+In particular, the event hierarchy corresponding to     distribution for event coreference resolution, we
+the event mentions annotated in our example is il-      associate the following categories of linguistic fea-
+lustrated in Figure 1.                                  tures with each annotated event mention.
+   Solving the event coreference problem poses          Lexical Features (LF) We capture the lexical con-
+many interesting challenges. For instance, in or-       text of an event mention by extracting the follow-
+der to solve the coreference chain of event men-        ing features: the head word (HW), the lemmatized
+tions that refer to the event e2 , we need to take      head word (HL), the lemmatized left and right
+into account the following issues: (i) a coreference    words surrounding the mention (LHL , RHL), and
+chain can encode both within- and cross-document        the HL features corresponding to the left and right
+coreference information; (ii) two mentions from         mentions (LHE , RHE). For instance, the lexical fea-
+the same chain can have different word classes          tures extracted for the event mention em7 (bought)
+(e.g., em3 (buy)–verb, em4 (purchase)–noun); (iii)      from our example are HW:bought, HL:buy, LHL:it,
+not all the mentions from the same chain are syn-       RHL:Compaq, LHE:acquisition, and RHE:acquire.
+onymous (e.g., em3 (buy) and em8 (acquire)), al-        Class Features (CF) These features aim to group
+though a semantic relation might exist between          mentions into several types of classes: the part-
+them (e.g., in WordNet (Fellbaum, 1998), the            of-speech of the HW feature (POS), the word class
+genus of buy is acquire); (iv) partial (or all) prop-   of the HW feature (HWC), and the event class of
+erties and participants of an event mention can be      the mention (EC). The HWC feature can take one
+omitted in text (e.g., em4 (purchase)). In Section      of the following values: VERB, NOUN, ADJEC -
+
+
+                                                    1413
+
+
+TIVE, and OTHER . As values for the EC feature,         billion], and ARG - TMP:[in 2002].
+we consider the seven event classes defined in             Event mentions are not only expressed as verbs
+the TimeML specification language (Pustejovsky          in text, but also as nouns and adjectives. There-
+et al., 2003a): OCCURRENCE, PERCEPTION, RE -            fore, for a better coverage of semantic features,
+PORTING , ASPECTUAL, STATE, I ACTION , and              we also employ the semantic annotations encoded
+I STATE. In order to extract the event classes cor-     in the FrameNet corpus (Baker et al., 1998).
+responding to the event mentions from a given           FrameNet annotates word expressions capable of
+dataset, we employed the event extractor described      evoking conceptual structures, or semantic frames,
+in (Bejan, 2007). This extractor is trained on          which describe specific situations, objects, or
+the TimeBank corpus (Pustejovsky et al., 2003b),        events (Fillmore, 1982). The semantic roles as-
+which is a TimeML resource encoding temporal            sociated with a word in FrameNet, or frame ele-
+elements such as events, time expressions, and          ments, are locally defined for the semantic frame
+temporal relations.                                     evoked by the word. In general, the words anno-
+                                                        tated in FrameNet are expressed as verbs, nouns,
+WordNet Features (WF) In our efforts to create
+                                                        and adjectives.
+clusters of event mention attributes as close as pos-
+                                                           To preserve the consistency of semantic role
+sible to the true attribute clusters of the individu-
+                                                        features, we align frame elements to predicate ar-
+ated events, we build two sets of word clusters us-
+                                                        guments by running the PropBank semantic parser
+ing the entire lexical information from the Word-
+                                                        on the manual annotations from FrameNet; con-
+Net database. After creating these sets of clusters,
+                                                        versely, we also run the FrameNet parser on the
+we then associate each event mention with only
+                                                        manual annotations from PropBank. Moreover, to
+one cluster from each set. The first set uses the
+                                                        obtain a better alignment of semantic roles, we
+transitive closure of the WordNet SYNONYMOUS
+                                                        run both parsers on a large amount of unlabeled
+relation to form clusters with all the words from
+                                                        text. The result of this process is a map with all
+WordNet (WNS). For instance, the verbs buy and
+                                                        frame elements statistically aligned to all predi-
+purchase correspond to the same cluster ID be-
+                                                        cate arguments. For instance, in 99.7% of the
+cause there exist a chain of SYNONYMOUS rela-
+                                                        cases the frame element BUYER of the semantic
+tions between them in WordNet. The second set
+                                                        frame C OMMERCE B UY is mapped to ARG0, and
+considers as grouping criteria the categorization
+                                                        in the remaining 0.3% of the cases to ARG1. Ad-
+of words from the WordNet lexicographer’s files
+                                                        ditionally, we use this map to create a more gen-
+(WNL). In addition, for each word that is not cov-
+                                                        eral semantic feature which assigns to each predi-
+ered in WordNet, we create a new cluster ID in
+                                                        cate argument a frame element label. In particular,
+each set of clusters.
+                                                        the features for em8 (acquire) are FEA0:BUYER,
+Semantic Features (SF) To extract features that         FEA 1:GOODS, FEA 3:MONEY , and FEATMP:TIME.
+characterize participants and properties of event          Two additional semantic features used in our ex-
+mentions, we use the semantic parser described          periments are: (1) the semantic frame (FR) evoked
+in (Bejan and Hathaway, 2007). One category of          by every mention;1 and (2) the WNS feature ap-
+semantic features that we identify for event men-       plied to the head word of every semantic role (e.g.,
+tions is the predicate argument structures encoded      WSA 0, WSA 1).
+in PropBank annotations (Palmer et al., 2005).          Feature Combinations (FC) We also explore var-
+In PropBank, the predicate argument structures          ious combinations of the features presented above.
+are represented by events expressed as verbs in         Examples include HW+HWC, HL+FR, FR+ARG1,
+text and by the semantic roles, or predicate argu-      LHL+RHL, etc.
+ments, associated with these events. For example,          It is worth noting that there exist event mentions
+ARG 0 annotates a specific type of semantic role        for which not all the features can be extracted. For
+which represents the AGENT, DOER, or ACTOR              example, the LHE and RHE features are missing
+of a specific event. Another argument is ARG1,          for the first and last event mentions in a document,
+which plays the role of the PATIENT, THEME,             respectively. Also, many semantic roles can be ab-
+or EXPERIENCER of an event. In particular, the          sent for an event mention in a given context.
+predicate arguments associated to the event men-        1
+                                                          The reason for extracting this feature is given by the fact
+tion em8 (bought) from Example 1 are ARG0:[it],         that, in general, frames are able to capture properties of
+ARG 1:[Compaq Computer Corp.], ARG 3:[for $19           generic events (Lowe et al., 1997).
+
+
+                                                    1414
+
+
+3 Nonparametric Bayesian Models                                  concentration parameter α > 0. Since this setting
+                                                                 enables a clustering of event mentions at the doc-
+As input for our models, we consider a collection
+                                                                 ument level, it is desirable that events be shared
+of I documents, where each document i has Ji
+                                                                 across documents and the number of events K be
+event mentions. For features, we make the dis-
+                                                                 inferred from data. To ensure this flexibility, a
+tinction between feature types and feature values
+                                                                 global nonparametric DP prior with a hyperparam-
+(e.g., POS is a feature type and has values such
+                                                                 eter γ and a global base measure H can be consid-
+as NN and VB). Each event mention is charac-
+                                                                 ered for β (Teh et al., 2006). The global distri-
+terized by L feature types, FT, and each feature
+                                                                 bution drawn from this DP prior, denoted as β 0
+type is represented by a finite vocabulary of fea-
+                                                                 in Figure 2(a), encodes the event mixing weights.
+ture values, f v. Thus, we can represent the ob-
+                                                                 Thus, same global events are used for each docu-
+servable properties of an event mention as a vec-
+                                                                 ment, but each event has a document specific dis-
+tor of L feature type – feature value pairs h(FT1 :
+                                                                 tribution βi that is drawn from a DP prior centered
+f v1i), . . . , (FTL : f vLi)i, where each feature value
+                                                                 on the global weights β 0 .
+index i ranges in the feature value space associated
+                                                                    To infer the true posterior probability of
+with a feature type.
+                                                                 P (Z|X), we follow (Teh et al., 2006) and use
+3.1   A Finite Feature Model                                     the Gibbs sampling algorithm (Geman and Ge-
+We present an extension of the hierarchical Dirich-              man, 1984) based on the direct assignment sam-
+let process (HDP) model which is able to represent               pling scheme. In this sampling scheme, the pa-
+each observable object (i.e., event mention) by a                rameters β and φ are integrated out analytically.
+finite number of feature types L. Our HDP ex-                    Moreover, to reduce the complexity of comput-
+tension is also inspired from the Bayesian model                 ing P (Z|X), we make the naı̈ve Bayes assump-
+proposed by Haghighi and Klein (2007). How-                      tion that the feature variables X are conditionally
+ever, their model is strictly customized for entity              independent given Z. This allows us to factorize
+coreference resolution, and therefore, extending it              the joint distribution of feature variables X condi-
+to include additional features for each observable               tioned on Z into product of marginals. Thus, by
+object is a challenging task (Ng, 2008; Poon and                 Bayes rule, the formula for sampling an event in-
+Domingos, 2008).                                                 dex for mention j from document i, Zi,j , is:3
+   In the HDP model, a Dirichlet process (DP)                                                                 Y
+                                                                 P (Zi,j | Z−i,j , X) ∝ P (Zi,j | Z−i,j )          P (Xi,j | Z, X−i,j )
+(Ferguson, 1973) is associated with each docu-                                                               X∈X
+ment, and each mixture component (i.e., event) is
+shared across documents. To describe its exten-                  where Xi,j represents the feature value of a feature
+sion, we consider Z the set of indicator random                  type corresponding to the event mention j from the
+variables for indices of events, φz the set of param-            document i.
+eters associated with an event z, φ a notation for                  In the process of generating an event mention,
+all model parameters, and X a notation for all ran-              an event index z is first sampled by using a mech-
+dom variables that represent observable features.2               anism that facilitates sampling from a prior for in-
+Given a document collection annotated with event                 finite mixture models called the Chinese restau-
+mentions, the goal is to find the best assignment                rant franchise (CRF) representation, as reported in
+of event indices Z∗ , which maximize the poste-                  (Teh et al., 2006):
+rior probability P (Z|X). In a Bayesian approach,                                                     (
+                                                                                    −i,j                  αβ0u ,      if z = znew
+this probability is computed by integrating out all              P (Zi,j = z | Z           , β0 ) ∝
+                                                                                                          nz + αβ0z , otherwise
+model parameters:
+            Z                    Z                               Here, nz is the number of event mentions with
+P (Z|X) =       P (Z, φ|X)dφ =       P (Z|X, φ)P (φ|X)dφ         event index z, znew is a new event index not used
+                                                                 already in Z−i,j , β0z are the global mixing propor-
+   Our HDP extension is depicted graphically in                  tions associated with the K events, and β0u is the
+Figure 2(a). Similar to the HDP model, the dis-                  weight for the unknown mixture component.
+tribution over events associated with each docu-                    Next, to generate a feature value x (with the fea-
+ment, β, is generated by a Dirichlet process with a              ture type X) of the event mention, the event z is
+2
+  In this subsection, the feature term is used in context of a   3
+                                                                     Z−i,j represents a notation for Z − {Zi,j }.
+feature type.
+
+
+                                                             1415
+
+
+                                         H            θ
+                                                                    Phase 2
+           H
+                                     γ   β0           φ                 S0       S1        S2                            ST
+                                               ∞          ∞   Phase 1
+ γ         β0                φ
+                ∞                ∞
+                                                                        FM
+                                                                         0       FM
+                                                                                  1       FM
+                                                                                           2                             FM
+                                                                                                                          T
+                                     α   β
+ α         β                                   ∞
+                ∞
+                                                                        F20      F21      F22                            F2T
+                                         Zi
+           Zi
+                                                                        F10      F11      F12                            F1T
+                                         HLi   POSi
+
+           Xi                                                                    Y1        Y2                            YT
+                L                        FRi
+                    Ji                             Ji I
+                         I
+          (a)                            (b)                                                       (c)
+Figure 2: Graphical representation of our models: nodes correspond to random variables; shaded nodes denote observable
+variables; a rectangle captures the replication of the structure it contains, where the number of replications is indicated in the
+bottom-right corner. The model in (a) illustrates a flat representation of a limited number of features in a generalized framework
+(henceforth, HDPf lat). The model in (b) captures a simple example of structured network topology of three feature variables
+(henceforth, HDPstruct ). The dependencies involving parameters φ and θ in these models are omitted for clarity. The model
+from (c) shows the representation of the iFHMM-iHMM model as well as the main phases of its generative process.
+
+
+associated with a multinomial emission distribu-                          3.2 An Infinite Feature Model
+tion over the feature values of X having the pa-                          To relax some of the restrictions of the first model,
+rameters φ = hφxZ i. We assume that this emission                         we devise an approach that combines the infinite
+distribution is drawn from a symmetric Dirichlet                          factorial hidden Markov model (iFHMM) with the
+distribution with concentration λX :                                      infinite hidden Markov model (iHMM) to form
+                                                                          the iFHMM-iHMM model.
+        P (Xi,j = x | Z, X−i,j ) ∝ nx,z + λX                                 The iFHMM framework uses the Markov In-
+                                                                          dian buffet process (mIBP) (Van Gael et al.,
+where Xi,j is the feature type of the mention j
+                                                                          2008b) in order to represent each object as a sparse
+from the document i, and nx,z is the number of                            subset of a potentially unbounded set of latent fea-
+times the feature value x has been associated with                        tures (Griffiths and Ghahramani, 2006; Ghahra-
+the event index z in (Z, X−i,j ). We also apply the                       mani et al., 2007; Van Gael et al., 2008a).4 Specif-
+Lidstone’s smoothing method to this distribution.
+                                                                          ically, the mIBP defines a distribution over an un-
+In cases when only a feature type is considered
+                                                                          bounded set of binary Markov chains, where each
+(e.g., X = hHLi), the HDPf lat model is identical
+                                                                          chain can be associated with a binary latent fea-
+with the original HDP model. We denote this one
+                                                                          ture that evolves over time according to Markov
+feature model by HDP1f .
+                                                                          dynamics. Therefore, if we denote by M the to-
+   When dependencies between feature variables                            tal number of feature chains and by T the num-
+exist (e.g., in our case, frame elements are de-                          ber of observable components, the mIBP defines
+pendent on the semantic frames that define them,                          a probability distribution over a binary matrix F
+and frames are dependent on the words that evoke                          with T rows, which correspond to observations,
+them), various global distributions are involved for                      and an unbounded number of columns M , which
+computing P (Z|X). For the model depicted in                              correspond to features. An observation yt con-
+Figure 2(b), for instance, the posterior probability                      tains a subset from the unbounded set of features
+is given by:                                                              {f 1 , f 2 , . . . , f M } that is represented in the matrix
+                                              Y                           by a binary vector Ft = hFt1 , Ft2 , . . . , FtM i, where
+     P (Zi,j )P (F Ri,j | HLi,j , θ)                P (Xi,j | Z)          Fti = 1 indicates that f i is associated with yt . In
+                                          X∈X
+                                                                          other words, F decomposes the observations and
+In this formula, P (F Ri,j |HLi,j , θ) is a global dis-                   represents them as feature factors, which can then
+tribution parameterized by θ, and X is a feature                          be associated with hidden variables in an iFHMM
+variable from the set X = hHL, P OS, F Ri. For                            model as depicted in Figure 2(c).
+the sake of clarity, we omit the conditioning com-                        4
+                                                                            In this subsection, a feature will be represented by a (fea-
+ponents of Z, HL, FR, and POS.                                            ture type:feature value) pair.
+
+
+                                                                   1416
+
+
+   Although the iFHMM allows a more flexible                    ideas of slice sampling and dynamic program-
+representation of the latent structure by letting the           ming for an efficient sampling of state trajectories.
+number of parallel Markov chains M be learned                   Since in time series models the transition probabil-
+from data, it cannot be used as a framework where               ities have independent priors (Beal et al., 2002),
+the number of clustering components K is infi-                  Van Gael and colleagues (2008a) also used the
+nite. On the other hand, the iHMM represents                    HDP mechanism to allow couplings across transi-
+a nonparametric extension of the hidden Markov                  tions. For sampling the whole hidden state trajec-
+model (HMM) (Rabiner, 1989) that allows per-                    tory s, this algorithm employs a forward filtering-
+forming inference on an infinite number of states               backward sampling technique.
+K. To further increase the representational power                  In the forward step of our adapted beam sam-
+for modeling discrete time series data, we propose              pler, for each mention yt , we sample features us-
+a nonparametric extension that combines the best                ing the mIBP mechanism and the auxiliary vari-
+of the two models, and lets the parameters M and                able ut ∼ Uniform(0, πst−1 st ). As explained in
+K be learned from data.                                         (Van Gael et al., 2008a), the auxiliary variables u
+   As shown in Figure 2(c), each step in the new                are used to filter only those trajectories s for which
+iHMM-iFHMM generative process is performed                      πst−1st ≥ ut for all t. Also, in this step, we com-
+in two phases: (i) the latent feature variables from            pute the probabilities P (st | y1:t , u1:t ) for all t:
+the iFHMM framework are sampled using the                                                      X
+mIBP mechanism; and (ii) the features sampled so                 P (st|y1:t ,u1:t) ∝ P (yt|st)   P (st−1|y1:t−1 ,u1:t−1)
+far, which become observable during this second                                       st−1 :ut<πst−1 st
+phase, are used in an adapted version of the beam
+sampling algorithm (Van Gael et al., 2008a) to in-              Here, the dependencies involving parameters π
+fer the clustering components (i.e., latent events).            and φ are omitted for clarity.
+   In the first phase, the stochastic process for sam-              In the backward step, we first sample the
+pling features in F is defined as follows. The first            event for the last state sT directly from P (sT |
+component samples a number of Poisson(α′ ) fea-                 y1:T , u1:T ) and then, for all t : T −1 . . . 1, we sam-
+tures. In general, depending on the value that was              ple each state st given st+1 by using the formula
+sampled in the previous step (t − 1), a feature f m             P (st | st+1 , y1:T , u1:T) ∝ P (st | y1:t , u1:t)P (st+1 |
+is sampled for the tth component according to the               st , ut+1). To sample the emission distribution
+P (Ftm = 1 | Ft−1   m = 1) and P (F m = 1 | F m = 0)            φ efficiently, and to ensure that each mention is
+                                        t        t−1
+probabilities.5 After all features are sampled for              characterized by a finite set of representative fea-
+the tth component, a number of Poisson(α′ /t)                   tures, we set the base distribution H to be con-
+new features are assigned for this component, and               jugate with the data distribution F in a Dirichlet-
+M gets incremented accordingly.                                 multinomial model with the multinomial parame-
+   To describe the adapted beam sampler, which                  ters (o1 , . . . , oK ) defined as:
+is employed in the second phase of the generative
+                                                                                        X
+                                                                                        T X
+process, we introduce additional notations. We de-                               ok =                 nmk
+note by (s1 , . . . , sT ) the sequence of hidden states                                t=1 f m ∈Bt
+corresponding to the sequence of event mentions
+(y1 , . . . , yT ), where each state st belongs to one          In this formula, nmk counts how many times the
+of the K events, st ∈ {1, . . . , K}, and each men-             feature f m was sampled for the event k, and Bt
+tion yt is represented by a sequence of latent fea-             stores a finite set of features for yt .
+tures hFt1 , Ft2 , . . . , FtM i. One element of the tran-         The mechanism for building a finite set of rep-
+sition probability π is defined as πij = P (st = j |            resentative features for the mention yt is based on
+st−1 = i), and a mention yt is generated according              slice sampling (Neal, 2003). Letting qm be the
+to a likelihood model F that is parameterized by a              number of times the feature f m was sampled in the
+state-dependent parameter φst (yt | st ∼ F(φst )).              mIBP, and vt an auxiliary variable for yt such that
+The observation parameters φ are drawn indepen-                 vt ∼ Uniform(1, max{qm : Ftm = 1}), we define
+dently from an identical prior base distribution H.             the finite feature set Bt for the observation yt as
+   The beam sampling algorithm combines the                     Bt = {f m : Ftm = 1∧qm ≥ vt }. The finiteness of
+5                                                               this feature set is based on the observation that, in
+  Technical details for computing these probabilities are de-
+scribed in (Van Gael et al., 2008b).                            the generative process of the mIBP, only a finite set
+
+
+                                                            1417
+
+
+                                                                                                      ACE        ECB
+of features are sampled for a component. We de-
+                                                               Number of topics                          –         43
+note this model as iFHMM-iHMMunif orm. Also,                   Number of documents                     745        482
+it is worth mentioning that, by using this type of             Number of within-topic events             –        339
+sampling, only the most representative features of             Number of cross-document events           –        208
+                                                               Number of within-document events       4946       1302
+yt get selected in Bt .                                        Number of true mentions                6553       1744
+   Furthermore, we explore the mechanism for                   Number of system mentions             45289      21175
+                                                               Number of distinct feature values    391798     237197
+selecting a finite set of features associated with
+an observation by: (1) considering all the ob-                     Table 1: Statistics of the ACE and ECB corpora.
+servation’s features whose corresponding feature
+counter qm ≥ 1 (unf iltered); (2) selecting only
+the higher half of the feature distribution consist-        tions) were able to cover all the true mentions from
+ing of the observation’s features that were sampled         both datasets. As shown in Table 1, we extracted
+at least once in the mIBP model (median); and               from ACE and ECB corpora 45289 and 21175 sys-
+(3) sampling vt from a discrete distribution of the         tem mentions, respectively.
+observation’s features that were sampled at least              We report results in terms of recall (R), preci-
+once in the mIBP (discrete).                                sion (P), and F-score (F) by employing the men-
+                                                            tion -based B3 metric (Bagga and Baldwin, 1998),
+4 Experiments                                               the entity -based CEAF metric (Luo, 2005), and the
+Datasets One dataset we employed is the au-                 pairwise F1 (PW) metric. All the results are av-
+tomatic content extraction (ACE) (ACE-Event,                eraged over 5 runs of the generative models. In
+2005). However, the utilization of the ACE corpus           the evaluation process, we considered only the
+for the task of solving event coreference is lim-           true mentions of the ACE test dataset, and the
+ited because this resource provides only within-            event mentions of the test sets derived from a 5-
+document event coreference annotations using a              fold cross validation scheme on the ECB dataset.
+restricted set of event types such as LIFE, BUSI -          For evaluating the cross-document coreference an-
+NESS, CONFLICT, and JUSTICE. Therefore, as a
+                                                            notations, we adopted the same approach as de-
+second dataset, we created the EventCorefBank               scribed in (Bagga and Baldwin, 1999) by merg-
+(ECB) corpus6 to increase the diversity of event            ing all the documents from the same topic into a
+types and to be able to evaluate our models for             meta-document and then scoring this document as
+both within- and cross-document event corefer-              performed for within-document evaluation. For
+ence resolution. One important step in the cre-             both corpora, we considered a set of 132 feature
+ation process of this corpus consists in finding sets       types, where each feature type consists on average
+of related documents that describe the same semi-           of 3900 distinct feature values.
+nal event such that the annotation of coreferential         Baselines We consider two baselines for event
+event mentions across documents is possible. For            coreference resolution (rows 1&2 in Tables 2&3).
+this purpose, we selected from the GoogleNews               One baseline groups each event mention by its
+archive7 various topics whose description contains          event class (BLeclass). Therefore, for this baseline,
+keywords such as commercial transaction, attack,            we cluster mentions according to their correspond-
+death, sports, terrorist act, election, arrest, natu-       ing EC feature value. Similarly, the second base-
+ral disaster, etc. The entire annotation process for        line uses as grouping criteria for event mentions
+creating the ECB resource is described in (Bejan            their corresponding WNS feature value (BLsyn ).
+and Harabagiu, 2008). Table 1 lists several basic           HDP Extensions Due to memory limitations, we
+statistics extracted from these two corpora.                evaluated the HDP models on a restricted set of
+Evaluation For a more realistic approach, we not            manually selected feature types. In general, the
+only trained the models on the manually annotated           HDP1f model with the feature type HL, which
+event mentions (i.e., true mentions), but also on all       plays the role of a baseline for the HDPf lat and
+the possible mentions encoded in the two datasets.          HDPstruct models, outperforms both baselines on
+To extract all event mentions, we ran the event             the ACE and ECB datasets. For the HDPf lat mod-
+identifier described in (Bejan, 2007). The men-             els (rows 4–7 in Tables 2&3), we classified the ex-
+tions extracted by this system (i.e., system men-           periments according to the set of feature types de-
+6
+                                                            scribed in Section 2. Our experiments reveal that
+    ECB is available at http://www.hlt.utdallas.edu/∼ady.
+7                                                           the best configuration of features for this model
+    http://news.google.com/
+
+
+                                                        1418
+
+
+                                            B3                     CEAF                    PW            B3              CEAF              PW
+     Model configuration             R      P         F        R     P        F    R        P   F   R    P     F    R      P       F   R    P    F
+                                                                   ECB | WD                                             ECB | CD
+ 1   BL eclass                     97.7 55.8 71.0 44.5 80.1 57.2 93.7 25.4 39.8 93.8 49.6 64.9 36.6 72.7 48.7 90.7 28.6                         43.3
+ 2   BL syn                        91.5 57.4 70.5 45.7 75.9 57.0 65.3 21.9 32.6 84.6 48.1 61.3 32.8 63.6 43.3 66.2 26.0                         37.3
+ 3   HDP1f (HL)                    84.3 89.0 86.5 83.4 79.6 81.4 36.6 53.4 42.6 67.0 86.2 75.3 76.2 57.1 65.2 34.9 58.9                         43.5
+ 4   HDPf lat (LF)                 81.4 98.2 89.0 92.7 77.2 84.2 24.7 82.8 37.7 63.8 97.3 77.0 84.9 54.3 66.1 27.2 88.5                         41.5
+ 5             (LF + CF)           81.5 98.0 89.0 92.8 77.9 84.7 24.6 80.7 37.4 64.6 97.3 77.6 85.3 55.6 67.2 27.6 88.7                         42.0
+ 6             (LF + CF + WF)      82.0 98.9 89.6 93.7 78.4 85.3 26.8 89.9 41.0 65.8 98.0 78.7 86.7 57.1 68.8 29.6 93.0                         44.8
+ 7             (LF + CF + WF + SF) 82.1 99.2 89.8 93.9 78.2 85.3 27.0 92.4 41.3 65.0 98.7 78.3 86.9 56.0 68.0 29.2 95.1                         44.4
+ 8   HDPstruct (HL→FR→FEA) 84.3 97.1 90.2 92.7 81.1 86.5 34.4 83.0 48.6 69.3 95.8 80.4 86.2 60.1 70.8 37.5 85.6                                 52.1
+ 9   i FHMM -i HMM unf iltered 82.6 97.7 89.5 92.7 78.5 85.0 28.5 82.4 41.8 67.2 96.4 79.1 85.6 58.0 69.1 32.5 87.7                             47.2
+10   i FHMM -i HMM discrete        82.6 98.1 89.7 93.2 79.0 85.5 29.7 85.4 44.0 66.2 96.2 78.4 84.8 57.2 68.3 32.2 88.1                         47.1
+11   i FHMM -i HMM median          82.6 97.8 89.5 92.9 78.8 85.3 29.3 83.7 43.0 67.0 96.5 79.0 86.1 58.3 69.5 33.1 88.1                         47.9
+12   i FHMM -i HMM unif orm        82.5 98.1 89.6 93.1 78.8 85.3 29.4 86.6 43.7 67.0 96.4 79.0 85.5 58.0 69.1 33.3 88.3                         48.2
+         Table 2: Results for within-document (WD) and cross-document (WD) coreference resolution on the ECB dataset.
+
+
+                 B3                  CEAF                          PW
+        R        P     F      R        P         F         R        P         F
+                                                                                       ments that brings a major improvement over the
+                                    ACE | WD                                           non-smoothed HDP models. Figure3(b) shows the
+ 1     97.9   25.0    39.9   14.7    64.4      24.0       93.5      8.2   15.2
+ 2     89.3   36.7    52.1   25.1    64.8      36.2       63.8     10.5   18.1         performances of HDPstruct on ECB with various λ
+ 3     86.0   70.6    77.5   62.3    76.4      68.6       50.5     27.7   35.8         values.8 The HDP results from Tables 2&3 corre-
+ 4     82.9   82.6    82.7   74.9    75.8      75.3       42.4     41.9   42.1         spond to a λ value of 10−4 and 10−2 for HDPf lat
+ 5     82.0   84.9    83.4   77.8    75.3      76.6       37.9     45.1   41.2
+ 6     83.3   83.6    83.4   76.3    76.2      76.3       42.2     43.9   43.0         and HDPstruct, respectively.
+ 7     83.4   84.2    83.8   76.9    76.5      76.7       43.3     47.1   45.1
+ 8     86.2   76.9    81.3   69.0    77.5      73.0       53.2     38.1   44.4         iFHMM-iHMM In spite of the fact that the
+ 9     82.8   83.6    83.2   75.8    75.0      75.4       41.4     42.6   42.0         iFHMM-iHMM model employs automatic feature
+10     83.1   81.5    82.3   73.7    75.1      74.4       41.9     40.1   41.0
+11     83.0   81.3    82.1   73.2    75.2      74.2       40.7     39.0   39.8         selection, its results remain competitive against
+12     81.9   82.2    82.1   74.6    74.5      74.5       37.2     39.0   38.1         the results of the HDP models, where the fea-
+     Table 3: Results for WD coreference resolution on ACE.                            ture types were manually tuned. When compar-
+                                                                                       ing the strategies for filtering feature values in this
+                                                                                       framework, we could not find a distinct separation
+consists of a combination of feature types from                                        between the results obtained by the unf iltered,
+all the categories of features (row 7). For the                                        discrete, median, and unif orm models. As ob-
+HDPstruct experiments, we considered the set of                                        served from Tables 2&3, most of the iFHMM-
+features of the best HDPf lat experiment as well as                                    iHMM results fall in between the HDPf lat and
+the dependencies between HL, FR, and FEA. Over-                                        HDPstruct results. The results were obtained by
+all, we can assert that HDPf lat achieved the best                                     automatically selecting only up to 1.5% of distinct
+performance results on the ACE test dataset (Ta-                                       feature values. Figure 3(c) shows the percents of
+ble 3), whereas HDPstruct proved to be more ef-                                        features employed by this model for various val-
+fective on the ECB dataset (Table 2). Moreover,                                        ues of the parameter α′ that controls the number
+the results of the HDPf lat and HDPstruct models                                       of sampled features. The best results (also listed
+show an F-score increase by 4-10% over HDP1f ,                                         in Tables 2&3) were obtained for α′ = 10 (0.05%)
+and therefore, the results prove that the HDP ex-                                      on ACE and α′ = 150 (0.91%) on ECB.
+tension provides a more flexible representation for                                        To show the usefulness of the sampling schemes
+clustering objects with rich properties.                                               considered for this model, we also compare in
+                                                                                       Table 4 the results obtained by an iFHMM-
+   We also plot the evolution of our generative
+                                                                                       iHMM model that considers all the feature values
+processes. For instance, Figure 3(a) shows that
+                                                                                       associated with an observable object (iFHMM-
+the HDPf lat model corresponding to row 7 in Ta-
+                                                                                       iHMMall ) against the iFHMM-iHMM models that
+ble 3 converges in 350 iteration steps to a posterior
+                                                                                       employ the mIBP sampling scheme together with
+distribution over event mentions from ACE with
+                                                                                       the unf iltered, discrete, median, and unif orm
+around 2000 latent events. Additionally, our ex-
+                                                                                       filtering schemes. Because of the memory limi-
+periments with different values of the λ parame-
+                                                                                       tation constraints, we performed the experiments
+ter for the Lidstone’s smoothing method indicate
+                                                                                       listed in Table 4 by selecting only a subset from
+that this smoothing method is useful for improv-
+                                                                                       8
+ing the performance of the HDP models. How-                                               A configuration λ = 0 in the Lidstone’s smoothing method
+                                                                                       is equivalent with a non-smoothed version of the model on
+ever, we could not find a λ value in our experi-                                       which it is applied.
+
+
+                                                                                  1419
+
+
+                                                 HDPflat    |    ACE       |   WD                                                                     HDP            |       ECB        |   WD
+                                                                                                                                                           struct                                                                                               iFHMM−iHMM         |        ECB    |    WD&CD
+                         2500                                                                                             100                                                                                                                       2
+
+
+  Number of categories
+                                                                                                                                                                                                  90.27                                            1.8
+                         2000                                                                                              90
+                                                                                                                                                                                                                                                   1.6
+
+
+
+
+                                                                                                                                                                                                                    Number of feature values (%)
+                                                                                                                                                                                        86.53                                                                                                                 1.47
+                         1500                                                                                              80                                                                                                                      1.4
+                                                                                                                                                                                                                                                                                                       1.20
+
+
+
+
+                                                                                                             F1−measure
+                                                                                                                                                                                                                                                   1.2
+                                                                                                                           70
+                         1000
+                                   5                                                                                                                                                                                                                1                                       0.91
+                                x 10
+                         −2.5                                                                                              60
+                                                                                                                                                                                                                                                   0.8
+      Log−likelihood
+
+
+
+
+                          −3                                                                                                                                                                                                                                              0.63
+                                                                                                                                                                                            48.62                                                  0.6
+                                                                                                                           50
+                         −3.5                                                                                                                                                                                                                      0.4             0.32
+                                                                                                                           40
+                          −4                                                                                                                                                                                                                       0.2
+                                                                                                                                     3
+                                                                                                                                     B         CEAF        PW                                                                                            0.07
+                         −4.5                                                                                              30                                                                                                                       0
+                             0         50       100        150       200           250     300        350                                 −7          −6            −4             −3           −2         1    2                                         10        50       100             150       200    250
+                                                                                                                                0        10         10          10            10             10           10   10
+                                                       Number of iterations                                                                                               λ                                                                                                            α’
+                                                           (a)                                                                                                      (b)                                                                                                      (c)
+Figure 3: (a) Evolution of K and log-likelihood in the HDPf lat model. (b) Evaluation of the Lidstone’s smoothing method in
+the HDPstruct model. (c) Counts of features employed by the iFHMM-iHMM model for various α′ values.
+
+
+                                                      B3                             CEAF                                           PW
+Model                                       R         P          F             R       P          F          R                       P          F
+                                                                                                                                                                         ist between em3 (buy) and em1 (buy) to indicate a
+                                                                                   ACE | WD                                                                              similarity between these mentions, they will most
+all                                    89.3      39.8           55.0   30.2              68.8    42.0       62.7                9.1           15.9                       probably be assigned to different clusters. This ex-
+unfiltered                             83.3      77.7           80.4   70.6              75.9    73.2       42.1                34.6          38.0
+discrete                               83.8      80.7           82.2   73.0              75.8    74.4       43.9                39.1          41.4                       ample also suggests the need for a better modeling
+median                                 83.5      80.2           81.8   72.2              75.3    73.7       42.7                38.2          40.3                       of the discourse salience for event mentions.
+uniform                                82.8      80.7           81.7   72.8              75.2    73.9       41.4                39.3          40.3
+                                                                                   ECB | WD
+                                                                                                                                                                            Another common error is made when match-
+all                                    89.5      62.5           73.6   53.3              76.5    62.8       60.7                22.9          33.2                       ing the semantic roles corresponding to coref-
+unfiltered                             82.6      96.6           89.0   92.0              79.1    85.1       28.4                75.6          41.0                       erential event mentions. Although we simu-
+discrete                               83.1      96.7           89.4   91.6              79.2    84.9       30.5                79.0          43.9
+median                                 82.5      97.3           89.3   92.8              78.9    85.3       29.2                78.8          42.0                       lated entity coreference by using various seman-
+uniform                                82.7      96.0           88.9   91.1              79.0    84.6       29.3                74.9          41.6                       tic features, the task of matching participants of
+                                                                                   ECB | CD
+ all        79.3 54.4 64.5 43.3 61.3 50.7                                                                   59.6 26.2 36.4                                               coreferential event mentions is not completely
+ unfiltered 67.2 94.5 78.5 84.7 59.2 69.6                                                                   32.8 82.5 46.8                                               solved. This is because, in many coreferen-
+ discrete 67.6 94.8 78.9 83.8 58.3 68.8                                                                     34.3 85.3 48.9                                               tial cases, partonomic relations between seman-
+ median     66.7 95.2 78.4 84.5 57.7 68.5                                                                   32.2 83.7 46.3
+ uniform 67.7 93.6 78.4 83.6 59.2 69.2                                                                      33.6 79.5 46.9                                               tic roles need to be inferred.9 Examples of
+Table 4: Feature non-sampling vs. feature                                                                   sampling in the                                              such relations extracted from ECB are Israeli
+                                                                                                                                                                                 PART OF                          PART OF
+iFHMM-iHMM model.                                                                                                                                                        forces−−−−→Israel, an Indian warship−−−−→the
+                                                                                                                                                                                                 PART OF
+                                                                                                                                                                         Indian navy, his cell−−−−→Sicilian jail. Simi-
+the feature types which proved to be salient in                                                                                                                          larly for event properties, many coreferential ex-
+the HDP experiments. As listed in Table 4,                                                                                                                               amples do not specify a clear location and time
+                                                                                                                                                                                                               PART OF
+all the iFHMM-iHMM models that used a fea-                                                                                                                               interval (e.g., Jabaliya refugee camp−−−−→Gaza,
+                                                                                                                                                                                   PART OF
+ture sampling scheme significantly outperform                                                                                                                            Tuesday−−−−→this week). In future work, we
+the iFHMM-iHMMall model; this proves that all                                                                                                                            plan to build relevant clusters using partonomies
+the sampling schemes considered in the iFHMM-                                                                                                                            and taxonomies such as the WordNet hierarchies
+iHMM framework are able to successfully filter                                                                                                                           built from MERONYMY/HOLONYMY and HYPER -
+out noisy and redundant feature values.                                                                                                                                  NYMY /HYPONYMY relations, respectively.10
+   The closest comparison to prior work is the
+                                                                                                                                                                         6 Conclusion
+supervised approach described in (Chen and Ji,
+2009) that achieved a 92.2% B3 F-measure on the                                                                                                                          We have presented two novel, nonparametric
+ACE corpus. However, for this result, ground truth                                                                                                                       Bayesian models that are designed to solve com-
+event mentions as well as a manually tuned coref-                                                                                                                        plex problems that require clustering objects char-
+erence threshold were employed.                                                                                                                                          acterized by a rich set of properties. Our experi-
+                                                                                                                                                                         ments for event coreference resolution proved that
+5 Error Analysis                                                                                                                                                         these models are able to solve real data applica-
+                                                                                                                                                                         tions in which the feature and cluster numbers are
+One frequent error occurs when a more complex
+                                                                                                                                                                         treated as free parameters, and the selection of fea-
+form of semantic inference is needed to find a cor-
+                                                                                                                                                                         ture values is performed automatically.
+respondence between two event mentions of the
+                                                                                                                                                                         9
+same individuated event. For instance, since all                                                                                                                            This observation was also reported in (Hasler and Orasan,
+                                                                                                                                                                         2009). 10 This task is not trivial since, if applying the tran-
+properties and participants of em3 (deal) are omit-                                                                                                                      sitive closure on these relations, all words will end up being
+ted in our example and no common features ex-                                                                                                                            part from the same cluster with entity for instance.
+
+
+                                                                                                                                                         1420
+
+
+References                                                   2009 Workshop on Graph-based Methods for Natu-
+                                                             ral Language Processing (TextGraphs-4), pages 54–
+ACE-Event. 2005. ACE (Automatic Content Extrac-              57.
+  tion) English Annotation Guidelines for Events, ver-
+  sion 5.4.3 2005.07.01.                                  Donald Davidson, 1969. The Individuation of Events.
+                                                            In N. Rescher et al., eds., Essays in Honor of Carl G.
+David Ahn. 2006. The stages of event extraction.            Hempel, Dordrecht: Reidel. Reprinted in D. David-
+  In Proceedings of the Workshop on Annotating and          son, ed., Essays on Actions and Events, 2001, Ox-
+  Reasoning about Time and Events, pages 1–8.               ford: Clarendon Press.
+James Allan, Jaime Carbonell, George Doddington,
+                                                          Donald Davidson, 1985. Reply to Quine on Events,
+  Jonathan Yamron, and Yiming Yang. 1998. Topic
+                                                            pages 172–176. In E. LePore and B. McLaughlin,
+  Detection and Tracking Pilot Study: Final Report.
+                                                            eds., Actions and Events: Perspectives on the Phi-
+  In Proceedings of the Broadcast News Understand-
+                                                            losophy of Donald Davidson, Oxford: Blackwell.
+  ing and Transcription Workshop, pages 194–218.
+
+Amit Bagga and Breck Baldwin. 1998. Algorithms            Marie-Catherine de Marneffe, Anna N. Rafferty, and
+ for Scoring Coreference Chains. In Proceedings of         Christopher D. Manning. 2008. Finding Contra-
+ the 1st International Conference on Language Re-          dictions in Text. In Proceedings of the 46th An-
+ sources and Evaluation (LREC-1998).                       nual Meeting of the Association for Computational
+                                                           Linguistics: Human Language Technologies (ACL-
+Amit Bagga and Breck Baldwin. 1999. Cross-                 HLT), pages 1039–1047.
+ Document Event Coreference: Annotations, Exper-
+ iments, and Observations. In Proceedings of the          Christiane Fellbaum. 1998. WordNet: An Electronic
+ ACL Workshop on Coreference and its Applications,          Lexical Database. MIT Press.
+ pages 1–8.
+                                                          Thomas S. Ferguson. 1973. A Bayesian Analysis
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.     of Some Nonparametric Problems. The Annals of
+  1998. The Berkeley FrameNet project. In Pro-              Statistics, 1(2):209–230.
+  ceedings of the 36th Annual Meeting of the Associ-
+  ation for Computational Linguistics and 17th Inter-     Charles J. Fillmore. 1982. Frame Semantics. In Lin-
+  national Conference on Computational Linguistics          guistics in the Morning Calm.
+  (COLING-ACL).
+                                                          Stuart Geman and Donald Geman. 1984. Stochas-
+Matthew J. Beal, Zoubin Ghahramani, and Carl Ed-             tic relaxation, Gibbs distributions and the Bayesian
+ ward Rasmussen. 2002. The Infinite Hidden                   restoration of images. IEEE Transactions on Pattern
+ Markov Model. In Advances in Neural Information             Analysis and Machine Intelligence, 6:721–741.
+ Processing Systems 14 (NIPS).
+                                                          Zoubin Ghahramani, T. L. Griffiths, and Peter Sollich,
+Cosmin Adrian Bejan and Sanda Harabagiu. 2008.              2007. Bayesian Statistics 8, chapter Bayesian non-
+  A Linguistic Resource for Discovering Event Struc-        parametric latent feature models, pages 201–225.
+  tures and Resolving Event Coreference. In Proceed-        Oxford University Press.
+  ings of the Sixth International Conference on Lan-
+  guage Resources and Evaluation (LREC).                  Tom Griffiths and Zoubin Ghahramani. 2006. Infinite
+                                                            Latent Feature Models and the Indian Buffet Pro-
+Cosmin Adrian Bejan and Chris Hathaway. 2007.               cess. In Advances in Neural Information Processing
+  UTD-SRL: A Pipeline Architecture for Extracting           Systems 18 (NIPS), pages 475–482.
+  Frame Semantic Structures. In Proceedings of the
+  Fourth International Workshop on Semantic Evalu-        Aria Haghighi and Dan Klein. 2007. Unsuper-
+  ations (SemEval), pages 460–463.                          vised Coreference Resolution in a Nonparametric
+                                                            Bayesian Model. In Proceedings of the 45th An-
+Cosmin Adrian Bejan, Matthew Titsworth, Andrew              nual Meeting of the Association of Computational
+  Hickl, and Sanda Harabagiu. 2009. Nonparametric           Linguistics (ACL), pages 848–855.
+  Bayesian Models for Unsupervised Event Corefer-
+  ence Resolution. In Advances in Neural Information      Aria Haghighi, Andrew Ng, and Christopher Man-
+  Processing Systems 23 (NIPS).                             ning. 2005. Robust Textual Inference via Graph
+                                                            Matching. In Proceedings of Human Language
+Cosmin Adrian Bejan. 2007. Deriving Chronologi-             Technology Conference and Conference on Empiri-
+  cal Information from Texts through a Graph-based          cal Methods in Natural Language Processing (HLT-
+  Algorithm. In Proceedings of the 20th Florida Ar-         EMNLP), pages 387–394.
+  tificial Intelligence Research Society International
+  Conference (FLAIRS), Applied Natural Language           Laura Hasler and Constantin Orasan. 2009. Do
+  Processing track.                                         coreferential arguments make event mentions coref-
+                                                            erential?    In Proceedings of the 7th Discourse
+Zheng Chen and Heng Ji. 2009. Graph-based Event             Anaphora and Anaphor Resolution Colloquium
+  Coreference Resolution. In Proceedings of the             (DAARC 2009).
+
+
+                                                      1421
+
+
+Kevin Humphreys, Robert Gaizauskas, and Saliha Az-           in R. Casati and A. C. Varzi, eds., Events, 1996,
+  zam. 1997. Event coreference for information ex-           pages 107–116, Aldershot: Dartmouth.
+  traction. In Proceedings of the Workshop on Opera-
+  tional Factors in Practical, Robust Anaphora Reso-      Lawrence R. Rabiner. 1989. A Tutorial on Hid-
+  lution for Unrestricted Texts, 35th Meeting of ACL,       den Markov Models and Selected Applications in
+  pages 75–81.                                              Speech Recognition. In Proceedings of the IEEE,
+                                                            pages 257–286.
+John B. Lowe, Collin F. Baker, and Charles J. Fillmore.
+  1997. A frame-semantic approach to semantic an-         Yee Whye Teh, Michael Jordan, Matthew Beal, and
+  notation. In Proceedings of the SIGLEX Workshop           David Blei. 2006. Hierarchical Dirichlet Pro-
+  on Tagging Text with Lexical Semantics: Why, What,        cesses. Journal of the American Statistical Associa-
+  and How?, pages 18–24.                                    tion, 101(476):1566–1581.
+
+Xiaoqiang Luo. 2005. On coreference resolution per-       Jurgen Van Gael, Y. Saatci, Yee Whye Teh, and Zoubin
+  formance metrics. In Proceedings of the Human              Ghahramani. 2008a. Beam Sampling for the Infi-
+  Language Technology Conference and Conference              nite Hidden Markov Model. In Proceedings of the
+  on Empirical Methods in Natural Language Pro-              25th Annual International Conference on Machine
+  cessing (EMNLP-2005), pages 25–32.                         Learning (ICML), pages 1088–1095.
+
+Jeff Malpas. 2009. Donald Davidson. In The                Jurgen Van Gael, Yee Whye Teh, and Zoubin Ghahra-
+   Stanford Encyclopedia of Philosophy (Fall 2009            mani. 2008b. The Infinite Factorial Hidden Markov
+   Edition), Edward N. Zalta (ed.), http://plato.stan        Model. In Advances in Neural Information Process-
+   ford.edu/archives/fall2009/entries/davidson/.             ing Systems 21 (NIPS).
+
+Srini Narayanan and Sanda Harabagiu. 2004. Ques-
+   tion Answering Based on Semantic Structures. In
+   Proceedings of the 20th International Conference on
+   Computational Linguistics (COLING), pages 693–
+   701.
+Radford M. Neal. 2003. Slice Sampling. The Annals
+  of Statistics, 31:705–741.
+Vincent Ng. 2008. Unsupervised Models for Corefer-
+  ence Resolution. In Proceedings of the 2008 Con-
+  ference on Empirical Methods in Natural Language
+  Processing (EMNLP), pages 640–649.
+Martha Palmer, Daniel Gildea, and Paul Kingsbury.
+ 2005. The Proposition Bank: An Annotated Cor-
+ pus of Semantic Roles. Computational Linguistics,
+ 31(1):71–105.
+Hoifung Poon and Pedro Domingos. 2008. Joint
+  Unsupervised Coreference Resolution with Markov
+  Logic. In Proceedings of the 2008 Conference on
+  Empirical Methods in Natural Language Processing
+  (EMNLP), pages 650–659.
+James Pustejovsky, Jose Castano, Bob Ingria, Roser
+  Sauri, Rob Gaizauskas, Andrea Setzer, and Gra-
+  ham Katz. 2003a. TimeML: Robust Specification
+  of Event and Temporal Expressions in Text. In
+  Proceedings of the Fifth International Workshop on
+  Computational Semantics (IWCS).
+James Pustejovsky, Patrick Hanks, Roser Sauri, An-
+  drew See, Robert Gaizauskas, Andrea Setzer,
+  Dragomir Radev, Beth Sundheim, David Day, Lisa
+  Ferro, and Marcia Lazo. 2003b. The TimeBank
+  Corpus. In Corpus Linguistics, pages 647–656.
+W. V. O. Quine, 1985. Events and Reification, pages
+  162–171. In E. LePore and B. P. McLaughlin, eds.,
+  Actions and Events: Perspectives on the philosophy
+  of Donald Davidson, Oxford: Blackwell. Reprinted
+
+
+                                                      1422
+

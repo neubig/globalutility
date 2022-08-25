@@ -1,0 +1,706 @@
+                               Learning 5000 Relational Extractors
+
+                         Raphael Hoffmann, Congle Zhang, Daniel S. Weld
+                                 Computer Science & Engineering
+                                     University of Washington
+                                     Seattle, WA-98195, USA
+                      {raphaelh,clzhang,weld}@cs.washington.edu
+
+
+
+                        Abstract                                    A third approach, sometimes refered to as weak
+                                                                 supervision, is to heuristically match values from
+    Many researchers are trying to use information               a database to text, thus generating a set of train-
+    extraction (IE) to create large-scale knowl-                 ing data for self-supervised learning of relation-
+    edge bases from natural language text on the                 specific extractors (Craven and Kumlien, 1999).
+    Web. However, the primary approach (su-                      With the Kylin system (Wu and Weld, 2007) ap-
+    pervised learning of relation-specific extrac-               plied this idea to Wikipedia by matching values
+    tors) requires manually-labeled training data                of an article’s infobox1 attributes to corresponding
+    for each relation and doesn’t scale to the thou-             sentences in the article, and suggested that their
+    sands of relations encoded in Web text.                      approach could extract thousands of relations (Wu
+                                                                 et al., 2008). Unfortunately, however, they never
+    This paper presents LUCHS, a self-supervised,
+                                                                 tested the idea on more than a dozen relations. In-
+    relation-specific IE system which learns 5025
+                                                                 deed, no one has demonstrated a practical way to
+    relations — more than an order of magnitude
+                                                                 extract more than about one hundred relations.
+    greater than any previous approach — with an
+                                                                    We note that Wikipedia’s infobox ‘ontology’ is
+    average F1 score of 61%. Crucial to LUCHS’s
+                                                                 a particularly interesting target for extraction. As a
+    performance is an automated system for dy-
+                                                                 by-product of thousands of contributors, it is broad
+    namic lexicon learning, which allows it to
+                                                                 in coverage and growing quickly. Unfortunately,
+    learn accurately from heuristically-generated
+                                                                 the schemata are surprisingly noisy and most are
+    training data, which is often noisy and sparse.
+                                                                 sparsely populated; challenging conditions for ex-
+                                                                 traction.
+1     Introduction
+                                                                    This paper presents LUCHS, an autonomous,
+Information extraction (IE), the process of gen-                 self-supervised system, which learns 5025 rela-
+erating relational data from natural-language text,              tional extractors — an order of magnitude greater
+has gained popularity for its potential applications             than any previous effort. Like Kylin, LUCHS cre-
+in Web search, question answering and other tasks.               ates training data by matching Wikipedia attribute
+Two main approaches have been attempted:                         values with corresponding sentences, but by itself,
+                                                                 this method was insufficient for accurate extrac-
+ • Supervised learning of relation-specific ex-
+                                                                 tion of most relations. Thus, LUCHS introduces
+    tractors (e.g., (Freitag, 1998)), and
+                                                                 a new technique, dynamic lexicon features, which
+ • “Open” IE — self-supervised learning of                       dramatically improves performance when learning
+    unlexicalized, relation-independent extractors               from sparse data and that way enables scalability.
+    (e.g., Textrunner (Banko et al., 2007)).
+Unfortunately, both methods have problems.                       1.1    Dynamic Lexicon Features
+Supervised approaches require manually-labeled                   Figure 1 summarizes the architecture of LUCHS.
+training data for each relation and hence can’t                  At the highest level, LUCHS’s offline training pro-
+scale to handle the thousands of relations encoded               cess resembles that of Kylin. Wikipedia pages
+in Web text. Open extraction is more scalable,
+but has lower precision and recall. Furthermore,                     1
+                                                                       A sizable fraction of Wikipedia articles have associated
+open extraction doesn’t canonicalize relations, so               infoboxes — relational summaries of the key aspects of the
+                                                                 subject of the article. For example, the infobox for Alan Tur-
+any application using the output must deal with                  ing’s Wikipedia page lists the values of 10 attributes, includ-
+homonymy and synonymy.                                           ing his birthdate, nationality and doctoral advisor.
+
+
+                                                           286
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 286–295,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ Learning                                                                    enables hyper-lexicalized extractors which
+                   Matcher            Harvester         WWW                  cope effectively with sparse training data.
+                                                                           • We evaluate the overall end-to-end perfor-
+  Training Data           Training Data            Filtered Lists
+                                                                             mance of LUCHS, showing an F1 score of 61%
+                                                                             when extracting relations from randomly se-
+      Classiﬁer               CRF                       Lexicon              lected Wikipedia pages.
+      Learner               Learner                     Learner
+                                        Lexicons                           • We present a comprehensive set of additional
+Extraction                                                                   experiments, evaluating LUCHS’s individual
+              Article                       Extractor
+                                           Extractor                         components, measuring the effect of dynamic
+                                          Extractor
+             Classiﬁer
+ Pages                   Classiﬁed Pages                  Tuples             lexicon features, testing sensitivity to varying
+                                                                             amounts of training data, and categorizing the
+Figure 1: Architecture of LUCHS. In order to                                 types of relations LUCHS can extract.
+handle sparsity in its heuristically-generated train-                     2   Heuristic Generation of Training Data
+ing data, LUCHS generates custom lexicon features
+when learning each relational extractor.                                  Wikipedia is an ideal starting point for our long-
+                                                                          term goal of creating a massive knowledge base of
+                                                                          extracted facts for two reasons. First, it is com-
+containing infoboxes are used to train a classi-                          prehensive, containing a diverse body of content
+fier that can predict the appropriate schema for                          with significant depth. Perhaps more importantly,
+pages missing infoboxes. Additionally, the val-                           Wikipedia’s structure facilitates self-supervised
+ues of infobox attributes are compared with article                       extraction. Infoboxes are short, manually-created
+sentences to heuristically generate training data.                        tabular summaries of many articles’ key facts —
+LUCHS’s major innovation is a feature-generation                          effectively defining a relational schema for that
+process, which starts by harvesting HTML lists                            class of entity. Since the same facts are often ex-
+from a 5B document Web crawl, discarding 98%                              pressed in both article and ontology, matching val-
+to create a set of 49M semantically-relevant lists.                       ues of the ontology to the article can deliver valu-
+When learning an extractor for relation R, LUCHS                          able, though noisy, training data.
+extracts seed phrases from R’s training data and                             For example, the Wikipedia article on “Jerry Se-
+uses a semi-supervised learning algorithm to cre-                         infeld” contains the sentence “Seinfeld was born
+ate several relation-specific lexicons at different                       in Brooklyn, New York.” and the article’s infobox
+points on a precision-recall spectrum. These lex-                         contains the attribute “birth place = Brooklyn”.
+icons form Boolean features which, along with                             By matching the attribute’s value “Brooklyn” to
+lexical and dependency parser-based features, are                         the sentence, we can heuristically generate train-
+used to produce a CRF extractor for each relation                         ing data for a birth place extractor. This data is
+— one which performs much better than lexicon-                            noisy; some attributes will not find matches, while
+free extraction on sparse training data.                                  others will find many co-incidental matches.
+   At runtime, LUCHS feeds pages to the article
+classfier, which predicts which infobox schema                            3   Learning Extractors
+is most appropriate for extraction. Then a small
+                                                                          We first assume that each Wikipedia infobox at-
+set of relation-specific extractors are applied to
+                                                                          tribute corresponds to a unique relation (but see
+each sentence, outputting tuples. Our experiments
+                                                                          Section 5.6) for which we would like to learn a
+demonstrate a high F1 score, 61%, across the 5025
+                                                                          specific extractor. A major challenge with such
+relational extractors learned.
+                                                                          an approach is scalability. Running a relation-
+1.2    Summary                                                            specific extractor for each of Wikipedia’s 34,000
+                                                                          unique infobox attributes on each of Wikipedia’s
+This paper makes several contributions:
+                                                                          50 million sentences would require 1.7 trillion ex-
+ • We present LUCHS, a self-supervised IE sys-                            tractor executions.
+   tem capable of learning more than an order                                We therefore choose a hierarchical approach
+   of magnitude more relation-specific extractors                         that combines both article classifiers and rela-
+   than previous systems.                                                 tion extractors. For each infobox schema, LUCHS
+ • We describe the construction and use of dy-                            trains a classifier that predicts if an article is likely
+   namic lexicon features, a novel technique, that                        to contain that schema. Only when an article
+
+
+                                                                    287
+
+
+is likely to contain a schema, does LUCHS run                   using the dynamic programming-based Viterbi al-
+that schema’s relation extractors. To extract in-               gorithm (Lafferty et al., 2001).
+fobox attributes from all of Wikipedia, LUCHS                     We evaluate nine kinds of Boolean features:
+now needs orders of magnitude fewer executions.
+   While this approach does not propagate infor-                Words For each input word w we introduce fea-
+mation from extractors back to article classifiers,             ture fww (yt−1 , yt , x, t) := 1[xt =w] .
+experiments confirm that our article classifiers
+nonetheless deliver accurate results (Section 5.2),             State Transitions For each transition be-
+reducing the potential benefit of joint inference. In           tween output labels li , lj we add feature
+addition, our approach reduces the need for extrac-             fltran
+                                                                  i ,lj
+                                                                        (yt−1 , yt , x, t) := 1[yt−1 =li ∧yt =lj ] .
+tors to keep track of the larger context, thus sim-
+plifying the extraction problem.                                Word Contextualization For parameters p and
+   We briefly summarize article classification: We              s we add features fwprev (yt−1 , yt , x, t) :=
+use a linear, multi-class classifier with six kinds of          1[w∈{xt−p ,...,xt−1 }] and fwsub (yt−1 , yt , x, t) :=
+features: words in the article title, words in the              1[w∈{xt+1 ,...,xt+s }] which capture a window of
+first sentence, words in the first sentence which               words appearing before and after each position t.
+are direct objects to the verb ‘to be’, article sec-
+                                                                Capitalization We                     add            feature
+tion headers, Wikipedia categories, and their an-
+                                                                f cap (yt−1 , yt , x, t) := 1[xt is capitalized] .
+cestor categories. We use the voted perceptron al-
+gorithm (Freund and Schapire, 1999) for training.
+                                                                Digits We add feature f dig (yt−1 , yt , x, t) :=
+   More challenging are the attribute extractors,
+                                                                1[xt is digits] .
+which we wish to be simple, fast, and able to well
+capture local dependencies. We use a linear-chain
+                                                                Dependencies We set f dep (yt−1 , yt , x, t) to the
+conditional random field (CRF) — an undirected
+                                                                lemmatized sequence of words from xt to the root
+graphical model connecting a sequence of input
+                                                                of the dependency tree, computed using the Stan-
+and output random variables, x = (x0 , . . . , xT )
+                                                                ford parser (Marneffe et al., 2006).
+and y = (y0 , . . . , yT ) (Lafferty et al., 2001). In-
+put variables are assigned words w. The states                  First Sentence We set f fs (yt−1 , yt , x, t) :=
+of output variables represent discrete labels l, e.g.           1[xt in first sentence of article] .
+Argi -of-Relj and Other. In our case, variables
+are connected in a chain, following the first-order             Gaussians For numeric attributes, we fit a Gaus-
+Markov assumption. We train to maximize condi-                  sian (µ, σ) and add feature figau (yt−1 , yt , x, t) :=
+tional likelihood of output variables given an input            1[|xt −µ|<iσ] for parameters i.
+probability distribution. The CRF models p(y|x)
+are represented with a log-linear distribution                  Lexicons For non-numeric attributes, and for a
+                                                                lexicon l, i.e. a set of related words, we add fea-
+                        T    K
+             1       XX                                         ture fllex (yt−1 , yt , x, t) := 1[xt ∈l] . Lexicons are
+ p(y|x) =        exp    λk fk (yt−1 , yt , x, t)
+            Z(x)                                                explained in the following section.
+                       t=1 k=1
+
+where feature functions, f , encode sufficient                  4    Extraction with Lexicons
+statistics of (x, y), T is the length of the sequence,
+K is the number of feature functions, and λk are                It is often possible to group words that are likely
+parameters representing feature weights, which                  to be assigned similar labels, even if many of these
+we learn during training. Z(x) is a partition func-             words do not appear in our training set. The ob-
+tion used to normalize the probabilities to 1. Fea-             tained lexicons then provide an elegant way to im-
+ture functions allow complex, overlapping global                prove the generalization ability of an extractor, es-
+features with lookahead.                                        pecially when only little training data is available.
+   Common techniques for learning the weights λk                However, there is a danger of overfitting, which
+include numeric optimization algorithms such as                 we discuss in Section 4.2.4.
+stochastic gradient descent or L-BFGS. In our ex-                  The next section explains how we mine the Web
+periments, we again use the simpler and more effi-              to obtain a large corpus of quality lists. Then Sec-
+cient voted-perceptron algorithm (Collins, 2002).               tion 4.2 presents our semi-supervised algorithm
+The linear-chain layout enables efficient interence             for learning semantic lexicons from these lists.
+
+
+                                                          288
+
+
+4.1     Harvesting Lists from the Web                         4.2.2 From Seeds to Lexicons
+Domain-independence requires access to an ex-                 To expand a set of seeds into a lexicon, LUCHS
+tremely large number of lists, but our tight in-              must identify relevant lists in the corpus. Rele-
+tegration of lexicon acquisition and CRF learn-               vancy can be computed by defining a similarity be-
+ing requires that relevant lists be accessed instan-          tween lists using the vector-space model. Specifi-
+taneously. Approaches using search engines or                 cally, let L denote the corpus of lists, and P be the
+wrappers at query time (Etzioni et al., 2004; Wang            set of unique phrases from L. Each list l0 ∈ L can
+and Cohen, 2008) are too slow; we must extract                be represented as a vector of weighted phrases p ∈
+and index lists prior to learning.                            P appearing on the list, l0 = (lp01 lp02 . . . lp0|P| ). Fol-
+   We begin with a 5 billion page Web crawl.                  lowing the notion of inverse document frequency,
+LUCHS can be combined with any list harvesting                a phrase’s weight is inversely proportional to the
+technique, but we choose a simple approach, ex-               number of lists containing the phrase. Popular
+tracting lists defined by HTML <ul> or <ol>                   phrases which appear on many lists thus receive
+tags. The set of lists obtained in this way is ex-            a small weight, whereas rare phrases are weighted
+tremely noisy — many lists comprise navigation                higher:
+                                                                                           1
+bars, tag sets, spam links, or a series of long text                         lp0i =
+paragraphs. This is consistent with the observation                                 |{l ∈ L|p ∈ l}|
+that less than 2% of Web tables are relational (Ca-           Unlike the vector space model for documents, we
+farella et al., 2008).                                        ignore term frequency, since the vast majority of
+   We therefore apply a series of filtering steps.            lists in our corpus don’t contain duplicates. This
+We remove lists of only one or two items, lists               vector representation supports the simple cosine
+containing long phrases, and duplicate lists from             definition of list similarity, which for lists l0 , l1 ∈
+the same host. After filtering we obtain 49 million           L is defined as
+lists, containing 56 million unique phrases.
+                                                                                              l0 · l1
+                                                                               simcos :=                .
+4.2     Semi-Supervised Learning of Lexicons                                                 kl0 kkl1 k
+
+While training a CRF extractor for a given rela-              Intuitively, two lists are similar if they have many
+tion, LUCHS uses its corpus of lists to automati-             overlapping phrases, the phrases are not too com-
+cally generate a set of semantic lexicons — spe-              mon, and the lists don’t contain many other
+cific to that relation. The technique proceeds in             phrases. By representing the seed set as another
+three steps, which have been engineered to run ex-            vector, we can find similar lists, hopefully contain-
+tremely quickly:                                              ing related phrases. We then create a semantic lex-
+                                                              icon by collecting phrases from a range of related
+  1. Seed phrases are extracted from the labeled              lists.
+     training set.                                               For example, one lexicon may be created as the
+                                                              union of all phrases on lists that have non-zero
+  2. A learning algorithm expands the seed                    similarity to the seed list. Unfortunately, due to
+     phrases into a set of lexicons.                          the noisy nature of the Web lists such a lexicon
+                                                              may be very large and may contain many irrele-
+  3. The semantic lexicons are added as features
+                                                              vant phrases. We expect that lists with higher sim-
+     to the CRF learning algorithm.
+                                                              ilarity are more likely to contain phrases which are
+                                                              related to our seeds; hence, by varying the sim-
+4.2.1    Extracting Seed Phrases                              ilarity threshold one may produce lexicons rep-
+For each training sentence LUCHS first identifies             resenting different compromises between lexicon
+subsequences of labeled words, and for each such              precision and recall. Not knowing which lexicon
+labeled subsequence, LUCHS creates one or more                will be most useful to the extractors, LUCHS gen-
+seed phrases p. Typically, a set of seeds con-                erates several and lets the extractors learn appro-
+sists precisely of the labeled subsequences. How-             priate weights.
+ever, if the labeled subsequences are long and have              However, since list similarities vary depending
+substructure, e.g., ‘San Remo, Italy’, our system             on the seeds, fixed thresholds are not an option. If
+splits at the separator token, and creates additional         #similarlists denotes the number of lists that have
+seed sets from prefixes and postfixes.                        non-zero similarity to the seed list and #lexicons
+
+
+                                                        289
+
+
+the total number of lexicons we want to generate,                                     1.0
+LUCHS sets lexicon i ∈ {0, . . . , #lexicons − 1}
+to be the union of prases on the                                                      0.8
+
+
+
+
+                                                                      precision
+                 #similarlistsi/#lexicons                                             0.6
+
+
+most similar lists.2                                                                  0.4
+
+4.2.3 Efficiently Creating Lexicons                                                   0.2
+We create lexicons from lists that are similar to
+                                                                                      0.0
+our seed vector, so we only consider lists that have                                     0.0   0.2    0.4    0.6    0.8      1.0
+at least one phrase in common. Importantly, our                                                         recall
+index structures allow LUCHS to select the rele-
+vant lists efficiently. For each seed, LUCHS re-                      Figure 2: Precision / recall curve for end-to-end
+trieves the set of containing lists as a sorted se-                   system performance on 100 random articles.
+quence of list identifiers. These sequences are
+then merged yielding a sequence of list identifiers
+with associated seed-hit counts. Precomputed list                     5.1               Overall Extraction Performance
+lengths and inverse document frequencies are also                     To evaluate the end-to-end performance of
+retrieved from indices, allowing efficient compu-                     LUCHS, we test the pipeline which first classifies
+tation of similarity. The worst case complexity is                    incoming pages, activating a small set of extrac-
+O(log(S)SK) where S is the number of seeds and                        tors on the text. To ensure adequate training and
+K the maximum number of lists to consider per                         test data, we limit ourselves to infobox classes
+seed.                                                                 with at least ten instances; there exist 1,583 such
+4.2.4 Preventing Lexicon Overfitting                                  classes, together comprising 981,387 articles. We
+                                                                      only consider the first ten sentences for each ar-
+Finally, we integrate the acquired semantic lexi-
+                                                                      ticle, and we only consider 5025 attributes.3 We
+cons as features into the CRF. Although Section 3
+                                                                      create a test set by sampling 100 articles ran-
+discussed how to use lexicons as CRF features,
+                                                                      domly; these articles are not used to train article
+there are some subtleties. Recall that the lexi-
+                                                                      classifiers or extractors. Each test article is then
+cons were created from seeds extracted from the
+                                                                      automatically classified, and a random attribute
+training set. If we now train the CRF on the same
+                                                                      of the predicted schema is selected for extraction.
+examples that generated the lexicon features, then
+                                                                      Gold labels for the selected attribute and article are
+the CRF will likely overfit, and weight the lexicon
+                                                                      created manually by a human judge and compared
+features too highly!
+                                                                      to the token-level predictions from the extractors
+    Before training, we therefore split the training
+                                                                      which are trainined on the remaining articles with
+set into k partitions. For each example in a par-
+                                                                      heuristic matches.
+tition we assign features based on lexicons gener-
+                                                                         Overall, LUCHS reaches a precision of .55 at a
+ated from only the k−1 remaining partitions. This
+                                                                      recall of .68, giving an F1-score of .61 (Figure 2).
+avoids overfitting and ensures that we will not per-
+                                                                      Analyzing the errors in more detail, we find that in
+form much worse than without lexicon features.
+                                                                      11 of 100 cases an article was incorrectly classi-
+When we apply the CRF to our test set, we use the
+                                                                      fied. We note that in at least two of these cases the
+lexicons based on all k partitions. We refer to this
+                                                                      predicted class could also be considered correct.
+technique as cross-training.
+                                                                      For example, instead of Infobox Minor Planet the
+5       Experiments                                                   extractor predicted Infobox Planet.
+                                                                         On five of the selected attributes the extrac-
+We start by evaluating end-to-end performance of                      tor failed because the attributes could be consid-
+LUCHS when applied to Wikipedia text, then an-                        ered unlearnable: The flexibility of Wikipedia’s
+alyze the characteristics of its components. Our                      infobox system allows contributors to introduce
+experiments use the 10/2008 English Wikipedia                         attributes for formatting, for example defining el-
+dump.
+                                                                                  3
+                                                                           Attributes were selected to have at least 10 heuristic
+    2
+     For practical reasons, we exclude the case i = #lexicons         matches, to have 10% of values covered by matches, and 10%
+in our experiments.                                                   of articles with attribute in infobox covered by matches.
+
+
+                                                                290
+
+
+ement order. In the future we wish to train LUCHS                                  Features                        F1-Score
+                                                                                                 Text attributes
+to ignore this type of attribute.                                                  Baseline                             .491
+   We also compared the heuristic matches con-                                     Baseline + Lexicons w/o CT           .367
+tained in the selected 100 articles to the gold stan-                              Baseline + Lexicons                  .545
+dard: The matches reach a precision of .90 at a                                               Numeric attributes
+                                                                                   Baseline                             .586
+recall of .33, giving an F1-score of .48. So while                                 Baseline + Gaussians w/o CT          .623
+most heuristic matches hit mentions of attribute                                   Baseline + Gaussians                 .627
+values, many other mentions go unmatched. Man-
+ual analysis shows that these values are often miss-                    Table 1: Impact of Lexicon and Gaussian features.
+ing from an infobox, are formatted differently, or                      Cross-Training (CT) is essential to improve per-
+are inconsistent to what is stated in the article.                      formance.
+   So why did the low recall of the heuristic
+matches not adversely affect recall of our extrac-                      improves these scores, but the relative improve-
+tors? For most articles, an attribute can be as-                        ments vary: For both text and numeric attributes,
+signed a single unique value. When training an                          contextualization and dependency features deliver
+attribute extractor, only articles that contained a                     the largest improvement. We then iteratively add
+heuristic match for that attribute were considered,                     the feature with largest improvement until no fur-
+thus avoiding many cases of unmatched mentions.                         ther improvement is observed. We finally obtain
+   Subsequent experiments evaluate the perfor-                          an F1-score of .491 for text and .586 for numeric
+mance of LUCHS components in more detail.                               attributes. For text attributes the extractor uses
+                                                                        word, contextualization, first sentence, capitaliza-
+5.2    Article Classification
+                                                                        tion, and digit features; for numeric attributes the
+The first step in LUCHS’s run-time pipeline is de-                      extractor uses word, contextualization, digit, first
+termining which infobox schemata are most likely                        sentence, and dependency features. We use these
+to be found in a given article. To test this, we ran-                   extractors as a baseline to evaluate our lexicon and
+domly split our 981,387 articles into 4/5 for train-                    Gaussian features.
+ing and 1/5 for testing, and train a single multi-                         Varying the size of the training sets affects re-
+class classifier. For this experiment, we use the                       sults: Taking more articles raises the F1-score, but
+original infobox class of an article as its gold la-                    taking more sentences per article reduces it. This
+bel. We compute the accuracy of the prediction at                       is because Wikipedia articles often summarize a
+.92. Since some classes can be considered inter-                        topic in the first few paragraphs and later discuss
+changeable, this number represents a lower bound                        related topics, necessitating reference resolution
+on performance.                                                         which we plan to add in future work.
+5.3    Factors Affecting Extraction Accuracy
+                                                                        5.4      Lexicon and Gaussian Features
+We now evaluate attribute extraction assuming
+perfect article classification. To keep training time                   We next study how our distribution features6 im-
+manageable, we sample 100 articles for training                         pact the quality of the baseline extractors (Table
+and 100 articles for testing4 for each of 100 ran-                      1). Without cross-training we observe a reduction
+dom attributes. We again only consider the first                        in performance, due to overfitting. Cross-training
+ten sentences of each article, and we only con-                         avoids this, and substantially improves results over
+sider articles that have heuristic matches with the                     the baseline. While cross-training is particularly
+attribute. We measure F1-score at a token-level,                        critical for lexicon features, it is less needed for
+taking the heuristic matches as ground-truth.                           Gaussians where only two parameters, mean and
+   We first test the performance of extractors                          deviation, are fitted to the training set.
+trained using our basic features (Section 3)5 , not                        The relative improvements depend on the num-
+including lexicons and Gaussians. We begin us-                          ber of available training examples (Table 2). Lex-
+ing word features and obtain a token-level F1-                          icon and Gaussian features especially benefit ex-
+score of .311 for text and .311 for numeric at-                         tractors for sparse attributes. Here we can also see
+tributes. Adding any of our additional features                         that the improvements are mainly due to increases
+   4
+      These numbers are smaller for attributes with less train-         in recall.
+ing data available, but the same split is maintained.
+    5                                                                      6
+      For contextualization features we choose p, s = 5.                       We set the number of lexicon and Gaussian features to 4.
+
+
+                                                                  291
+
+
+                                                                                  1.0
+ # Train   F1-B   F1-LUCHS       ∆F1    ∆Pr     ∆Re                                                        Numeric attr. (1063)
+                    Text attributes                                               0.8
+                                                                                                           Text attr. (3962)
+ 10        .379        .439 +16%       +10%    +20%
+ 25        .447        .504 +13%        +7%    +20%
+
+
+
+
+                                                               F1 Score
+ 100       .491        .545 +11%        +5%    +17%                               0.6
+                  Numeric attributes
+ 10        .484        .531 +10%        +4%    +13%                               0.4
+ 25        .552        .596      +8%    +4%    +10%
+ 100       .586        .627      +7%    +5%     +8%                               0.2
+
+Table 2: Lexicon and Gaussian features greatly ex-                                0.0
+pand F1 score (F1-LUCHS) over the baseline (F1-                                      0%     20%      40%    60%      80%        100%
+B), in particular for attributes with few training ex-                                              # Attributes
+amples. Gains are mainly due to increased recall.
+                                                               Figure 3: F1 scores among attributes, ranked by
+                                                               score. 810 text attributes (20%) and 328 numeric
+5.5    Scaling to All of Wikipedia                             attributes (31%) had an F1-score of .80 or higher.
+Finally, we take our best extractors and run them
+on all 5025 attributes, again assuming perfect ar-                                0.8
+ticle classification and using heuristic matches as
+gold-standard. Figure 3 shows the distribution of
+                                                               Average F1 Score
+                                                                                  0.6
+obtained F1 scores. 810 text attributes and 328 nu-
+meric attributes reach a score of 0.80 or higher.
+   The performance depends on the number of                                       0.4
+available training examples, and that number is
+governed by a long-tailed distribution. For ex-                                   0.2                              Numeric attr.
+ample, 61% of the attributes in our set have 50
+                                                                                                                   Text attr.
+or fewer examples, 36% have 20 or fewer. Inter-                                   0.0
+estingly, the number of training examples had a                                         0   20       40      60        80       100
+smaller effect on performance than expected. Fig-                                                # Training Examples
+ure 4 shows the correlation between these vari-
+ables. Lexicon and Gaussian features enables ac-               Figure 4: Average F1 score by number of training
+ceptable performance even for sparse attributes.               examples. While more training data helps, even
+   Averaging across all attributes we obtain F1                sparse attributes reach acceptable performance.
+scores of 0.56 and 0.60 for textual and numeric
+values respectively. We note that these scores
+assume that all attributes are equally important,                 Nevertheless, we clustered the textual attributes
+weighting rare attributes just like common ones.               in several ways. First, we cleaned the attribute
+If we weight scores by the number of attribute in-             names heuristically and performed spell check.
+stances, we obtain F1 scores of 0.64 (textual) and             The “distance” between two attributes was calcu-
+0.78 (numeric). In each case, precision is slightly            lated with a combination of edit distance and IR
+higher than recall.                                            metrics with Wordnet synonyms; then hierarchical
+                                                               agglomerative clustering was performed. We man-
+5.6    Towards an Attribute Ontology                           ually assigned names to the clusters and cleaned
+The true promise of relation-specific extractors               them, splitting and joining as needed. The result is
+comes when an ontology ties the system together.               too crude to be called an ontology, but we continue
+By learning a probabilistic model of selectional               its elaboration. There are a total of 3962 attributes
+preferences, one can use joint inference to improve            grouped in about 1282 clusters (not yet counting
+extraction accuracy. One can also answer scien-                attributes with numerical values); the largest clus-
+tific questions, such as “How many of the learned              ter, location, has 115 similar attributes. Figure 5
+Wikipedia attributes are distinct?” It is clear that           shows the confusion matrix between attributes in
+many duplicates exist due to collaborative sloppi-             the biggest clusters; the shade of the i, j th pixel
+ness, but semantic similarity is a matter of opinion           indicates the F1 score achieved by training on in-
+and an exact answer is impossible.                             stances of attribute i and testing on attribute j.
+
+
+                                                         292
+
+
+                                           location           ing data similar to LUCHS, but were only on a few
+                                           birthplace
+                                                p             infobox classes. In contrast, LUCHS shows that
+                                           title
+                                                              the idea scales to more than 5000 relations, but
+                                           country            that additional techniques, such as dynamic lexi-
+                                           full name          con learning, are necessary to deal with sparsity.
+                                           city
+                                                                 Extraction with lexicons While lexicons have
+                                           nationality        been commonly used for IE (Cohen and Sarawagi,
+                                           birth name         2004; Agichtein and Ganti, 2004; Bellare and Mc-
+                                           date of birth
+                                                              Callum, 2007), many approaches assume that lex-
+                                           date of death
+                                                              icons are clean and are supplied by a user before
+                                           date               training. Other approaches (Talukdar et al., 2006;
+                                           states
+                                                              Miller et al., 2004; Riloff, 1993) learn lexicons
+                                                              automatically from distributional patterns in text.
+Figure 5: Confusion matrix for extractor accuracy             (Wang et al., 2009) learns lexicons from Web lists
+training on one attribute then testing on another.            for query tagging. LUCHS differs from these ap-
+Note the extraction similarity between title and              proaches in that it is not limited to a small set of
+full-name, as well as between dates of birth and              well-defined relations. Rather than creating large
+death. Space constraints allow us to show only                lexicons of common entities, LUCHS attempts to
+1000 of LUCHS’s 5025 extracted attributes, those              efficiently instantiate a series of lexicons from a
+in the largest clusters.                                      small set of seeds to bias extractors of sparse at-
+                                                              tributes. Crucual to LUCHS’s different setting is
+6   Related Work                                              also the need to avoid overfitting.
+                                                                 Set expansion A large amount of work has
+Large-scale extraction A popular approach to IE               looked at automatically generating sets of related
+is supervised learning of relation-specific extrac-           items. Starting with a set of seed terms, (Etzioni
+tors (Freitag, 1998). Open IE, self-supervised                et al., 2004) extract lists by learning wrappers for
+learning of unlexicalized, relation-independent ex-           Web pages containing those terms. (Wang and Co-
+tractors (Banko et al., 2007), is a more scalable             hen, 2007; Wang and Cohen, 2008) extend the
+approach, but suffers from lower precision and                idea, computing term relatedness through a ran-
+recall, and doesn’t canonicalize the relations. A             dom walk algorithm that takes into account seeds,
+third approach, weak supervision, performs self-              documents, wrappers and mentions. Other ap-
+supervised learning of relation-specific extractors           proaches include Bayesian methods (Ghahramani
+from noisy training data, heuristically generated             and Heller, 2005) and graph label propagation al-
+by matching database values to text. (Craven and              gorithms (Talukdar et al., 2008; Bengio et al.,
+Kumlien, 1999; Hirschman et al., 2002) apply this             2006). The goal of set expansion techniques is
+technique to the biological domain, and (Mintz                to generate high precision sets of related items;
+et al., 2009) apply it to 102 relations from Free-            hence, these techniques are evaluated based on
+base. LUCHS differs from these approaches in that             lexicon precision and recall. For LUCHS, which is
+its “database” – the set of infobox values – itself           evaluated based on the quality of an extractor us-
+is noisy, contains many more relations, and has               ing the lexicons, lexicon precision is not important
+few instances per relation. Whereas the existing              – as long as it does not confuse the extractor.
+approaches focus on syntactic extraction patterns,
+LUCHS focuses on lexical information enhanced                 7   Future Work
+by dynamic lexicon learning.
+   Extraction from Wikipedia Wikipedia has                    We envision a Web-scale machine reading system
+become an interesting target for extraction.                  which simultaneously learns ontologies and ex-
+(Suchanek et al., 2008) build a knowledgebase                 tractors, and we believe that LUCHS’s approach
+from Wikipedia’s semi-structured data. (Wang et               of leveraging noisy semi-structured information
+al., 2007) propose a semisupervised positive-only             (such as lists or formatting templates) is a key to-
+learning technique. Although that extracts from               wards this goal. For future work, we plan to en-
+text, its reliance on hyperlinks and other semi-              hance LUCHS in two major ways.
+structured data limits extraction. (Wu and Weld,                 First, we note that a big weakness is that the
+2007; Wu et al., 2008)’s systems generate train-              system currently only works for Wikipedia pages.
+
+
+                                                        293
+
+
+For example, LUCHS assumes that each page cor-                     the author(s) and do not necessarily reflect the view of the
+responds to exactly one schema and that the sub-                   Air Force Research Laboratory (AFRL).
+ject of relations on a page are the same. Also,
+LUCHS makes predictions on a token basis, thus                     References
+sometimes failing to recognize larger segments.                    Eugene Agichtein and Venkatesh Ganti. 2004. Mining refer-
+To remove these limitations we plan to add a                         ence tables for automatic text segmentation. In Proceed-
+deeper linguistic analysis, making better use of                     ings of the Tenth ACM SIGKDD International Conference
+                                                                     on Knowledge Discovery and Data Mining (KDD-2004),
+parse and dependency information and including                       pages 20–29.
+coreference resolution. We also plan to employ
+relation-independent Open extraction techniques,                   Sören Auer, Christian Bizer, Georgi Kobilarov, Jens
+                                                                      Lehmann, Richard Cyganiak, and Zachary G. Ives. 2007.
+e.g. as suggested in (Wu and Weld, 2008) (retrain-                    Dbpedia: A nucleus for a web of open data. In Proceed-
+ing).                                                                 ings of the 6th International Semantic Web Conference
+   Second, we note that LUCHS’s performance                           and 2nd Asian Semantic Web Conference (ISWC/ASWC-
+                                                                      2007), pages 722–735.
+may benefit substantially from an attribute ontol-
+ogy. As we showed in Section 5.6, LUCHS’s cur-                     Michele Banko, Michael J. Cafarella, Stephen Soderland,
+rent extractors can also greatly facilitate learning                 Matthew Broadhead, and Oren Etzioni. 2007. Open in-
+                                                                     formation extraction from the web. In Proceedings of the
+a full attribute ontology. We therefore plan to in-                  20th International Joint Conference on Artificial Intelli-
+terleave extractor learning and ontology inference,                  gence (IJCAI-2007), pages 2670–2676.
+hence jointly learning ontology and extractors.
+                                                                   Kedar Bellare and Andrew McCallum. 2007. Learning ex-
+                                                                     tractors from unlabeled text using relevant databases. In
+8       Conclusion                                                   Sixth International Workshop on Information Integration
+                                                                     on the Web.
+Many researchers are trying to use IE to cre-
+                                                                   Yoshua Bengio, Olivier Delalleau, and Nicolas Le Roux.
+ate large-scale knowledge bases from natural lan-                    2006. Label propagation and quadratic criterion. In
+guage text on the Web, but existing relation-                        Olivier Chapelle, Bernhard Schölkopf, and Alexander
+specific techniques do not scale to the thousands                    Zien, editors, Semi-Supervised Learning, pages 193–216.
+                                                                     MIT Press.
+of relations encoded in Web text – while relation-
+independent techniques suffer from lower preci-                    Michael J. Cafarella, Alon Y. Halevy, Daisy Zhe Wang, Eu-
+sion and recall, and do not canonicalize the rela-                   gene Wu, and Yang Zhang. 2008. Webtables: exploring
+                                                                     the power of tables on the web. Proceedings of the In-
+tions. This paper shows that – with new techniques                   ternational Conference on Very Large Databases (VLDB-
+– self-supervised learning of relation-specific ex-                  2008), 1(1):538–549.
+tractors from Wikipedia infoboxes does scale.
+                                                                   Andrew Carlson, Justin Betteridge, Estevam R. Hruschka Jr.,
+   In particular, we present LUCHS, a self-                          and Tom M. Mitchell. 2009a. Coupling semi-supervised
+supervised IE system capable of learning more                        learning of categories and relations. In NAACL HLT 2009
+                                                                     Workskop on Semi-supervised Learning for Natural Lan-
+than an order of magnitude more relation-specific                    guage Processing.
+extractors than previous systems. LUCHS uses
+dynamic lexicon features that enable hyper-                        Andrew Carlson, Scott Gaffney, and Flavian Vasile. 2009b.
+                                                                     Learning a named entity tagger from gazetteers with the
+lexicalized extractors which cope effectively with                   partial perceptron. In AAAI Spring Symposium on Learn-
+sparse training data. We show an overall perfor-                     ing by Reading and Learning to Read.
+mance of 61% F1 score, and present experiments
+                                                                   William W. Cohen and Sunita Sarawagi. 2004. Exploiting
+evaluating LUCHS’s individual components.                            dictionaries in named entity extraction: combining semi-
+   Datasets generated in this work are available to                  markov extraction processes and data integration methods.
+the community7 .                                                     In Proceedings of the Tenth ACM SIGKDD International
+                                                                     Conference on Knowledge Discovery and Data Mining
+                                                                     (KDD-2004), pages 89–98.
+Acknowledgments
+                                                                   Michael Collins. 2002. Discriminative training methods for
+We thank Jesse Davis, Oren Etzioni, Andrey Kolobov,                  hidden markov models: Theory and experiments with per-
+Mausam, Fei Wu, and the anonymous reviewers for helpful              ceptron algorithms. In Proceedings of the 2002 Confer-
+comments and suggestions.                                            ence on Empirical Methods in Natural Language Process-
+   This material is based upon work supported by a WRF /             ing (EMNLP-2002).
+TJ Cable Professorship, a gift from Google and by the Air
+Force Research Laboratory (AFRL) under prime contract no.          Mark Craven and Johan Kumlien. 1999. Constructing bi-
+FA8750-09-C-0181. Any opinions, findings, and conclusion             ological knowledge bases by extracting information from
+or recommendations expressed in this material are those of           text sources. In Proceedings of the Seventh International
+                                                                     Conference on Intelligent Systems for Molecular Biology
+    7
+        http://www.cs.washington.edu/ai/iwp                          (ISMB-1999), pages 77–86.
+
+
+                                                             294
+
+
+Benjamin Van Durme and Marius Pasca. 2008. Finding cars,              Fabian M. Suchanek, Mauro Sozio, and Gerhard Weikum.
+  goddesses and enzymes: Parametrizable acquisition of la-              2009. Sofie: A self-organizing framework for informa-
+  beled instances for open-domain information extraction.               tion extraction. In Proceedings of the 18th International
+  In Proceedings of the Twenty-Third AAAI Conference on                 Conference on World Wide Web (WWW-2009).
+  Artificial Intelligence (AAAI-2008), pages 1243–1248.
+                                                                      Partha Pratim Talukdar, Thorsten Brants, Mark Liberman,
+Oren Etzioni, Michael J. Cafarella, Doug Downey, Ana-                    and Fernando Pereira. 2006. A context pattern induction
+  Maria Popescu, Tal Shaked, Stephen Soderland, Daniel S.                method for named entity extraction. In The Tenth Confer-
+  Weld, and Alexander Yates. 2004. Methods for domain-                   ence on Natural Language Learning (CoNLL-X-2006).
+  independent information extraction from the web: An ex-
+  perimental comparison. In Proceedings of the Nineteenth             Partha Pratim Talukdar, Joseph Reisinger, Marius Pasca,
+  National Conference on Artificial Intelligence (AAAI-                  Deepak Ravichandran, Rahul Bhagat, and Fernando
+  2004), pages 391–398.                                                  Pereira. 2008. Weakly-supervised acquisition of labeled
+                                                                         class instances using graph random walks. In EMNLP,
+Dayne Freitag. 1998. Toward general-purpose learning for                 pages 582–590.
+  information extraction. In Proceedings of the 17th inter-
+  national conference on Computational linguistics, pages             Richard C. Wang and William W. Cohen. 2007. Language-
+  404–408. Association for Computational Linguistics.                    independent set expansion of named entities using the
+                                                                         web. In Proceedings of the 7th IEEE International Con-
+Yoav Freund and Robert E. Schapire. 1999. Large margin                   ference on Data Mining (ICDM-2007), pages 342–350.
+  classification using the perceptron algorithm. Machine
+  Learning, 37(3):277–296.                                            Richard C. Wang and William W. Cohen. 2008. Iterative set
+                                                                         expansion of named entities using the web. In Proceed-
+                                                                         ings of the 8th IEEE International Conference on Data
+Zoubin Ghahramani and Katherine A. Heller.          2005.
+                                                                         Mining (ICDM-2008).
+  Bayesian sets. In Neural Information Processing Systems
+  (NIPS-2005).                                                        Gang Wang, Yong Yu, and Haiping Zhu. 2007. Pore:
+                                                                        Positive-only relation extraction from wikipedia text.
+Lynette Hirschman, Alexander A. Morgan, and Alexander S.                In Proceedings of the 6th International Semantic Web
+  Yeh. 2002. Rutabaga by any other name: extracting                     Conference and 2nd Asian Semantic Web Conference
+  biological names. Journal of Biomedical Informatics,                  (ISWC/ASWC-2007), pages 580–594.
+  35(4):247–259.
+                                                                      Ye-Yi Wang, Raphael Hoffmann, Xiao Li, and Alex Acero.
+John D. Lafferty, Andrew McCallum, and Fernando C. N.                   2009. Semi-supervised acquisition of semantic classes –
+   Pereira. 2001. Conditional random fields: Probabilistic              from the web and for the web. In International Confer-
+   models for segmenting and labeling sequence data. In                 ence on Information and Knowledge Management (CIKM-
+   Proceedings of the Eighteenth International Conference               2009), pages 37–46.
+   on Machine Learning (ICML-2001), pages 282–289.
+                                                                      Fei Wu and Daniel S. Weld. 2007. Autonomously seman-
+Marie-Catherine De Marneffe, Bill Maccartney, and Christo-               tifying wikipedia. In Proceedings of the International
+  pher D. Manning. 2006. Generating typed dependency                     Conference on Information and Knowledge Management
+  parses from phrase structure parses. In Proceedings of the             (CIKM-2007), pages 41–50.
+  fifth international conference on Language Resources and
+  Evaluation (LREC-2006).                                             Fei Wu and Daniel S. Weld. 2008. Automatically refin-
+                                                                         ing the wikipedia infobox ontology. In Proceedings of
+Scott Miller, Jethran Guinness, and Alex Zamanian. 2004.                 the 17th International Conference on World Wide Web
+  Name tagging with word clusters and discriminative train-              (WWW-2008), pages 635–644.
+  ing. In Proceedings of the Human Language Technology
+  Conference of the North American Chapter of the Associ-             Fei Wu and Daniel S. Weld. 2010. Open information ex-
+  ation for Computational Linguistics (HLT-NAACL-2004).                  traction using wikipedia. In The Annual Meeting of the
+                                                                         Association for Computational Linguistics (ACL-2010).
+Mike Mintz, Steven Bills, Rion Snow, and Daniel Jurafsky.
+  2009. Distant supervision for relation extraction without           Fei Wu, Raphael Hoffmann, and Daniel S. Weld. 2008. In-
+  labeled data. In The Annual Meeting of the Association                 formation extraction from wikipedia: moving down the
+  for Computational Linguistics (ACL-2009).                              long tail. In Proceedings of the 14th ACM SIGKDD Inter-
+                                                                         national Conference on Knowledge Discovery and Data
+Marius Pasca. 2009. Outclassing wikipedia in open-domain                 Mining (KDD-2008), pages 731–739.
+  information extraction: Weakly-supervised acquisition of
+  attributes over conceptual hierarchies. In Proceedings
+  of the 12th Conference of the European Chapter of the
+  Association for Computational Linguistics (EACL-2009),
+  pages 639–647.
+
+Ellen Riloff. 1993. Automatically constructing a dictionary
+   for information extraction tasks. In Proceedings of the
+   11th National Conference on Artificial Intelligence (AAAI-
+   1993), pages 811–816.
+
+Fabian M. Suchanek, Gjergji Kasneci, and Gerhard Weikum.
+  2008. Yago: A large ontology from wikipedia and word-
+  net. Elsevier Journal of Web Semantics, 6(3):203–217.
+
+
+                                                                295
+

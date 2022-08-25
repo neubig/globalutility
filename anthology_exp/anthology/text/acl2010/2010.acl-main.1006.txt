@@ -1,0 +1,715 @@
+       Structural Semantic Relatedness: A Knowledge-Based Method to
+                       Named Entity Disambiguation
+
+                                           Xianpei Han              Jun Zhao∗
+                                    National Laboratory of Pattern Recognition
+                              Institute of Automation, Chinese Academy of Sciences
+                                              Beijing 100190, China
+                                    {xphan,jzhao}@nlpr.ia.ac.cn
+
+
+
+                                                                  ledge base population. For example, in response
+                           Abstract                               to a person query, search engine returns a long,
+                                                                  flat list of results containing web pages about
+                                                                  several namesakes. The users are then forced
+                                                                  either to refine their query by adding terms, or to
+      Name ambiguity problem has raised urgent                    browse through the search results to find the per-
+      demands for efficient, high-quality named ent-              son they are seeking. Besides, an ever-increasing
+      ity disambiguation methods. In recent years,
+                                                                  number of question answering and information
+      the increasing availability of large-scale, rich
+      semantic knowledge sources (such as Wikipe-
+                                                                  extraction systems are coming to rely on data
+      dia and WordNet) creates new opportunities to               from multi-sources, where name ambiguity will
+      enhance the named entity disambiguation by                  lead to wrong answers and poor results. For ex-
+      developing algorithms which can exploit these               ample, in order to extract the birth date of the
+      knowledge sources at best. The problem is that              Berkeley professor Michael Jordan, a system
+      these knowledge sources are heterogeneous                   may return the birth date of his popular name-
+      and most of the semantic knowledge within                   sakes, e.g., the basketball player Michael Jordan.
+      them is embedded in complex structures, such
+      as graphs and networks. This paper proposes a                  So there is an urgent demand for efficient,
+      knowledge-based method, called Structural                   high-quality named entity disambiguation me-
+      Semantic Relatedness (SSR), which can en-                   thods. Currently, the common methods for
+      hance the named entity disambiguation by                    named entity disambiguation include name ob-
+      capturing and leveraging the structural seman-              servation clustering (Bagga and Baldwin, 1998)
+      tic knowledge in multiple knowledge sources.                and entity linking with knowledge base (McNa-
+      Empirical results show that, in comparison                  mee and Dang, 2009). In this paper, we focus on
+      with the classical BOW based methods and                    the method of name observation clustering. Giv-
+      social network based methods, our method can                en a set of observations O = {o1, o2, …, on} of the
+      significantly improve the disambiguation per-
+                                                                  target name to be disambiguated, a named entity
+      formance by respectively 8.7% and 14.7%.
+                                                                  disambiguation system should group them into a
+                                                                  set of clusters C = {c1, c2, …, cm}, with each re-
+1       Introduction
+                                                                  sulting cluster corresponding to one specific enti-
+Name ambiguity problem is common on the Web.                      ty. For example, consider the following four ob-
+For example, the name “Michael Jordan”                            servations of Michael Jordan:
+represents more than ten persons in the Google 1) Michael Jordan is a researcher in Computer
+search results. Some of them are shown below:     Science.
+                                                               2) Michael Jordan plays basketball in Chicago Bulls.
+    Michael (Jeffrey) Jordan, Basketball Player
+                                                               3) Michael Jordan wins NBA MVP.
+    Michael (I.) Jordan, Professor of Berkeley
+                                                               4) Learning in Graphical Models: Michael Jordan.
+    Michael (B.) Jordan, American Actor
+                                                                  A named entity disambiguation system should
+  The name ambiguity has raised serious prob-
+                                                                  group the 1st and 4th Michael Jordan observations
+lems in many relevant areas, such as web person
+                                                                  into one cluster for they both refer to the Berke-
+search, data integration, link analysis and know-
+∗
+    Corresponding author
+
+
+                                                             50
+            Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 50–59,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ley professor Michael Jordan, meanwhile group                      Fortunately, in recent years, due to the evolu-
+the other two Michael Jordan into another clus-                 tion of Web (e.g., the Web 2.0 and the Semantic
+ter as they refer to another person, the Basketball             Web) and many research efforts for the construc-
+Player Michael Jordan.                                          tion of knowledge bases, there is an increasing
+   To a human, named entity disambiguation is                   availability of large-scale knowledge sources,
+usually not a difficult task as he can make deci-               such as Wikipedia and WordNet. These large-
+sions depending on not only contextual clues, but               scale knowledge sources create new opportuni-
+also the prior background knowledge. For exam-                  ties for knowledge-based named entity disam-
+ple, as shown in Figure 1, with the background                  biguation methods as they contain rich semantic
+knowledge that both Learning and Graphical                      knowledge. For example, as shown in Figure 2,
+models are the topics related to Machine learning,              the link structure of Wikipedia contains rich se-
+while Machine learning is the sub domain of                     mantic relations between concepts. And we be-
+Computer science, a human can easily determine                  lieve that the disambiguation performance can be
+that the two Michael Jordan in the 1st and 4th ob-              greatly improved by designing algorithms which
+servations represent the same person. In the same               can exploit these knowledge sources at best.
+way, a human can also easily identify that the                     The problem of these knowledge sources is
+two Michael Jordan in the 2nd and 3rd observa-                  that they are heterogeneous (e.g., they contain
+tions represent the same person.                                different types of semantic relations and different
+                                                                types of concepts) and most of the semantic
+  1) Michael Jordan is a researcher in Computer Science.        knowledge within them is embedded in complex
+                  Machine learning                              structures, such as graphs and networks. For ex-
+ 4) Learning in Graphical Models: Michael Jordan
+                                                                ample, as shown in Figure 2, the semantic rela-
+                                                                tion between Graphical Model and Computer
+  2) Michael Jordan plays basketball in Chicago Bulls.          Science is embedded in the link structure of the
+ 3) Michael Jordan wins NBA MVP.
+                                                                Wikipedia. In recent years, some research has
+                                                                investigated to exploit some specific semantic
+ Figure 1. The exploitation of knowledge in human               knowledge, such as the social connection be-
+            named entity disambiguation                         tween named entities in the Web (Kalashnikov et
+   The development of systems which could rep-                  al. (2008), Wan et al. (2005) and Lu et al.
+licate the human disambiguation ability, however,               (2007)), the ontology connection in DBLP (Has-
+is not a trivial task because it is difficult to cap-           sell et al., 2006) and the semantic relations in
+ture and leverage the semantic knowledge as                     Wikipedia (Cucerzan (2007), Han and Zhao
+humankind. Conventionally, the named entity                     (2009)). These knowledge-based methods, how-
+disambiguation methods measure the similarity                   ever, usually are specialized to the knowledge
+between name observations using the bag of                      sources they used, so they often have the know-
+words (BOW) model (Bagga and Baldwin (1998);                    ledge coverage problem. Furthermore, these me-
+Mann and Yarowsky (2006); Fleischman and                        thods can only exploit the semantic knowledge to
+Hovy (2004); Pedersen et al. (2005)), where a                   a limited extent because they cannot take the
+name observation is represented as a feature vec-               structural semantic knowledge into consideration.
+tor consisting of the contextual terms. This mod-                  To overcome the deficiencies of previous me-
+el measures similarity based on only the co-                    thods, this paper proposes a knowledge-based
+occurrence statistics of terms, without consider-               method, called Structural Semantic Relatedness
+ing all the semantic relations like social related-             (SSR), which can enhance the named entity dis-
+ness between named entities, associative related-               ambiguation by capturing and leveraging the
+ness between concepts, and lexical relatedness                  structural semantic knowledge from multiple
+(e.g., acronyms, synonyms) between key terms.                   knowledge sources. The key point of our method
+                                                                is a reliable semantic relatedness measure be-
+   Mathematic                    Computer Science               tween concepts (including WordNet concepts,
+                                                                NEs and Wikipedia concepts), called Structural
+                 Statistics                                     Semantic Relatedness, which can capture both
+                              Machine learning                  the explicit semantic relations between concepts
+ Probability Theory                                             and the implicit semantic knowledge embedded
+                                                                in graphs and networks. In particular, we first
+                      Graphical model       Learning
+                                                                extract the semantic relations between two con-
+   Figure 2. Part of the link structure of Wikipedia            cepts from a variety of knowledge sources and
+
+
+                                                           51
+
+
+represent them using a graph-based model, se-                1. Wikipedia1, a large-scale online encyc-
+mantic-graph. Then based on the principle that            lopedia, its English version includes more than
+“two concepts are semantic related if they are            3,000,000 concepts and new articles are added
+both semantic related to the neighbor concepts of         quickly and up-to-date. Wikipedia contains rich
+each other”, we construct our Structural Seman-           semantic knowledge in the form of hyperlinks
+tic Relatedness measure. In the end, we leverage          between Wikipedia articles, such as Polysemy
+the structural semantic relatedness measure for           (disambiguation pages), Synonym (redirect pages)
+named entity disambiguation and evaluate the              and Associative relation (hyperlinks between
+performance on the standard WePS data sets.               Wikipedia articles). In this paper, we extract the
+The experimental results show that our SSR me-            semantic relatedness sr between Wikipedia con-
+thod can significantly outperform the traditional         cepts using the method described in Milne and
+methods.                                                  Witten(2008):
+   This paper is organized as follows. Section 2                                        log(max( A ，B )) − log( A ∩ B )
+                                                                     sr ( a, b) = 1 −
+describes how to construct the structural seman-                                          log( W ) − log(min( A , B ))
+tic relatedness measure. Next in Section 3 we             where a and b are the two concepts of interest, A
+describe how to leverage the captured knowledge           and B are the sets of all the concepts that are re-
+for named entity disambiguation. Experimental             spectively linked to a and b, and W is the entire
+results are demonstrated in Sections 4. Section 5         Wikipedia. For demonstration, we show the se-
+briefly reviews the related work. Section 6 con-          mantic relatedness between four selected con-
+cludes this paper and discusses the future work.          cepts in Table 1.
+
+2     The Structural Semantic Relatedness                                                      Statistics       Basketball
+      Measure                                                 Machine learning                    0.58             0.00
+                                                              MVP                                 0.00             0.45
+In this section, we demonstrate the structural se-
+                                                              Table 1. The semantic relatedness table of four se-
+mantic relatedness measure, which can capture
+                                                                         lected Wikipedia concepts
+the structural semantic knowledge in multiple
+knowledge sources. Totally, there are two prob-
+                                                              2. WordNet 3.02 (Fellbaum et al., 1998), a
+lems we need to address:
+                                                          lexical knowledge source includes over 110,000
+    1) How to extract and represent the seman-
+                                                          WordNet concepts (word senses about English
+tic relations between concepts, since there are
+                                                          words). Various lexical relations are recorded
+many types of semantic relations and they may
+                                                          between WordNet concepts, such as hyponyms,
+exist as different patterns (the semantic know-
+                                                          holonym and synonym. The lexical relatedness lr
+ledge may exist as explicit semantic relations or
+                                                          between two WordNet concepts are measured
+be embedded in complex structures).
+                                                          using the Lin (1998)’s WordNet semantic simi-
+    2) How to capture all the extracted seman-
+                                                          larity measure. Table 2 shows some examples of
+tic relations between concepts in our semantic
+                                                          the lexical relatedness.
+relatedness measure.
+   To address the above two problems, in follow-                                               school             science
+ing we first introduce how to extract the semantic            university                        0.67                0.10
+relations from multiple knowledge sources; then               research                          0.54                0.39
+we represent the extracted semantic relations us-
+                                                          Table 2. The lexical relatedness table of four selected
+ing the semantic-graph model; finally we build
+                                                                           WordNet concepts
+our structural semantic relatedness measure.
+2.1    Knowledge Sources                                      3. NE Co-occurrence Corpus, a corpus of
+                                                          documents for capturing the social relatedness
+We extract three types of semantic relations (se-
+                                                          between named entities. According to the fuzzy
+mantic relatedness between Wikipedia concepts,
+                                                          set theory (Baeza-Yates et al., 1999), the degree
+lexical relatedness between WordNet concepts
+                                                          of named entities co-occurrence in a corpus is a
+and social relatedness between NEs) correspon-
+                                                          measure of the relatedness between them. For
+dingly from three knowledge sources: Wikipedia,
+                                                          example, in Google search results, the “Chicago
+WordNet and NE Co-occurrence Corpus.
+                                                          Bulls” co-occurs with “NBA” in more than
+
+                                                          1
+                                                              http://www.wikipedia.org/
+                                                          2
+                                                              http:// wordnet.princeton.edu/
+
+
+                                                     52
+
+
+7,900,000 web pages, while only co-occurs with                                  Given a set of name observations, the con-
+“EMNLP” in less than 1,000 web pages. So the                                 struction of semantic-graph takes two steps: con-
+co-occurrence statistics can be used to measure                              cept extraction and concept connection. In the
+the social relatedness between named entities. In                            following we respectively describe each step.
+this paper, given a NE Co-occurrence Corpus D,                                   1) Concept Extraction. In this step we ex-
+the social relatedness scr between two named                                 tract all the concepts in the contexts of name ob-
+entities ne1 and ne2 is measured using the Google                            servations and represent them as the nodes in the
+Similarity Distance (Cilibrasi and Vitanyi, 2007):                           semantic-graph. We first gather all the N-grams
+                               log(max( D1 , D2 )) − log( D1 ∩ D2 )          (up to 8 words) and identify whether they corres-
+      scr (ne1 , ne2 ) = 1 −
+                                  log( D ) − log(min( D1 , D2 ))             pond to semantically meaningful concepts: if a
+where D1 and D2 are the document sets corres-                                N-gram is contained in the WordNet, we identify
+pondingly containing ne1 and ne2. An example of                              it as a WordNet concept, and use its primary
+social relatedness is shown in Table 3, which is                             word sense as its semantic meaning; to find
+computed using the Web corpus through Google.                                whether a N-gram is a named entity, we match it
+                                                                             to the named entity list extracted using the open-
+                                       ACL                       NBA         Calais API3, which contains more than 30 types
+ EMNLP                                 0.61                      0.00        of named entities, such as Person, Organization
+ Chicago Bulls                         0.19                      0.55        and Award; to find whether a N-gram is a Wiki-
+Table 3. The social relatedness table of four selected                       pedia concept, we match it to the Wikipedia anc-
+                   named entities                                            hor dictionary, then find its corresponding Wiki-
+                                                                             pedia concept using the method described in
+2.2       The Semantic-Graph Model                                           (Medelyan et al, 2008). After concept identifica-
+                                                                             tion, we filter out all the N-grams which do not
+In this section we present a graph-based repre-                              correspond to the semantic meaningful concepts,
+sentation, called semantic-graph, to model the                               such as the N-grams “learning in” and “wins
+extracted semantic relations as a graph within                               NBA MVP”. The retained N-grams are identified
+which the semantic relations are interconnected                              as concepts, corresponding with their semantic
+and transitive. Concretely, the semantic-graph is                            meanings (a concept may have multiple semantic
+defined as follows:                                                          meaning explanation, e.g., the “MVP” has three
+  A semantic-graph is a weighted graph G = (V,                               semantic meaning, as “most valuable player,
+  E), where each node represents a distinct con-                             MVP” in WordNet, as the “Most Valuable Play-
+  cept; and each edge between a pair of nodes                                er” in Wikipedia and as a named entity of Award
+  represents the semantic relation between the                               type).
+  two concepts corresponding to these nodes,
+  with the edge weight indicating the strength of                                2) Concept Connection. In this step we
+  the semantic relation.                                                     represent the semantic relations as the edges be-
+   For demonstration, Figure 3 shows a semantic-                             tween nodes. That is, for each pair of extracted
+graph which models the semantic knowledge                                    concepts, we identify whether there are semantic
+extracted from Wikipedia for the Michael Jordan                              relations between them: 1) If there is only one
+observations in Section 1.                                                   semantic relation between them, we connect
+                                                                             these two concepts with an edge, where the edge
+            Researcher                           Graphical
+                                                 Model
+                                                                             weight is the strength of the semantic relation; 2)
+                  0.32                0.28
+                                                                             If there is more than one semantic relations be-
+                         Computer                 0.48                       tween them, we choose the most reliable seman-
+                         Science
+                                         0.41         Learning               tic relation, i.e., we choose the semantic relation
+                                                                             in the knowledge sources according to the order
+        Basketball
+                                               0.76                          of WordNet, Wikipedia and NE Co-concurrence
+                           0.45                              NBA
+                                                                             corpus (Suchanek et al., 2007). For example, if
+                  0.58         0.71                      0.57                both Wikipedia and WordNet provide the seman-
+         Chicago Bulls
+                                                                 MVP
+                                                                             tic relation between MVP and NBA, we choose
+                                                                             the semantic relation provided by WordNet.
+                                        0.71
+
+
+
+          Figure 3. An example of semantic-graph
+                                                                             3
+                                                                                 http://www.opencalais.com/
+
+
+                                                                        53
+
+
+2.3   The Structural Semantic Relatedness                   cago Bulls are all semantically related to MVP.
+      Measure                                               This definition is recursive, and the starting point
+                                                            we choose is the semantic relatedness in the edge.
+In this section, we describe how to capture the
+                                                            Thus our structural semantic relatedness has two
+semantic relations between the concepts in se-
+                                                            components: the neighbor term of the previous
+mantic-graph using a semantic relatedness meas-
+                                                            recursive phase which captures the graph struc-
+ure. Totally, the semantic knowledge between
+                                                            ture and the semantic relatedness which captures
+concepts is modeled in two forms:
+                                                            the edge information. Thus, the recursive form of
+    1) The edges of semantic-graph. The
+                                                            the structural semantic relatedness Sij between
+edges model the direct semantic relations be-
+                                                            the node i and the node j can be written as:
+tween concepts. We call this form of semantic
+                                                                                          Ail
+knowledge as explicit semantic knowledge.                                  Sij = λ ∑          Slj + μ Aij
+    2) The structure of semantic-graph. Ex-                                       l∈N i   di
+cept for the edges, the structure of the semantic-          where λ and μ control the relative importance
+graph also models the semantic knowledge of                 of the two components and
+concepts. For example, the neighbors of a con-                Ni={j | Aij > 0} is the set of the immediate
+cept represent all the concepts which are explicit-           neighbors of node i;
+ly semantic-related to this concept; and the paths
+                                                              d = ∑ Aij is the degree of node i.
+between two concepts represent all the explicit                 i  j∈Ni
+and implicit semantic relations between them.               In order to solve this formula, we introduce the
+We call this form of semantic knowledge as                  following two notations:
+structural semantic knowledge, or implicit se-                T: The relatedness transition matrix, where
+mantic knowledge.                                             T[i,j]=Aij/di, indicating the transition rate of re-
+   Therefore, in order to deduce a reliable seman-            latedness from node j to its neighbor i.
+tic relatedness measure, we must take both the
+edges and the structure of semantic-graph into                S: The structural semantic relatedness matrix,
+consideration. Under the semantic-graph model,                where S[i,j]=Sij.
+the measurement of semantic relatedness be-                 Now we can turn our first form of structural se-
+tween concepts equals to quantifying the similar-           mantic relatedness into the matrix form:
+ity between nodes in a weighted graph. To simpl-                               S = λTS + μ A
+ify the description, we assign each node in se-             By solving this equation, we can get:
+                                                                                             −1
+mantic-graph an integer index from 1 to |V| and                              S = μ ( I − λT ) A
+use this index to represent the node, then we can
+                                                            where I is the identity matrix. Since μ is a pa-
+write the adjacency matrix of the semantic-graph
+                                                            rameter which only contributes an overall scale
+G as A, where A[i,j] or Aij is the edge weight be-
+tween node i and node j.                                    factor to the relatedness value, we can ignore it
+                                                            and get the final form of the structural semantic
+   The problem of quantifying the relatedness be-           relatedness as:
+tween nodes in a graph is not a new problem, e.g.,                                          −1
+                                                                              S = ( I − λT ) A
+the structural equivalence and structural similar-
+ity (the SimRank in Jeh and Widom (2002) and                Because the S is asymmetric, the finally related-
+the similarity measure in Leicht et al. (2006)).            ness between node i and node j is the average of
+However, these similarity measures are not suit-            Sij and Sji.
+able for our task, because all of them assume that          The meaning of λ : The last question of our
+the edges are uniform so that they cannot take              structural semantic relatedness measure is how to
+edge weight into consideration.                             set the free parameter λ . To understand the
+                                                            meaning of λ , let us expand the similarity as a
+   In order to take both the graph structure and
+                                                            power series thus:
+the edge weight into account, we design the                                        2 2               k      k
+structural semantic relatedness measure by ex-                     S = ( I + λT + λ T + ... + λ T + ...) A
+tending the measure introduced in Leicht et al.                Noting that the [Tk]ij element is the relatedness
+(2006). The fundamental principle behind our                transition rate from node i to node j with path
+measure is “a node u is semantically related to             length k, we can view the λ as a penalty factor
+another node v if its immediate neighbors are               for the transition path length: by setting the λ
+semantically related to v”. This definition is natu-        with a value within (0, 1), a longer graph path
+ral, for example, as shown in Figure 3, the con-            will contribute less to the final relatedness value.
+cept Basketball and its neighbors NBA and Chi-              The optimal value of λ is 0.6 through a learning
+
+                                                       54
+
+
+process shown in Section 4. For demonstration,                 using the same method described in Section 2.2,
+Table 4 shows some structural semantic related-                so they are just the same concepts within the se-
+ness values of the Semantic-graph in Figure 3                  mantic-graph. Using the same concept index as
+(CS represents computer science and GM                         the semantic-graph, a name observation oi is then
+represents Graphical model). From Table 4, we                  represented as oi = {wi1 , wi 2 ,..., win } , where wik is
+can see that the structural semantic relatedness               the kth concept’s weight in observation oi, com-
+can successfully capture the semantic knowledge                puted using the standard TFIDF weight model,
+embedded in the structure of semantic-graph,                   where the DF is computed using the Google
+such as the implicit semantic relation between                 Web1T 5-gram corpus4. Given the concept vec-
+Researcher and Learning.                                       tor representation of two name observations oi
+                 Researcher     CS     GM     Learning         and oj, their similarity is computed as:
+ Researcher          ---        0.50   0.27     0.31
+                                                                         SIM (oi , o j ) = ∑∑ wil w jk Slk   ∑∑ w w  il   jk
+ CS                 0.50         ---   0.62     0.73                                      l   k              l   k
+ GM                 0.27        0.62    ---     0.80           which is the weighted average of all the structur-
+ Learning           0.31        0.73   0.80      ---
+                                                               al semantic relatedness between the concepts in
+    Table 4. The structural semantic relatedness of the        the contexts of the two name observations.
+            semantic-graph shown in Figure 3
+                                                               3.2      Grouping Name Observations through
+3      Named Entity Disambiguation by Le-                               Hierarchical Agglomerative Clustering
+       veraging Semantic Knowledge                             Given the computed similarities, name observa-
+In this section we describe how to leverage the                tions are disambiguated by grouping them ac-
+semantic knowledge captured in the structural                  cording to their represented entities. In this paper,
+semantic relatedness measure for named entity                  we group name observations using the hierar-
+disambiguation. Because the key problem of                     chical agglomerative clustering(HAC) algorithm,
+named entity disambiguation is to measure the                  which is widely used in prior disambiguation
+similarity between name observations, we inte-                 research and evaluation task (WePS1 and
+grate the structural semantic relatedness in the               WePS2). The HAC produce clusters in a bottom-
+similarity measure, so that it can better reflect the          up way as follows: Initially, each name observa-
+actual similarity between name observations.                   tion is an individual cluster; then we iteratively
+   Concretely, our named entity disambiguation                 merge the two clusters with the largest similarity
+system works as follows: 1) Measuring the simi-                value to form a new cluster until this similarity
+larity between name observations; 2) Grouping                  value is smaller than a preset merging threshold
+name observations using the clustering algorithm.              or all the observations reside in one common
+In the following we describe each step in detail.              cluster. The merging threshold can be deter-
+                                                               mined through cross-validation. We employ the
+3.1      Measuring the Similarity between Name                 single-link method to compute the similarity be-
+         Observations                                          tween two clusters, which has been applied wide-
+Intuitively, if two observations of the target name            ly in prior research (Bagga and Baldwin (1998);
+represent the same entity, it is highly possible               Mann and Yarowsky (2003)).
+that the concepts in their contexts are closely re-
+                                                               4      Experiments
+lated, i.e., the named entities in their contexts are
+socially related and the Wikipedia concepts in                 To assess the performance of our method and
+their contexts are semantically related. In con-               compare it with traditional methods, we conduct
+trast, if two name observations represent differ-              a series of experiments. In the experiments, we
+ent entities, the concepts within their contexts               evaluate the proposed SSR method on the task of
+will not be closely related. Therefore we can                  personal name disambiguation, which is the most
+measure the similarity between two name obser-                 common type of named entity disambiguation. In
+vations by summarizing all the semantic related-               the following, we first explain the general expe-
+ness between the concepts in their contexts.                   rimental settings in Section 4.1, 4.2 and 4.3; then
+   To measure the similarity between name ob-                  evaluate and discuss the performance of our me-
+servations, we represent each name observation                 thod in Section 4.4.
+as a weighted vector of concepts (including
+named entities, Wikipedia concepts and Word-
+Net concepts), where the concepts are extracted                4
+                                                                   www.ldc.upenn.edu/Catalog/docs/LDC2006T13/
+
+
+                                                          55
+
+
+4.1   Disambiguation Data Sets                             network based methods, which is the same as the
+                                                           method described in Malin et al. (2005): HAC
+We adopted the standard data sets used in the
+                                                           over the similarity obtained through random
+First Web People Search Clustering Task
+                                                           walk over the social network built from the web
+(WePS1) (Artiles et al., 2007) and the Second
+                                                           pages of the top N search results. (3)SSR-
+Web People Search Clustering Task (WePS2)
+                                                           NoKnowledge: The third one is used as a base-
+(Artiles et al., 2009). The three data sets we used
+                                                           line for evaluating the efficiency of semantic
+are WePS1_training data set, WePS1_test data
+                                                           knowledge: HAC over the similarity computed
+set, and WePS2_test data set. Each of the three
+                                                           on semantic-graph with no knowledge integrated,
+data sets consists of a set of ambiguous personal
+                                                           i.e., the similarity is computed as:
+names (totally 109 personal names); and for each
+                                                                       SIM (oi , o j ) = ∑ wil w jl    ∑∑ w w   il   jk
+name, we need to disambiguate its observations                                            l             l   k
+
+in the web pages of the top N (100 for WePS1               (4) SSR-NoStructure: The fourth one is used as
+and 150 for WePS2) Yahoo! search results.                  a baseline for evaluating the efficiency of the
+   The experiment made the standard “one per-              semantic knowledge embedded in complex struc-
+son per document” assumption, which is widely              tures: HAC over the similarity computed by only
+used in the participated systems in WePS1 and              integrating the explicit semantic relations, i.e.,
+WePS2, i.e., all the observations of the same              the similarity is computed as:
+name in a document are assumed to represent the                     SIM (oi , o j ) = ∑∑ wil w jk Alk       ∑∑ w w   il   jk
+same entity. Based on this assumption, the fea-                                       l   k                 l   k
+
+
+tures within the entire web page are used to dis-          4.4.1 Overall Performance
+ambiguate personal names.                                  We conducted several experiments on all the
+                                                           three WePS data sets: the four baselines, the pro-
+4.2   Knowledge Sources
+                                                           posed SSR method and the proposed SSR me-
+There were three knowledge sources we used for             thod with only one special type knowledge added,
+our experiments: the WordNet 3.0; the Sep. 9,              respectively SSR-NE, SSR-WordNet and SSR-
+2007 English version of Wikipedia; and the Web             Wikipedia. All the optimal merging thresholds
+pages of each ambiguous name in WePS datasets              used in HAC were selected by applying leave-
+as the NE Co-occurrence Corpus.                            one-out cross validation. The overall perfor-
+                                                           mance is shown in Table 5.
+4.3   Evaluation Criteria                                                                            WePS1_training
+                                                                  Method                      Pur       Inv_Pur                 F
+We adopted the measures used in WePS1 to eva-                      BOW                        0.71        0.88                 0.78
+luate the performance of name disambiguation.                  SocialNetwork                  0.66        0.98                 0.76
+These measures are:                                          SSR-NoKnowledge                  0.79        0.89                 0.81
+                                                              SSR-NoStructure                 0.87        0.83                 0.83
+   Purity (Pur): measures the homogeneity of                     SSR-NE                       0.80        0.86                 0.82
+name observations in the same cluster;                         SSR-WordNet                    0.80        0.91                 0.83
+   Inverse purity (Inv_Pur): measures the com-                 SSR-Wikipedia                  0.82        0.90                 0.84
+                                                                    SSR                       0.82        0.92                 0.85
+pleteness of a cluster;                                                                               WePS1_test
+   F-Measure (F): the harmonic mean of purity                                                 Pur       Inv_Pur                 F
+and inverse purity.                                                BOW                        0.74        0.87                 0.74
+                                                               SocialNetwork                  0.83        0.63                 0.65
+   The detailed definitions of these measures can            SSR-NoKnowledge                  0.80        0.74                 0.75
+be found in Amigo, et al. (2008). We use F-                   SSR-NoStructure                 0.80        0.78                 0.78
+measure as the primary measure just liking                       SSR-NE                       0.73        0.80                 0.74
+                                                               SSR-WordNet                    0.81        0.77                 0.77
+WePS1 and WePS2.                                               SSR-Wikipedia                  0.88        0.77                 0.81
+                                                                    SSR                       0.85        0.83                 0.84
+4.4   Experimental Results                                                                            WePS2_test
+                                                                                              Pur       Inv_Pur                 F
+We compared our method with four baselines: (1)                    BOW                        0.80        0.80                 0.77
+BOW: The first one is the traditional Bag of                   SocialNetwork                  0.62        0.93                 0.70
+Words model (BOW) based methods: hierarchic-                 SSR-NoKnowledge                  0.84        0.80                 0.80
+                                                              SSR-NoStructure                 0.84        0.83                 0.81
+al agglomerative clustering (HAC) over term                      SSR-NE                       0.78        0.88                 0.80
+vector similarity, where the features including                SSR-WordNet                    0.85        0.82                 0.83
+single words and NEs, and all the features are                 SSR-Wikipedia                  0.84        0.81                 0.82
+                                                                    SSR                       0.89        0.84                 0.86
+weighted using TFIDF. This baseline is also the
+state-of-art method in WePS1 and WePS2. (2)                 Table 5. Performance results of baselines and SSR
+SocialNetwork: The second one is the social                                    methods
+
+
+                                                      56
+
+
+  From the performance results in Table 5, we              tion of semantic knowledge. Our method exploits
+can see that:                                              the semantic knowledge in two directions:
+  1) The semantic knowledge can greatly im-
+                                                              1) The Integration of Multiple Semantic
+prove the disambiguation performance: com-
+                                                           Knowledge Sources. Using the semantic-graph
+pared with the BOW and the SocialNetwork
+                                                           model, our method can integrate the semantic
+baselines, SSR respectively gets 8.7% and 14.7%
+                                                           knowledge extracted from multiple knowledge
+improvement on average on the three data sets.
+                                                           sources, while most traditional knowledge-based
+   2) By leveraging the semantic knowledge                 methods are usually specialized to one type of
+from multiple knowledge sources, we can obtain             knowledge. By integrating multiple semantic
+a better named entity disambiguation perfor-               knowledge sources, our method can improve the
+mance: compared with the SSR-NE’s 0% im-                   semantic knowledge coverage.
+provement, the SSR-WordNet’s 2.3% improve-
+                                                               2) The exploitation of Semantic Knowledge
+ment and the SSR-Wikipedia’s 3.7% improve-
+                                                           embedded in complex structures. Using the struc-
+ment, the SSR gets 6.3% improvement over the
+                                                           tural semantic relatedness measure, our method
+SSR-NoKnowledge baseline, which is larger than
+                                                           can exploit the implicit semantic knowledge em-
+all the SSR methods with only one type of se-
+                                                           bedded in complex structures; while traditional
+mantic knowledge integrated.
+                                                           knowledge-based methods usually lack this abili-
+   3) The exploitation of the structural seman-
+                                                           ty.
+tic knowledge can further improve the disambig-
+uation performance: compared with SSR-                     The Rich Meaningful Features. One another
+NoStructure, our SSR method achieves 4.3% im-              advantage of our method is the rich meaningful
+provement.                                                 features, which is brought by the multiple seman-
+                                                           tic knowledge sources. With more meaningful
+                                                           features, our method can better describe the
+                                                           name observations with less information loss.
+                                                           Furthermore, unlike the traditional N-gram fea-
+                                                           tures, the features enriched by semantic know-
+                                                           ledge sources are all semantically meaningful
+                                                           units themselves, so little noisy features will be
+                                                           added. The effect of rich meaningful features can
+                                                           also be shown in Table 5: by adding these fea-
+                                                           tures, the SSR-NoKnowledge respectively
+  Figure 4. The F-Measure vs. λ on three data sets         achieves 2.3% and 9.7% improvement over the
+                                                           BOW and the SocialNetwork baseline.
+4.4.2 Optimizing Parameters
+There is only one parameter λ needed to be con-            5   Related Work
+figured, which is the penalty factor for the rela-
+tedness transition path length in the structural           In this section, we briefly review the related
+semantic relatedness measure. Usually a smaller            work. Totally, the traditional named entity dis-
+ λ will make the structural semantic knowledge
+                                                           ambiguation methods can be classified into two
+                                                           categories: the shallow methods and the know-
+contribute less in the resulting relatedness value.
+                                                           ledge-based methods.
+Figure 4 plots the performance of our method
+corresponding to the special λ settings. As                Most of previous named entity disambiguation
+shown in Figure 4, the SSR method is not very              researches adopt the shallow methods, which are
+sensitive to the λ and can achieve its best aver-          mostly the natural extension of the bag of words
+age performance when the value of λ is 0.6.                (BOW) model. Bagga and Baldwin (1998)
+                                                           represented a name as a vector of its contextual
+4.4.3 Detailed Analysis                                    words, then two names were predicted to be the
+To better understand the reasons why our SSR               same entity if their cosine similarity is above a
+method works well and how the exploitation of              threshold. Mann and Yarowsky (2003) and Niu
+structural semantic knowledge can improve per-             et al. (2004) extended the vector representation
+formance, we analyze the results in detail.                with extracted biographic facts. Pedersen et al.
+The Exploitation of Semantic Knowledge. The                (2005) employed significant bigrams to represent
+primary advantage of our method is the exploita-
+
+
+                                                      57
+
+
+a name observation. Chen and Martin (2007) ex-                tion metrics based on formal constraints. Informa-
+plored a range of syntactic and semantic features.            tion Retrieval.
+
+In recent years some research has investigated              Artiles, J., Gonzalo, J. & Sekine, S. 2007. The Se-
+employing knowledge sources to enhance the                    mEval-2007 WePS Evaluation: Establishing a
+                                                              benchmark for the Web People Search Task. In
+named entity disambiguation. Bunescu and Pasca
+                                                              SemEval.
+(2006) disambiguated the names using the cate-
+gory information in Wikipedia. Cucerzan (2007)              Artiles, J., Gonzalo, J. and Sekine, S. 2009. WePS2
+disambiguated the names by combining the BOW                  Evaluation Campaign: Overview of the Web
+model with the Wikipedia category information.                People Search Clustering Task. In WePS2, WWW
+                                                              2009.
+Han and Zhao (2009) leveraged the Wikipedia
+semantic knowledge for computing the similarity             Baeza-Yates, R., Ribeiro-Neto, B., et al. 1999. Mod-
+between name observations. Bekkerman and                      ern information retrieval. Addison-Wesley Reading,
+McCallum (2005) disambiguated names based                     MA.
+on the link structure of the Web pages between a            Bagga, A. & Baldwin, B. 1998. Entity-based cross-
+set of socially related persons. Kalashnikov et al.           document coreferencing using the vector space
+(2008) and Lu et al. (2007) used the co-                      model. Proceedings of the 17th international confe-
+occurrence statistics between named entities in               rence on Computational linguistics-Volume 1, pp.
+the Web. The social network was also exploited                79-85.
+for named entity disambiguation, where similari-            Bekkerman, R. & McCallum, A. 2005. Disambiguat-
+ty is computed through random walking, such as                ing web appearances of people in a social network.
+the work introduced in Malin (2005), Malin and                Proceedings of the 14th international conference on
+Airoldi (2005), Yang et al.(2006) and Minkov et               World Wide Web, pp. 463-470.
+al. (2006). Hassell et al. (2006) used the relation-        Bunescu, R. & Pasca, M. 2006. Using encyclopedic
+ships from DBLP to disambiguate names in re-                  knowledge for named entity disambiguation. Pro-
+search domain.                                                ceedings of EACL, vol. 6.
+
+6    Conclusions and Future Works                           Chen, Y. & Martin, J. 2007. Towards robust unsuper-
+                                                              vised personal name disambiguation. Proceedings
+In this paper we demonstrate how to enhance the               of EMNLP and CoNLL, pp. 190-198.
+named entity disambiguation by capturing and                Cilibrasi, R. L., Vitanyi, P. M. & CWI, A. 2007. The
+exploiting the semantic knowledge existed in                   google similarity distance, IEEE Transactions on
+multiple knowledge sources. In particular, we                  knowledge and data engineering, vol. 19, no. 3, pp.
+propose a semantic relatedness measure, Struc-                 370-383.
+tural Semantic Relatedness, which can capture               Cucerzan, S. 2007, Large-scale named entity disam-
+both the explicit semantic relations and the im-              biguation based on Wikipedia data. Proceedings of
+plicit structural semantic knowledge. The expe-               EMNLP-CoNLL, pp. 708-716.
+rimental results on the WePS data sets demon-
+                                                            Fellbaum, C., et al. 1998. WordNet: An electronic
+strate the efficiency of the proposed method. For             lexical database. MIT press Cambridge, MA.
+future work, we want to develop a framework
+which can uniformly model the semantic know-                Fleischman, M. B. & Hovy, E. 2004. Multi-document
+ledge and the contextual clues for named entity                person name resolution. Proceedings of ACL, Ref-
+disambiguation.                                                erence Resolution Workshop.
+                                                            Han, X. & Zhao, J. 2009. Named entity disambigua-
+Acknowledgments                                               tion by leveraging Wikipedia semantic knowledge.
+                                                              Proceeding of the 18th ACM conference on Infor-
+The work is supported by the National Natural                 mation and knowledge management, pp. 215-224.
+Science Foundation of China under Grants no.
+                                                            Hassell, J., Aleman-Meza, B. & Arpinar, I. 2006. On-
+60875041 and 60673042, and the National High
+                                                              tology-driven automatic entity disambiguation in
+Technology Development 863 Program of China                   unstructured text. Proceedings of The 2006 ISWC,
+under Grants no. 2006AA01Z144.                                pp. 44-57.
+
+References                                                  Jeh, G. & Widom, J. 2002. SimRank: A measure of
+                                                               structural-context similarity, Proceedings of the
+Amigo, E., Gonzalo, J., Artiles, J. and Verdejo, F.            eighth ACM SIGKDD international conference on
+  2008. A comparison of extrinsic clustering evalua-           Knowledge discovery and data mining, p. 543.
+
+
+
+                                                       58
+
+
+Kalashnikov, D. V., Nuray-Turan, R. & Mehrotra, S.             of the 16th international conference on World
+  2008. Towards Breaking the Quality Curse. A                  Wide Web, p. 706.
+  Web-Querying Approach to Web People Search. In
+                                                             Wan, X., Gao, J., Li, M. & Ding, B. 2005. Person
+  Proc. of SIGIR.
+                                                              resolution in person search results: Webhawk. Pro-
+Leicht, E. A., Petter Holme, & M. E. J. Newman.               ceedings of the 14th ACM international conference
+  2006. Vertex similarity in networks. Physical Re-           on Information and knowledge management, p.
+  view E , vol. 73, no. 2, p. 26120.                          170.
+Lin., D. 1998. An information-theoretic definition of        Witten, D. M. & Milne, D. 2008. An effective, low-
+  similarity. In Proc. of ICML.                                cost measure of semantic relatedness obtained from
+                                                               Wikipedia links. Proceeding of AAAI Workshop
+Lu, Y. & Nie , Z. et al. 2007. Name Disambiguation
+                                                               on Wikipedia and Artificial Intelligence: an Evolv-
+  Using Web Connection. In Proc. of AAAI.
+                                                               ing Synergy, AAAI Press, Chicago, USA, pp. 25-
+Malin, B. 2005. Unsupervised name disambiguation               30.
+  via social network similarity. SIAM SDM Work-
+                                                             Yang, K. H., Chiou, K. Y., Lee, H. M. & Ho, J. M.
+  shop on Link Analysis, Counterterrorism and Secu-
+                                                               2006. Web appearance disambiguation of personal
+  rity.
+                                                               names based on network motif. Proceedings of the
+Malin, B., Airoldi, E. & Carley, K. M. 2005. A net-            2006 IEEE/WIC/ACM International Conference on
+  work analysis model for disambiguation of names              Web Intelligence, pp. 386-389.
+  in lists. Computational & Mathematical Organiza-
+  tion Theory, vol. 11, no. 2, pp. 119-139.
+Mann, G. S. & Yarowsky, D. 2003. Unsupervised
+  personal name disambiguation, Proceedings of the
+  seventh conference on Natural language learning at
+  HLT-NAACL 2003-Volume 4, p. 40.
+McNamee, P. & Dang, H. Overview of the TAC 2009
+  Knowledge Base Population Track. In Proceedings
+  of Text Analysis Conference (TAC-2009), 2009.
+Medelyan, O., Witten, I. H. & Milne, D. 2008. Topic
+  indexing with Wikipedia. Proceedings of the AAAI
+  WikiAI workshop.
+Milne, D., Medelyan, O. & Witten, I. H. 2006. Min-
+  ing domain-specific thesauri from wikipedia: A
+  case study. IEEE/WIC/ACM International Confe-
+  rence on Web Intelligence, pp. 442-448.
+Minkov, E., Cohen, W. W. & Ng, A. Y. 2006. Con-
+  textual search and name disambiguation in email
+  using graphs, Proceedings of the 29th annual inter-
+  national ACM SIGIR conference on Research and
+  development in information retrieval, pp. 27-34.
+Niu C., Li W. and Srihari, R. K. 2004. Weakly Super-
+  vised Learning for Cross-document Person Name
+  Disambiguation Supported by Information Extrac-
+  tion. Proceedings of ACL, pp. 598-605.
+Pedersen, T., Purandare, A. & Kulkarni, A. 2005.
+  Name discrimination by clustering similar contexts.
+  Computational Linguistics and Intelligent Text
+  Processing, pp. 226-237.
+Strube, M. & Ponzetto, S. P. 2006. WikiRelate! Com-
+   puting semantic relatedness using Wikipedia, Pro-
+   ceedings of the National Conference on Artificial
+   Intelligence, vol. 21, no. 2, p. 1419.
+Suchanek, F. M., Kasneci, G. & Weikum, G. 2007.
+  Yago: a core of semantic knowledge, Proceedings
+
+
+
+                                                        59
+

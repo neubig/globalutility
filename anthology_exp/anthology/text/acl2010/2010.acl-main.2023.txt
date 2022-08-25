@@ -1,0 +1,407 @@
+       Automatically Generating Term-frequency-induced Taxonomies
+
+         Karin Murthy              Tanveer A Faruquie                 L Venkata Subramaniam
+                    K Hima Prasad      Mukesh Mohania
+                            IBM Research - India
+     {karinmur|ftanveer|lvsubram|hkaranam|mkmukesh}@in.ibm.com
+
+
+
+                   Abstract                                 and Subramaniam, 2006), even if those relation-
+                                                            ships do not explicitly appear in the text. Though
+    We propose a novel method to automati-                  these methods tackle inconsistency by addressing
+    cally acquire a term-frequency-based tax-               taxonomy deduction globally, the relationships ex-
+    onomy from a corpus using an unsuper-                   tracted are often difficult to interpret by humans.
+    vised method. A term-frequency-based                       We show that for certain domains, the frequency
+    taxonomy is useful for application do-                  with which terms appear in a corpus on their own
+    mains where the frequency with which                    and in conjunction with other terms induces a nat-
+    terms occur on their own and in combi-                  ural taxonomy. We formally define the concept
+    nation with other terms imposes a natural               of a term-frequency-based taxonomy and show
+    term hierarchy. We highlight an applica-                its applicability for an example application. We
+    tion for our approach and demonstrate its               present an unsupervised method to generate such
+    effectiveness and robustness in extracting              a taxonomy from scratch and outline how domain-
+    knowledge from real-world data.                         specific constraints can easily be integrated into
+                                                            the generation process. An advantage of the new
+1   Introduction                                            method is that it can also be used to extend an ex-
+Taxonomy deduction is an important task to under-           isting taxonomy.
+stand and manage information. However, building                We evaluated our method on a large corpus of
+taxonomies manually for specific domains or data            real-life addresses. For addresses from emerging
+sources is time consuming and expensive. Tech-              geographies no standard postal address scheme
+niques to automatically deduce a taxonomy in an             exists and our objective was to produce a postal
+unsupervised manner are thus indispensable. Au-             taxonomy that is useful in standardizing addresses
+tomatic deduction of taxonomies consist of two              (Kothari et al., 2010). Specifically, the experi-
+tasks: extracting relevant terms to represent con-          ments were designed to investigate the effective-
+cepts of the taxonomy and discovering relation-             ness of our approach on noisy terms with lots of
+ships between concepts. For unstructured text, the          variations. The results show that our method is
+extraction of relevant terms relies on information          able to induce a taxonomy without using any kind
+extraction methods (Etzioni et al., 2005).                  of lexical-semantic patterns.
+   The relationship extraction task can be classi-
+                                                            2   Related Work
+fied into two categories. Approaches in the first
+category use lexical-syntactic formulation to de-           One approach for taxonomy deduction is to use
+fine patterns, either manually (Kozareva et al.,            explicit expressions (Iwaska et al., 2000) or lexi-
+2008) or automatically (Girju et al., 2006), and            cal and semantic patterns such as is a (Snow et al.,
+apply those patterns to mine instances of the pat-          2004), similar usage (Kozareva et al., 2008), syn-
+terns. Though producing accurate results, these             onyms and antonyms (Lin et al., 2003), purpose
+approaches usually have low coverage for many               (Cimiano and Wenderoth, 2007), and employed by
+domains and suffer from the problem of incon-               (Bunescu and Mooney, 2007) to extract and orga-
+sistency between terms when connecting the in-              nize terms. The quality of extraction is often con-
+stances as chains to form a taxonomy. The second            trolled using statistical measures (Pantel and Pen-
+category of approaches uses clustering to discover          nacchiotti, 2006) and external resources such as
+terms and the relationships between them (Roy               wordnet (Girju et al., 2006). However, there are
+
+
+                                                      126
+                     Proceedings of the ACL 2010 Conference Short Papers, pages 126–131,
+               Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+domains (such as the one introduced in Section
+3.2) where the text does not allow the derivation
+of linguistic relations.
+   Supervised methods for taxonomy induction
+provide training instances with global seman-
+tic information about concepts (Fleischman and
+Hovy, 2002) and use bootstrapping to induce new
+seeds to extract further patterns (Cimiano et al.,
+2005). Semi-supervised approaches start with
+known terms belonging to a category, construct
+context vectors of classified terms, and associate
+categories to previously unclassified terms de-
+pending on the similarity of their context (Tanev                    Figure 1: Part of an address taxonomy
+and Magnini, 2006). However, providing train-
+ing data and hand-crafted patterns can be tedious.
+                                                               3.1   Definition
+Moreover in some domains (such as the one pre-
+sented in Section 3.2) it is not possible to construct         Let C be a corpus of records r. Each record is
+a context vector or determine the replacement fit.             represented as a set of terms t. Let T = {t | t ∈
+                                                               r ∧ r ∈ C} be the set of all terms of C. Let f (t)
+   Unsupervised methods use clustering of word-
+                                                               denote the frequency of term t, that is the number
+context vectors (Lin, 1998), co-occurrence (Yang
+                                                               of records in C that contain t. Let F (t, T + , T − )
+and Callan, 2008), and conjunction features (Cara-
+                                                               denote the frequency of term t given a set of must-
+ballo, 1999) to discover implicit relationships.
+                                                               also-appear terms T + and a set of cannot-also-
+However, these approaches do not perform well
+                                                               appear terms T − . F (t, T + , T − ) = | {r ∈ C |
+for small corpora. Also, it is difficult to label the
+                                                               t ∈ r ∧ ∀ t0 ∈ T + : t0 ∈ r ∧ ∀ t0 ∈ T − : t0 ∈/ r} |.
+obtained clusters which poses challenges for eval-
+                                                                  A term-frequency-induced taxonomy (TFIT), is
+uation. To avoid these problems, incremental clus-
+                                                               an ordered tree over terms in T . For a node n in
+tering approaches have been proposed (Yang and
+                                                               the tree, n.t is the term at n, A(n) the ancestors of
+Callan, 2009). Recently, lexical entailment has
+                                                               n, and P (n) the predecessors of n.
+been used where the term is assigned to a cate-
+                                                                  A TFIT has a root node with the special term ⊥
+gory if its occurrence in the corpus can be replaced
+                                                               and the conditional frequency ∞. The following
+by the lexicalization of the category (Giuliano and
+                                                               condition is true for any other node n:
+Gliozzo, 2008). In our method, terms are incre-
+                                                               ∀t ∈ T, F (n.t, A(n), P (n)) ≥ F (t, A(n), P (n)).
+mentally added to the taxonomy based on their
+                                                               That is, each node’s term has the highest condi-
+support and context.
+                                                               tional frequency in the context of the node’s an-
+   Association rule mining (Agrawal and Srikant,
+                                                               cestors and predecessors. Only terms with a con-
+1994) discovers interesting relations between
+                                                               ditional frequency above zero are added to a TFIT.
+terms, based on the frequency with which terms
+                                                                  We show in Section 4 how a TFIT taxonomy
+appear together. However, the amount of patterns
+                                                               can be automatically induced from a given corpus.
+generated is often huge and constructing a tax-
+                                                               But before that, we show that TFITs are useful in
+onomy from all the patterns can be challenging.
+                                                               practice and reflect a natural ordering of terms for
+In our approach, we employ similar concepts but
+                                                               application domains where the concept hierarchy
+make taxonomy construction part of the relation-
+                                                               is expressed through the frequency in which terms
+ship discovery process.
+                                                               appear.
+
+3   Term-frequency-induced Taxonomies                          3.2   Example Domain: Address Data
+                                                               An address taxonomy is a key enabler for address
+For some application domains, a taxonomy is in-                standardization. Figure 1 shows part of such an ad-
+duced by the frequency in which terms appear in a              dress taxonomy where the root contains the most
+corpus on their own and in combination with other              generic term and leaf-level nodes contain the most
+terms. We first introduce the problem formally and             specific terms. For emerging economies building
+then motivate it with an example application.                  a standardized address taxonomy is a huge chal-
+
+
+                                                         127
+
+
+ Row    Term          Part of address   Category               states), the conditional-frequency constraint intro-
+  1     D-15          house number      alphanumerical
+                                                               duced in Section 3.1 is enforced for each node in a
+  2     Rawal         building name     proper noun
+  3     Complex       building name     proper noun            TFIT. ’Houston’s state ’Texas’ (which is more fre-
+  4     Behind        landmark          marker                 quent) is picked before ’Houston’. After ’Texas’ is
+  5     Hotel         landmark          marker                 picked it appears in the ”cannot-also-appear”’ list
+  6     Ruchira       landmark          proper noun
+  7     Katre         street            proper noun            for all further siblings on the first level, thus giving
+  8     Road          street            marker                 ’Houston’ has a conditional frequency of zero.
+  9     Jeevan        area              proper noun               We show in Section 5 that an address taxonomy
+  10    Nagar         area              marker
+  11    Andheri       city (taluk)      proper noun            can be inferred by generating a TFIT taxonomy.
+  12    East          city (taluk)      direction
+  13    Mumbai        district          proper noun            4     Automatically Generating TFITs
+  14    Maharashtra   state             proper noun
+  15    400069        ZIP code          6 digit string
+                                                               We describe a basic algorithm to generate a TFIT
+    Table 1: Example of a tokenized address                    and then show extensions to adapt to different ap-
+                                                               plication domains.
+
+lenge. First, new areas and with it new addresses              4.1     Base Algorithm
+constantly emerge. Second, there are very limited
+conventions for specifying an address (Faruquie et
+al., 2010). However, while many developing coun-               Algorithm 1 Algorithm for generating a TFIT.
+tries do not have a postal taxonomy, there is often                // For initialization T + , T − are empty
+                                                                   // For initialization l,w are zero
+no lack of address data to learn a taxonomy from.                  genTFIT(T + , T − , C, l, w)
+   Column 2 of Table 1 shows an example of an                      // select most frequent term
+                                                                   tnext = tj with F (tj , T + , T − ) is maximal amongst all
+Indian address. Although Indian addresses tend to                  tj ∈ C;
+follow the general principal that more specific in-                fnext = F (tnext , T + , T − );
+formation is mentioned earlier, there is no fixed or-              if fnext ≥ support then
+                                                                       //Output node (tj , l, w)
+der for different elements of an address. For exam-                    ...
+ple, the ZIP code of an address may be mentioned                       // Generate child node
+before or after the state information and, although                    genTFIT(T + ∪ {tnext }, T − , C, l + 1, w)
+                                                                       // Generate sibling node
+ZIP code information is more specific than city in-                    genTFIT(T + , T − ∪ {tnext }, C, l, w + 1)
+formation, it is generally mentioned later in the                  end if
+address. Also, while ZIP codes often exist, their
+use by people is very limited. Instead, people tend               To generate a TFIT taxonomy as defined in Sec-
+to mention copious amounts of landmark informa-                tion 3.1 we recursively pick the most frequent term
+tion (see for example rows 4-6 in Table 1).                    given previously chosen terms. The basic algo-
+   Taking all this into account, there is often not            rithm genT F IT is sketched out in Algorithm 1.
+enough structure available to automatically infer a            When genT F IT is called the first time, T + and
+taxonomy purely based on the structural or seman-              T − are empty and both level l and width w are
+tic aspects of an address. However, for address                zero. With each call of genT F IT a new node
+data, the general-to-specific concept hierarchy is             n in the taxonomy is created with (t, l, w) where
+reflected in the frequency with which terms appear             t is the most frequent term given T + and T −
+on their own and together with other terms.                    and l and w capture the position in the taxonomy.
+   It mostly holds that f (s) > f (d) > f (c) >                genT F IT is recursively called to generate a child
+f (z) where s is a state name, d is a district name,           of n and a sibling for n.
+c is a city name, and z is a ZIP code. How-                       The only input parameter required by our al-
+ever, sometimes the name of a large city may be                gorithm is support. Instead of adding all terms
+more frequent than the name of a small state. For              with a conditional frequency above zero, we only
+example, in a given corpus, the term ’Houston’                 add terms with a conditional frequency equal to or
+(a populous US city) may appear more frequent                  higher than support. The support parameter con-
+than the term ’Vermont’ (a small US state). To                 trols the precision of the resulting TFIT and also
+avoid that ’Houston’ is picked as a node at the first          the runtime of the algorithm. Increasing support
+level of the taxonomy (which should only contain               increases the precision but also lowers the recall.
+
+
+                                                         128
+
+
+4.2   Integrating Constraints                                ’Houston’ may become a node at the first level and
+                                                             appear to be a state. Generally, such cases only ap-
+Structural as well as semantic constraints can eas-
+                                                             pear at the far right of the taxonomy.
+ily be integrated into the TFIT generation.
+   We distinguish between taxonomy-level and                 5       Evaluation
+node-level structural constraints. For example,
+limiting the depth of the taxonomy by introduc-              We present an evaluation of our approach for ad-
+ing a maxLevel constraint and checking before                dress data from an emerging economy. We imple-
+each recursive call if maxLevel is reached, is               mented our algorithm in Java and store the records
+a taxonomy-level constraint. A node-level con-               in a DB2 database. We rely on the DB2 optimizer
+straint applies to each node and affects the way             to efficiently retrieve the next frequent term.
+the frequency of terms is determined.
+                                                             5.1      Dataset
+   For our example application, we introduce the
+following node-level constraint: at each node we             The results are based on 40 Million Indian ad-
+only count terms that appear at specific positions           dresses. Each address record was given to us as
+in records with respect to the current level of the          a single string and was first tokenized into a se-
+node. Specifically, we slide (or incrementally in-           quence of terms as shown in Table 1. In a second
+crease) a window over the address records start-             step, we addressed spelling variations. There is no
+ing from the end. For example, when picking the              fixed way of transliterating Indian alphabets to En-
+term ’Washington’ as a state name, occurrences of            glish and most Indian proper nouns have various
+’Washington’ as city or street name are ignored.             spellings in English. We used tools to detect syn-
+Using a window instead of an exact position ac-              onyms with the same context to generate a list of
+counts for positional variability. Also, to accom-           rules to map terms to a standard form (Lin, 1998).
+modate varying amounts of landmark information               For example, in Table 1 ’Maharashtra’ can also be
+we length-normalize the position of terms. That is,          spelled ’Maharastra’. We also used a list of key-
+we divide all positions in an address by the average         words to classify some terms as markers such as
+length of an address (which is 10 for our 40 Mil-            ’Road’ and ’Nagar’ shown in Table 1.
+lion addresses). Accordingly, we adjust the size of             Our evaluation consists of two parts. First, we
+the window and use increments of 0.1 for sliding             show results for constructing a TFIT from scratch.
+(or increasing) the window.                                  To evaluate the precision and recall we also re-
+   In addition to syntactical constraints, semantic          trieved post office addresses from India Post1 ,
+constraints can be integrated by classifying terms           cleaned them, and organized them in a tree.
+for use when picking the next frequent term. In our             Second, we use our approach to enrich the ex-
+example application, markers tend to appear much             isting hierarchy created from post office addresses
+more often than any proper noun. For example,                with additional area terms. To validate the result,
+the term ’Road’ appears in almost all addresses,             we also retrieved data about which area names ap-
+and might be picked up as the most frequent term             pear within a ZIP code.2 We also verified whether
+very early in the process. Thus, it is beneficial to         Google Maps shows an area on its map.3
+ignore marker terms during taxonomy generation               5.2      Taxonomy Generation
+and adding them as a post-processing step.
+                                                             We generated a taxonomy O using all 40 million
+4.3   Handling Noise                                         addresses. We compare the terms assigned to
+                                                             category levels district and taluk4 in O with the
+The approach we propose naturally handles noise              tree P constructed from post office addresses.
+by ignoring it, unless the noise level exceeds the           Each district and taluk has at least one post office.
+support threshold. Misspelled terms are generally            Thus P covers all districts and taluks and allows
+infrequent and will as such not become part of               us to test coverage and precision. We compute the
+the taxonomy. The same applies to incorrect ad-              precision and recall for each category level CL as
+dresses. Incomplete addresses partially contribute
+to the taxonomy and only cause a problem if the                  1
+                                                                   http://www.indiapost.gov.in/Pin/pinsearch.aspx
+same information is missing too often. For ex-                   2
+                                                                   http://www.whereincity.com/india/pincode/search
+ample, if more than support addresses with the                   3
+                                                                   maps.google.com
+                                                                 4
+city ’Houston’ are missing the state ’Texas’, then                 Administrative division in some South-Asian countries.
+
+
+                                                       129
+
+
+          Support         Recall %     Precision %                 Area                Whereincity    PO    Google
+       100   District     93.9         57.4                        Bhuleshwar          yes            no    yes
+             Taluk        50.9         60.5                        Chira Bazar         yes            no    yes
+       200   District     87.9         64.4                        Dhobi Talao         no             no    yes
+             Taluk        49.6         66.1                        Fanaswadi           no             no    no
+                                                                   Kalbadevi Road      yes            yes   yes
+Table 2: Precision and recall for categorizing                     Marine Drive        no             no    no
+terms belonging to the state Maharashtra                           Marine Lines        yes            yes   yes
+                                                                   Princess Street     no             no    yes
+                                                                   th                  no             no    no
+                                                                   Thakurdwar Road     no             no    no
+RecallCL =   # correct paths f rom root to CL in O                 Zaveri Bazar        yes            no    yes
+                # paths f rom root to CL in P
+                                                                   Charni Road         no             yes   no
+                 # correct paths f rom root to CL in O             Girgaon             yes            yes   yes
+P recisionCL =      # paths f rom root to CL in O
+                                                                   Khadilkar Road      yes            no    yes
+                                                                   Khetwadi Road       yes            no    no
+   Table 2 shows precision and recall for district                 Kumbharwada         no             no    yes
+and taluk for the large state Maharashtra. Recall                  Opera House         no             yes   no
+is good for district. For taluk it is lower because a              Prathna Samaj       yes            no    no
+major part of the data belongs to urban areas where            Table 3: Areas found for ZIP code 400002 (top)
+taluk information is missing. The precision seems              and 400004 (bottom)
+to be low but it has to be noted that in almost 75%
+of the addresses either district or taluk informa-
+tion is missing or noisy. Given that, we were able             tokenization process. 16 correct terms out of 18
+to recover a significant portion of the knowledge              terms results in a precision of 89%.
+structure.                                                        We also ran experiments to measure the cov-
+   We also examined a branch for a smaller state               erage of area detection for Mumbai without us-
+(Kerala). Again, both districts and taluks appear              ing ZIP codes. Initializing our algorithm with
+at the next level of the taxonomy. For a support               M aharshtra and M umbai yielded over 100 ar-
+of 200 there are 19 entries in O of which all but              eas with a support of 300 and more. However,
+two appear in P as district or taluk. One entry is a           again the precision is low because quite a few of
+taluk that actually belongs to Maharashtra and one             those areas are actually taluk names.
+entry is a name variation of a taluk in P . There                 Using a large number of addresses is necessary
+were not enough addresses to get a good coverage               to achieve good recall and precision.
+of all districts and taluks.
+                                                               6   Conclusion
+5.3   Taxonomy Augmentation
+We used P and ran our algorithm for each branch                In this paper, we presented a novel approach to
+in P to include area information. We focus our                 generate a taxonomy for data where terms ex-
+evaluation on the city Mumbai. The recall is low               hibit an inherent frequency-based hierarchy. We
+because many addresses do not mention a ZIP                    showed that term frequency can be used to gener-
+code or use an incorrect ZIP code. However,                    ate a meaningful taxonomy from address records.
+the precision is good implying that our approach               The presented approach can also be used to extend
+works even in the presence of large amounts of                 an existing taxonomy which is a big advantage
+noise.                                                         for emerging countries where geographical areas
+   Table 3 shows the results for ZIP code 400002               evolve continuously.
+and 400004 for a support of 100. We get simi-                     While we have evaluated our approach on ad-
+lar results for other ZIP codes. For each detected             dress data, it is applicable to all data sources where
+area we compared whether the area is also listed               the inherent hierarchical structure is encoded in
+on whereincity.com, part of a post office name                 the frequency with which terms appear on their
+(PO), or shown on google maps. All but four                    own and together with other terms. Preliminary
+areas found are confirmed by at least one of the               experiments on real-time analyst’s stock market
+three external sources. Out of the unconfirmed                 tips 5 produced a taxonomy of (TV station, An-
+terms F anaswadi and M arineDrive seem to                      alyst, Affiliation) with decent precision and recall.
+be genuine area names but we could not confirm                     5
+                                                                     See Live Market voices at:
+DhakurdwarRoad. The term th is due to our                      http://money.rediff.com/money/jsp/markets home.jsp
+
+
+                                                         130
+
+
+References                                                        Language for Knowledge and Knowledge for Lan-
+                                                                  guage, pages 335–345.
+Rakesh Agrawal and Ramakrishnan Srikant. 1994.
+  Fast algorithms for mining association rules in large         Govind Kothari, Tanveer A Faruquie, L V Subrama-
+  databases. In Proceedings of the 20th International             niam, K H Prasad, and Mukesh Mohania. 2010.
+  Conference on Very Large Data Bases, pages 487–                 Transfer of supervision for improved address stan-
+  499.                                                            dardization. In Proceedings of the 20th Interna-
+                                                                  tional Conference on Pattern Recognition.
+Razvan C. Bunescu and Raymond J. Mooney. 2007.
+  Learning to extract relations from the web using              Zornitsa Kozareva, Ellen Riloff, and Eduard Hovy.
+  minimal supervision. In Proceedings of the 45th An-             2008. Semantic class learning from the web with
+  nual Meeting of the Association of Computational                hyponym pattern linkage graphs. In Proceedings of
+  Linguistics, pages 576–583.                                     the 46th Annual Meeting of the Association for Com-
+                                                                  putational Linguistics: Human Language Technolo-
+Sharon A. Caraballo. 1999. Automatic construction                 gies, pages 1048–1056.
+  of a hypernym-labeled noun hierarchy from text. In
+  Proceedings of the 37th Annual Meeting of the As-             Dekang Lin, Shaojun Zhao, Lijuan Qin, and Ming
+  sociation for Computational Linguistics on Compu-               Zhou. 2003. Identifying synonyms among distri-
+  tational Linguistics, pages 120–126.                            butionally similar words. In Proceedings of the 18th
+                                                                  International Joint Conference on Artificial Intelli-
+Philipp Cimiano and Johanna Wenderoth. 2007. Au-                  gence, pages 1492–1493.
+  tomatic acquisition of ranked qualia structures from
+  the web. In Proceedings of the 45th Annual Meet-              Dekang Lin. 1998. Automatic retrieval and clustering
+  ing of the Association for Computational Linguis-               of similar words. In Proceedings of the 17th Inter-
+  tics, pages 888–895.                                            national Conference on Computational Linguistics,
+                                                                  pages 768–774.
+Philipp Cimiano, Günter Ladwig, and Steffen Staab.
+  2005. Gimme’ the context: context-driven auto-                Patrick Pantel and Marco Pennacchiotti.        2006.
+  matic semantic annotation with c-pankow. In Pro-                Espresso: leveraging generic patterns for automat-
+  ceedings of the 14th International Conference on                ically harvesting semantic relations. In Proceed-
+  World Wide Web, pages 332–341.                                  ings of the 21st International Conference on Com-
+                                                                  putational Linguistics and the 44th Annual Meet-
+Oren Etzioni, Michael Cafarella, Doug Downey, Ana-                ing of the Association for Computational Linguis-
+  Maria Popescu, Tal Shaked, Stephen Soderland,                   tics, pages 113–120.
+  Daniel S. Weld, and Alexander Yates. 2005. Un-
+                                                                Shourya Roy and L Venkata Subramaniam. 2006. Au-
+  supervised named-entity extraction from the web:
+                                                                  tomatic generation of domain models for call cen-
+  an experimental study.      Artificial Intelligence,
+                                                                  ters from noisy transcriptions. In Proceedings of
+  165(1):91–134.
+                                                                  the 21st International Conference on Computational
+Tanveer A. Faruquie, K. Hima Prasad, L. Venkata                   Linguistics and the 44th Annual Meeting of the As-
+  Subramaniam, Mukesh K. Mohania, Girish Venkat-                  sociation for Computational Linguistics, pages 737–
+  achaliah, Shrinivas Kulkarni, and Pramit Basu.                  744.
+  2010. Data cleansing as a transient service. In               Rion Snow, Daniel Jurafsky, and Andrew Y. Ng. 2004.
+  Proceedings of the 26th International Conference on             Learning syntactic patterns for automatic hypernym
+  Data Engineering, pages 1025–1036.                              discovery. In Advances in Neural Information Pro-
+Michael Fleischman and Eduard Hovy. 2002. Fine                    cessing Systems, pages 1297–1304.
+  grained classification of named entities. In Proceed-         Hristo Tanev and Bernardo Magnini. 2006. Weakly
+  ings of the 19th International Conference on Com-               supervised approaches for ontology population. In
+  putational Linguistics, pages 1–7.                              Proceedings of the 11th Conference of the European
+                                                                  Chapter of the Association for Computational Lin-
+Roxana Girju, Adriana Badulescu, and Dan Moldovan.                guistics, pages 3–7.
+  2006. Automatic discovery of part-whole relations.
+  Computational Linguistics, 32(1):83–135.                      Hui Yang and Jamie Callan. 2008. Learning the dis-
+                                                                  tance metric in a personal ontology. In Proceed-
+Claudio Giuliano and Alfio Gliozzo. 2008. Instance-               ing of the 2nd International Workshop on Ontolo-
+  based ontology population exploiting named-entity               gies and Information Systems for the Semantic Web,
+  substitution. In Proceedings of the 22nd Inter-                 pages 17–24.
+  national Conference on Computational Linguistics,
+  pages 265–272.                                                Hui Yang and Jamie Callan. 2009. A metric-based
+                                                                  framework for automatic taxonomy induction. In
+Lucja M. Iwaska, Naveen Mata, and Kellyn Kruger.                  Proceedings of the Joint Conference of the 47th An-
+  2000. Fully automatic acquisition of taxonomic                  nual Meeting of the ACL and the 4th International
+  knowledge from large corpora of texts. In Lucja M.              Joint Conference on Natural Language Processing
+  Iwaska and Stuart C. Shapiro, editors, Natural Lan-             of the AFNLP, pages 271–279.
+  guage Processing and Knowledge Representation:
+
+
+                                                          131
+

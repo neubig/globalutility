@@ -1,0 +1,623 @@
+                      Learning Phrase-Based Spelling Error Models
+                               from Clickthrough Data
+
+
+                        Xu Sun∗                                           Jianfeng Gao
+           Dept. of Mathematical Informatics                            Microsoft Research
+           University of Tokyo, Tokyo, Japan                           Redmond, WA, USA
+          xusun@mist.i.u-tokyo.ac.jp                                 jfgao@microsoft.com
+
+                     Daniel Micol                                         Chris Quirk
+                 Microsoft Corporation                                 Microsoft Research
+                   Munich, Germany                                     Redmond, WA, USA
+              danielmi@microsoft.com                                chrisq@microsoft.com
+
+
+                                                               human-compiled lexicons, to infer knowledge
+                       Abstract                                about misspellings and word usage in search
+                                                               queries (e.g., Whitelaw et al., 2009). Another
+    This paper explores the use of clickthrough data           important data source that would be useful for this
+    for query spelling correction. First, large amounts        purpose is clickthrough data. Although it is
+    of query-correction pairs are derived by analyzing         well-known that clickthrough data contain rich
+    users' query reformulation behavior encoded in             information about users' search behavior, e.g.,
+    the clickthrough data. Then, a phrase-based error
+                                                               how a user (re-) formulates a query in order to
+    model that accounts for the transformation
+                                                               find the relevant document, there has been little
+    probability between multi-term phrases is trained
+    and integrated into a query speller system. Expe-          research on exploiting the data for the develop-
+    riments are carried out on a human-labeled data            ment of a query speller system.
+    set. Results show that the system using the                    In this paper we present a novel method of
+    phrase-based error model outperforms signifi-              extracting large amounts of query-correction pairs
+    cantly its baseline systems.                               from the clickthrough data. These pairs, impli-
+                                                               citly judged by millions of users, are used to train
+1      Introduction                                            a set of spelling error models. Among these
+                                                               models, the most effective one is a phrase-based
+Search queries present a particular challenge for
+                                                               error model that captures the probability of
+traditional spelling correction methods for three
+                                                               transforming one multi-term phrase into another
+main reasons (Ahmad and Kondrak, 2004). First,
+                                                               multi-term phrase. Comparing to traditional error
+spelling errors are more common in search queries
+                                                               models that account for transformation probabili-
+than in regular written text: roughly 10-15% of
+                                                               ties between single characters (Kernighan et al.,
+queries contain misspelled terms (Cucerzan and
+                                                               1990) or sub-word strings (Brill and Moore,
+Brill, 2004). Second, most search queries consist
+                                                               2000), the phrase-based model is more powerful
+of a few key words rather than grammatical sen-
+                                                               in that it captures some contextual information by
+tences, making a grammar-based approach inap-
+                                                               retaining inter-term dependencies. We show that
+propriate. Most importantly, many queries con-
+                                                               this information is crucial to detect the correction
+tain search terms, such as proper nouns and names,
+                                                               of a query term, because unlike in regular written
+which are not well established in the language.
+                                                               text, any query word can be a valid search term
+For example, Chen et al. (2007) reported that
+                                                               and in many cases the only way for a speller
+16.5% of valid search terms do not occur in their
+                                                               system to make the judgment is to explore its
+200K-entry spelling lexicon.
+                                                               usage according to the contextual information.
+   Therefore, recent research has focused on the
+                                                                   We conduct a set of experiments on a large
+use of Web corpora and query logs, rather than
+                                                               data     set,    consisting of human-labeled
+
+∗   The work was done when Xu Sun was visiting Microsoft Research Redmond.
+
+
+                                                           266
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 266–274,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+query-correction pairs. Results show that the error      such a vocabulary, and the boundary between the
+models learned from clickthrough data lead to            non-word and real-word errors is quite vague.
+significant improvements on the task of query            Therefore, recent research on query spelling
+spelling correction. In particular, the speller sys-     correction has focused on exploiting noisy Web
+tem incorporating a phrase-based error model             data and query logs to infer knowledge about
+significantly outperforms its baseline systems.          misspellings and word usage in search queries.
+   To the best of our knowledge, this is the first       Cucerzan and Brill (2004) discuss in detail the
+extensive study of learning phase-based error            challenges of query spelling correction, and
+models from clickthrough data for query spelling         suggest the use of query logs. Ahmad and Kon-
+correction. The rest of the paper is structured as       drak (2005) propose a method of estimating an
+follows. Section 2 reviews related work. Section 3       error model from query logs using the EM algo-
+presents the way query-correction pairs are ex-          rithm. Li et al. (2006) extend the error model by
+tracted from the clickthrough data. Section 4            capturing word-level similarities learned from
+presents the baseline speller system used in this        query logs. Chen et al. (2007) suggest using web
+study. Section 5 describes in detail the phrase-         search results to improve spelling correction.
+based error model. Section 6 presents the expe-          Whitelaw et al. (2009) present a query speller
+riments. Section 7 concludes the paper.                  system in which both the error model and the
+                                                         language model are trained using Web data.
+2    Related Work                                            Compared to Web corpora and query logs,
+                                                         clickthrough data contain much richer informa-
+Spelling correction for regular written text is a
+                                                         tion about users’ search behavior. Although there
+long standing research topic. Previous researches
+                                                         has been a lot of research on using clickthrough
+can be roughly grouped into two categories:
+                                                         data to improve Web document retrieval (e.g.,
+correcting non-word errors and real-word errors.
+                                                         Joachims, 2002; Agichtein et al., 2006; Gao et al.,
+    In non-word error spelling correction, any
+                                                         2009), the data have not been fully explored for
+word that is not found in a pre-compiled lexicon is
+                                                         query spelling correction. This study tries to learn
+considered to be misspelled. Then, a list of lexical
+                                                         error models from clickthrough data. To our
+words that are similar to the misspelled word are
+                                                         knowledge, this is the first such attempt using
+proposed as candidate spelling corrections. Most
+                                                         clickthrough data.
+traditional systems use a manually tuned similar-
+                                                             Most of the speller systems reviewed above are
+ity function (e.g., edit distance function) to rank
+                                                         based on the framework of the source channel
+the candidates, as reviewed by Kukich (1992).
+                                                         model. Typically, a language model (source
+During the last two decades, statistical error
+                                                         model) is used to capture contextual information,
+models learned on training data (i.e.,
+                                                         while an error model (channel model) is consi-
+query-correction pairs) have become increasingly
+                                                         dered to be context free in that it does not take into
+popular, and have proven more effective (Ker-
+                                                         account any contextual information in modeling
+nighan et al., 1990; Brill and Moore, 2000; Tou-
+                                                         word transformation probabilities. In this study
+tanova and Moore, 2002; Okazaki et al., 2008).
+                                                         we argue that it is beneficial to capture contextual
+    Real-word spelling correction is also referred
+                                                         information in the error model. To this end, in-
+to as context sensitive spelling correction (CSSC).
+                                                         spired by the phrase-based statistical machine
+It tries to detect incorrect usages of a valid word
+                                                         translation (SMT) systems (Koehn et al., 2003;
+based on its context, such as "peace" and "piece"
+                                                         Och and Ney, 2004), we propose a phrase-based
+in the context "a _ of cake". A common strategy in
+                                                         error model where we assume that query spelling
+CSSC is as follows. First, a pre-defined confusion
+                                                         correction is performed at the phrase level.
+set is used to generate candidate corrections, then
+                                                             In what follows, before presenting the phrase-
+a scoring model, such as a trigram language
+                                                         based error model, we will first describe the
+model or naïve Bayes classifier, is used to rank the
+                                                         clickthrough data and the query speller system we
+candidates according to their context (e.g.,
+                                                         used in this study.
+Golding and Roth, 1996; Mangu and Brill, 1997;
+Church et al., 2007).                                    3    Clickthrough Data and Spelling Cor-
+    When designed to handle regular written text,
+                                                              rection
+both CSSC and non-word error speller systems
+rely on a pre-defined vocabulary (i.e., either a         This section describes the way the
+lexicon or a confusion set). However, in query           query-correction pairs are extracted from click-
+spelling correction, it is impossible to compile
+
+
+                                                       267
+
+
+through data. Two types of clickthrough data are         Google:
+explored in our experiment.
+                                                             http://www.google.com/search?
+    The clickthrough data of the first type has been         hl=en&source=hp&
+widely used in previous research and proved to be            q=harrypotter+sheme+park&aq=f&oq=&aqi=
+useful for Web search (Joachims, 2002; Agichtein             http://www.google.com/search?
+et al., 2006; Gao et al., 2009) and query refor-             hl=en&ei=rnNAS8-oKsWe_AaB2eHlCA&
+                                                             sa=X&oi=spell&resnum=0&ct=
+mulation (Wang and Zhai, 2008; Suzuki et al.,                result&cd=1&ved=0CA4QBSgA&
+2009). We start with this same data with the hope            q=harry+potter+theme+park&spell=1
+of achieving similar improvements in our task.
+                                                         Yahoo:
+The data consist of a set of query sessions that
+                                                             http://search.yahoo.com/search;
+were extracted from one year of log files from a             _ylt=A0geu6ywckBL_XIBSDtXNyoA?
+commercial Web search engine. A query session                p=harrypotter+sheme+park&
+contains a query issued by a user and a ranked list          fr2=sb-top&fr=yfp-t-701&sao=1
+of links (i.e., URLs) returned to that same user             http://search.yahoo.com/search?
+along with records of which URLs were clicked.               ei=UTF-8&fr=yfp-t-701&
+                                                             p=harry+potter+theme+park
+Following Suzuki et al. (2009), we extract                   &SpellState=n-2672070758_q-tsI55N6srhZa.
+query-correction pairs as follows. First, we extract         qORA0MuawAAAA%40%40&fr2=sp-top
+pairs of queries Q1 and Q2 such that (1) they are        Bing:
+issued by the same user; (2) Q2 was issued within
+                                                             http://www.bing.com/search?
+3 minutes of Q1; and (3) Q2 contained at least one           q=harrypotter+sheme+park&form=QBRE&qs=n
+clicked URL in the result page while Q1 did not              http://www.bing.com/search?
+result in any clicks. We then scored each query              q=harry+potter+theme+park&FORM=SSRE
+pair (Q1, Q2) using the edit distance between Q1
+and Q2, and retained those with an edit distance         Figure 1. A sample of query reformulation sessions
+score lower than a pre-set threshold as query            from three popular search engines. These sessions
+correction pairs.                                        show that a user first issues the query "harrypotter
+    Unfortunately, we found in our experiments           sheme park", and then clicks on the resulting spell
+that the pairs extracted using the method are too        suggestion "harry potter theme park".
+noisy for reliable error model training, even with a
+very tight threshold, and we did not see any sig-
+nificant improvement. Therefore, in Section 6 we         gestion is desired. From these three months of
+will not report results using this dataset.              query reformulation sessions, we extracted about
+    The clickthrough data of the second type con-        3 million query-correction pairs. Compared to the
+sists of a set of query reformulation sessions           pairs extracted from the clickthrough data of the
+extracted from 3 months of log files from a              first type (query sessions), this data set is much
+commercial Web browser. A query reformulation            cleaner because all these spelling corrections are
+session contains a list of URLs that record user         actually clicked, and thus judged implicitly, by
+behaviors that relate to the query reformulation         many users.
+functions, provided by a Web search engine. For              In addition to the "did you mean" function,
+example, almost all commercial search engines            recently some search engines have introduced two
+offer the "did you mean" function, suggesting a          new spelling suggestion functions. One is the
+possible alternate interpretation or spelling of a       "auto-correction" function, where the search
+user-issued query. Figure 1 shows a sample of the        engine is confident enough to automatically apply
+query reformulation sessions that record the "did        the spelling correction to the query and execute it
+you mean" sessions from three of the most pop-           to produce search results for the user. The other is
+ular search engines. These sessions encode the           the "split pane" result page, where one half por-
+same user behavior: A user first queries for             tion of the search results are produced using the
+"harrypotter sheme park", and then clicks on the         original query, while the other half, usually vi-
+resulting spelling suggestion "harry potter theme        sually separate portion of results are produced
+park". In our experiments, we "reverse-engineer"         using the auto-corrected query.
+the parameters from the URLs of these sessions,              In neither of these functions does the user ever
+and deduce how each search engine encodes both           receive an opportunity to approve or disapprove
+a query and the fact that a user arrived at a URL        of the correction. Since our extraction approach
+by clicking on the spelling suggestion of the query      focuses on user-approved spelling suggestions,
+– an important indication that the spelling sug-
+
+                                                       268
+
+
+we ignore the query reformulation sessions re-               The speller system used in our experiments is
+cording either of the two functions. Although by         based on a ranking model (or ranker), which can
+doing so we could miss some basic, obvious               be viewed as a generalization of the source
+spelling corrections, our experiments show that          channel model. The system consists of two
+the negative impact on error model training is           components: (1) a candidate generator, and (2) a
+negligible. One possible reason is that our base-        ranker.
+line system, which does not use any error model              In candidate generation, an input query is first
+learned from the clickthrough data, is already able      tokenized into a sequence of terms. Then we scan
+to correct these basic, obvious spelling mistakes.       the query from left to right, and each query term q
+Thus, including these data for training is unlikely      is looked up in lexicon to generate a list of spel-
+to bring any further improvement.                        ling suggestions c whose edit distance from q is
+   We found that the error models trained using          lower than a preset threshold. The lexicon we
+the data directly extracted from the query refor-        used contains around 430,000 entries; these are
+mulation sessions suffer from the problem of             high frequency query terms collected from one
+underestimating the self-transformation probabil-        year of search query logs. The lexicon is stored
+ity of a query P(Q2=Q1|Q1), because we only              using a trie-based data structure that allows effi-
+included in the training data the pairs where the        cient search for all terms within a maximum edit
+query is different from the correction. To deal          distance.
+with this problem, we augmented the training data            The set of all the generated spelling sugges-
+by including correctly spelled queries, i.e., the        tions is stored using a lattice data structure, which
+pairs (Q1, Q2) where Q1 = Q2. First, we extracted a      is a compact representation of exponentially many
+set of queries from the sessions where no spell          possible candidate spelling corrections. We then
+suggestion is presented or clicked on. Second, we        use a decoder to identify the top twenty candi-
+removed from the set those queries that were             dates from the lattice according to the source
+recognized as being auto-corrected by a search           channel model of Equation (2). The language
+engine. We do so by running a sanity check of the        model (the second factor) is a backoff bigram
+queries against our baseline spelling correction         model trained on the tokenized form of one year
+system, which will be described in Section 6. If         of query logs, using maximum likelihood estima-
+the system thinks an input query is misspelled, we       tion with absolute discounting smoothing. The
+assumed it was an obvious misspelling, and re-           error model (the first factor) is approximated by
+moved it. The remaining queries were assumed to          the edit distance function as
+be correctly spelled and were added to the training
+data.                                                            log     |       EditDist    ,            (3)
+
+4    The Baseline Speller System                         The decoder uses a standard two-pass algorithm
+                                                         to generate 20-best candidates. The first pass uses
+The spelling correction problem is typically             the Viterbi algorithm to find the best C according
+formulated under the framework of the source             to the model of Equations (2) and (3). In the
+channel model. Given an input query                      second pass, the A-Star algorithm is used to find
+   . . . , we want to find the best spelling correc-     the 20-best corrections, using the Viterbi scores
+tion          . . . among all candidate spelling         computed at each state in the first pass as heuris-
+corrections:                                             tics. Notice that we always include the input query
+                                                         Q in the 20-best candidate list.
+                 argmax         |               (1)          The core of the second component of the
+                                                         speller system is a ranker, which re-ranks the
+Applying Bayes' Rule and dropping the constant           20-best candidate spelling corrections. If the top
+denominator, we have                                     C after re-ranking is different than the original
+                                                         query Q, the system returns C as the correction.
+              argmax        |                   (2)          Let f be a feature vector extracted from a query
+                                                         and candidate spelling correction pair (Q, C). The
+                                                         ranker maps f to a real value y that indicates how
+where the error model      | models the trans-
+                                                         likely C is a desired correction of Q. For example,
+formation probability from C to Q, and the lan-          a linear ranker simply maps f to y with a learned
+guage model          models how likely C is a            weight vector w such as              · , where w is
+correctly spelled query.                                 optimized w.r.t. accuracy on a set of hu-
+
+                                                       269
+
+
+C:        “disney theme park”       correct query
+S:      [“disney”, “theme park”]    segmentation
+T:      [“disnee”, “theme part”]    translation                |                             | ,         | , ,   (4)
+M:            (1 Æ 2, 2Æ 1)         permutation                            , ,
+Q:         “theme part disnee”      misspelled query                             ,
+
+Figure 2: Example demonstrating the generative
+procedure behind the phrase-based error model.           As is common practice in SMT, we use the
+                                                         maximum approximation to the sum:
+
+                                                                   |       max               | ,         | , ,   (5)
+                                                                           , ,
+man-labeled (Q, C) pairs. The features in f are                                  ,
+arbitrary functions that map (Q, C) to a real value.
+Since we define the logarithm of the probabilities
+of the language model and the error model (i.e.,         5.1       Forced Alignments
+the edit distance function) as features, the ranker      Although we have defined a generative model for
+can be viewed as a more general framework,               transforming queries, our goal is not to propose
+subsuming the source channel model as a special          new queries, but rather to provide scores over
+case. In our experiments we used 96 features and a       existing Q and C pairs which act as features for
+non-linear model, implemented as a two-layer             the ranker. Furthermore, the word-level align-
+neural net, though the details of the ranker and the     ments between Q and C can most often be iden-
+features are beyond the scope of this paper.             tified with little ambiguity. Thus we restrict our
+                                                         attention to those phrase transformations consis-
+5    A Phrase-Based Error Model
+                                                         tent with a good word-level alignment.
+The goal of the phrase-based error model is to               Let J be the length of Q, L be the length of C,
+transform a correctly spelled query C into a             and A = a1, …, aJ be a hidden variable
+misspelled query Q. Rather than replacing single         representing the word alignment. Each ai takes on
+words in isolation, this model replaces sequences        a value ranging from 1 to L indicating its corres-
+of words with sequences of words, thus incorpo-          ponding word position in C, or 0 if the ith word in
+rating contextual information. For instance, we          Q is unaligned. The cost of assigning k to ai is
+might learn that “theme part” can be replaced by         equal to the Levenshtein edit distance (Levensh-
+“theme park” with relatively high probability,           tein, 1966) between the ith word in Q and the kth
+even though “part” is not a misspelled word. We          word in C, and the cost of assigning 0 to ai is equal
+assume the following generative story: first the         to the length of the ith word in Q. We can deter-
+correctly spelled query C is broken into K               mine the least cost alignment A* between Q and C
+non-empty word sequences c1, …, ck, then each is         efficiently using the A-star algorithm.
+replaced with a new non-empty word sequence q1,              When scoring a given candidate pair, we fur-
+…, qk, and finally these phrases are permuted and        ther restrict our attention to those S, T, M triples
+concatenated to form the misspelled Q. Here, c           that are consistent with the word alignment, which
+and q denote consecutive sequences of words.             we denote as B(C, Q, A*). Here, consistency re-
+    To formalize this generative process, let S          quires that if two words are aligned in A*, then
+denote the segmentation of C into K phrases c1…cK,       they must appear in the same bi-phrase (ci, qi).
+and let T denote the K replacement phrases               Once the word alignment is fixed, the final per-
+q1…qK – we refer to these (ci, qi) pairs as              mutation is uniquely determined, so we can safely
+bi-phrases. Finally, let M denote a permutation of       discard that factor. Thus we have:
+K elements representing the final reordering step.
+Figure 2 demonstrates the generative procedure.                        |             max           | ,           (6)
+                                                                                     , ,
+    Next let us place a probability distribution over                                  , ,
+rewrite pairs. Let B(C, Q) denote the set of S, T, M
+triples that transform C into Q. If we assume a             For the sole remaining factor P(T|C, S), we
+uniform probability over segmentations, then the         make the assumption that a segmented query T =
+phrase-based probability can be defined as:              q1… qK is generated from left to right by trans-
+                                                         forming each phrase c1…cK independently:
+
+
+
+
+                                                       270
+
+
+                                                                         A    B   C   D   E   F                a   A
+Input: biPhraseLattice “PL” with length = K & height
+                                                                     a   #                                   adc   ABCD
+= L;                                                                 d                #                        d   D
+Initialization: biPhrase.maxProb = 0;                                c            #                           dc   CD
+for (x = 0; x <= K – 1; x++)                                         f                        #              dcf   CDEF
+    for (y = 1; y <= L; y++)                                                                                   c   C
+        for (yPre = 1; yPre <= L; yPre++)                                                                      f   F
+        {
+            xPre = x – y;                                            Figure 4: Toy example of (left) a word alignment
+            biPhrasePre = PL.get(xPre, yPre);                        between two strings "adcf" and "ABCDEF"; and (right)
+            biPhrase = PL.get(x, y);                                 the bi-phrases containing up to four words that are
+            if (!biPhrasePre || !biPhrase)                           consistent with the word alignment.
+                 continue;
+             probIncrs = PL.getProbIncrease(biPhrasePre,
+                                            biPhrase);
+              maxProbPre = biPhrasePre.maxProb;                      The pseudo-code of the above algorithm is
+              totalProb = probIncrs + maxProbPre;                shown in Figure 3. After generating Q from left to
+              if (totalProb > biPhrase.maxProb)                  right according to Equations (8) to (10), we record
+              {                                                  at each possible bi-phrase boundary its maximum
+                  biPhrase.maxProb = totalProb;                  probability, and we obtain the total probability at
+                  biPhrase.yPre = yPre;                          the end-position of Q. Then, by back-tracking the
+               }                                                 most probable bi-phrase boundaries, we obtain B*.
+        }                                                        The algorithm takes a complexity of O(KL2),
+Result: record at each bi-phrase boundary its maxi-
+                                                                 where K is the total number of word alignments in
+mum probability (biPhrase.maxProb) and optimal
+                                                                 A* which does not contain empty words, and L is
+back-tracking biPhrases (biPhrase.yPre).
+                                                                 the maximum length of a bi-phrase, which is a
+Figure 3: The dynamic programming algorithm for                  hyper-parameter of the algorithm. Notice that
+Viterbi bi-phrase segmentation.                                  when we set L=1, the phrase-based error model is
+                                                                 reduced to a word-based error model which as-
+                                                                 sumes that words are transformed independently
+                                                                 from C to Q, without taking into account any
+               | ,            ∏             |       ,   (7)
+                                                                 contextual information.
+
+where         |     is a phrase transformation
+probability, the estimation of which will be de-                 5.2         Model Estimation
+scribed in Section 5.2.                                          We follow a method commonly used in SMT
+    To find the maximum probability assignment                   (Koehn et al., 2003) to extract bi-phrases and
+efficiently, we can use a dynamic programming                    estimate their replacement probabilities. From
+approach, somewhat similar to the monotone                       each query-correction pair with its word align-
+decoding algorithm described in Och (2002).                      ment (Q, C, A*), all bi-phrases consistent with the
+Here, though, both the input and the output word                 word alignment are identified. Consistency here
+sequences are specified as the input to the algo-                implies two things. First, there must be at least
+rithm, as is the word alignment. We define the                   one aligned word pair in the bi-phrase. Second,
+quantity to be the probability of the most likely                there must not be any word alignments from
+sequence of bi-phrases that produce the first j                  words inside the bi-phrase to words outside the
+terms of Q and are consistent with the word                      bi-phrase. That is, we do not extract a phrase pair
+alignment and C. It can be calculated using the                  if there is an alignment from within the phrase
+following algorithm:                                             pair to outside the phrase pair. The toy example
+ 1. Initialization:                                              shown in Figure 4 illustrates the bilingual phrases
+                          1                             (8)      we can generate by this process.
+ 2. Induction:                                                       After gathering all such bi-phrases from the
+                                                                 full training data, we can estimate conditional
+                                  max           ′
+                          ′   ,         …
+                                                        (9)      relative frequency estimates without smoothing.
+                                    ′
+                                                                 For example, the phrase transformation probabil-
+ 3. Total:                                                       ity     | in Equation (7) can be estimated ap-
+                      |                                 (10)     proximately as
+
+
+
+                                                               271
+
+
+                                                                  directions. In the correction-to-query direc-
+                                   ,
+                   |                               (11)           tion, we define the feature as        , ,
+                           ∑           ,                          log      | , where        | is computed by
+where       ,       is the number of times that c is              Equations (8) to (10), and           is the rel-
+aligned to q in training data. These estimates are                ative frequency estimate of Equation (11).
+useful for contextual lexical selection with suffi-             • Two lexical weight features: These are the
+cient training data, but can be subject to data                   phrase transformation scores based on the
+sparsity issues.                                                  lexical weighting models in two directions.
+   An alternate translation probability estimate                  For example, in the correction-to-query di-
+not subject to data sparsity issues is the so-called              rection,      we     define      the    feature
+lexical weight estimate (Koehn et al., 2003).                     as        , ,      log      |  , where      |
+Assume we have a word translation distribution                    is computed by Equations (8) to (10), and the
+    |    (defined over individual words, not                      phrase transformation probability is the
+phrases), and a word alignment A between q and c;                 computed as lexical weight according to Eq-
+here, the word alignment contains (i, j) pairs,                   uation (12).
+where         1. . | | and    0. . | |, with 0 indicat-         • Unaligned word penalty feature: the feature
+ing an inserted word. Then we can use the fol-                    is defined as the ratio between the number of
+lowing estimate:                                                  unaligned query words and the total number
+             | |                                                  of query words.
+                           1
+      | ,                                      |   (12)
+                   | | ,       |                            6      Experiments
+                                           ,
+
+We assume that for every position in q, there is            We evaluate the spelling error models on a large
+either a single alignment to 0, or multiple align-          scale real world data set containing 24,172 queries
+ments to non-zero positions in c. In effect, this           sampled from one year’s worth of query logs from
+computes a product of per-word translation scores;          a commercial search engine. The spelling of each
+the per-word scores are averages of all the trans-          query is judged and corrected by four annotators.
+lations for the alignment links of that word. We                We divided the data set into training and test
+estimate the word translation probabilities using           data sets. The two data sets do not overlap. The
+counts from the word aligned corpus:         |              training data contains 8,515 query-correction
+     ,                                                      pairs, among which 1,743 queries are misspelled
+∑      , ′
+           . Here   , is the number of times that
+  ′
+                                                            (i.e., in these pairs, the corrections are different
+the words (not phrases as in Equation 11) c and q           from the queries). The test data contains 15,657
+are aligned in the training data. These word based          query-correction pairs, among which 2,960 que-
+scores of bi-phrases, though not as effective in            ries are misspelled. The average length of queries
+contextual selection, are more robust to noise and          in the training and test data is 2.7 words.
+sparsity.                                                       The speller systems we developed in this study
+    Throughout this section, we have approached             are evaluated using the following three metrics.
+this model in a noisy channel approach, finding                • Accuracy: The number of correct outputs
+probabilities of the misspelled query given the                  generated by the system divided by the total
+corrected query. However, the method can be run                  number of queries in the test set.
+in both directions, and in practice SMT systems                • Precision: The number of correct spelling
+benefit from also including the direct probability               corrections for misspelled queries generated
+of the corrected query given this misspelled query               by the system divided by the total number of
+(Och, 2002).                                                     corrections generated by the system.
+5.3     Phrase-Based Error Model Features                      • Recall: The number of correct spelling cor-
+                                                                 rections for misspelled queries generated by
+To use the phrase-based error model for spelling                 the system divided by the total number of
+correction, we derive five features and integrate                misspelled queries in the test set.
+them into the ranker-based query speller system,
+described in Section 4. These features are as                  We also perform a significance test, i.e., a t-test
+follows.                                                    with a significance level of 0.05. A significant
+                                                            difference should be read as significant at the 95%
+  • Two phrase transformation features:
+                                                            level.
+    These are the phrase transformation scores
+    based on relative frequency estimates in two
+
+                                                          272
+
+
+#   System                Accuracy    Precision   Recall      derived from a word-based error model. This
+1   Source-channel         0.8526      0.7213     0.3586      model is a special case of the phrase-based error
+2   Ranker-based           0.8904      0.7414     0.4964      model described in Section 5 with the maximum
+3   Word model             0.8994      0.7709     0.5413      phrase length set to one. Row 4 is the system that
+4   Phrase model (L=3)     0.9043      0.7814     0.5732
+                                                              uses the additional 5 features derived from the
+ Table 1. Summary of spelling correction results.
+                                                              phrase-based error models with a maximum
+                                                              bi-phrase length of 3.
+ # System                    Accuracy   Precision     Recall
+                                                                  In phrase based error model, L is the maxi-
+ 5 Phrase model (L=1)         0.8994     0.7709      0.5413
+ 6 Phrase model (L=2)         0.9014     0.7795      0.5605
+                                                              mum    length of a bi-phrase (Figure 3). This value
+ 7 Phrase model (L=3)         0.9043     0.7814      0.5732   is  important  for the spelling performance. We
+ 8 Phrase model (L=5)         0.9035     0.7834      0.5698   perform   experiments   to study the impact of L;
+ 9 Phrase model (L=8)         0.9033     0.7821      0.5713   the results are displayed in Table 2. Moreover,
+ Table 2. Variations of spelling performance as a func-       since we proposed to use clickthrough data for
+ tion of phrase length.                                       spelling correction, it is interesting to study the
+                                                              impact on spelling performance from the size of
+ # System                    Accuracy   Precision     Recall
+10 L=3; 0 month data          0.8904     0.7414      0.4964
+                                                              clickthrough data used for training. We varied
+11 L=3; 0.5 month data        0.8959     0.7701      0.5234   the size of clickthrough data and the experi-
+12 L=3; 1.5 month data        0.9023     0.7787      0.5667   mental results are presented in Table 3.
+13 L=3; 3 month data          0.9043     0.7814      0.5732       The results show first and foremost that the
+ Table 3. Variations of spelling performance as a func-       ranker-based system significantly outperforms
+ tion of the size of clickthrough data used for training.     the spelling system based solely on the
+                                                              source-channel model, largely due to the richer
+                                                              set of features used (Row 1 vs. Row 2). Second,
+     In our experiments, all the speller systems are         the error model learned from clickthrough data
+ ranker-based. In most cases, other than the base-           leads to significant improvements (Rows 3 and 4
+ line system (a linear neural net), the ranker is a          vs. Row 2). The phrase-based error model, due to
+ two-layer neural net with 5 hidden nodes. The free          its capability of capturing contextual information,
+ parameters of the neural net are trained to optim-          outperforms the word-based model with a small
+ ize accuracy on the training data using the back            but statistically significant margin (Row 4 vs.
+ propagation algorithm, running for 500 iterations           Row 3), though using phrases longer (L > 3) does
+ with a very small learning rate (0.1) to avoid              not lead to further significant improvement (Rows
+ overfitting. We did not adjust the neural net               6 and 7 vs. Rows 8 and 9). Finally, using more
+ structure (e.g., the number of hidden nodes) or             clickthrough data leads to significant improve-
+ any training parameters for different speller sys-          ment (Row 13 vs. Rows 10 to 12). The benefit
+ tems. Neither did we try to seek the best tradeoff          does not appear to have peaked – further im-
+ between precision and recall. Since all the sys-            provements are likely given a larger data set.
+ tems are optimized for accuracy, we use accuracy
+ as the primary metric for comparison.                       7 Conclusions
+     Table 1 summarizes the main spelling correc-
+ tion results. Row 1 is the baseline speller system          Unlike conventional textual documents, most
+ where the source-channel model of Equations (2)             search queries consist of a sequence of key words,
+ and (3) is used. In our implementation, we use a            many of which are valid search terms but are not
+ linear ranker with only two features, derived               stored in any compiled lexicon. This presents a
+ respectively from the language model and the                challenge to any speller system that is based on a
+ error model models. The error model is based on             dictionary.
+ the edit distance function. Row 2 is the rank-                  This paper extends the recent research on using
+ er-based spelling system that uses all 96 ranking           Web    data and query logs for query spelling cor-
+ features, as described in Section 4. Note that the          rection in two aspects. First, we show that a large
+ system uses the features derived from two error             amount of training data (i.e. query-correction
+ models. One is the edit distance model used for             pairs) can be extracted from clickthrough data,
+ candidate generation. The other is a phonetic               focusing on query reformulation sessions. The
+ model that measures the edit distance between the           resulting data are very clean and effective for
+ metaphones (Philips, 1990) of a query word and              error model training. Second, we argue that it is
+ its aligned correction word. Row 3 is the same              critical to capture contextual information for
+ system as Row 2, with an additional set of features         query spelling correction. To this end, we propose
+
+
+                                                       273
+
+
+a new phrase-based error model, which leads to            Kukich, K. 1992. Techniques for automatically
+significant improvement in our spelling correc-            correcting words in text. ACM Computing Sur-
+tion experiments.                                          veys. 24(4): 377-439.
+   There is additional potentially useful informa-        Levenshtein, V. I. 1966. Binary codes capable of
+tion that can be exploited in this type of model.           correcting deletions, insertions and reversals. So-
+For example, in future work we plan to investigate          viet Physics Doklady, 10(8):707-710.
+the combination of the clickthrough data collected
+from a Web browser with the noisy but large               Li, M., Zhu, M., Zhang, Y., and Zhou, M. 2006.
+                                                            Exploring distributional similarity based models
+query sessions collected from a commercial
+                                                            for query spelling correction. In ACL, pp.
+search engine.
+                                                            1025-1032.
+Acknowledgments                                           Mangu, L., and Brill, E. 1997. Automatic rule ac-
+                                                           quisition for spelling correction. In ICML, pp.
+The authors would like to thank Andreas Bode,              187-194.
+Mei Li, Chenyu Yan and Galen Andrew for the
+very helpful discussions and collaboration.               Och, F. 2002. Statistical machine translation: from
+                                                           single-word models to alignment templates. PhD
+                                                           thesis, RWTH Aachen.
+References
+                                                          Och, F., and Ney, H. 2004. The alignment template
+Agichtein, E., Brill, E. and Dumais, S. 2006. Im-          approach to statistical machine translation.
+ proving web search ranking by incorporating user          Computational Linguistics, 30(4): 417-449.
+ behavior information. In SIGIR, pp. 19-26.
+                                                          Okazaki, N., Tsuruoka, Y., Ananiadou, S., and
+Ahmad, F., and Kondrak, G. 2005. Learning a                Tsujii, J. 2008. A discriminative candidate gene-
+ spelling error model from search query logs. In           rator for string transformations. In EMNLP, pp.
+ HLT-EMNLP, pp 955-962.                                    447-456.
+Brill, E., and Moore, R. C. 2000. An improved error       Philips, L. 1990. Hanging on the metaphone.
+  model for noisy channel spelling correction. In           Computer Language Magazine, 7(12):38-44.
+  ACL, pp. 286-293.
+                                                          Suzuki, H., Li, X., and Gao, J. 2009. Discovery of
+Chen, Q., Li, M., and Zhou, M. 2007. Improving              term variation in Japanese web search queries. In
+ query spelling correction using web search results.        EMNLP.
+ In EMNLP-CoNLL, pp. 181-189.
+                                                          Toutanova, K., and Moore, R. 2002. Pronunciation
+Church, K., Hard, T., and Gao, J. 2007. Compress-           modeling for improved spelling correction. In
+ ing trigram language models with Golomb cod-               ACL, pp. 144-151.
+ ing. In EMNLP-CoNLL, pp. 199-207.
+                                                          Wang, X., and Zhai, C. 2008. Mining term associa-
+Cucerzan, S., and Brill, E. 2004. Spelling correction      tion patterns from search logs for effective query
+ as an iterative process that exploits the collective      reformulation. In CIKM, pp. 479-488.
+ knowledge of web users. In EMNLP, pp. 293-300.
+                                                          Whitelaw, C., Hutchinson, B., Chung, G. Y., and
+Gao, J., Yuan, W., Li, X., Deng, K., and Nie, J-Y.         Ellis, G. 2009. Using the web for language inde-
+ 2009. Smoothing clickthrough data for web                 pendent spellchecking and autocorrection. In
+ search ranking. In SIGIR.                                 EMNLP, pp. 890-899.
+Golding, A. R., and Roth, D. 1996. Applying win-
+ now to context-sensitive spelling correction. In
+ ICML, pp. 182-190.
+Joachims, T. 2002. Optimizing search engines using
+  clickthrough data. In SIGKDD, pp. 133-142.
+Kernighan, M. D., Church, K. W., and Gale, W. A.
+ 1990. A spelling correction program based on a
+ noisy channel model. In COLING, pp. 205-210.
+Koehn, P., Och, F., and Marcu, D. 2003. Statistical
+ phrase-based translation. In HLT/NAACL, pp.
+ 127-133.
+
+
+
+                                                        274
+

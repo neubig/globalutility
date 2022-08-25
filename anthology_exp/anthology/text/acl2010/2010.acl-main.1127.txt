@@ -1,0 +1,581 @@
+    Generating image descriptions using dependency relational patterns
+
+                   Ahmet Aker                                      Robert Gaizauskas
+               University of Sheffield                            University of Sheffield
+            a.aker@dcs.shef.ac.uk                           r.gaizauskas@dcs.shef.ac.uk
+
+
+
+
+                      Abstract                                Paul’s,London}i. Scene type and place names can
+                                                              be obtained automatically given GPS coordinates
+    This paper presents a novel approach
+                                                              and compass information using techniques such as
+    to automatic captioning of geo-tagged
+                                                              those described in Xin et al. (2010) – that task is
+    images by summarizing multiple web-
+                                                              not the focus of this paper.
+    documents that contain information re-
+    lated to an image’s location. The summa-                     Our method applies only to images of static fea-
+    rizer is biased by dependency pattern mod-                tures of the built or natural landscape, i.e. objects
+    els towards sentences which contain fea-                  with persistent geo-coordinates, such as buildings
+    tures typically provided for different scene              and mountains, and not to images of objects which
+    types such as those of churches, bridges,                 move about in such landscapes, e.g. people, cars,
+    etc. Our results show that summaries bi-                  clouds, etc. However, our technique is suitable not
+    ased by dependency pattern models lead                    only for image captioning but in any application
+    to significantly higher ROUGE scores than                 context that requires summary descriptions of in-
+    both n-gram language models reported in                   stances of object classes, where the instance is to
+    previous work and also Wikipedia base-                    be characterized in terms of the features typically
+    line summaries. Summaries generated us-                   mentioned in describing members of the class.
+    ing dependency patterns also lead to more                    Aker and Gaizauskas (2009) have argued that
+    readable summaries than those generated                   humans appear to have a conceptual model of
+    without dependency patterns.                              what is salient regarding a certain object type (e.g.
+                                                              church, bridge, etc.) and that this model informs
+1   Introduction                                              their choice of what to say when describing an in-
+The number of images tagged with location infor-              stance of this type. They also experimented with
+mation on the web is growing rapidly, facilitated             representing such conceptual models using n-gram
+by the availability of GPS (Global Position Sys-              language models derived from corpora consisting
+tem) equipped cameras and phones, as well as by               of collections of descriptions of instances of spe-
+the widespread use of online social sites. The ma-            cific object types (e.g. a corpus of descriptions of
+jority of these images are indexed with GPS coor-             churches, a corpus of bridge descriptions, and so
+dinates (latitude and longitude) only and/or have             on) and reported results showing that incorporat-
+minimal captions. This typically small amount of              ing such n-gram language models as a feature in a
+textual information associated with the image is of           feature-based extractive summarizer improves the
+limited usefulness for image indexing, organiza-              quality of automatically generated summaries.
+tion and search. Therefore methods which could                   The main weakness of n-gram language mod-
+automatically supplement the information avail-               els is that they only capture very local information
+able for image indexing and lead to improved im-              about short term sequences and cannot model long
+age retrieval would be extremely useful.                      distance dependencies between terms. For exam-
+   Following the general approach proposed by                 ple one common and important feature of object
+Aker and Gaizauskas (2009), in this paper we                  descriptions is the simple specification of the ob-
+describe a method for automatic image caption-                ject type, e.g. the information that the object Lon-
+ing or caption enhancement starting with only a               don Bridge is a bridge or that the Rhine is a river.
+scene or subject type and a set of place names per-           If this information is expressed as in the first line
+taining to an image – for example hchurch, {St.               of Table 1, n-gram language models are likely to
+
+
+                                                        1250
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1250–1258,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+  Table 1: Example of sentences which express the type of an object.           Table 2:      Object types and the number of articles in each object type cor-
+ London Bridge is a bridge...                                                  pus. Object types which are bold are covered by the evaluation image set.
+ The Rhine (German: Rhein; Dutch: Rijn; French: Rhin; Romansh: Rain;             village 39970, school 15794, city 14233, organization 9393, university
+ Italian: Reno; Latin: Rhenus West Frisian Ryn) is one of the longest and        7101, area 6934, district 6565, airport 6493, island 6400, railway station
+ most important rivers in Europe...                                              5905, river 5851, company 5734, mountain 5290, park 3754, college 3749,
+                                                                                 stadium 3665, lake 3649, road 3421, country 3186, church 3005, way
+                                                                                 2508, museum 2320, railway 2093, house 2018, arena 1829, field 1731,
+                                                                                 club 1708, shopping centre 1509, highway 1464, bridge 1383, street 1352,
+                                                                                 theatre 1330, bank 1310, property 1261, hill 1072, castle 1022, forest 995,
+reflect it, since one would expect the tri-gram is a                             court 949, hospital 937, peak 906, bay 899, skyscraper 843, valley 763, ho-
+bridge to occur with high frequency in a corpus of                               tel 741, garden 739, building 722, market 712, monument 679, port 651,
+                                                                                 sea 645, temple 625, beach 614, square 605, store 547, campus 525, palace
+bridge descriptions. However, if the type predica-                               516, tower 496, cemetery 457, volcano 426, cathedral 402, glacier 392,
+                                                                                 residence 371, dam 363, waterfall 355, gallery 349, prison 348, cave 341,
+tion occurs with less commonly seen local context,                               canal 332, restaurant 329, path 312, observatory 303, zoo 302, coast 298,
+as is the case for the object Rhine in the second                                statue 283, venue 269, parliament 258, shrine 256, desert 248, synagogue
+                                                                                 236, bar 229, ski resort 227, arch 223, landscape 220, avenue 202, casino
+row of Table 1 – most important rivers – n-gram                                  179, farm 179, seaside 173, waterway 167, tunnel 167, ruin 166, chapel 165,
+                                                                                 observation wheel 158, basilica 157, woodland 154, wetland 151, cinema
+language models may well be unable to identify it.                               144, gate 142, aquarium 136, entrance 136, opera house 134, spa 125,
+                                                                                 shop 124, abbey 108, boulevard 108, pub 92, bookstore 76, mosque 56
+   Intuitively, what is important in both these cases
+is that there is a predication whose subject is the
+object instance of interest and the head of whose                              formation we can group the patterns into groups
+complement is the object type: London Bridge ...                               expressing the same type of information and then,
+is ... bridge and Rhine ... is ... river. Sentences                            during sentence selection, ensure that sentences
+matching such patterns are likely to be important                              matching patterns from different groups are se-
+ones to include in a summary. This intuition sug-                              lected in order to guarantee broad, non-redundant
+gests that rather than representing object type con-                           coverage of information relevant for inclusion in
+ceptual models via corpus-derived language mod-                                the summary. We report work experimenting with
+els as do Aker and Gaizauskas (2009), we do so in-                             this idea too.
+stead using corpus-derived dependency patterns.
+                                                                               2     Representing conceptual models
+   We pursue this idea in this paper, our hy-
+pothesis being that information that is important                              2.1     Object type corpora
+for describing objects of a given type will fre-                               We derive n-gram language and dependency pat-
+quently be realized linguistically via expressions                             tern models using object type corpora made avail-
+with the same dependency structure. We explore                                 able to us by Aker and Gaizauskas. Aker and
+this hypothesis by developing a method for deriv-                              Gaizauskas (2009) define an object type corpus as
+ing common dependency patterns from object type                                a collection of texts about a specific static object
+corpora (Section 2) and then incorporating these                               type such as church, bridge, etc. Objects can be
+patterns into an extractive summarization system                               named locations such as Eiffel Tower. To refer to
+(Section 3). In Section 4 we evaluate the approach                             such names they use the term toponym. To build
+both by scoring against model summaries and via                                such object type corpora the authors categorized
+a readability assessment. Since our work aims to                               Wikipedia articles places by object type. The ob-
+extend the work of Aker and Gaizauskas (2009)                                  ject type of each article was identified automati-
+we reproduce their experiments with n-gram lan-                                cally by running Is-A patterns over the first five
+guage models in the current setting so as to permit                            sentences of the article. The authors report 91%
+accurate comparison.                                                           accuracy for their categorization process. The
+   Multi-document summarizers face the problem                                 most populated of the categories identified (in to-
+of avoiding redundancy: often, important infor-                                tal 107 containing articles about places around the
+mation which must be included in the summary                                   world) are shown in Table 2.
+is repeated several times across the document set,
+but must be included in the summary only once.                                 2.2     N-gram language models
+We can use the dependency pattern approach to                                  Aker and Gaizauskas (2009) experimented with
+address this problem in a novel way. The com-                                  uni-gram and bi-gram language models to capture
+mon approach to avoiding redundancy is to use a                                the features commonly used when describing an
+text similarity measure to block the addition of a                             object type and used these to bias the sentence se-
+further sentence to the summary if it is too simi-                             lection of the summarizer towards the sentences
+lar to one already included. Instead, since specific                           that contain these features. As in Song and Croft
+dependency patterns express specific types of in-                              (1999) they used their language models in a gener-
+
+
+                                                                            1251
+
+
+ative way, i.e. they calculate the probability that a
+                                                                         Table 3: Example sentence for dependency pattern.
+sentence is generated based on a n-gram language                 Original sentence: The bridge was built in 1876 by W. W.
+                                                                 After NE tagging: The bridge was built in DATE by W. W.
+model. They showed that summarizer biased with                   Input to the parser: The OBJECTTYPE was built in DATE by W. W.
+bi-gram language models produced better results                  Output of the parser: det(OBJECTTYPE-2, The-1), nsubjpass(built-
+                                                                 4, OBJECTTYPE-2), auxpass(built-4, was-3), prep-in(built-4, DATE-6),
+than those biased with uni-gram models. We repli-                nn(W-10, W-8), agent(built-4, W-10)
+cate the experiments of Aker and Gaizauskas and                  Patterns: The OBJECTTYPE built, OBJECTTYPE was built, OBJECT-
+                                                                 TYPE built DATE, OBJECTTYPE built W, was built DATE, was built W
+generate a bi-gram language model for each object
+type corpus. In later sections we use LM to refer
+to these models.                                              both terms. E.g. for the term nsubjpass(built-4,
+                                                              OBJECTTYPE-2) we use the verb built and ex-
+2.3    Dependency patterns
+                                                              tract patterns based on this. OBJECTTYPE is in
+We use the same object type corpora to derive                 direct relation to built and The is in indirect rela-
+dependency patterns. Our patterns are derived                 tion to built through OBJECTTYPE. So a pattern
+from dependency trees which are obtained using                from these relations is The OBJECTTYPE built.
+the Stanford parser1 . Each article in each ob-               The next pattern extracted from this term is OB-
+ject type corpus was pre-processed by sentence                JECTTYPE was built. This pattern is based on di-
+splitting and named entity tagging2 . Then each               rect relations. The verb built is in direct relation
+sentence was parsed by the Stanford dependency                to OBJECTTYPE and also to was. We continue
+parser to obtain relational patterns. As with the             this until we cover all direct relations with built re-
+chain model introduced by Sudo et al. (2001) our              sulting in two more patterns (OBJECTTYPE built
+relational patterns are concentrated on the verbs             DATE and OBJECTTYPE built W). It should be
+in the sentences and contain n+1 words (the verb              noted that we consider all direct and indirect rela-
+and n words in direct or indirect relation with the           tions while generating the patterns.
+verb). The number n is experimentally set to two                 Following these steps we extracted relational
+words.                                                        patterns for each object type corpus along with the
+   For illustration consider the sentence shown in            frequency of occurrence of the pattern in the en-
+Table 3 that is taken from an article in the bridge           tire corpus. The frequency values are used by the
+corpus. The first two rows of the table show the              summarizer to score the sentences. In the follow-
+original sentence and its form after named entity             ing sections we will use the term DpM to refer to
+tagging. The next step in processing is to replace            these dependency pattern models.
+any occurrence of a string denoting the object type
+                                                              2.3.1      Pattern categorization
+by the term “OBJECTTYPE” as shown in the third
+row of Table 3. The final two rows of the table               In addition to using dependency patterns as mod-
+show the output of the Stanford dependency parser             els for biasing sentence selection, we can also use
+and the relational patterns identified for this ex-           them to control the kind of information to be in-
+ample. To obtain the relational patterns from the             cluded in the final summary (see Section 3.2). We
+parser output we first identified the verbs in the            may want to ensure that the summary contains
+output. For each such verb we extracted two fur-              a sentence describing the object type of the ob-
+ther words being in direct or indirect relation to the        ject, its location and some background informa-
+current verb. Two words are directly related if they          tion. For example, for the object Eiffel Tower we
+occur in the same relational term. The verb built-4,          aim to say that it is a tower, located in Paris, de-
+for instance, is directly related to DATE-6 because           signed by Gustave Eiffel, etc. To be able to do
+they both are in the same relational term prep-               so, we categorize dependency patterns according
+in(built-4, DATE-6). Two words are indirectly re-             to the type of information they express.
+lated if they occur in two different terms but are               We manually analyzed human written descrip-
+linked by a word that occurs in those two terms.              tions about instances of different object types and
+The verb was-3 is, for instance, indirectly related           recorded for each sentence in the descriptions the
+to OBJECTTYPE-2 because they are both in dif-                 kind of information it contained about the object.
+ferent terms but linked with built-4 that occurs in           We analyzed descriptions of 310 different objects
+   1                                                          where each object had up to four different human
+     http://nlp.stanford.edu/software/lex-parser.shtml
+   2
+     For performing shallow text analysis the OpenNLP tools   written descriptions (Section 4.1). We categorized
+(http://opennlp.sourceforge.net/) were used.                  the information contained in the descriptions into
+
+
+                                                          1252
+
+
+the following categories:                                             occurring non stop words in the document collection
+                                                                      (cosine similarity over the vector representation of the
+    • type: sentences containing the “type” information of            sentence and the centroid).
+      the object such as XXX is a bridge                            • sentencePosition: Position of the sentence within its
+    • year: sentences containing information about when the           document. The first sentence in the document gets the
+      object was built or in case of mountains, for instance,         score 1 and the last one gets n1 where n is the number
+      when it was first climbed                                       of sentences in the document.
+    • location: sentences containing information about              • starterSimilarity: A sentence gets a binary score if it
+      where the object is located                                     starts with the query term (e.g. Westminster Abbey, The
+    • background: sentences containing some specific in-              Westminster Abbey, The Westminster or The Abbey) or
+      formation about the object                                      with the object type, e.g. The church. We also allow
+    • surrounding: sentences containing information about             gaps (up to four words) between the and the query to
+      what other objects are close to the main object                 capture cases such as The most magnificent Abbey, etc.
+    • visiting: sentences containing information about e.g.         • LMSim3 : The similarity of a sentence S to an n-gram
+      visiting times, etc.                                            language model LM (the probability that the sentence
+                                                                      S is generated by LM).
+   We also manually assigned each dependency
+pattern in each corpus-derived model to one of the                  In our experiments we extend this feature set by
+above categories, provided it occurred five or more              two dependency pattern related features: DpMSim
+times in the object type corpora. The patterns ex-               and DepCat.
+tracted for our example sentence shown in Table 3,                  DpMSim is computed in a similar fashion to
+for instance, are all categorized by year category               LMSim feature. We assign each sentence a depen-
+because all of them contain information about the                dency similarity score. To compute this score, we
+foundation date of an object.                                    first parse the sentence on the fly with the Stan-
+                                                                 ford parser and obtain the dependency patterns for
+3     Summarizer                                                 the sentence. We then associate each dependency
+We adopted the same overall approach to sum-                     pattern of the sentence with the occurrence fre-
+marization used by Aker and Gaizauskas (2009)                    quency of that pattern in the dependency pattern
+to generate the image descriptions. The summa-                   model (DpM). DpMSim is then computed as given
+rizer is an extractive, query-based multi-document               in Equation 1. It is a sum of all occurrence fre-
+summarization system. It is given two inputs: a                  quencies of the dependency patterns detected in a
+toponym associated with an image and a set of                    sentence S that are also contained in the DpM.
+documents to be summarized which have been re-                                                        X
+trieved from the web using the toponym as a query.                          DpM Sim(S, DpM ) =              fDpM (p)        (1)
+                                                                                                      p∈S
+The summarizer creates image descriptions in a
+three step process. First, it applies shallow text                  The second feature, DepCat, uses dependency
+analysis, including sentence detection, tokeniza-                patterns to categorize the sentences rather than
+tion, lemmatization and POS-tagging to the given                 ranking them. It can be used independently from
+input documents. Then it extracts features from                  other features to categorize each sentence by one
+the document sentences. Finally, it combines the                 of the categories described in Section 2.3.1. To do
+features using a linear weighting scheme to com-                 this, we obtain the relational patterns for the cur-
+pute the final score for each sentence and to cre-               rent sentence, check whether for each such pattern
+ate the final summary. We modified the approach                  whether it is included in the DpM, and, if so, we
+to feature extraction and the way the summarizer                 add to the sentence the category the pattern was
+acquires the weights for feature combination. The                manually associated with. It should be noted that
+following subsections describe how feature extrac-               a sentence can have more than one category. This
+tion/combination is done in more detail.                         can occur, for instance, if the sentence contains in-
+3.1    Feature Extraction                                        formation about when something was built and at
+                                                                 the same time where it is located. It is also impor-
+The original summarizer reported in Aker and                     tant to mention that assigning sentences categories
+Gaizauskas (2009) uses the following features to                 does not change the order in the ranked list.
+score the sentences:                                                We use DepCat to generate an automated sum-
+    • querySimilarity: Sentence similarity to the query (to-     mary by first including sentences containing the
+      ponym) (cosine similarity over the vector representa-      category “type”, then “year” and so on until the
+      tion of the sentence and the query).
+                                                                     3
+    • centroidSimilarity: Sentence similarity to the centroid.         In Aker and Gaizauskas (2009) this feature is called mod-
+      The centroid is composed of the 100 most frequently        elSimilarity.
+
+
+                                                             1253
+
+
+summary length is violated. The sentences are se-           summaries for that particular object. Sentences
+lected according to the order in which they occur           which are exactly the same or have common parts
+in the ranked list. From each of the first three cat-       will score higher in ROUGE than sentences which
+egories (“type”, “year” and “location”) we take a           do not have anything in common. In this way, we
+single sentence to avoid redundancy. The same is            have for each sentence from all existing image de-
+applied to the final two categories (“surrounding”          scriptions about an object a ROUGE score5 indi-
+and “visiting”). Then, if length limit is not vio-          cating its relevance. We also ran the summarizer
+lated, we fill the summary with sentences from the          for each of these sentences to compute the values
+“background” category until the word limit of 200           for the different features. This gives information
+words is reached. Here the number of added sen-             about each feature’s value for each sentence. Then
+tences is not limited. Finally, we order the sen-           the ROUGE scores and feature score values for ev-
+tences by first adding the sentences from the first         ery sentence were input to the linear regression al-
+three categories to the summary, then the “back-            gorithm to train the weights.
+ground” related sentences and finally the last two             Given the weights, Equation 2 is used to com-
+sentences from the “surrounding” and “visiting”             pute the final score for each sentence. The final
+categories. However, in cases where we have not             sentence scores are used to sort the sentences in
+reached the summary word limit because of un-               the descending order. This sorted list is then used
+covered categories, i.e. there were not, for in-            by the summarizer to generate the final summary
+stance, sentences about “location”, we add to the           as described in Aker and Gaizauskas (2009).
+end of the summary the next top sentence from the           4       Evaluation
+ranked list that was not taken.
+                                                            To evaluate our approach we used two different as-
+3.2      Sentence Selection
+                                                            sessment methods: ROUGE (Lin, 2004) and man-
+To compute the final score for each sentence Aker           ual readability. In the following we first describe
+and Gaizauskas (2009) use a linear function with            the data sets used in each of these evaluations, and
+weighted features:                                          then we present the results of each assessment.
+                                                            4.1      Data sets
+                      n
+                      X
+           Sscore = (         f eaturei ∗ weighti )   (2)   For evaluation we use the image collection de-
+                        i=1                                 scribed in Aker and Gaizauskas (2010). The image
+We use the same approach, but whereas the fea-              collection contains 310 different images with man-
+ture weights they use are experimentally set rather         ually assigned toponyms. The images cover 60
+than learned, we learn the weights using linear re-         of the 107 object types identified from Wikipedia
+gression instead. We used 23 of the 310 images              (see Table 2). For each image there are up to
+from our image set (see Section 4.1) to train the           four short descriptions or model summaries. The
+weights. The image descriptions from this data set          model summaries were created manually based on
+are used as model summaries.                                image descriptions taken from VirtualTourist and
+   Our training data contains for each image a              contain a minimum of 190 and a maximum of 210
+set of image descriptions taken from the Virtual-           words. An example model summary about the Eif-
+Tourist travel community web-site 4 . From this             fel Tower is shown in Table 4. 23 of this image
+web-site we took all existing image descriptions            collection was used to train the weights and the
+about a particular image or object. Note that some          remaining 31 (105 images) for evaluation.
+of these descriptions about a particular object were           To generate automatic captions for the im-
+used to derive the model summaries for that ob-             ages we automatically retrieved the top 30 related
+ject (see Section 4.1). Assuming that model sum-            web-documents for each image using the Yahoo!
+maries contain the most relevant sentences about            search engine and the toponym associated with the
+an object we perform ROUGE comparisons be-                  image as a query. The text from these documents
+tween the sentences in all the image descriptions           was extracted using an HTML parser and passed
+and the model summaries, i.e. we pair each sen-             to the summarizer. The set of documents we used
+tence from all image descriptions about a particu-          to generate our summaries excluded any Virtual-
+lar place with every sentence from all the model            Tourist related sites, as these were used to generate
+   4                                                            5
+       www.virtualtourist.com                                       We used ROUGE 1.
+
+
+                                                        1254
+
+
+                            Table 4: Model, Wikipedia baseline and starterSimilarity+LMSim+DepCat summary for Eiffel Tower.
+ Model Summary                                            Wikipedia baseline summary                            starterSimilarity+LMSim+DepCat summary
+ The Eiffel Tower is the most famous place in Paris. It   The Eiffel Tower (French: Tour Eiffel, [tur efel])    The Eiffel Tower, which is the tallest building in
+ is made of 15,000 pieces fitted together by 2,500,000    is a 19th century iron lattice tower located on the   Paris, is the single most visited paid monument in the
+ rivets. It’s of 324 m (1070 ft) high structure and       Champ de Mars in Paris that has become both a         world; millions of people ascend it every year. The
+ weighs about 7,000 tones. This world famous land-        global icon of France and one of the most recog-      tower is located on the Left Bank of the Seine River,
+ mark was built in 1889 and was named after its de-       nizable structures in the world. The Eiffel Tower,    at the northwestern extreme of the Parc du Champ
+ signer, engineer Gustave Alexandre Eiffel. It is now     which is the tallest building in Paris, is the single de Mars, a park in front of the Ecole Militaire that
+ one of the world’s biggest tourist places which is vis-  most visited paid monument in the world; millions     used to be a military parade ground. The tower was
+ ited by around 6,5 million people yearly. There are      of people ascend it every year. Named after its de-   met with much criticism from the public when it was
+ three levels to visit: Stages 1 and 2 which can be       signer, engineer Gustave Eiffel, the tower was built  built, with many calling it an eyesore. Counting from
+ reached by either taking the steps (680 stairs) or the   as the entrance arch for the 1889 World’s Fair. The   the ground, there are 347 steps to the first level, 674
+ lift, which also has a restaurant ”Altitude 95” and a    tower stands at 324 m (1,063 ft) tall, about the      steps to the second level, and 1,710 steps to the small
+ Souvenir shop on the first floor. The second floor also  same height as an 81-story building. It was the       platform on the top of the tower. Although it was
+ has a restaurant ”Jules Verne”. Stage 3, which is at     tallest structure in the world from its completion    the world’s tallest structure when completed in 1889,
+ the top of the tower can only be reached by using the    until 1930, when it was eclipsed by the Chrysler      the Eiffel Tower has since lost its standing both as
+ lift. But there were times in the history when Tour Eif- Building in New York City. Not including broad-       the tallest lattice tower and as the tallest structure in
+ fel was not at all popular, when the Parisians thought   cast antennas, it is the second-tallest structure in  France. The tower has two restaurants: Altitude 95,
+ it looked ugly and wanted to pull it down. The Eif-      France, behind the Millau Viaduct, completed in       on the first floor 311ft (95m) above sea level; and
+ fel Tower can be reached by using the Mtro through       2004. The tower has three levels for visitors. Tick-  the Jules Verne, an expensive gastronomical restau-
+ Trocadro, Ecole Militaire, or Bir-Hakeim stops. The      ets can be purchased to ascend either on stairs or    rant on the second floor, with a private lift.
+ address is: Champ de Mars-Tour Eiffel.                   lifts to the first and second levels.
+
+
+
+                                          Table 5:     ROUGE scores for each single feature and Wikipedia baseline.
+ Recall              centroidSimilarity    sentencePosition querySimilarity       starterSimilarity    LMSim                      DpMSim***        Wiki
+ R2                  .0734                 .066             .0774                 .0869                .0895                      .093             .097
+ RSU4                .12                   .11              .12                   .137                 .142                       .145             .14
+
+
+
+the model summaries.                                                                (R2 0.042, RSU4 .079) 6 . Thus, we will focus
+                                                                                    on the Wikipedia baseline summaries to draw con-
+4.2    ROUGE assessment
+                                                                                    clusions about our automatic summaries. Table 4
+In the first assessment we compared the automat-                                    shows the Wikipedia baseline summary about the
+ically generated summaries against model sum-                                       Eiffel Tower.
+maries written by humans using ROUGE (Lin,                                             Secondly, we separately ran the summarizer
+2004). Following the Document Understanding                                         over the top ten documents for each single feature
+Conference (DUC) evaluation standards we used                                       and compared the automated summaries against
+ROUGE 2 (R2) and ROUGE SU4 (RSU4) as eval-                                          the model ones. The results of this comparison
+uation metrics (Dang, 2006) . ROUGE 2 gives re-                                     are shown in Table 5.
+call scores for bi-gram overlap between the auto-                                      Table 5 shows that the dependency model fea-
+matically generated summaries and the reference                                     ture (DpMSim) contributes most to the summary
+ones. ROUGE SU4 allows bi-grams to be com-                                          quality according to the ROUGE metrics. It is also
+posed of non-contiguous words, with a maximum                                       significantly better than all other feature scores
+of four words between the bi-grams.                                                 except the LMSim feature. Compared to LMSim
+   As baselines for evaluation we used two dif-                                     ROUGE scores the DpMSim feature offers only a
+ferent summary types. Firstly, we generated                                         moderate improvement. The same moderate im-
+summaries for each image using the top-ranked                                       provement we can see between the DpMSim RSU4
+non Wikipedia document retrieved in the Yahoo!                                      and the Wiki RSU4. The lowest ROUGE scores
+search results for the given toponyms. From this                                    are obtained if only sentence position (sentecePo-
+document we create a baseline summary by select-                                    sition) is used.
+ing sentences from the beginning until the sum-                                        To see how the ROUGE scores change when
+mary reaches a length of 200 words. As a second                                     features are combined with each other we per-
+baseline we use the Wikipedia article for a given                                   formed different combinations of the features,
+toponym from which we again select sentences                                        ran the summarizer for each combination and
+from the beginning until the summary length limit                                   compared the automated summaries against the
+is reached.                                                                         model ones. In the different combinations we
+   First, we compared the baseline summaries                                            6
+                                                                                          To assess the statistical significance of ROUGE score
+against the VirtualTourist model summaries. The                                     differences between multiple summarization results we per-
+comparison shows that the Wikipedia baseline                                        formed a pairwise Wilcoxon signed-rank test. We use the
+                                                                                    following conventions for indicating significance level in the
+ROUGE scores (R2 .097***, RSU4 .14***) are                                          tables: *** = p < .0001, ** = p < .001, * = p < .05 and no
+significantly higher than the first document ones                                   star indicates non-significance.
+
+
+                                                                             1255
+
+
+                                                                             tion. For comparison we also evaluated sum-
+Table 6:       ROUGE scores of feature combinations which score moderately
+or significantly higher than dependency pattern model (DpMSim) feature and   maries which were not structured by dependency
+Wikipedia baseline.
+  Recall     starterSimilarity starterSimilarity       DpmSim      Wiki
+                                                                             patterns (starterSimilarity + LMSim) and also the
+             + LMSim           + LMSim + Dep-                                Wikipedia baseline summaries.
+                               Cat***
+  R2         .095              .102                    .093        .097         We asked four people to assess the summaries.
+  RSU4       .145              .155                    .145        .14
+                                                                             Each person was shown all 315 summaries (105
+                                                                             from each summary type) in a random way and
+also included the dependency pattern categoriza-                             was asked to assess them according to the DUC
+tion (DepCat) feature explained in Section 3.1.                              and TAC manual assessment scheme. The results
+Table 6 shows the results of feature combinations                            are shown in Table 7.
+which score moderately or significantly higher                                  We see from Table 7 that using dependency pat-
+than the dependency pattern model (DpMSim) fea-                              terns to categorize the sentences and produce a
+ture score shown in Table 5.                                                 structured summary helps to obtain better readable
+   The results showed that combining DpMSim                                  summaries. Looking at the 5 and 4 scores the ta-
+with other features did not lead to higher ROUGE                             ble shows that the dependency pattern categorized
+scores than those produced by that feature alone.                            summaries (SLMD) have better clarity (85% of the
+   The summaries categorized by dependency pat-                              summaries), are more coherent (74% of the sum-
+terns (starterSimilarity+LMSim+DepCat) achieve                               maries), contain less redundant information (83%
+significantly higher ROUGE scores than the                                   of the summaries) and have better grammar (92%
+Wikipedia baseline. For both ROUGE R2 and                                    of the summaries) than the ones without depen-
+ROUGE SU4 the significance is at level p <                                   dency categorization (80%, 70%, 60%, 84%).
+.0001. Table 4 shows a summary about the                                        The scores of our automated summaries were
+Eiffel Tower obtained using this starterSimilar-                             better than the Wikipedia baseline summaries in
+ity+LMSim+DepCat feature. Table 5 also shows                                 the grammar feature. However, in other features
+the ROUGE scores of the feature combination                                  the Wikipedia baseline summaries obtained better
+starterSimilarity and LMSim used without the de-                             scores than our automated summaries. This com-
+pendency categorization (DepCat) feature. It can                             parison show that there is a gap to fill in order to
+be seen that this combination without the depen-                             obtain better readable summaries.
+dency patterns lead to lower ROUGE scores in                                 5   Related Work
+ROUGE 2 and only moderate improvement in
+ROUGE SU4 if compared with Wikipedia base-                                   Our approach has an advantage over related work
+line ROUGE scores.                                                           in automatic image captioning in that it requires
+                                                                             only GPS information associated with the image in
+4.3     Readability assessment                                               order to generate captions. Other attempts towards
+We also evaluated our summaries using a read-                                automatic generation of image captions generate
+ability assessment as in DUC and TAC. DUC and                                captions based on the immediate textual context of
+TAC manually assess the quality of automatically                             the image with or without consideration of image
+generated summaries by asking human subjects to                              related features such as colour, shape or texture
+score each summary using five criteria – gram-                               (Deschacht and Moens, 2007; Mori et al., 2000;
+maticality, redundancy, clarity, focus and structure                         Barnard and Forsyth, 2001; Duygulu et al., 2002;
+criteria. Each criterion is scored on a five point                           Barnard et al., 2003; Pan et al., 2004; Feng and La-
+scale with high scores indicating a better result                            pata, 2008; Satoh et al., 1999; Berg et al., 2005).
+(Dang, 2005).                                                                However, Marsch & White (2003) argue that the
+   For this evaluation we used the same 105 im-                              content of an image and its immediate text have
+ages as in the ROUGE evaluation. As the ROUGE                                little semantic agreement and this can, according
+evaluation showed that the dependency pattern                                to Purves et al. (2008), be misleading to image
+categorization (DepCat) renders the best results                             retrieval. Furthermore, these approaches assume
+when used in feature combination starterSimilar-                             that the image has been obtained from a document.
+ity + LMSim + DepCat, we further investigated                                In cases where there is no document associated
+the contribution of dependency pattern categoriza-                           with the image, which is the scenario we are prin-
+tion by performing a readability assessment on                               cipally concerned with, these techniques are not
+summaries generated using this feature combina-                              applicable.
+
+
+                                                                         1256
+
+
+Table 7:      Readability evaluation results: Each cell shows the percentage of summaries scoring the ranking score heading the column for each criterion in the
+row as produced by the summary method indicated by the subcolumn heading – Wikipedia baseline (W), starterSimilarity + LMSim (SLM) and starterSimilarity +
+LMSim + DepCat (SLMD). The numbers indicate the percentage values averaged over the four people.
+                                5                            4                        3                           2                          1
+    Criterion       W         SLM       SLMD W             SLM     SLMD W           SLM       SLMD W            SLM      SLMD W            SLM       SLMD
+    clarity         72.6      50.5      53.6     21.7      30.0    31.4     1.2     6.7       5.7       4.0     10.2     6.0       0.5     2.6       3.3
+    focus           72.1      49.3      51.2     20.5      26.0    25.2     3.8     10.0      10.7      3.3     10.0     10.5      0.2     4.8       2.4
+    coherence       67.1      39.0      48.3     23.6      31.4    26.9     4.8     12.4      11.9      3.3     10.2     9.8       1.2     6.9       3.1
+    redundancy      69.8      42.9      55.0     21.7      17.4    28.8     2.4     4.5       4.3       5.0     27.1     8.8       1.2     8.1       3.1
+    grammar         48.6      55.7      62.9     32.9      29.0    30.0     5.0     3.1       1.9       11.7    12.1     5.2       1.9     0         0
+
+
+
+   Dependency patterns have been exploited in                                      in combination with features reported in Aker and
+various language processing applications. In in-                                   Gaizauskas to produce a structured summary led
+formation extraction, for instance, dependency                                     to significantly better results than Wikipedia base-
+patterns have been used to extract relevant in-                                    line summaries as assessed by ROUGE. However,
+formation from text resources (Yangarber et al.,                                   human assessed readability showed that there is
+2000; Sudo et al., 2001; Culotta and Sorensen,                                     still scope for improvement.
+2004; Stevenson and Greenwood, 2005; Bunescu                                          These results indicate that dependency patterns
+and Mooney, 2005; Stevenson and Greenwood,                                         are worth investigating for object focused auto-
+2009). However, dependency patterns have not                                       mated summarization tasks. Such investigations
+been used extensively in summarization tasks. We                                   should in particular concentrate on how depen-
+are aware only of the work described in Nobata et                                  dency patterns can be used to structure informa-
+al. (2002) who used dependency patterns in com-                                    tion within the summary, as our best results were
+bination with other features to generate extracts in                               achieved when dependency patterns were used for
+a single document summarization task. The au-                                      this purpose.
+thors found that when learning weights in a simple                                    There are a number of avenues to pursue in fu-
+feature weigthing scheme, the weight assigned to                                   ture work. One is to explore how dependency pat-
+dependency patterns was lower than that assigned                                   terns could be used to produce generative sum-
+to other features. The small contribution of the de-                               maries and/or perform sentence trimming. An-
+pendency patterns may have been due to the small                                   other is to investigate how dependency patterns
+number of documents they used to derive their                                      might be automatically clustered into groups ex-
+dependency patterns – they gathered dependency                                     pressing similar or related facts, rather than rely-
+patterns from only ten domain specific documents                                   ing on manual categorization of dependency pat-
+which are unlikely to be sufficient to capture re-                                 terns into categories such as “type”, “year”, etc.
+peated features in a domain.                                                       as was done here. Evaluation should be extended
+                                                                                   to investigate the utility of the automatically gen-
+6     Discussion and Conclusion                                                    erated image descriptions for image retrieval. Fi-
+We have proposed a method by which dependency                                      nally, we also plan to analyze automated ways for
+patterns extracted from corpora of descriptions of                                 learning information structures (e.g. what is the
+instances of particular object types can be used in a                              flow of facts to describe a location) from existing
+multi-document summarizer to automatically gen-                                    image descriptions to produce better summaries.
+erate image descriptions. Our evaluations show                                     7     Acknowlegment
+that such an approach yields summaries which                                       The research reported was funded by the TRIPOD
+score more highly than an approach which uses a                                    project supported by the European Commission
+simpler representation of an object type model in                                  under the contract No. 045335. We would like
+the form of a n-gram language model.                                               to thank Emina Kurtic, Mesude Bicak, Edina Kur-
+   When used as the sole feature for sentence rank-                                tic and Olga Nesic for participating in our manual
+ing, dependency pattern models (DpMSim) pro-                                       evaluation. We also would like to thank Trevor
+duced summaries with higher ROUGE scores than                                      Cohn and Mark Hepple for discussions and com-
+those obtained using the features reported in Aker                                 ments.
+and Gaizauskas (2009). These dependency pat-
+tern models also achieved a modest improvement                                     References
+over Wikipedia baseline ROUGE SU4. Further-                                        A. Aker and R. Gaizauskas. 2009. Summary Gener-
+more, we showed that using dependency patterns                                       ation for Toponym-Referenced Images using Object
+
+
+                                                                            1257
+
+
+  Type Language Models. International Conference          C.Y. Lin. 2004. ROUGE: A Package for Automatic
+  on Recent Advances in Natural Language Process-           Evaluation of Summaries. Proc. of the Workshop
+  ing (RANLP),2009.                                         on Text Summarization Branches Out (WAS 2004),
+                                                            pages 25–26.
+A. Aker and R. Gaizauskas. 2010. Model Summaries
+  for Location-related Images. In Proc. of the LREC-      E.E. Marsh and M.D. White. 2003. A taxonomy of
+  2010 Conference.                                          relationships between images and text. Journal of
+                                                            Documentation, 59:647–672.
+K. Barnard and D. Forsyth. 2001. Learning the seman-
+   tics of words and pictures. In International Confer-   Y. Mori, H. Takahashi, and R. Oka. 2000. Automatic
+   ence on Computer Vision, volume 2, pages 408–415.         word assignment to images based on image division
+   Vancouver: IEEE.                                          and vector quantization. In Proc. of RIAO 2000:
+                                                             Content-Based Multimedia Information Access.
+K. Barnard, P. Duygulu, D. Forsyth, N. de Freitas,
+  D.M. Blei, and M.I. Jordan. 2003. Matching words        C. Nobata, S. Sekine, H. Isahara, and R. Grishman.
+  and pictures. The Journal of Machine Learning Re-         2002. Summarization system integrated with named
+  search, 3:1107–1135.                                      entity tagging and ie pattern discovery. In Proc. of
+                                                            the LREC-2002 Conference, pages 1742–1745.
+T.L. Berg, A.C. Berg, J. Edwards, and DA Forsyth.
+   2005. Whos in the Picture? In Advances in Neural       J.Y. Pan, H.J. Yang, P. Duygulu, and C. Faloutsos.
+   Information Processing Systems 17: Proc. Of The           2004. Automatic image captioning. In Multime-
+   2004 Conference. MIT Press.                               dia and Expo, 2004. ICME’04. IEEE International
+                                                             Conference on, volume 3.
+R.C. Bunescu and R.J. Mooney. 2005. A shortest
+  path dependency kernel for relation extraction. In      RS Purves, A. Edwardes, and M. Sanderson. 2008.
+  Proceedings of the conference on Human Language           Describing the where–improving image annotation
+  Technology and Empirical Methods in Natural Lan-          and search through geography. 1st Intl. Workshop
+  guage Processing, pages 724–731. Association for          on Metadata Mining for Image Understanding, Fun-
+  Computational Linguistics Morristown, NJ, USA.            chal, Madeira-Portugal.
+                                                          S. Satoh, Y. Nakamura, and T. Kanade. 1999. Name-It:
+A. Culotta and J. Sorensen. 2004. Dependency Tree
+                                                             naming and detecting faces in news videos. Multi-
+  Kernels for Relation Extraction. In Proceedings of
+                                                             media, IEEE, 6(1):22–35.
+  the 42nd Meeting of the Association for Compu-
+  tational Linguistics (ACL’04), Main Volume, pages       F. Song and W.B. Croft. 1999. A general language
+  423–429, Barcelona, Spain, July.                           model for information retrieval. In Proc. of the
+                                                             eighth international conference on Information and
+H.T. Dang. 2005. Overview of DUC 2005. DUC 05                knowledge management, pages 316–321. ACM New
+  Workshop at HLT/EMNLP.                                     York, NY, USA.
+H.T. Dang. 2006. Overview of DUC 2006. National           M. Stevenson and M.A. Greenwood. 2005. A seman-
+  Institute of Standards and Technology.                    tic approach to IE pattern induction. In Proc. of the
+                                                            43rd Annual Meeting on Association for Computa-
+K. Deschacht and M.F. Moens. 2007. Text Analy-              tional Linguistics, pages 379–386. Association for
+  sis for Automatic Image Annotation. Proc. of the          Computational Linguistics Morristown, NJ, USA.
+  45th Annual Meeting of the Association for Compu-
+  tational Linguistics. East Stroudsburg: ACL.            M. Stevenson and M. Greenwood. 2009. Depen-
+                                                            dency Pattern Models for Information Extraction.
+P. Duygulu, K. Barnard, JFG de Freitas, and D.A.            Research on Language and Computation, 7(1):13–
+   Forsyth. 2002. Object Recognition as Machine             39.
+   Translation: Learning a Lexicon for a Fixed Im-
+   age Vocabulary. In Seventh European Conference         K. Sudo, S. Sekine, and R. Grishman. 2001. Auto-
+   on Computer Vision (ECCV), 4:97–112.                     matic pattern acquisition for Japanese information
+                                                            extraction. In Proc. of the first international con-
+X. Fan, A. Aker, M. Tomko, P. Smart, M Sanderson,           ference on Human language technology research,
+  and R. Gaizauskas. 2010. Automatic Image Cap-             page 7. Association for Computational Linguistics.
+  tioning From the Web For GPS Photographs. In
+  Proc. of the 11th ACM SIGMM International Con-          R. Yangarber, R. Grishman, P. Tapanainen, and S. Hut-
+  ference on Multimedia Information Retrieval, Na-           tunen. 2000. Automatic acquisition of domain
+  tional Constitution Center, Philadelphia, Pennsylva-       knowledge for information extraction. In Proc. of
+  nia.                                                       the 18th International Conference on Computational
+                                                             Linguistics (COLING 2000), pages 940–946. Saar-
+Y. Feng and M. Lapata. 2008. Automatic Image An-             briicken, Germany, August.
+   notation Using Auxiliary Text Information. Proc.
+   of Association for Computational Linguistics (ACL)
+   2008, Columbus, Ohio, USA.
+
+
+                                                      1258
+

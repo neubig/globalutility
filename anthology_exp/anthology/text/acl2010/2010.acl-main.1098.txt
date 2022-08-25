@@ -1,0 +1,696 @@
+     Bootstrapping Semantic Analyzers from Non-Contradictory Texts
+
+                             Ivan Titov         Mikhail Kozhevnikov
+                                   Saarland University
+                                  Saarbrücken, Germany
+                   {titov|m.kozhevnikov}@mmci.uni-saarland.de
+
+
+
+                      Abstract                                 2009). Unsupervised approaches can only rely on
+                                                               distributional similarity of contexts (Harris, 1968)
+    We argue that groups of unannotated texts                  to decide on semantic relatedness of terms, but this
+    with overlapping and non-contradictory                     information may be sparse and not reliable (Weeds
+    semantics represent a valuable source of                   and Weir, 2005). For example, when analyzing
+    information for learning semantic repre-                   weather forecasts it is very hard to discover in an
+    sentations. A simple and efficient infer-                  unsupervised way which of the expressions among
+    ence method recursively induces joint se-                  “south wind”, “wind from west” and “southerly”
+    mantic representations for each group and                  denote the same wind direction and which are not,
+    discovers correspondence between lexical                   as they all have a very similar distribution of their
+    entries and latent semantic concepts. We                   contexts. The same challenges affect the problem
+    consider the generative semantics-text cor-                of identification of argument roles and predicates.
+    respondence model (Liang et al., 2009)                        In this paper, we show that groups of unanno-
+    and demonstrate that exploiting the non-                   tated texts with overlapping and non-contradictory
+    contradiction relation between texts leads                 semantics provide a valuable source of informa-
+    to substantial improvements over natu-                     tion. This form of weak supervision helps to
+    ral baselines on a problem of analyzing                    discover implicit clustering of lexical entries and
+    human-written weather forecasts.                           predicates, which presents a challenge for purely
+                                                               unsupervised techniques. We assume that each
+1   Introduction
+                                                               text in a group is independently generated from
+In recent years, there has been increasing inter-              a full latent semantic state corresponding to the
+est in statistical approaches to semantic parsing.             group. Importantly, the texts in each group do
+However, most of this research has focused on su-              not have to be paraphrases of each other, as they
+pervised methods requiring large amounts of la-                can verbalize only specific parts (aspects) of the
+beled data. The supervision was either given in                full semantic state, yet statements about the same
+the form of meaning representations aligned with               aspects must not contradict each other. Simulta-
+sentences (Zettlemoyer and Collins, 2005; Ge and               neous inference of the semantic state for the non-
+Mooney, 2005; Mooney, 2007) or in a some-                      contradictory and semantically overlapping docu-
+what more relaxed form, such as lists of candidate             ments would restrict the space of compatible hy-
+meanings for each sentence (Kate and Mooney,                   potheses, and, intuitively, ‘easier’ texts in a group
+2007; Chen and Mooney, 2008) or formal repre-                  will help to analyze the ‘harder’ ones.1
+sentations of the described world state for each                  As an illustration of why this weak supervi-
+text (Liang et al., 2009). Such annotated resources            sion may be valuable, consider a group of two
+are scarce and expensive to create, motivating the             non-contradictory texts, where one text mentions
+need for unsupervised or semi-supervised tech-                 “2.2 bn GBP decrease in profit”, whereas another
+niques (Poon and Domingos, 2009). However,                     one includes a passage “profit fell by 2.2 billion
+unsupervised methods have their own challenges:                pounds”. Even if the model has not observed
+they are not always able to discover semantic
+                                                                   1
+equivalences of lexical entries or logical forms or,                 This view on this form of supervision is evocative of co-
+                                                               training (Blum and Mitchell, 1998) which, roughly, exploits
+on the contrary, cluster semantically different or             the fact that the same example can be ‘easy’ for one model
+even opposite expressions (Poon and Domingos,                  but ‘hard’ for another one.
+
+
+                                                         958
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 958–967,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                             w1                                                                   w3
+  A slight chance of showers                                                                                           Current temperature is about 70F,
+  and thunderstorms after noon.                                                                                        with high of around 75F amd low
+  Mostly cloudy,                                                                                                       of around 64.
+  with a high near 75.                            skycover(time=6-21,bucket=75-100)
+                                                                                                                       Overcast,
+  South wind between 15 and 20 mph,               temperature (time = 6-21; min = 64, max = 75, mean = 70)
+                                                                                                                       Rain is quite possible tonight,
+  with gusts as high as 30 mph.                   windSpeed(time=6-21; min=14,max=22,mean=19, bucket=10-20)
+                                                                                                                       as t-storms are.
+  Chance of precipitation is 30%.                 windDir(time=6-21,mode=S)
+                                                                                                                       South wind of around 19 mph.
+                                                  gust(time=6-21, min=0, max=29, mean=25)
+                                                  precipPotential(time=6-21,min=20,max=32,mean=26)
+                                                  sleetChance(time='6-21',mode=--)
+  Thunderstorms and pouring are possible
+                                                  thunderChance(time=6-21,mode=chance)
+  throughout the day,
+                                                  freezingRainChance(time=17-30,mode=--)
+  with precipitation chance of about 25%.
+                                                  rainChance(time=6-21,mode=chance)
+  It is 70 F now,
+                                                  windChill(time=6-21,min=0,max=0,mean=0)
+  possibly growing up to 75 F during the day,
+                                                           ......
+  as south wind blows at about 20 mph.
+  The sky is heavy.
+                                            w2
+
+
+Figure 1: An example of three non-contradictory weather forecasts and their alignment to the semantic
+representation. Note that the semantic representation (the block in the middle) is not observable in
+training.
+
+
+the word “fell” before, it is likely to align these                                        cated to them in a visual or audio form (e.g., as
+phrases to the same semantic form because of sim-                                          a picture or a short video clip) ensuring that their
+ilarity of their arguments. And this alignment                                             interpretations are consistent.
+would suggest that “fell” and “decrease” refer to                                             Unsupervised learning with shared latent se-
+the same process, and should be clustered together.                                        mantic representations presents its own chal-
+This would not happen for the pair “fell” and “in-                                         lenges, as exact inference requires marginalization
+crease” as similarity of their arguments would nor-                                        over possible assignments of the latent semantic
+mally entail contradiction. Similarly, in the exam-                                        state, consequently, introducing non-local statisti-
+ple mentioned earlier, when describing a forecast                                          cal dependencies between the decisions about the
+for a day with expected south winds, texts in the                                          semantic structure of each text. We propose a sim-
+group can use either “south wind” or “southerly”                                           ple and fairly general approximate inference algo-
+to indicate this fact but no texts would verbalize                                         rithm for probabilistic models of semantics which
+it as “wind from west”, and therefore these ex-                                            is efficient for the considered model, and achieves
+pressions will be assigned to different semantic                                           favorable results in our experiments.
+clusters. However, it is important to note that the                                           In this paper, we do not consider models
+phrase “wind from west” may still appear in the                                            which aim to produce complete formal meaning
+texts, but in reference to other time periods, un-                                         of text (Zettlemoyer and Collins, 2005; Mooney,
+derlying the need for modeling alignment between                                           2007; Poon and Domingos, 2009), instead focus-
+grouped texts and their latent meaning representa-                                         ing on a simpler problem studied in (Liang et al.,
+tion.                                                                                      2009). They investigate grounded language ac-
+   As much of the human knowledge is re-                                                   quisition set-up and assume that semantics (world
+described multiple times, we believe that non-                                             state) can be represented as a set of records each
+contradictory and semantically overlapping texts                                           consisting of a set of fields. Their model seg-
+are often easy to obtain. For example, consider                                            ments text into utterances and identifies records,
+semantic analysis of news articles or biographies.                                         fields and field values discussed in each utter-
+In both cases we can find groups of documents re-                                          ance. Therefore, one can think of this problem as
+ferring to the same events or persons, and though                                          an extension of the semantic role labeling prob-
+they will probably focus on different aspects and                                          lem (Carreras and Marquez, 2005), where predi-
+have different subjective passages, they are likely                                        cates (i.e. records in our notation) and their ar-
+to agree on the core information (Shinyama and                                             guments should be identified in text, but here ar-
+Sekine, 2003). Alternatively, if such groupings are                                        guments are not only assigned to a specific role
+not available, it may still be easier to give each se-                                     (field) but also mapped to an underlying equiv-
+mantic representation (or a state) to multiple an-                                         alence class (field value). For example, in the
+notators and ask each of them to provide a tex-                                            weather forecast domain field sky cover should get
+tual description, instead of annotating texts with                                         the same value given expressions “overcast” and
+semantic expressions. The state can be communi-                                            “very cloudy” but a different one if the expres-
+
+
+                                                                                     959
+
+
+sions are “clear” or “sunny”. This model is hard               garded as defining the probability distribution of
+to evaluate directly as text does not provide in-              meaning m and its alignment a with the given
+formation about all the fields and does not neces-             text w, P (m, a, w) = P (a, w|m)P (m). The
+sarily provide it at the sufficient granularity level.         semantics m can be represented either as a logical
+Therefore, it is natural to evaluate their model               formula (see, e.g., (Poon and Domingos, 2009)) or
+on the database-text alignment problem (Snyder                 as a set of field values if database records are used
+and Barzilay, 2007), i.e. measuring how well the               as a meaning representation (Liang et al., 2009).
+model predicts the alignment between the text and              The alignment a defines how semantics is verbal-
+the observable records describing the entire world             ized in the text w, and it can be represented by
+state. We follow their set-up, but assume that in-             a meaning derivation tree in case of full semantic
+stead of having access to the full semantic state              parsing (Poon and Domingos, 2009) or, e.g., by
+for every training example, we have a very small               a hierarchical segmentation into utterances along
+amount of data annotated with semantic states and              with an utterance-field alignment in a more shal-
+a larger number of unannotated texts with non-                 low variation of the problem. In semantic parsing,
+contradictory semantics.                                       we aim to find the most likely underlying seman-
+   We study our set-up on the weather forecast                 tics and alignment given the text:
+data (Liang et al., 2009) where the original textual
+weather forecasts were complemented by addi-                      (m̂, â) = arg max P (a, w|m)P (m).             (1)
+                                                                                   m,a
+tional forecasts describing the same weather states
+(see figure 1 for an example). The average overlap             In the supervised case, where a and m are observ-
+between the verbalized fields in each group of non-            able, estimation of the generative model parame-
+contradictory forecasts was below 35%, and more                ters is generally straightforward. However, in a
+than 60% of fields are mentioned only in a single              semi-supervised or unsupervised case variational
+forecast from a group. Our model, learned from                 techniques, such as the EM algorithm (Demp-
+100 labeled forecasts and 259 groups of unanno-                ster et al., 1977), are often used to estimate the
+tated non-contradictory forecasts (750 texts in to-            model. As common for complex generative mod-
+tal), achieved 73.9% F1 . This compares favorably              els, the most challenging part is the computation
+with 69.1% shown by a semi-supervised learning                 of the posterior distributions P (a, m|w) on the
+approach, though, as expected, does not reach the              E-step which, depending on the underlying model
+score of the model which, in training, observed se-            P (m, a, w), may require approximate inference.
+mantics states for all the 750 documents (77.7%                   As discussed in the introduction, our goal is to
+F1 ).                                                          integrate groups of non-contradictory documents
+   The rest of the paper is structured as follows.             into the learning procedure. Let us denote by
+In section 2 we describe our inference algorithm               w1 ,..., wK a group of non-contradictory docu-
+for groups of non-contradictory documents. Sec-                ments. As before, the estimation of the poste-
+tion 3 redescribes the semantics-text correspon-               rior probabilities P (mi , ai |w1 . . . wK ) presents
+dence model (Liang et al., 2009) in the context of             the main challenge. Note that the decision about
+our learning scenario. In section 4 we provide an              mi is now conditioned on all the texts wj rather
+empirical evaluation of the proposed method. We                than only on wi . This conditioning is exactly what
+conclude in section 5 with an examination of ad-               drives learning, as the information about likely se-
+ditional related work.                                         mantics mj of text j affects the decision about
+                                                               choice of mi :
+2   Inference with Non-Contradictory                                                      X
+    Documents                                                      P (mi |w1 ,..., wK ) ∝     P (ai , wi |mi )×
+                                                                                             ai
+In this section we will describe our inference                   ×
+                                                                       X
+                                                                                P (mi |m−i )P (m−i , a−i , w−i ), (2)
+method on a higher conceptual level, not speci-                      m−i ,a−i
+fying the underlying meaning representation and
+the probabilistic model. An instantiation of the               where x−i denotes {xj : j 6= i}. P (mi |m−i )
+algorithm for the semantics-text correspondence                is the probability of the semantics mi given all
+model is given in section 3.2.                                 the meanings m−i . This probability assigns zero
+   Statistical models of parsing can often be re-              weight to inconsistent meanings, i.e. such mean-
+
+
+                                                         960
+
+
+ings (m1 ,..., mK ) that ∧K                            2                 1:   n := (), m? := ()
+                            i=1 mi is not satisfiable,
+and models dependencies between components in                            2:   for i := 1 : K − 1 do
+the composite meaning representation (e.g., argu-                        3:     for j ∈/ n do
+ments values of predicates). As an illustration, in                      4:         m̂j := arg maxmj P (mj , wj |m? )
+the forecast domain it may express that clouds, and                      5:     end for
+                                                                                                                 ?
+not sunshine, are likely when it is raining. Note,                       6:                     / P (m̂j , w j |m )×
+                                                                                ni :=Qarg maxj ∈n
+that this probability is different from the probabil-                              × k∈n∪{j}
+                                                                                         /      maxmk P (mk , wk |m? , m̂j )
+                                                                         7:         ?
+                                                                                mi := m̂ni
+ity that mi is actually verbalized in the text.
+   Unfortunately, these dependencies between mi                          8:   end for
+and wj are non-local. Even though the dependen-                          9:   nK := {1,..., K}\n
+cies are only conveyed via {mj : j 6= i} the space                      10:   m?K := arg maxmn P (mnK , wnK |m? )
+                                                                                                 K
+of possible meanings m is very large even for rela-                     Figure 2: The approximate inference algorithm.
+tively simple semantic representations, and, there-
+fore, we need to resort to efficient approximations.
+                                                                        and corresponding meaning representations m? =
+   One natural approach would be to use a form
+                                                                        (m?1 ,..., m?K ), where m?k is the predicted mean-
+of belief propagation (Pearl, 1982; Murphy et al.,
+                                                                        ing representation of text wnk . It starts with an
+1999), where messages pass information about
+                                                                        empty ordering n = () and an empty list of mean-
+likely semantics between the texts. However, this
+                                                                        ings m? = () (line 1). Then it iteratively pre-
+approach is still expensive even for simple mod-
+                                                                        dicts meaning representations m̂j conditioned on
+els, both because of the need to represent distribu-
+                                                                        the list of semantics m? = (m?1 ,..., m?i−1 ) fixed
+tions over m and also because of the large number
+                                                                        on the previous stages and does it for all the re-
+of iterations of message exchange needed to reach
+                                                                        maining texts wj (lines 3-5). The algorithm se-
+convergence (if it converges).
+                                                                        lects a single meaning m̂j which maximizes the
+   An even simpler technique would be to parse
+                                                                        probability of all the remaining texts and excludes
+texts in a random order conditioning each mean-
+                                                                        the text j from future consideration (lines 6-7).
+ing m?k for k ∈ {1,..., K} on all the previous se-
+                                                                           Though the semantics mk (k ∈   / n∪{j}) used in
+mantics m?<k = m?1 ,..., m?k−1 :
+                                                                        the estimates (line 6) can be inconsistent with each
+  m?k = arg max P (wk |mk )P (mk |m?<k ).                               other, the final list of meanings m? is guaranteed
+              mk                                                        to be consistent. It holds because on each iteration
+                                                                        we add a single meaning m̂ni to m? (line 7), and
+Here, and in further discussion, we assume that                         m̂ni is guaranteed to be consistent with m? , as the
+the above search problem can be efficiently solved,                     semantics m̂ni was conditioned on the meaning
+exactly or approximately. However, a major weak-                        m? during inference (line 4).
+ness of this algorithm is that decisions about com-
+                                                                           An important aspect of this algorithm is that un-
+ponents of the composite semantic representation
+                                                                        like usual greedy inference, the remaining (‘fu-
+(e.g., argument values) are made only on the ba-
+                                                                        ture’) texts do affect the choice of meaning rep-
+sis of a single text, which first mentions the cor-
+                                                                        resentations made on the earlier stages. As soon
+responding aspects, without consulting any future
+                                                                        as semantics m?k are inferred for every k, we find
+texts k 0 > k, and these decisions cannot be revised
+                                                                        ourselves in the set-up of learning with unaligned
+later.
+                                                                        semantic states considered in (Liang et al., 2009).
+   We propose a simple algorithm which aims to
+                                                                           The induced alignments a1 ,..., aK of semantics
+find an appropriate order of the greedy inference
+                                                                        m? to texts w1 ,..., wK at the same time induce
+by estimating how well each candidate semantics
+                                                                        alignments between the texts. The problem of pro-
+m̂k would explain other texts and at each step se-
+                                                                        ducing multiple sequence alignment, especially in
+lecting k (and m̂k ) which explains them best.
+                                                                        the context of sentence alignments, has been ex-
+   The algorithm, presented in figure 23 , con-
+                                                                        tensively studied in NLP (Barzilay and Lee, 2003).
+structs an ordering of texts n = (n1 ,..., nK )
+                                                                        In this paper, we use semantic structures as a pivot
+   2
+      Note that checking for satisfiability may be expensive or         for finding the best alignment in the hope that pres-
+intractable depending on the formalism.                                 ence of meaningful text alignments will improve
+    3
+      We slightly abuse notation by using set operations with
+the lists n and m? as arguments. Also, for all the document             the quality of the resulting semantic structures by
+indices j we use j ∈/ S to denote j ∈ {1,..., K}\S.                     enforcing a form of agreement between them.
+
+
+                                                                  961
+
+
+3     A Model of Semantics
+In this section we redescribe the semantics-text
+correspondence model (Liang et al., 2009) with an
+extension needed to model examples with latent
+states, and also explain how the inference algo-
+rithm defined in section 2 can be applied to this
+model.
+
+3.1    Model definition
+Liang et al. (2009) considered a scenario where
+each text was annotated with a world state, even              Figure 3: The semantics-text correspondence
+though alignment between the text and the state               model with K documents sharing the same latent
+was not observable. This is a weaker form of                  semantic state.
+supervision than the one traditionally considered
+in supervised semantic parsing, where the align-              contradict each other if they assign different val-
+ment is also usually provided in training (Chen and           ues to the same field of the same record.
+Mooney, 2008; Zettlemoyer and Collins, 2005).                    The semantics-text correspondence model de-
+Nevertheless, both in training and testing the                fines a hierarchical segmentation of text: first, it
+world state is observable, and the alignment and              segments the text into fragments discussing differ-
+the text are conditioned on the state during infer-           ent records, then the utterances corresponding to
+ence. Consequently, there was no need to model                each record are further segmented into fragments
+the distribution of the world state. This is differ-          verbalizing specific fields of that record. An exam-
+ent for us, and we augment the generative story by            ple of a segmented fragment is presented in fig-
+adding a simplistic world state generation step.              ure 4. The model has a designated null-record
+   As explained in the introduction, the world                which is aligned to words not assigned to any
+states s are represented by sets of records (see the          record. Additionally there is a null-field in each
+block in the middle of figure 1 for an example of             record to handle words not specific to any field.
+a world state). Each record is characterized by a             In figure 3 the corresponding graphical model is
+record type t ∈ {1,..., T }, which defines the set of         presented. The formal definition of the model for
+fields F (t) . There are n(t) records of type t and           documents w1 ,..., wK sharing a semantic state is
+this number may change from document to docu-                 as follows:
+ment. For example, there may be more than a sin-
+                                                                 • Generation of world state s:
+gle record of type wind speed, as they may refer
+                                                                     – For each type τ ∈ {1,..., T } choose a number of
+to different time periods but all these records have                    records of that type n(τ ) ∼ Unif(1,..., nmax ).
+the same set of fields, such as minimal, maximal                                              (τ )
+                                                                      – For each record sn , n ∈ {1, .., n(τ ) } choose
+and average wind speeds. Each field has an asso-                                       (τ )
+                                                                         field values snf for all fields f ∈ F (τ ) from the
+ciated type: in our experiments we consider only                         type-specific distribution.
+                                             (t)                 • Generation of the verbalizations, for each document
+categorical and integer fields. We write sn,f = v
+                                                                   wk , k ∈ {1,..., K}:4
+to denote that n-th record of type t has field f set                  – Record Types: Choose a sequence of verbalized
+to value v.                                                              record types t = (t1 ,..., t|t| ) from the first-order
+   Each document k verbalizes a subset of the en-                        Markov chain.
+                                                                      – Records: For each type ti choose a verbalized
+tire world state, and therefore semantics mk of                          record r i from all the records of that type: l ∼
+the document is an assignment to |mk | verbalized                                                     (t )
+                                                                         Unif(1,..., n(τ ) ), r i := sl i .
+          |m | (t )
+fields: ∧q=1k (snqq,fq = vq ), where tq , nq , fq are                 – Fields: For each record r i choose a sequence of
+the verbalized record types, records and fields, re-                     verbalized fields f i = (fi1 ,..., fi|f i | ) from the
+                                                                         first-order Markov chain (fij ∈ F (ti ) ).
+spectively, and vq is the assigned field value. The
+                                                                      – Length: For each field fij , choose length cij ∼
+probability of meaning mk then equals the prob-                          Unif(1,..., cmax ).
+ability of this assignment with other state vari-                     – Words: Independently generate cij words from
+ables left non-observable (and therefore marginal-                       the field-specific distribution P (w|fij , rifij ).
+ized out). In this formalism checking for con-                   4
+                                                                   We omit index k in the generative story and figure 3 to
+tradiction is trivial: two meaning representations            simplify the notation.
+
+
+                                                        962
+
+
+                    Figure 4: A segmentation of a text fragment into records and fields.
+
+
+   Note that, when generating fields, the Markov                  {w1 ,..., wK } sharing the same latent state:5
+chain is defined over fields and the transition pa-                       Y X           YX
+rameters are independent of the field values rifij .               max            P (s)         P (r, f , c, wk |s, θ).
+                                                                     θ
+                                                                         w∈D s              k r,f ,c
+On the contrary, when drawing a word, the distri-
+bution of words is conditioned on the value of the                   To estimate the parameters, we use the
+corresponding field.                                              Expectation-Maximization algorithm (Dempster
+   The form of word generation distributions                      et al., 1977). When the world state is observ-
+P (w|fij , rifij ) depends on the type of the field               able, learning does not require any approxima-
+fi,j . For categorical fields, the distribution of                tions, as dynamic programming (a form of the
+words is modeled as a distinct multinomial for                    forward-backward algorithm) can be used to in-
+each field value. Verbalizations of numerical fields              fer the posterior distribution on the E-step (Liang
+are generated via a perturbation on the field value               et al., 2009). However, when the state is latent,
+rifij : the value rifij can be perturbed by either                dependencies are not local anymore, and approxi-
+rounding it (up or down) or distorting (up or down,               mate inference is required.
+modeled by a geometric distribution). The param-                     We use the algorithm described in section 2 (fig-
+eters corresponding to each form of generation are                ure 2) to infer the state. In the context of the
+estimated during learning. For details on these                   semantics-text correspondence model, as we dis-
+emission models, as well as for details on model-                 cussed above, semantics m defines the subset of
+ing record and field transitions, we refer the reader             admissible world states. In order to use the algo-
+to the original publication (Liang et al., 2009).                 rithm, we need to understand how the conditional
+                                                                  probabilities of the form P (m0 |m) are computed,
+   In our experiments, when choosing a world
+                                                                  as they play the key role in the inference proce-
+state s, we generate the field values independently.
+                                                                  dure (see equation (2)). If there is a contradiction
+This is clearly a suboptimal regime as often there
+                                                                  (m0 ⊥m) then P (m0 |m) = 0, conversely, if m0
+are very strong dependencies between field val-
+                                                                  is subsumed by m (m → m0 ) then this proba-
+ues: e.g., in the weather domain many record
+                                                                  bility is 1. Otherwise, P (m0 |m) equals the prob-
+types contain groups of related fields defining min-                                                             (t0 )
+                                                                                                       |m0 \m|
+imal, maximal and average values of some param-                   ability of new assignments ∧q=1 (sn0q,f 0 = vq0 )
+                                                                                                             q q
+eter. Extending the method to model, e.g., pair-                  (defined by m0 \m) conditioned on the previously
+wise dependencies between field values is rela-                   fixed values of s (given by m). Summarizing,
+tively straightforward.                                           when predicting the most likely semantics m̂j
+   As explained above, semantics of a text m is de-               (line 4), for each span the decoder weighs alter-
+fined by the assignment of state variables s. Anal-               natives of either (1) aligning this span to the pre-
+ogously, an alignment a between semantics m                       viously induced meaning m? , or (2) aligning it to
+and a text w is represented by all the remaining                  a new field and paying the cost of generation of its
+latent variables: by the sequence of record types                 value.
+t = (t1 ,..., t|t| ), choice of records r i for each ti ,            The exact computation of the most probable se-
+the field sequence f i and the segment length cij                 mantics (line 4 of the algorithm) is intractable, and
+for every field fij .                                             we have to resort to an approximation. Instead
+                                                                  of predicting the most probable semantics m̂j we
+                                                                  search for the most probable pair (âj , m̂j ), thus
+3.2   Learning and inference
+                                                                  assuming that the probability mass is mostly con-
+We select the model parameters θ by maximiz-                      centrated on a single alignment. The alignment aj
+ing the marginal likelihood of the data, where                       5
+                                                                       For simplicity, we assume here that all the examples are
+the data D is given in the form of groups w =                     unlabeled.
+
+
+                                                            963
+
+
+is then discarded and not used in any other compu-                    symbolic parameters) and then manually anno-
+tations. Though the most likely alignment âj for                     tated these illustrations. These newly-produced
+a fixed semantic representation m̂j can be found                      forecasts, when combined with the original texts,
+efficiently using a Viterbi algorithm, computing                      resulted in 259 groups of non-contradictory texts
+the most probable pair (âj , m̂j ) is still intractable.             (650 texts, 2.5 texts per group). An example of
+We use a modification of the beam search algo-                        such a group is given in figure 1.
+rithm, where we keep a set of candidate meanings                         The dataset is relatively noisy: there are incon-
+(partial semantic representations) and compute an                     sistencies due to annotation mistakes (e.g., number
+alignment for each of them using a form of the                        distortions), or due to different perception of the
+Viterbi algorithm.                                                    weather by the annotators (e.g., expressions such
+   As soon as the meaning representations m? are                      as ‘warm’ or ‘cold’ are subjective). The overlap
+inferred, we find ourselves in the set-up studied                     between the verbalized fields in each group was
+in (Liang et al., 2009): the state s is no longer                     estimated to be below 35%. Around 60% of fields
+latent and we can run efficient inference on the                      are mentioned only in a single forecast from a
+E-step. Though some fields of the state s may                         group, consequently, the texts cannot be regarded
+still not be specified by m? , we prohibit utterances                 as paraphrases of each other.
+from aligning to these non-specified fields.                             The test set consists of 150 texts, each corre-
+   On the M-step of EM the parameters are es-                         sponding to a different weather state. Note that
+timated as proportional to the expected marginal                      during testing we no longer assume that docu-
+counts computed on the E-step. We smooth the                          ments share the state, we treat each document in
+distributions of values for numerical fields with                     isolation. We aimed to preserve approximately the
+convolution smoothing equivalent to the assump-                       same proportion of new and original examples as
+tion that the fields are affected by distortion in the                we had in the training set, therefore, we combined
+form of a two-sided geometric distribution with                       50 texts originally present in the weather dataset
+the success rate parameter equal to 0.67. We use                      with additional 100 newly-produced texts. We an-
+add-0.1 smoothing for all the remaining multino-                      notated these 100 texts by aligning each line to one
+mial distributions.                                                   or more records,7 whereas for the original texts the
+                                                                      alignments were already present. Following Liang
+4     Empirical Evaluation                                            et al. (2009) we evaluate the models on how well
+                                                                      they predict these alignments.
+In this section, we consider the semi-supervised
+                                                                         When estimating the model parameters, we fol-
+set-up, and present evaluation of our approach on
+                                                                      lowed the training regime prescribed in (Liang et
+on the problem of aligning weather forecast re-
+                                                                      al., 2009). Namely, 5 iterations of EM with a basic
+ports to the formal representation of weather.
+                                                                      model (with no segmentation or coherence mod-
+4.1    Experiments                                                    eling), followed by 5 iterations of EM with the
+                                                                      model which generates fields independently and,
+To perform the experiments we used a subset
+                                                                      at last, 5 iterations with the full model. Only
+of the weather dataset introduced in (Liang et
+                                                                      then, in the semi-supervised learning scenarios,
+al., 2009). The original dataset contains 22,146
+                                                                      we added unlabeled data and ran 5 additional it-
+texts of 28.7 words on average, there are 12
+                                                                      erations of EM.
+types of records (predicates) and 36.0 records per
+                                                                         Instead of prohibiting records from crossing
+forecast on average. We randomly chose 100
+                                                                      punctuation, as suggested by Liang et al. (2009),
+texts along with their world states to be used as
+                                                                      in our implementation we disregard the words not
+the labeled data.6 To produce groups of non-
+                                                                      attached to specific fields (attached to the null-
+contradictory texts we have randomly selected a
+                                                                      field, see section 3.1) when computing spans of
+subset of weather states, represented them in a vi-
+                                                                      records. To speed-up training, only a single record
+sual form (icons accompanied by numerical and
+                                                                      of each type is allowed to be generated when run-
+    6
+      In order to distinguish from completely unlabeled exam-         ning inference for unlabeled examples on the E-
+ples, we refer to examples labeled with world states as la-
+                                                                          7
+beled examples. Note though that the alignments are not ob-                 The text was automatically tokenized and segmented into
+servable even for these labeled examples. Similarly, we call          lines, with line breaks at punctuation characters. Information
+the models trained from this data supervised though full su-          about the line breaks is not used during learning and infer-
+pervision was not available.                                          ence.
+
+
+                                                                964
+
+
+                                P      R     F1                    value     top words
+      Supervised BL            63.3   52.9   57.6                  0-25      clear, small, cloudy, gaps, sun
+      Semi-superv BL           68.8   69.4   69.1                  25-50     clouds, increasing, heavy, produce, could
+      Semi-superv, non-contr   78.8   69.5   73.9                  50-75     cloudy, mostly, high, cloudiness, breezy
+      Supervised UB            69.4   88.6   77.9                  75-100    amounts, rainfall, inch, new, possibly
+
+
+Table 1: Results (precision, recall and F1 ) on the            Table 2: Top 5 words in the word distribution for
+weather forecast dataset.                                      field mode of record sky cover, function words and
+                                                               punctuation are omitted.
+step of the EM algorithm, as it significantly re-
+duces the search space. Similarly, though we pre-              vide this information, the documents do not ver-
+served all records which refer to the first time pe-           balize the state at the necessary granularity level
+riod, for other time periods we removed all the                to predict the field values. For example, it is not
+records which declare that the corresponding event             possible to decide to which bucket of the field sky
+(e.g., rain or snowfall) is not expected to happen.            cover the expression ‘cloudy’ refers to, as it has a
+This preprocessing results in the oracle recall of             relatively uniform distribution across 3 (out of 4)
+93%.                                                           buckets. The problem of predicting text-meaning
+   We compare our approach (Semi-superv, non-                  alignments is interesting in itself, as the extracted
+contr) with two baselines: the basic supervised                alignments can be used in training of a statisti-
+training on 100 labeled forecasts (Supervised BL)              cal generation system or information extractors,
+and with the semi-supervised training which disre-             but we also believe that evaluation on this prob-
+gards the non-contradiction relations (Semi-superv             lem is an appropriate test for the relative compar-
+BL). The learning regime, the inference proce-                 ison of the semantic analyzers’ performance. Ad-
+dure and the texts for the semi-supervised baseline            ditionally, note that the success of our weakly-
+were identical to the ones used for our approach,              supervised scenario indirectly suggests that the
+the only difference is that all the documents were             model is sufficiently accurate in predicting seman-
+modeled as independent. Additionally, we report                tics of an unlabeled text, as otherwise there would
+the results of the model trained with all the 750              be no useful information passed in between se-
+texts labeled (Supervised UB), its scores can be               mantically overlapping documents during learning
+regarded as an upper bound on the results of the               and, consequently, no improvement from sharing
+semi-supervised models. The results are reported               the state.8
+in table 1.                                                       To confirm that the model trained by our ap-
+                                                               proach indeed assigns new words to correct fields
+4.2   Discussion                                               and records, we visualize top words for the field
+                                                               characterizing sky cover (table 2). Note that the
+Our training strategy results in a substantially
+                                                               words “sun”, “cloudiness” or “gaps” were not ap-
+more accurate model, outperforming both the su-
+                                                               pearing in the labeled part of the data, but seem to
+pervised and semi-supervised baselines. Surpris-
+                                                               be assigned to correct categories. However, cor-
+ingly, its precision is higher than that of the model
+                                                               relation between rain and overcast, as also noted
+trained on 750 labeled examples, though admit-
+                                                               in (Liang et al., 2009), results in the wrong assign-
+tedly it is achieved at a very different recall level.
+                                                               ment of the rain-related words to the field value
+The estimation of the model with our approach
+                                                               corresponding to very cloudy weather.
+takes around one hour on a standard desktop PC,
+which is comparable to 40 minutes required to                  5       Related Work
+train the semi-supervised baseline.
+   In these experiments, we consider the problem               Probably the most relevant prior work is an ap-
+of predicting alignment between text and the cor-              proach to bootstrapping lexical choice of a gen-
+responding observable world state. The direct                  eration system using a corpus of alternative pas-
+evaluation of the meaning recognition (i.e. se-                    8
+                                                                    We conducted preliminary experiments on synthetic data
+mantic parsing) accuracy is not possible on this               generated from a random semantic-correspondence model.
+                                                               Our approach outperformed the baselines both in predicting
+dataset, as the data does not contain information              ‘text’-state correspondence and in the F1 score on the pre-
+which fields are discussed. Even if it would pro-              dicted set of field assignments (‘text meanings’).
+
+
+                                                         965
+
+
+sages (Barzilay and Lee, 2002), however, in their            forecasts. Our approach resulted in an improve-
+work all the passages were annotated with un-                ment over the scores of both the supervised base-
+aligned semantic expressions. Also, they as-                 line and of the traditional semi-supervised learn-
+sumed that the passages are paraphrases of each              ing.
+other, which is stronger than our non-contradiction             There are many directions we plan on inves-
+assumption. Sentence and text alignment has                  tigating in the future for the problem of learn-
+also been considered in the related context of               ing semantics with non-contradictory relations. A
+paraphrase extraction (see, e.g., (Dolan et al.,             promising and challenging possibility is to con-
+2004; Barzilay and Lee, 2003)) but this prior                sider models which induce full semantic represen-
+work did not focus on inducing or learning se-               tations of meaning. Another direction would be
+mantic representations. Similarly, in information            to investigate purely unsupervised set-up, though
+extraction, there have been approaches for pat-              it would make evaluation of the resulting method
+tern discovery using comparable monolingual cor-             much more complex. One potential alternative
+pora (Shinyama and Sekine, 2003) but they gener-             would be to replace the initial supervision with a
+ally focused only on discovery of a single pattern           set of posterior constraints (Graca et al., 2008) or
+from a pair of sentences or texts.                           generalized expectation criteria (McCallum et al.,
+   Radev (2000) considered types of potential rela-          2007).
+tions between documents, including contradiction,
+and studied how this information can be exploited            Acknowledgements
+in NLP. However, this work considered primarily              The authors acknowledge the support of the Excel-
+multi-document summarization and question an-                lence Cluster on Multimodal Computing and Inter-
+swering problems.                                            action (MMCI). Thanks to Alexandre Klementiev,
+   Another related line of research in machine               Alexander Koller, Manfred Pinkal, Dan Roth, Car-
+learning is clustering or classification with con-           oline Sporleder and the anonymous reviewers for
+straints (Basu et al., 2004), where supervision is           their suggestions, and to Percy Liang for answer-
+given in the form of constraints. Constraints de-            ing questions about his model.
+clare which pairs of instances are required to be
+assigned to the same class (or required to be as-
+signed to different classes). However, we are not            References
+aware of any previous work that generalized these            Regina Barzilay and Lillian Lee. 2002. Bootstrap-
+methods to structured prediction problems, as triv-            ping lexical choice via multiple-sequence align-
+                                                               ment. In Proceedings of the Conference on Em-
+ial equality/inequality constraints are probably too
+                                                               pirical Methods in Natural Language Processing
+restrictive, and a notion of consistency is required           (EMNLP), pages 164–171.
+instead.
+                                                             Regina Barzilay and Lillian Lee. 2003. Learning
+                                                               to paraphrase: An unsupervised approach using
+6   Summary and Future Work                                    multiple-sequence alignment. In Proceedings of the
+                                                               Conference on Human Language Technology and
+In this work we studied the use of weak supervi-               North American chapter of the Association for Com-
+sion in the form of non-contradictory relations be-            putational Linguistics (HLT-NAACL).
+tween documents in learning semantic represen-               Sugatu Basu, Arindam Banjeree, and Raymond
+tations. We argued that this type of supervision               Mooney. 2004. Active semi-supervision for pair-
+encodes information which is hard to discover in               wise constrained clustering. In Proc. of the SIAM
+an unsupervised way. However, exact inference                  International Conference on Data Mining (SDM),
+                                                               pages 333–344.
+for groups of documents with overlapping seman-
+tic representation is generally prohibitively expen-         A. Blum and T. Mitchell. 1998. Combining labeled
+sive, as the shared latent semantics introduces non-           and unlabeled data with co-training. In COLT: Pro-
+                                                               ceedings of the Workshop on Computational Learn-
+local dependences between semantic representa-                 ing Theory, Morgan Kaufmann Publishers, pages
+tions of individual documents. To combat it, we                209–214.
+proposed a simple iterative inference algorithm.
+                                                             Xavier Carreras and Lluis Marquez. 2005. Introduc-
+We showed how it can be instantiated for the                   tion to the conll-2005 shared task: Semantic role la-
+semantics-text correspondence model (Liang et                  beling. In Proceedings of CoNLL-2005, Ann Arbor,
+al., 2009) and evaluated it on a dataset of weather            MI USA.
+
+
+                                                       966
+
+
+David L. Chen and Raymond L. Mooney. 2008. Learn-               Hoifung Poon and Pedro Domingos. 2009. Unsuper-
+  ing to sportcast: A test of grounded language acqui-            vised semantic parsing. In Proceedings of the 2009
+  sition. In Proc. of International Conference on Ma-             Conference on Empirical Methods in Natural Lan-
+  chine Learning, pages 128–135.                                  guage Processing, (EMNLP-09).
+
+A. P. Dempster, N. M. Laird, and D. B. Rubin. 1977.             Dragomir Radev. 2000. A common theory of infor-
+  Maximum likelihood from incomplete data via the                 mation fusion from multiple text sources step one:
+  EM algorithms. Journal of the Royal Statistical So-             Cross-document structure. In 1st SIGdial Workshop
+  ciety. Series B (Methodological), 39(1):1–38.                   on Discourse and Dialogue, pages 74–83.
+
+P. Diaconis and B. Efron. 1983. Computer-intensive              Yusuke Shinyama and Satoshi Sekine. 2003. Para-
+   methods in statistics. Scientific American, pages              phrase acquisition for information extraction. In
+   116–130.                                                       Proceedings of Second International Workshop on
+                                                                  Paraphrasing (IWP2003), pages 65–71.
+Bill Dolan, Chris Quirk, and Chris Brockett. 2004.
+   Unsupervised construction of large paraphrase cor-           Benjamin Snyder and Regina Barzilay.             2007.
+   pora: Exploiting massively parallel news sources.              Database-text alignment via structured multilabel
+   In Proceedings of the Conference on Computational              classification. In Proceedings of International Joint
+   Linguistics (COLING), pages 350–356.                           Conference on Artificial Intelligence (IJCAI-05),
+                                                                  pages 1713–1718.
+Ruifang Ge and Raymond J. Mooney. 2005. A sta-
+  tistical semantic parser that integrates syntax and           J. Weeds and W. Weir. 2005. Co-occurrence retrieval:
+  semantics. In Proceedings of the Ninth Confer-                   A flexible framework for lexical distributional simi-
+  ence on Computational Natural Language Learning                  larity. Computational Linguistics, 31(4):439–475.
+  (CONLL-05), Ann Arbor, Michigan.
+                                                                Luke Zettlemoyer and Michael Collins. 2005. Learn-
+Joao Graca, Kuzman Ganchev, and Ben Taskar. 2008.                 ing to map sentences to logical form: Structured
+  Expectation maximization and posterior constraints.             classification with probabilistic categorial grammar.
+  Advances in Neural Information Processing Systems               In Proceedings of the Twenty-first Conference on
+  20 (NIPS).                                                      Uncertainty in Artificial Intelligence, Edinburgh,
+                                                                  UK, August.
+Zellig Harris. 1968. Mathematical structures of lan-
+  guage. Wiley.
+
+Rohit J. Kate and Raymond J. Mooney. 2007. Learn-
+  ing language semantics from ambigous supervision.
+  In Association for the Advancement of Artificial In-
+  telligence (AAAI), pages 895–900.
+
+Percy Liang, Michael I. Jordan, and Dan Klein. 2009.
+  Learning semantic correspondences with less super-
+  vision. In Proc. of the Annual Meeting of the Asso-
+  ciation for Computational Linguistics and Interna-
+  tional Joint Conference on Natural Language Pro-
+  cessing (ACL-IJCNLP).
+
+Andrew McCallum, Gideon Mann, and Gregory
+  Druck. 2007. Generalized expectation criteria.
+  Technical Report TR 2007-60, University of Mas-
+  sachusetts, Amherst, MA.
+
+Raymond J. Mooney. 2007. Learning for semantic
+  parsing. In Proceedings of the 8th International
+  Conference on Computational Linguistics and Intel-
+  ligent Text Processing, pages 982–991.
+
+Kevin P. Murphy, Yair Weiss, and Michael I. Jordan.
+  1999. Loopy belief propagation for approximate in-
+  ference: An empirical study. In Proc. of Uncertainty
+  in Artificial Intelligence (UAI), pages 467–475.
+
+Judea Pearl. 1982. Reverend bayes on inference en-
+  gines: A distributed hierarchical approach. In Proc.
+  of the National Conference on Artificial Intelligence
+  (AAAI), pages 133–136.
+
+
+                                                          967
+

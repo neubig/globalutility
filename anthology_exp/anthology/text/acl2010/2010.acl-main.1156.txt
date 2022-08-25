@@ -1,0 +1,628 @@
+      Combining Orthogonal Monolingual and Multilingual Sources of
+                     Evidence for All Words WSD
+                   Weiwei Guo                                            Mona Diab
+            Computer Science Department                  Center for Computational Learning Systems
+               Columbia University                                   Columbia University
+               New York, NY, 10115                                  New York, NY, 10115
+           weiwei@cs.columbia.edu                            mdiab@ccls.columbia.edu
+
+
+                     Abstract                                Miller, 1990), the availability of large scale cor-
+                                                             pora, the existence and dissemination of standard-
+    Word Sense Disambiguation remains one                    ized data sets over the past 10 years through differ-
+    of the most complex problems facing com-                 ent testbeds such as SENSEVAL and SEMEVAL
+    putational linguists to date. In this pa-                competitions,1 devising more robust computing
+    per we present a system that combines                    algorithms to handle large scale data sets, and sim-
+    evidence from a monolingual WSD sys-                     ply advancement in hardware machinery.
+    tem together with that from a multilingual                  In this paper, we address the problem of WSD
+    WSD system to yield state of the art per-                of all content words in a sentence, All-Words data.
+    formance on standard All-Words data sets.                In this framework, the task is to associate all to-
+    The monolingual system is based on a                     kens with their contextually relevant meaning defi-
+    modification of the graph based state of the             nitions from some computational lexical resource.
+    art algorithm In-Degree. The multilingual                Our work hinges upon combining two high qual-
+    system is an improvement over an All-                    ity WSD systems that rely on essentially differ-
+    Words unsupervised approach, SALAAM.                     ent sources of evidence. The two WSD systems
+    SALAAM exploits multilingual evidence                    are a monolingual system RelCont and a multi-
+    as a means of disambiguation. In this                    lingual system TransCont. RelCont is an en-
+    paper, we present modifications to both                  hancement on an existing graph based algorithm,
+    of the original approaches and then their                In-Degree, first described in (Navigli and Lapata,
+    combination. We finally report the highest               2007). TransCont is an enhancement over an
+    results obtained to date on the SENSEVAL                 existing approach that leverages multilingual evi-
+    2 standard data set using an unsupervised                dence through projection, SALAAM, described in
+    method, we achieve an overall F measure                  detail in (Diab and Resnik, 2002). Similar to the
+    of 64.58 using a voting scheme.                          leveraged systems, the current combined approach
+                                                             is unsupervised, namely it does not rely on training
+1   Introduction
+                                                             data from the onset. We show that by combining
+Despite advances in natural language processing              both sources of evidence, our approach yields the
+(NLP), Word Sense Disambiguation (WSD) is still              highest performance for an unsupervised system
+considered one of the most challenging problems              to date on standard All-Words data sets.
+in the field. Ever since the field’s inception, WSD             This paper is organized as follows: Section 2
+has been perceived as one of the central problems            delves into the problem of WSD in more detail;
+in NLP. WSD is viewed as an enabling technology              Section 3 explores some of the relevant related
+that could potentially have far reaching impact on           work; in Section 4, we describe the two WSD
+NLP applications in general. We are starting to see          systems in some detail emphasizing the improve-
+the beginnings of a positive effect of WSD in NLP            ments to the basic systems in addition to a de-
+applications such as Machine Translation (Carpuat            scription of our combination approach; we present
+and Wu, 2007; Chan et al., 2007).                            our experimental set up and results in Section 5;
+   Advances in WSD research in the current mil-              we discuss the results and our overall observations
+lennium can be attributed to several key factors:            with error analysis in Section 6; Finally, we con-
+the availability of large scale computational lexi-
+                                                                 1
+cal resources such as WordNets (Fellbaum, 1998;                      http://www.semeval.org
+
+                                                        1542
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1542–1551,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+clude in Section 7.                                     relies on WN similarity measures in conjunction
+                                                        with evidence obtained through exploiting multi-
+2       Word Sense Disambiguation                       lingual evidence. We will review the closely rele-
+The definition of WSD has taken on several differ-      vant related work on which this current investiga-
+ent practical meanings in recent years. In the latest   tion is based.3
+SEMEVAL 2010 workshop, there are 18 tasks de-
+fined, several of which are on different languages,     4     Our Approach
+however we recognize the widening of the defi-
+                                                        Our current investigation exploits two basic unsu-
+nition of the task of WSD. In addition to the tra-
+                                                        pervised approaches that perform at state-of-the-
+ditional All-Words and Lexical Sample tasks, we
+                                                        art for the AW WSD task in an unsupervised set-
+note new tasks on word sense discrimination (no
+                                                        ting. Crucially the two systems rely on differ-
+sense inventory needed, the different senses are
+                                                        ent sources of evidence allowing them to comple-
+merely distinguished), lexical substitution using
+                                                        ment each other to a large extent leading to better
+synonyms of words as substitutes both monolin-
+                                                        performance than for each system independently.
+gually and multilingually, as well as meaning def-
+                                                        Given a target content word and co-occurring con-
+initions obtained from different languages namely
+                                                        textual clues, the monolingual system RelCont
+using words in translation.
+                                                        attempts to assign the approporiate meaning def-
+   Our paper is about the classical All-Words
+                                                        inition to the target word. Such words by defini-
+(AW) task of WSD. In this task, all content bear-
+                                                        tion are semantically related words. TransCont,
+ing words in running text are disambiguated from
+                                                        on the other hand, is the multilingual system.
+a static lexical resource. For example a sen-
+                                                        TransCont defines the notion of context in the
+tence such as ‘I walked by the bank and saw
+                                                        translational space using a foreign word as a fil-
+many beautiful plants there.’ will have the verbs
+                                                        ter for defining the contextual content words for
+‘walked, saw’, the nouns ‘bank, plants’, the ad-
+                                                        a given target word. In this multilingual setting,
+jectives ‘many, beautiful’, and the adverb ‘there’,
+                                                        all the words that are mapped to (aligned with)
+be disambiguated from a standard lexical resource.
+                                                        the same orthographic form in a foreign language
+Hence, using WordNet,2 ‘walked’ will be assigned
+                                                        constitute the context. In the next subsections
+the corresponding meaning definitions of: to use
+                                                        we describe the two approaches RelCont and
+one’s feet to advance; to advance by steps, ‘saw’
+                                                        TransCont in some detail, then we proceed to
+will be assigned the meaning definition of: to per-
+                                                        describe two combination methods for the two ap-
+ceive by sight or have the power to perceive by
+                                                        proaches: MERGE and VOTE.
+sight, the noun ‘bank’ will be assigned the mean-
+ing definition of: sloping land especially the slope    4.1    Monolingual System RelCont
+beside a body of water, and so on.
+                                                        RelCont is based on an extension of a state-
+3       Related Works                                   of-the-art WSD approach by (Sinha and Mihal-
+                                                        cea, 2007), henceforth (SM07). In the basic
+Many systems over the years have been proposed
+                                                        SM07 work, the authors combine different seman-
+for the task. A thorough review of the state of
+                                                        tic similarity measures with different graph based
+the art through the late 1990s (Ide and Veronis,
+                                                        algorithms as an extension to work in (Mihal-
+1998) and more recently in (Navigli, 2009). Sev-
+                                                        cea, 2005). Given a sequence of words W =
+eral techniques have been used to tackle the prob-
+                                                        {w1 , w2 ...wn }, each word wi with several senses
+lem ranging from rule based/knowledge based
+                                                        {si1 , si2 ...sim }. A graph G = (V,E) is defined such
+approaches to unsupervised and supervised ma-
+                                                        that there exists a vertex v for each sense. Two
+chine learning techniques. To date, the best ap-
+                                                        senses of two different words may be connected by
+proaches that solve the AW WSD task are super-
+                                                        an edge e, depending on their distance. That two
+vised as illustrated in the different SenseEval and
+                                                        senses are connected suggests they should have
+SEMEVAL AW task (Palmer et al., 2001; Snyder
+                                                        influence on each other, accordingly a maximum
+and Palmer, 2004; Pradhan et al., 2007).
+   In this paper, we present an unsupervised com-           3
+                                                              We acknowledge the existence of many research papers
+bination approach to the AW WSD problem that            that tackled the AW WSD problem using unsupervised ap-
+                                                        proaches, yet for lack of space we will not be able to review
+    2
+        http://wordnet.princeton.edu                    most of them.
+
+                                                    1543
+
+
+allowable distance is set. They explore 4 differ-    pand the basic Lesk similarity measure to take into
+ent graph based algorithms. The highest yield-       account the glosses for all the relations for the
+ing algorithm in their work is the In-Degree al-     synsets on the contextual words and compare them
+gorithm combining different WN similarity mea-       with the glosses of the target word senses, there-
+sures depending on POS. They used the Jiang          fore going beyond the is-a relation. We exploit the
+and Conrath (JCN) (Jiang and Conrath., 1997)         observation that WN senses are too fine-grained,
+similarity measure within nouns, the Leacock &       accordingly the neighbors would be slightly varied
+Chodorow (LCH) (Leacock and Chodorow, 1998)          while sharing significant semantic meaning con-
+similarity measure within verbs, and the Lesk        tent. To find similar senses, we use the relations:
+(Lesk, 1986) similarity measure within adjectives,   hypernym, hyponym, similar attributes, similar
+within adverbs, and among different POS tag pair-    verb group, pertinym, holonym, and meronyms.4
+ings. They evaluate their work against the SEN-      The algorithm assumes that the words in the input
+SEVAL 2 AW test data (SV2AW). They tune the          are POS tagged. In PEA05, the authors retrieve all
+parameters of their algorithm – namely, the nor-     the relevant neighbors to form a bag of words for
+malization ratio for some of these measures – on     both the target sense and the surrounding senses of
+the SENSEVAL 3 data set. They report a state-of-     the context words, they specifically focus on the
+the-art unsupervised system that yields an overall   Lesk similarity measure. In our current work, we
+performance across all AW POS sets of 57.2%.         employ the neighbors in a disambiguation strategy
+    In our current work, we extend the SM07 work     using different similarity measures one pair at a
+in some interesting ways. A detailed narrative       time. Our algorithm takes as input a target sense
+of our approach is described in (Guo and Diab,       and a sense pertaining to a word in the surrounding
+2009). Briefly, we focus on the In-Degree            context, and returns a sense similarity score. We
+graph based algorithm since it is the best per-      do not apply the WN relations expansion to the
+former in the SM07 work. The In-Degree al-           target sense. It is only applied to the contextual
+gorithm presents the problem as a weighted graph     word.5
+with senses as nodes and the similarity between         For the monolingual system, we employ the
+senses as weights on edges. The In-Degree            same normalization values used in SM07 for the
+of a vertex refers to the number of edges inci-      different similarity measures. Namely for the Lesk
+dent on that vertex. In the weighted graph, the      and Expand-Lesk, we use the same cut-off value of
+In-Degree for each vertex is calculated by sum-      240, accordingly, if the Lesk or Expand-Lesk sim-
+ming the weights on the edges that are incident on   ilarity value returns 0 <= 240 it is converted to
+it. After all the In-Degree values for each sense    a real number in the interval [0,1], any similarity
+are computed, the sense with maximum value is        over 240 is by default mapped to 1. We will refer
+chosen as the final sense for that word.             to the Expand-Lesk with this threshold as Lesk2.
+    In this paper, we use the In-Degree algo-        We also experimented with different thresholds for
+rithm while applying some modifications to the       the Lesk and Expand-Lesk similarity measure us-
+basic similarity measures exploited and the WN       ing the SENSEVAL 3 data as a tuning set. We
+lexical resource tapped into. Similar to the orig-   found that a cut-off threshold of 40 was also use-
+inal In-Degree algorithm, we produce a prob-         ful. We will refer to this variant of Expand-Lesk
+abilistic ranked list of senses. Our modifications   with a cut off threshold of 40 as Lesk3. For JCN,
+are described as follows:                            similar to SM07, the values are from 0.04 to 0.2,
+                                                     we mapped them to the interval [0,1]. We did not
+JCN for Verb-Verb Similarity In our imple-           run any calibration studies beyond the what was
+mentation of the In-Degree algorithm, we use         reported in SM07.
+the JCN similarity measure for both Noun-Noun
+                                                        4
+similarity calculation similar to SM07. However,           In our experiments, we varied the number of relations to
+                                                     employ and they all yielded relatively similar results. Hence
+different from SM07, instead of using LCH for        in this paper, we report results using all the relations listed
+Verb-Verb similarity, we use the JCN metric as it    above.
+                                                         5
+yields better performance in our experimentations.         We experimented with expanding both the contextual
+                                                     sense and the target sense and we found that the unreliabil-
+                                                     ity of some of the relations is detrimental to the algorithm’s
+Expand Lesk Following the intuition in (Ped-         performance. Hence we decided empirically to expand only
+ersen et al., 2005), henceforth (PEA05), we ex-      the contextual word.
+
+                                                 1544
+
+
+SemCor Expansion of WN A part of the                            is sentence and word aligned, group all the word
+RelCont approach relies on using the Lesk al-                   types in L1 that map to same word in L2 creat-
+gorithm. Accordingly, the availability of glosses               ing clusters referred to as typesets. Then perform
+associated with the WN entries is extremely bene-               disambiguation on the typeset clusters using WN.
+ficial. Therefore, we expand the number of glosses              Once senses are identified for each word in the
+available in WN by using the SemCor data set,                   cluster, the senses are propagated back to the origi-
+thereby adding more examples to compare. The                    nal word instances in the corpus. In the SALAAM
+SemCor corpus is a corpus that is manually sense                algorithm, the disambiguation step is carried out
+tagged (Miller, 1990).6 In this expansion, depend-              as follows: within each of these target sets con-
+ing on the version of WN, we use the sense-index                sider all possible sense tags for each word and
+file in the WN Database to convert the SemCor                   choose sense tags informed by semantic similarity
+data to the appropriate version sense annotations.              with all the other words in the whole group. The
+We augment the sense entries for the different POS              algorithm is a greedy algorithm that aims at maxi-
+WN databases with example usages from SemCor.                   mizing the similarity of the chosen sense across all
+The augmentation is done as a look up table exter-              the words in the set. The SALAAM disambigua-
+nal to WN proper since we did not want to dabble                tion algorithm used the noun groupings (Noun-
+with the WN offsets. We set a cap of 30 additional              Groupings) algorithm described in DR02. The al-
+examples per synset. We used the first 30 exam-                 gorithm applies disambiguation within POS tag.
+ples with no filtering criteria. Many of the synsets            The authors report only results on the nouns only
+had no additional examples. WN1.7.1 comprises a                 since NounGroupings heavily exploits the hierar-
+total of 26875 synsets, of which 25940 synsets are              chy structure of the WN noun taxonomy, which
+augmented with SemCor examples.7                                does not exist for adjectives and adverbs, and is
+                                                                very shallow for verbs.
+4.2   Multilingual System TransCont
+                                                                   Essentially SALAAM relies on variability in
+TransCont is based on the WSD system
+                                                                translation as it is important to have multiple
+SALAAM (Diab and Resnik, 2002), henceforth
+                                                                words in a typeset to allow for disambiguation.
+(DR02). The SALAAM system leverages word
+                                                                In the original SALAAM system, the authors au-
+alignments from parallel corpora to perform WSD.
+                                                                tomatically translated several balanced corpora in
+The SALAAM algorithm exploits the word corre-
+                                                                order to render more variable data for the approach
+spondence cross linguistically to tag word senses
+                                                                to show it’s impact. The corpora that were trans-
+on words in running text. It relies on several un-
+                                                                lated are: the WSJ, the Brown corpus and all the
+derlying assumptions. The first assumption is that
+                                                                SENSEVAL data. The data were translated to dif-
+senses of polysemous words in one language could
+                                                                ferent languages (Arabic, French and Spanish) us-
+be lexicalized differently in other languages. For
+                                                                ing state of art MT systems. They employed the
+example, ‘bank’ in English would be translated as
+                                                                automatic alignment system GIZA++ (Och and
+banque or rive de fleuve in French, depending on
+                                                                Ney, 2003) to obtain word alignments in a single
+context. The other assumption is that if Language
+                                                                direction from L1 to L2.
+1 (L1) words are translated to the same ortho-
+graphic form in Language 2 (L2), then they share                   For TransCont we use the basic SALAAM
+the some element of meaning, they are semanti-                  approach with some crucial modifications that
+cally similar.8                                                 lead to better performance. We still rely on par-
+   The SALAAM algorithm can be described as                     allel corpora, we extract typesets based on the in-
+follows. Given a parallel corpus of L1-L2 that                  tersection of word alignments in both alignment
+    6
+                                                                directions using more advanced GIZA++ machin-
+      Using SemCor in this setting to augment WN does hint
+of using supervised data in the WSD process, however, since     ery. In contrast to DR02, we experiment with
+our approach does not rely on training data and SemCor is not   all four POS: Verbs (V), Nouns (N), Adjectives
+used in our algorithm directly to tag data, but to augment a    (A) and Adverbs (R). Moreover, we modified the
+rich knowledge resource, we contend that this does not affect
+our system’s designation as an unsupervised system.             underlying disambiguation method on the type-
+    7
+      Some example sentences are repeated across different      sets. We still employ WN similarity, however, we
+synsets and POS since the SemCor data is annotated as an        do not use the NounGroupings algorithm. Our
+All-Words tagged data set.
+    8
+      We implicitly make the underlying simplifying assump-     disambiguation method relies on calculating the
+tion that the L2 words are less ambiguous than the L1 words.    sense pair similarity exhaustively across all the
+
+                                                            1545
+
+
+word types in a typeset and choosing the combi-          given the shallowness of the verb hierarchy and
+nation that yields the highest similarity. We exper-     the inherent nature of the verbal synsets which are
+imented with all the WN similarity measures in           differentiated along syntactic rather than semantic
+the WN similarity package.9 We also experiment           dimensions. We employ the Lesk algorithm still
+with Lesk2 and Lesk3 as well as other measures,          with A-A and R-R similarity and when comparing
+however we do not use SemCor examples with               across different POS tag pairings.
+TransCont. We found that the best results are
+yielded using the Lesk2/Lesk3 similarity measure         4.3.2     VOTE
+for N, A and R POS tagsets, while the Lin and JCN        In this combination scheme, the output of the
+measures yield the best performance for the verbs.       global disambiguation system is simply an inter-
+In contrast to the DR02 approach, we modify the          section of the two outputs from the two underly-
+internal WSD process to use the In-Degree al-            ing systems RelCont and TransCont. Specif-
+gorithm on the typeset, so each sense obtains a          ically, we sum up the confidence ranging from
+confidence, and the sense(s) with the highest con-       0 to 1 of the two system In-Degree algo-
+fidences are returned.                                   rithm outputs to obtain a final confidence for each
+                                                         sense, choosing the sense(s) that yields the high-
+4.3      Combining RelCont and TransCont                 est confidences. The fact that TransCont uses
+Our objective is to combine the different sources        In-Degree internally allows for a seamless in-
+of evidence for the purposes of producing an effec-      tegration.
+tive overall global WSD system that is able to dis-
+ambiguate all content words in running text. We          5     Experiments and Results
+combine the two systems in two different ways.           5.1     Data
+4.3.1      MERGE                                         The parallel data we experiment with are the
+In this combination scheme, the words in the type-       same standard data sets as in (Diab and Resnik,
+set that result from the TransCont approach are          2002), namely, Senseval 2 English AW data sets
+added to the context of the target word in the           (SV2AW) (Palmer et al., 2001), and Seneval 3 En-
+RelCont approach. However the typeset words              glish AW (SV3AW) data set. We use the true POS
+are not treated the same as the words that come          tag sets in the test data as rendered in the Penn
+from the surrounding context in the In-Degree            Tree Bank.10 We present our results on WordNet
+algorithm as we recognize that words that are            1.7.1 for ease of comparison with previous results.
+yielded in the typesets are semantically similar in
+                                                         5.2     Evaluation Metrics
+terms of content rather than being co-occurring
+words as is the case for contextual words in Rel-        We use the scorer2 software to report fine-
+Cont. Heeding this difference, we proceed to             grained (P)recision and (R)ecall and (F)-measure.
+calculate similarity for words in the typesets us-
+ing different similarity measures. In the case of        5.3     Baselines
+noun-noun similarity, in the original RelCont            We consider here several baselines. 1. A random
+experiments we use JCN, however with the words           baseline (RAND) is the most appropriate base-
+present in the TransCont typesets we use one             line for an unsupervised approach.2. We include
+of the Lesk variants, Lesk2 or Lesk3. Our obser-         the most frequent sense baseline (MFBL), though
+vation is that the JCN measure is relatively coarser     we note that we consider the most frequent sense
+grained, compared to Lesk measures, therefore it         or first sense baseline to be a supervised baseline
+is sufficient in case of lexical relatedness therefore   since it depends crucially on SemCor in ranking
+works well in case of the context words. Yet for         the senses within WN.11 3. The SM07 results as a
+the words yielded in the TransCont typesets a               10
+                                                               We exclude the data points that have a tag of ”U” in the
+method that exploits the underlying rich relations       gold standard for both baselines and our system.
+                                                            11
+in the noun hierarchy captures the semantic sim-               From an application standpoint, we do not find the first
+ilarity more aptly. In the case of verbs we still        sense baseline to be of interest since it introduces a strong
+                                                         level of uniformity – removing semantic variability – which
+maintain the JCN similarity as it most effective         is not desirable. Even if the first sense achieves higher results
+                                                         in data sets, it is an artifact of the size of the data and the very
+   9
+       http://wn-similarity.sourceforge.net/             limited number of documents under investigation.
+
+                                                     1546
+
+
+monolingual baseline. 4. The DR02 results as the       tation of WN seemed to benefit all POS signifi-
+multilingual baseline.                                 cantly except for nouns. In fact the performance
+                                                       on the nouns deteriorated from the base condition
+5.4      Experimental Results                          JCN-V from 68.7 to 68.3%. This maybe due to in-
+5.4.1 RelCont                                          consistencies in the annotations of nouns in Sem-
+We present the results for 4 different experi-         Cor or the very fine granularity of the nouns in
+mental conditions for RelCont: JCN-V which             WN. We know that 72% of the nouns, 74% of
+uses JCN instead of LCH for verb-verb similar-         the verbs, 68.9% of the adjectives, and 81.9% of
+ity comparison, we consider this our base con-         the adverbs directly exploited the use of SemCor
+dition; +ExpandL is adding the Lesk Expansion          augmented examples. Combining SemCor and
+to the base condition, namely Lesk2;12 +SemCor         ExpandL seems to have a positive impact on the
+adds the SemCor expansion to the base condi-           verbs and adverbs, but not on the nouns and adjec-
+tion; and finally +ExpandL SemCor, adds the lat-       tives. These trends are not held consistently across
+ter both conditions simultaneously. Table 1 illus-     data sets. For example, we see that SemCor aug-
+trates the obtained results for the SV2AW using        mentation helps all POS tag sets over using Ex-
+WordNet 1.7.1 since it is the most studied data set    pandL alone or even when combined with Sem-
+and for ease of comparison with previous studies.      Cor. We note the similar trends in performance for
+We break the results down by POS tag (N)oun,           the SV3AW data.
+(V)erb, (A)djective, and Adve(R)b. The coverage           Compared to state of the art systems, RelCont
+for SV2AW is 98.17% losing some of the verb and        with an overall F-measure performance of 62.13%
+adverb target words.                                   outperforms the best unsupervised system of
+   Our overall results on all the data sets clearly    57.5% UNED-AW-U2 for SV2 (Navigli, 2009). It
+outperform the baseline as well as state-of-the-       is worth noting that it is higher than several of the
+art performance using an unsupervised system           supervised systems. Moreover, RelCont yields
+(SM07) in overall f-measure across all the data        better overall results on SV3 at 59.87 compared to
+sets. We are unable to beat the most frequent          the best unsupervised system IRST-DDD-U which
+baseline (MFBL) which is obtained using the first      yielded an F-measure of 58.3% (Navigli, 2009).
+sense. However MFBL is a supervised baseline
+and our approach is unsupervised. Our implemen-
+                                                       5.4.2 TransCont
+tation of SM07 is slightly higher than those re-
+ported in (Sinha and Mihalcea, 2007) (57.12% )         For the TransCont results we illustrate the orig-
+is probably due to the fact that we do not consider    inal SALAAM results as our baseline. Simi-
+the items tagged as ”U” and also we resolve some       lar to the DR02 work, we actually use the same
+of the POS tag mismatches between the gold set         SALAAM parallel corpora comprising more than
+and the test data. We note that for the SV2AW data     5.5M English tokens translated using a single ma-
+set our coverage is not 100% due to some POS tag       chine translation system GlobalLink. Therefore
+mismatches that could not have been resolved au-       our parallel corpus is the French English transla-
+tomatically. These POS tag problems have to do         tion condition mentioned in DR02 work as FrGl.
+mainly with multiword expressions. In observing        We have 4 experimental conditions: FRGL using
+the performance of the overall RelCont, we note        Lesk2 for all POS tags in the typeset disambigua-
+that using JCN for verbs clearly outperforms us-       tion (Lesk2); FRGL using Lesk3 for all POS tags
+ing the LCH similarity measure. Using SemCor to        (Lesk3); using Lesk3 for N, A and R but LIN simi-
+augment WN examples seems to have the biggest          larity measure for verbs (Lesk3 Lin); using Lesk3
+impact. Combining SemCor with ExpandL yields           for N, A and R but JCN for verbs (Lesk3 JCN).
+the best results.
+                                                         In Table 3 we note the the Lesk3 JCN followed
+   Observing the results yielded per POS in Ta-
+                                                       immediately by Lesk3 Lin yield the best perfor-
+ble 1, ExpandL seems to have the biggest impact
+                                                       mance. The trend holds for both SV2AW and
+on the Nouns only. This is understandable since
+                                                       SV3AW. Essentially our new implementation of
+the noun hierarchy has the most dense relations
+                                                       the multilingual system significantly outperforms
+and the most consistent ones. SemCor augmen-
+                                                       the original DR02 implementation for all experi-
+  12
+       Using Lesk3 yields almost the same results      mental conditions.
+
+                                                    1547
+
+
+                     Condition                N        V      A        R      Global F Measure
+                       RAND                  43.7     21     41.2    57.4           39.9
+                       MFBL                  71.8    41.45   67.7    81.8          65.35
+                       SM07                  68.7    33.01   65.2    63.1           59.2
+                       JCN-V                 68.7    35.46   65.2    63.1          59.72
+                     +ExpandL                70.2    35.86   65.4    62.45         60.48
+                     +SemCor                 68.5    38.66   69.2    67.75         61.79
+                  +ExpandL SemCor            69.0    38.66   68.8    69.45         62.13
+
+        Table 1: RelCont F-measure results per POS tag per condition for SV2AW using WN 1.7.1.
+
+                   Condition                 N         V       A        R      Global F Measure
+                     RAND                  39.67     19.34   41.85    92.31         32.97
+                     MFBL                  70.4      54.15   66.7     92.88         63.96
+                     SM07                  60.9       43.4    57      92.88         53.98
+                     JCN-V                 60.9       48.5    57      92.88         55.87
+                   +ExpandL                59.9      48.55   57.95    92.88         55.62
+                   +SemCor                  66       48.95   65.55    92.88         59.87
+                +ExpandL SemCor             65        49.2   65.55    92.88         59.52
+
+        Table 2: RelCont F-measure results per POS tag per condition for SV3AW using WN 1.7.1.
+
+
+5.4.3     Global Combined WSD                                gual system, the combined result is still bet-
+In this section we present the results of the global         ter. However, we observed worse results for Ex-
+combined WSD system. All the combined ex-                    pandL Semcor, RelCont-Final. There may be 2
+perimental conditions have the same percentage               main reasons for the loss: (1) SV3 is the tuning
+coverage.13 We present the results combining us-             set in SM07, and we inherit the thresholds for
+ing MERGE and using VOTE. We have chosen                     similarity metrics from that study. Accordingly,
+4 baseline systems: (1) SM07; (2) the our base-              an overfitting of the thresholds is probably hap-
+line monolingual system using JCN for verb-verb              pening in this case; (2) TransCont results are
+comparisons (RelCont-BL), so as to distinguish               not good enough on the SV3AW data. Compar-
+the level of improvement that could be attributed            ing the RelCont and TransCont system re-
+to the multilingual system in the combination re-            sults, we find a drop in f-measure of −1.37%
+sults; as well as (3) and (4) our best individual sys-       in SV2AW, in contrast to a much larger drop in
+tem results from RelCont (ExpandL SemCor)                    performance for the SV3AW data set where the
+referred to in the tables below as (RelCont-Final)           drop in performance is −6.38% when comparing
+and TransCont using the best experimental con-               RelCont-BL to TransCont and nearly −10%
+dition (Lesk3 JCN). Table 5 and 6 illustrates the            comparing against RelCont-Final.
+overall performance of our combined approach.
+   In Table 5 we note that the combined conditions           6   Discussion
+outperform the two base systems independently,
+                                                             We looked closely at the data in the combined con-
+using TransCont is always helpful for any of the
+                                                             ditions attempting to get a feel for the data and
+3 monolingual systems, no matter we use VOTE or
+                                                             understand what was captured and what was not.
+MERGE. In general the trend is that VOTE outper-
+                                                             Some of the good examples that are captured in the
+forms MERGE, however they exhibit different be-
+                                                             combined system that are not tagged in RelCont
+haviors with respect to what works for each POS.
+                                                             is the case of ringer in Like most of the other 6,000
+   In Table 6 the combined result is not always
+                                                             churches in Britain with sets of bells , St. Michael
+better than the corresponding monolingual sys-
+                                                             once had its own “ band ” of ringers , who would
+tem. When applying to our baseline monolin-
+                                                             herald every Sunday morning and evening service
+  13
+     We do not back off in any of our systems to a default   .. The RelCont answer is ringer sense number 4:
+sense, hence the coverage is not at a 100%.                  (horseshoes) the successful throw of a horseshoe
+
+                                                         1548
+
+
+                    Condition         N       V           A       R      Global F Measure
+                     RAND           43.7      21         41.2    57.4          39.9
+                   DR02-FRGL        54.5
+                    SALAAM          65.48    31.77      56.87    67.4           57.23
+                      Lesk2         67.05     30        59.69   68.01           57.27
+                      Lesk3         67.15     30        60.2    68.01           57.41
+                    Lesk3 Lin       67.15    29.27      60.2    68.01           57.61
+                   Lesk3 JCN        67.15    33.88      60.2    68.01           58.35
+
+    Table 3: TransCont F-measure results per POS tag per condition for SV2AW using WN 1.7.1.
+
+                    Condition        N        V           A       R     Global F Measure
+                      RAND         39.67    19.34       41.85   92.31        32.93
+                    SALAAM         52.42    29.27       54.14   88.89        45.63
+                      Lesk2        53.57    33.58       53.63   88.89          47
+                      Lesk3        53.77    33.30       56.48   88.89         47.5
+                    Lesk3 Lin      53.77    29.24       56.48   88.89        46.37
+                    Lesk3 JCN      53.77    38.43       56.48   88.89        49.29
+
+    Table 4: TransCont F-measure results per POS tag per condition for SV3AW using WN 1.7.1.
+
+
+or quoit so as to encircle a stake or peg. When            state-of-the-art system for the task of WSD disam-
+the merged system is employed we see the cor-              biguation for AW. Our approach yields an over-
+rect sense being chosen as sense number 1 in the           all global F measure of 64.58 for the standard
+MERGE condition: defined in WN as a person                 SV2AW data set combining monolingual and mul-
+who rings church bells (as for summoning the con-          tilingual evidence. The approach can be fur-
+gregation) resulting from a corresponding transla-         ther refined by adding other types of orthogo-
+tion into French as sonneur.                               nal features such as syntactic features and seman-
+   We did some basic data analysis on the items            tic role label features. Adding SemCor exam-
+we are incapable of capturing. Several of them             ples to TransCont should have a positive im-
+are cases of metonymy in examples such as ”the             pact on performance. Also adding more languages
+English are known...”, the sense of English here           as illustrated by the DR02 work should also yield
+is clearly in reference to the people of England,          much better performance.
+however, our WSD system preferred the language
+sense of the word. These cases are not gotten by
+any of our systems. If it had access to syntac-
+                                                           References
+tic/semantic roles we assume it could capture that         Marine Carpuat and Dekai Wu. 2007. Improving sta-
+this sense of the word entails volition for example.        tistical machine translation using word sense disam-
+                                                            biguation. In Proceedings of the 2007 Joint Con-
+Other types of errors resulted from the lack of a           ference on Empirical Methods in Natural Language
+way to explicitly identify multiwords.                      Processing and Computational Natural Language
+   Looking at the performance of TransCont we               Learning (EMNLP-CoNLL), pages 61–72, Prague,
+note that much of the loss is a result of the lack of       Czech Republic, June. Association for Computa-
+                                                            tional Linguistics.
+variability in the translations which is a key factor
+in the performance of the algorithm. For example           Yee Seng Chan, Hwee Tou Ng, and David Chiang.
+for the 157 adjective target test words in SV2AW,            2007. Word sense disambiguation improves statisti-
+                                                             cal machine translation. In Proceedings of the 45th
+there was a single word alignment for 51 of the              Annual Meeting of the Association of Computational
+cases, losing any tagging for these words.                   Linguistics, pages 33–40, Prague, Czech Republic,
+                                                             June. Association for Computational Linguistics.
+7   Conclusions and Future Directions                      Mona Diab and Philip Resnik. 2002. An unsuper-
+                                                            vised method for word sense tagging using parallel
+In this paper we present a framework that com-              corpora. In Proceedings of 40th Annual Meeting
+bines orthogonal sources of evidence to create a            of the Association for Computational Linguistics,
+
+                                                     1549
+
+
+                 Condition                            N         V       A        R      Global F Measure
+                  SM07                              68.7      33.01    65.2    63.1           59.2
+               RelCont-BL                           68.7      35.46    65.2    63.1          59.72
+             RelCont-Final                          69.0      38.66    68.8    69.45         62.13
+                TransCont                           67.15     33.88    60.2    68.01         58.35
+      MERGE: RelCont-BL+TransCont                   69.3      36.91    66.7    64.45         60.82
+        VOTE: RelCont-BL+TransCont                   71       37.71    66.5    66.1          61.92
+      MERGE: RelCont-Final+TransCont                70.7      38.66    69.5    70.45         63.14
+       VOTE: RelCont-Final+TransCont                74.2      38.26    68.6    71.45         64.58
+
+               Table 5: F-measure % for all Combined experimental conditions on SV2AW
+
+                Condition                             N        V        A         R      Global F Measure
+                 SM07                               60.9     43.4      57       92.88         53.98
+              RelCont-BL                            60.9     48.5      57       92.88         55.87
+           RelCont-Final                             65      49.2     65.55     92.88         59.52
+               TransCont                            53.77    38.43    56.48     88.89         49.29
+     MERGE: RelCont-BL+TransCont                    60.6     49.5     58.85     92.88         56.47
+       VOTE: RelCont-BL+TransCont                   59.3     49.5     59.1      92.88         55.92
+     MERGE: RelCont-Final+TransCont                 63.2     50.3     65.25     92.88         59.07
+      VOTE: RelCont-Final+TransCont                 62.4     49.65    65.25     92.88         58.47
+
+               Table 6: F-measure % for all Combined experimental conditions on SV3AW
+
+
+  pages 255–262, Philadelphia, Pennsylvania, USA,             and Conference on Empirical Methods in Natural
+  July. Association for Computational Linguistics.            Language Processing, pages 411–418, Vancouver,
+                                                              British Columbia, Canada, October. Association for
+Christiane Fellbaum. 1998. ”wordnet: An electronic            Computational Linguistics.
+  lexical database”. MIT Press.
+Weiwei Guo and Mona Diab. 2009. Improvements to             George A. Miller. 1990. Wordnet: a lexical database
+  monolingual english word sense disambiguation. In           for english. In Communications of the ACM, pages
+  Proceedings of the Workshop on Semantic Evalua-             39–41.
+  tions: Recent Achievements and Future Directions
+  (SEW-2009), pages 64–69, Boulder, Colorado, June.         Roberto Navigli and Mirella Lapata. 2007. Graph
+  Association for Computational Linguistics.                  connectivity measures for unsupervised word sense
+                                                              disambiguation. In Proceedings of the 20th Inter-
+N. Ide and J. Veronis. 1998. Word sense disambigua-           national Joint Conference on Artificial Intelligence
+  tion: The state of the art. In Computational Linguis-       (IJCAI), pages 1683–1688, Hyderabad, India.
+  tics, pages 1–40, 24:1.
+J. Jiang and D. Conrath. 1997. Semantic similarity          Roberto Navigli. 2009. Word sense disambiguation:
+   based on corpus statistics and lexical taxonomy. In        a survey. In ACM Computing Surveys, pages 1–69.
+   Proceedings of the International Conference on Re-         ACM Press.
+   search in Computational Linguistics, Taiwan.
+                                                            Franz Joseph Och and Hermann Ney. 2003. A sys-
+C. Leacock and M. Chodorow. 1998. Combining lo-               tematic comparison of various statistical alignment
+   cal context and wordnet sense similarity for word          models. Computational Linguistics, 29(1):19–51.
+   sense identification. In WordNet, An Electronic Lex-
+   ical Database. The MIT Press.                            M. Palmer, C. Fellbaum, S. Cotton, L. Delfs, , and
+                                                              H. Dang. 2001. English tasks: all-words and verb
+M. Lesk. 1986. Automatic sense disambiguation using
+                                                              lexical sample. In In Proceedings of ACL/SIGLEX
+  machine readable dictionaries: How to tell a pine
+                                                              Senseval-2, Toulouse, France, June.
+  cone from an ice cream cone. In In Proceedings of
+  the SIGDOC Conference, Toronto, June.
+                                                            Ted Pedersen, Satanjeev Banerjee, and Siddharth Pat-
+Rada Mihalcea. 2005. Unsupervised large-vocabulary            wardhan. 2005. Maximizing semantic relatedness
+  word sense disambiguation with graph-based algo-            to perform word sense disambiguation. In Univer-
+  rithms for sequence data labeling. In Proceed-              sity of Minnesota Supercomputing Institute Research
+  ings of Human Language Technology Conference                Report UMSI 2005/25, Minnesotta, March.
+
+                                                      1550
+
+
+Sameer Pradhan, Edward Loper, Dmitriy Dligach, and
+  Martha Palmer. 2007. Semeval-2007 task-17: En-
+  glish lexical sample, srl and all words. In Proceed-
+  ings of the Fourth International Workshop on Se-
+  mantic Evaluations (SemEval-2007), pages 87–92,
+  Prague, Czech Republic, June. Association for Com-
+  putational Linguistics.
+Ravi Sinha and Rada Mihalcea. 2007. Unsupervised
+  graph-based word sense disambiguation using mea-
+  sures of word semantic similarity. In Proceedings
+  of the IEEE International Conference on Semantic
+  Computing (ICSC 2007), Irvine, CA.
+Benjamin Snyder and Martha Palmer. 2004. The en-
+  glish all-words task. In Rada Mihalcea and Phil
+  Edmonds, editors, Senseval-3: Third International
+  Workshop on the Evaluation of Systems for the Se-
+  mantic Analysis of Text, pages 41–43, Barcelona,
+  Spain, July. Association for Computational Linguis-
+  tics.
+
+
+
+
+                                                     1551
+

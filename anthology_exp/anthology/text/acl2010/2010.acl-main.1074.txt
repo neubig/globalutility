@@ -1,0 +1,599 @@
+                         Hierarchical Joint Learning:
+             Improving Joint Parsing and Named Entity Recognition
+                        with Non-Jointly Labeled Data
+                          Jenny Rose Finkel and Christopher D. Manning
+                                    Computer Science Department
+                                         Stanford University
+                                         Stanford, CA 94305
+                               {jrfinkel|manning}@cs.stanford.edu
+
+                      Abstract                                 jointly should improve performance. Because a
+    One of the main obstacles to produc-                       named entity should correspond to a node in the
+    ing high quality joint models is the lack                  parse tree, strong evidence about either aspect of
+    of jointly annotated data. Joint model-                    the model should positively impact the other as-
+    ing of multiple natural language process-                  pect.
+    ing tasks outperforms single-task models                      However, designing joint models which actu-
+    learned from the same data, but still under-               ally improve performance has proven challeng-
+    performs compared to single-task models                    ing. The CoNLL 2008 shared task (Surdeanu
+    learned on the more abundant quantities                    et al., 2008) was on joint parsing and semantic
+    of available single-task annotated data. In                role labeling, but the best systems (Johansson and
+    this paper we present a novel model which                  Nugues, 2008) were the ones which completely
+    makes use of additional single-task anno-                  decoupled the tasks. While negative results are
+    tated data to improve the performance of                   rarely published, this was not the first failed at-
+    a joint model. Our model utilizes a hier-                  tempt at joint parsing and semantic role label-
+    archical prior to link the feature weights                 ing (Sutton and McCallum, 2005). There have
+    for shared features in several single-task                 been some recent successes with joint modeling.
+    models and the joint model. Experiments                    Zhang and Clark (2008) built a perceptron-based
+    on joint parsing and named entity recog-                   joint segmenter and part-of-speech (POS) tagger
+    nition, using the OntoNotes corpus, show                   for Chinese, and Toutanova and Cherry (2009)
+    that our hierarchical joint model can pro-                 learned a joint model of lemmatization and POS
+    duce substantial gains over a joint model                  tagging which outperformed a pipelined model.
+    trained on only the jointly annotated data.                Adler and Elhadad (2006) presented an HMM-
+                                                               based approach for unsupervised joint morpho-
+1 Introduction                                                 logical segmentation and tagging of Hebrew, and
+Joint learning of multiple types of linguistic struc-          Goldberg and Tsarfaty (2008) developed a joint
+ture results in models which produce more consis-              model of segmentation, tagging and parsing of He-
+tent outputs, and for which performance improves               brew, based on lattice parsing. No discussion of
+across all aspects of the joint structure. Joint               joint modeling would be complete without men-
+models can be particularly useful for producing                tion of (Miller et al., 2000), who trained a Collins-
+analyses of sentences which are used as input for              style generative parser (Collins, 1997) over a syn-
+higher-level, more semantically-oriented systems,              tactic structure augmented with the template entity
+such as question answering and machine trans-                  and template relations annotations for the MUC-7
+lation. These high-level systems typically com-                shared task.
+bine the outputs from many low-level systems,                     One significant limitation for many joint mod-
+such as parsing, named entity recognition (NER)                els is the lack of jointly annotated data. We built
+and coreference resolution. When trained sepa-                 a joint model of parsing and named entity recog-
+rately, these single-task models can produce out-              nition (Finkel and Manning, 2009b), which had
+puts which are inconsistent with one another, such             small gains on parse performance and moderate
+as named entities which do not correspond to any               gains on named entity performance, when com-
+nodes in the parse tree (see Figure 1 for an ex-               pared with single-task models trained on the same
+ample). Moreover, one expects that the different               data. However, the performance of our model,
+types of annotations should provide useful infor-              trained using the OntoNotes corpus (Hovy et al.,
+mation to one another, and that modeling them                  2006), fell short of separate parsing and named
+
+
+                                                         720
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 720–728,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                  FRAG
+
+
+
+                 INTJ                   NP                                              NP
+
+                  UH          NP                  PP                               JJ    NN
+
+                         DT        NN   IN                    NP
+
+                                                  QP                  NNS
+
+                                             DT        CD
+
+                 Like     a    gross    of   a     [billion      dollars]M ONEY   last   year
+Figure 1: Example from the data where separate parse and named entity models give conflicting output.
+
+
+entity models trained on larger corpora, annotated          them. Ando and Zhang (2005) utilized a multi-
+with only one type of information.                          task learner within their semi-supervised algo-
+    This paper addresses the problem of how to              rithm to learn feature representations which were
+learn high-quality joint models with smaller quan-          useful across a large number of related tasks. Out-
+tities of jointly-annotated data that has been aug-         side of the NLP community, Elidan et al. (2008)
+mented with larger amounts of single-task an-               used an undirected Bayesian transfer hierarchy
+notated data. To our knowledge this work is                 to jointly model the shapes of multiple mammal
+the first attempt at such a task. We use a hi-              species. Evgeniou et al. (2005) applied a hier-
+erarchical prior to link a joint model trained on           archical prior to modeling exam scores of stu-
+jointly-annotated data with other single-task mod-          dents. Other instances of multi-task learning in-
+els trained on single-task annotated data. The key          clude (Baxter, 1997; Caruana, 1997; Yu et al.,
+to making this work is for the joint model to share         2005; Xue et al., 2007). For a more general discus-
+some features with each of the single-task models.          sion of hierarchical models, we direct the reader to
+Then, the singly-annotated data can be used to in-          Chapter 5 of (Gelman et al., 2003) and Chapter 12
+fluence the feature weights for the shared features         of (Gelman and Hill, 2006).
+in the joint model. This is an important contribu-
+tion, because it provides all the benefits of joint         3 Hierarchical Joint Learning
+modeling, but without the high cost of jointly an-          In this section we will discuss the main con-
+notating large corpora. We applied our hierarchi-           tribution of this paper, our hierarchical joint
+cal joint model to parsing and named entity recog-          model which improves joint modeling perfor-
+nition, and it reduced errors by over 20% on both           mance through the use of single-task models
+tasks when compared to a joint model trained on             which can be trained on singly-annotated data.
+only the jointly annotated data.                            Our experiments are on a joint parsing and named
+                                                            entity task, but the technique is more general and
+2 Related Work                                              only requires that the base models (the joint model
+Our task can be viewed as an instance of multi-task         and single-task models) share some features. This
+learning, a machine learning paradigm in which              section covers the general technique, and we will
+the objective is to simultaneously solve multiple,          cover the details of the parsing, named entity, and
+related tasks for which you have separate labeled           joint models that we use in Section 4.
+training data. Many schemes for multitask learn-
+ing, including the one we use here, are instances           3.1 Intuitive Overview
+of hierarchical models. There has not been much             As discussed, we have a joint model which re-
+work on multi-task learning in the NLP com-                 quires jointly-annotated data, and several single-
+munity; Daumé III (2007) and Finkel and Man-               task models which only require singly-annotated
+ning (2009a) both build models for multi-domain             data. The key to our hierarchical model is that the
+learning, a variant on domain adaptation where              joint model must have features in common with
+there exists labeled training data for all domains          each of the single models, though it can also have
+and the goal is to improve performance on all of            features which are only present in the joint model.
+
+
+                                                      721
+
+
+                     µ                                         The parameters θ∗ for this prior have the same di-
+                                                               mensionality as the model-specific parameters θm
+                                                               and are drawn from another, top-level prior. In our
+                    θ∗         σ∗                              case, this top-level prior is a zero-mean Gaussian. 1
+                                                                  The graphical representation of our hierarchical
+                                                               model is shown in Figure 2. The log-likelihood of
+                                                               this model is
+  θp      σp        θj         σj     θn       σn
+                                                                 Lhier-joint (D; θ) =                            (1)
+                                                                                                                !
+                                                                  X                           X (θm,i − θ∗,i )2
+  Dp                Dj                Dn                                      Lm (Dm ; θm ) −          2
+                                                                                                    2σm
+                                                                  m∈M                            i
+       PARSE          J OINT               NER                        X (θ∗,i − µi )2
+                                                                  −
+                                                                               2σ∗2
+Figure 2: A graphical representation of our hierar-                    i
+chical joint model. There are separate base models             The first summation in this equation computes the
+for just parsing, just NER, and joint parsing and              log-likelihood of each model, using the data and
+NER. The parameters for these models are linked                parameters which correspond to that model, and
+via a hierarchical prior.                                      the prior likelihood of that model’s parameters,
+                                                               based on a Gaussian prior centered around the
+Each model has its own set of parameters (feature              top-level, non-model-specific parameters θ∗ , and
+weights). However, parameters for the features                 with model-specific variance σm . The final sum-
+which are shared between the single-task models                mation in the equation computes the prior likeli-
+and the joint model are able to influence one an-              hood of the top-level parameters θ∗ according to a
+other via a hierarchical prior. This prior encour-             Gaussian prior with variance σ∗ and mean µ (typ-
+ages the learned weights for the different models              ically zero). This formulation encourages each
+to be similar to one another. After training has               base model to have feature weights similar to the
+been completed, we retain only the joint model’s               top-level parameters (and hence one another).
+parameters. Our resulting joint model is of higher                The effects of the variances σm and σ∗ warrant
+quality than a comparable joint model trained on               some discussion. σ∗ has the familiar interpretation
+only the jointly-annotated data, due to all of the ev-         of dictating how much the model “cares” about
+idence provided by the additional single-task data.            feature weights diverging from zero (or µ). The
+                                                               model-specific variances, σm , have an entirely dif-
+3.2    Formal Model                                            ferent interpretation. They dictate how how strong
+We have a set M of three base models: a                        the penalty is for the domain-specific parameters
+parse-only model, an NER-only model and a                      to diverge from one another (via their similarity to
+joint model. These have corresponding log-                     θ∗ ). When σm are very low, then they are encour-
+likelihood functions Lp (Dp ; θp ), Ln (Dn ; θn ), and         aged to be very similar, and taken to the extreme
+Lj (Dj ; θj ), where the Ds are the training data for          this is equivalent to completely tying the parame-
+each model, and the θs are the model-specific pa-              ters between the tasks. When σm are very high,
+rameter (feature weight) vectors. These likelihood             then there is less encouragement for the parame-
+functions do not include priors over the θs. For               ters to be similar, and taken to the extreme this is
+representational simplicity, we assume that each               equivalent to completely decoupling the tasks.
+of these vectors is the same size and corresponds                 We need to compute partial derivatives in or-
+to the same ordering of features. Features which               der to optimize the model parameters. The partial
+don’t apply to a particular model type (e.g., parse            derivatives for the parameters for each base model
+features in the named entity model) will always                m are given by:
+be zero, so their weights have no impact on that                  ∂Lhier (D; θ)    ∂Lm (Dm , θm ) θm,i − θ∗,i
+                                                                                =                  −
+model’s likelihood function. Conversely, allowing                     ∂θm,i             ∂θm,i            σd2
+the presence of those features in models for which                                                              (2)
+they do not apply will not influence their weights             where the first term is the partial derivative ac-
+in the other models because there will be no evi-              cording to the base model, and the second term is
+dence about them in the data. These three models                  1
+                                                                    Though we use a zero-mean Gaussian prior, this top-
+are linked by a hierarchical prior, and their fea-             level prior could take many forms, including an L1 prior, or
+ture weight vectors are all drawn from this prior.             another hierarchical prior.
+
+
+                                                         722
+
+
+the prior centered around the top-level parameters.             stochastic gradient descent only makes use of the
+The partial derivatives for the top level parameters            partial derivatives and not the function value, so
+θ∗ are:                                                         we will focus the remainder of the discussion on
+                                      !                         how to rescale the partial derivatives.
+ ∂Lhier (D; θ)       X θ∗,i − θm,i         θ∗,i − µi
+               =                        −                          We now describe the more complicated case
+     ∂θ∗,i                    σm2              σ∗2
+                    m∈M                                         of stochastic optimization with a hierarchical ob-
+                                                   (3)          jective function. For the sake of simplicity, let
+where the first term relates to how far each model-             us assume that we are using a batch size of one,
+specific weight vector is from the top-level param-             meaning |D|   b = 1 in the above equation. Note
+eter values, and the second term relates how far                that in the hierarchical model, each datum (sen-
+each top-level parameter is from zero.                          tence) in each base model should be weighted
+   When a model has strong evidence for a feature,              equally, so whichever dataset is the largest should
+effectively what happens is that it pulls the value             be proportionally more likely to have one of its
+of the top-level parameter for that feature closer to           data sampled. For the sampled datum d, we then
+the model-specific value for it. When it has little             compute the function value and partial derivatives
+or no evidence for a feature then it will be pulled             with respect to the correct base model for that da-
+in the direction of the top-level parameter for that            tum. When we rescale the model-specific prior, we
+feature, whose value was influenced by the models               rescale based on the number of data in that model’s
+which have evidence for that feature.                           training set, not the total number of data in all the
+                                                                models combined. S      Having uniformly randomly
+3.3   Optimization with Stochastic Gradient                     drawn datum d ∈ m∈M Dm , let m(d) ∈ M
+      Descent                                                   tell us to which model’s training data the datum
+Inference in joint models tends to be slow, and of-             belongs. The stochastic partial derivatives will
+ten requires the use of stochastic optimization in              equal zero for all model parameters θm such that
+order for the optimization to be tractable. L-BFGS              m 6= m(d), and for θm(d) it becomes:
+and gradient descent, two frequently used numer-                ∂Lhier-stoch (D; θ)
+ical optimization algorithms, require computing                                      =                                 (5)
+                                                                     ∂θm(d),i
+the value and partial derivatives of the objective                                                                     
+                                                                   ∂Lm(d) ({d}; θm(d) )          1       θm(d),i − θ∗,i
+function using the entire training set. Instead,                                          −
+we use stochastic gradient descent. It requires a                        ∂θm(d),i             |Dm(d) |        σd2
+stochastic objective function, which is meant to be             Now we will discuss the stochastic partial deriva-
+a low computational cost estimate of the real ob-               tives with respect to the top-level parameters θ∗ ,
+jective function. In most NLP models, such as lo-               which requires modifying Equation 3. The first
+gistic regression with a Gaussian prior, computing              term in that equation is a summation over all
+the stochastic objective function is fairly straight-           the models. In the stochastic derivative we only
+forward: you compute the model likelihood and                   perform this computation for the datum’s model
+partial derivatives for a randomly sampled subset               m(d), and then we rescale that value based on the
+of the training data. When computing the term                   number of data in that datum’s model |Dm(d) |. The
+for the prior, it must be rescaled by multiplying               second term in that equation is rescaled by the to-
+its value and derivatives by the proportion of the              tal number of data in all models combined. The
+training data used. The stochastic objective func-              stochastic partial derivatives with respect to θ∗ be-
+tion, where D b ⊆ D is a randomly drawn subset of               come:
+the full training set, is given by                               ∂Lhier-stoch (D; θ)
+                                                                                      =                               (6)
+                                                                       ∂θ∗,i
+                                     b X (θ∗,i )2                                                                   
+                           b θ) − |D|
+   Lstoch (D; θ) = Lorig (D;                                         1         θ∗,i − θm(d),i           1         θ∗,i
+                                    |D|        2σ∗2                                   2
+                                                                                                −  P
+                                           i                      |Dm(d) |          σm                   |Dm | σ∗2
+                                                    (4)                                           m∈M
+This is a stochastic function, and multiple calls to            where for conciseness we omit µ under the as-
+it with the same D and θ will produce different                 sumption that it equals zero.
+values because D  b is resampled each time. When                   An equally correct formulation for the partial
+designing a stochastic objective function, the crit-            derivative of θ∗ is to simply rescale Equation 3
+ical fact to keep in mind is that the summed values             by the total number of data in all models. Early
+and partial derivatives for any split of the data need          experiments found that both versions gave simi-
+to be equal to that of the full dataset. In practice,           lar performance, but the latter was significantly
+
+
+                                                          723
+
+
+                                                              doing named entity recognition, a semi-CRF will
+                                                              have one node for each entity, unlike a regular
+      B - PER     I - PER      O      B - GPE       O         CRF which will have one node for each word.2
+                                                              See Figure 3a-b for an example of a semi-CRF
+      Hilary Clinton visited           Haiti        .
+                                                              and a linear-chain CRF over the same sentence.
+                               (a)                            Note that the entity Hilary Clinton has one node
+                                                              in the semi-CRF representation, but two nodes in
+                                                              the linear-chain CRF. Because different segmen-
+                                                              tations have different model structures in a semi-
+            PER                O       GPE          O         CRF, one has to consider all possible structures
+      Hilary Clinton visited           Haiti        .         (segmentations) as well as all possible labelings.
+                                                              It is common practice to limit segment length in
+                               (b)                            order to speed up inference, as this allows for the
+                                                              use of a modified version of the forward-backward
+                                                              algorithm. When segment length is not restricted,
+                             ROOT                             the inference procedure is the same as that used
+                                                              in parsing (Finkel and Manning, 2009c).3 In this
+                                                              work we do not enforce a length restriction, and
+          P ER                O       GPE       O             directly utilize the fact that the model can be trans-
+                                                              formed into a parsing model. Figure 3c shows a
+ P ER-i         P ER-i                GPE-i                   parse tree representation of a semi-CRF.
+                                                                 While a linear-chain CRF allows features over
+ Hilary         Clinton     visited   Haiti     .             adjacent words, a semi-CRF allows them over ad-
+                               (c)                            jacent segments. This means that a semi-CRF can
+                                                              utilize all features used by a linear-chain CRF, and
+                                                              can also utilize features over entire segments, such
+Figure 3: A linear-chain CRF (a) labels each word,
+                                                              as First National Bank of New York City, instead of
+whereas a semi-CRF (b) labels entire entities. A
+                                                              just adjacent words like First National and Bank
+semi-CRF can be represented as a tree (c), where i
+                                                              of. Let y be a vector representing the labeling for
+indicates an internal node for an entity.
+                                                              an entire sentence. yi encodes the label of the ith
+                                                              segment, along with the span of words the seg-
+slower to compute because it required summing
+                                                              ment encompasses. Let θ be the feature weights,
+over the parameter vectors for all base models in-
+                                                              and f (s, yi , yi−1 ) the feature function over adja-
+stead of just the vector for the datum’s model.
+                                                              cent segments yi and yi−1 in sentence s.4 The log
+   When using a batch size larger than one, you               likelihood of a semi-CRF for a single sentence s is
+compute the given functions for each datum in the             given by:
+batch and then add them together.
+                                                                               |y|
+                                                                            1 X
+4 Base Models                                                   L(y|s; θ) =        exp{θ · f (s, yi , yi−1 )} (7)
+                                                                            Zs
+                                                                                      i=1
+Our hierarchical joint model is composed of three             The partition function Zs serves as a normalizer.
+separate models, one for just named entity recog-             It requires summing over the set ys of all possible
+nition, one for just parsing, and one for joint pars-         segmentations and labelings for the sentence s:
+ing and named entity recognition. In this section
+                                                                               |y|
+we will review each of these models individually.                             XX
+                                                                      Zs =               exp{θ · f (s, yi , yi−1 )}       (8)
+4.1     Semi-CRF for Named Entity Recognition                                y∈ys i=1
+                                                                 2
+For our named entity recognition model we use a                     Both models will have one node per word for non-entity
+semi-CRF (Sarawagi and Cohen, 2004; Andrew,                   words.
+                                                                  3
+                                                                    While converting a semi-CRF into a parser results in
+2006). Semi-CRFs are very similar to the more                 much slower inference than a linear-chain CRF, it is still sig-
+popular linear-chain CRFs, but with several key               nificantly faster than a treebank parser due to the reduced
+advantages. Semi-CRFs segment and label the                   number of labels.
+                                                                  4
+text simultaneously, whereas a linear-chain CRF                     There can also be features over single entities, but these
+                                                              can be encoded in the feature function over adjacent entities,
+will only label each word, and segmentation is im-            so for notational simplicity we do not include an additional
+plied by the labels assigned to the words. When               term for them.
+
+
+                                                        724
+
+
+                                                  FRAG
+
+
+
+       INTJ                          NP                                                           NP
+
+        UH          NP                          PP                                           JJ     NN
+
+               DT       NN      IN                           NP-M ONEY
+
+                                               QP-M ONEY-i               NNS-M ONEY-i
+
+                                      DT-M ONEY-i      CD-M ONEY-i
+
+        Like    a      gross    of         a                billion             dollars      last   year
+Figure 4: An example of a sentence jointly annotated with parse and named entity information. Named
+entities correspond to nodes in the tree, and the parse label is augmented with the named entity informa-
+tion.
+
+  Because we use a tree representation, it is               be the value of feature i for subtree r over sen-
+easy to ensure that the features used in the NER            tence s, and let Eθ [fi |s] be the expected value of
+model are identical to those in the joint parsing           feature i in sentence s, based on the current model
+and named entity model, because the joint model             parameters θ. The partial derivatives of θ are then
+(which we will discuss in Section 4.3) is also              given by
+based on a tree representation where each entity                                X                           !
+                                                               ∂L        X
+corresponds to a single node in the tree.                           =                   fi (r, s) − Eθ [fi |s]
+                                                               ∂θi                r∈t
+                                                                      (t,s)∈D
+4.2   CRF-CFG for Parsing
+                                                                                                             (10)
+Our parsing model is the discriminatively trained,          Just like with a linear-chain CRF, this equation
+conditional random field-based context-free gram-           will be zero when the feature expectations in the
+mar parser (CRF-CFG) of (Finkel et al., 2008).              model equal the feature values in the training data.
+The relationship between a CRF-CFG and a PCFG                  A variant of the inside-outside algorithm is used
+is analogous to the relationship between a linear-          to efficiently compute the likelihood and partial
+chain CRF and a hidden Markov model (HMM)                   derivatives. See (Finkel et al., 2008) for details.
+for modeling sequence data. Let t be a com-
+plete parse tree for sentence s, and each lo-               4.3 Joint Model of Parsing and Named Entity
+cal subtree r ∈ t encodes both the rule from                    Recognition
+the grammar, and the span and split informa-
+                                                            Our base joint model for parsing and named entity
+tion (e.g NP(7,9) → JJ(7,8) NN(8,9) which covers
+                                                            recognition is the same as (Finkel and Manning,
+the last two words in Figure 1). The feature func-
+                                                            2009b), which is also based on the discriminative
+tion f (r, s) computes the features, which are de-
+                                                            parser discussed in the previous section. The parse
+fined over a local subtree r and the words of the
+                                                            tree structure is augmented with named entity in-
+sentence. Let θ be the vector of feature weights.
+                                                            formation; see Figure 4 for an example. The fea-
+The log-likelihood of tree t over sentence s is:
+                                                            tures in the joint model are designed in a man-
+                     1 X                                    ner that fits well with the hierarchical joint model:
+        L(t|s; θ) =         exp{θ · f (r, s)}    (9)
+                    Zs r∈t                                  some are over just the parse structure, some are
+To compute the partition function Zs , which                over just the named entities, and some are over the
+serves to normalize the function, we must sum               joint structure. The joint model shares the NER
+over τ (s), the set of all possible parse trees for         and parse features with the respective single-task
+sentence s. The partition function is given by:             models. Features over the joint structure only ap-
+                 X X                                        pear in the joint model, and their weights are only
+         Zs =             exp{θ · f (r, s)}                 indirectly influenced by the singly-annotated data.
+               t′ ∈τ (s) r∈t′                                  In the parsing model, the grammar consists of
+We also need to compute the partial derivatives             only the rules observed in the training data. In the
+which are used during optimization. Let fi (r, s)           joint model, the grammar is augmented with ad-
+
+
+                                                      725
+
+
+                   Training                Testing                     model improved on the single models. We used
+               Range # Sent.          Range      # Sent.
+   ABC         0–55       1195        56–69         199                OntoNotes 3.0 (Hovy et al., 2006), and made the
+   MNB         0–17        509        18–25         245                same data modifications as (Finkel and Manning,
+   NBC         0–29        589        30–39         149                2009b) to ensure consistency between the parsing
+   PRI         0–89       1704        90–112        394
+   VOA         0–198      1508        199–264       385                and named entity annotations. Table 2 has our
+                                                                       complete set of results, and Table 1 gives the num-
+Table 1: Training and test set sizes for the five
+                                                                       ber of training and test sentences. For each sec-
+datasets in sentences. The file ranges refer to
+                                                                       tion of the data (ABC, MNB, NBC, PRI, VOA)
+the numbers within the names of the original
+                                                                       we ran experiments training a linear-chain CRF
+OntoNotes files.
+                                                                       on only the named entity information, a CRF-CFG
+ditional joint rules which are composed by adding                      parser on only the parse information, a joint parser
+named entity information to existing parse rules.                      and named entity recognizer, and our hierarchi-
+Because the grammars are based on the observed                         cal model. For the hierarchical model, we used
+data, and the two models have different data, they                     the CNN portion of the data (5093 sentences) for
+will have somewhat different grammars. In our hi-                      the extra named entity data (and ignored the parse
+erarchical joint model, we added all observed rules                    trees) and the remaining portions combined for the
+from the joint data (stripped of named entity infor-                   extra parse data (and ignored the named entity an-
+mation) to the parse-only grammar, and we added                        notations). We used σ∗ = 1.0 and σm = 0.1,
+all observed rules from the parse-only data to the                     which were chosen based on early experiments on
+grammar for the joint model, and augmented them                        development data. Small changes to σm do not
+with named entity information in the same manner                       appear to have much influence, but larger changes
+as the rules observed in the joint data.                               do. We similarly decided how many iterations to
+   Earlier we said that the NER-only model uses                        run stochastic gradient descent for (20) based on
+identical named entity features as the joint model                     early development data experiments. We did not
+(and similarly for the parse-only model), but this                     run this experiment on the CNN portion of the
+is not quite true. They use identical feature tem-                     data, because the CNN data was already being
+plates, such as word, but different realizations                       used as the extra NER data.
+of those features will occur with the different                           As Table 2 shows, the hierarchical model did
+datasets. For instance, the NER-only model may                         substantially better than the joint model overall,
+have word=Nigel as a feature, but because Nigel                        which is not surprising given the extra data to
+never occurs in the joint data, that feature is never                  which it had access. Looking at the smaller cor-
+manifested and no weight is learned for it. We deal                    pora (NBC and MNB) we see the largest gains,
+with this similarly to how we dealt with the gram-                     with both parse and NER performance improving
+mar: if a named entity feature occurs in either the                    by about 8% F1. ABC saw about a 6% gain on
+joint data or the NER-only data, then both mod-                        both tasks, and VOA saw a 1% gain on both. Our
+els will learn a weight for that feature. We do the                    one negative result is in the PRI portion: parsing
+same thing for the parse features. This modeling                       improves slightly, but NER performance decreases
+decision gives the joint model access to potentially                   by almost 2%. The same experiment on develop-
+useful features to which it would not have had ac-                     ment data resulted in a performance increase, so
+cess if it were not part of the hierarchical model. 5                  we are not sure why we saw a decrease here. One
+                                                                       general trend, which is not surprising, is that the
+5 Experiments and Discussion                                           hierarchical model helps the smaller datasets more
+We compared our hierarchical joint model to a reg-                     than the large ones. The source of this is two-
+ular (non-hierarchical) joint model, and to parse-                     fold: lower baselines are generally easier to im-
+only and NER-only models. Our baseline ex-                             prove upon, and the larger corpora had less singly-
+periments were modeled after those in (Finkel                          annotated data to provide improvements, because
+and Manning, 2009b), and while our results were                        it was composed of the remaining, smaller, sec-
+not identical (we updated to a newer release of                        tions of OntoNotes. We found it interesting that
+the data), we had similar results and found the                        the gains tended to be similar on both tasks for all
+same general trends with respect to how the joint                      datasets, and believe this fact is due to our use of
+                                                                       roughly the same amount of singly-annotated data
+    5
+      In the non-hierarchical setting, you could include those         for both parsing and NER.
+features in the optimization, but, because there would be no
+evidence about them, their weights would be zero due to reg-              One possible conflating factor in these experi-
+ularization.                                                           ments is that of domain drift. While we tried to
+
+
+                                                                 726
+
+
+                                      Parse Labeled Bracketing                       Named Entities
+                                     Precision Recall    F1                   Precision Recall      F1
+ ABC         Just Parse               69.8%    69.9% 69.8%                                –
+             Just NER                            –                             77.0%    75.1% 76.0%
+             Baseline Joint           70.2%    70.5% 70.3%                     79.2%    76.5% 77.8%
+             Hierarchical Joint       75.5%    74.4% 74.9%                     85.1%    82.7% 83.9%
+ MNB         Just Parse               61.7%    65.5% 63.6%                                –
+             Just NER                            –                             69.6%    49.0% 57.5%
+             Baseline Joint           61.7%    66.2% 63.9%                     70.9%    63.5% 67.0%
+             Hierarchical Joint       72.6%    70.2% 71.4%                     74.4%    75.5% 74.9%
+ NBC         Just Parse               59.9%    63.9% 61.8%                                –
+             Just NER                            –                             63.9%    60.9% 62.4%
+             Baseline Joint           59.3%    64.2% 61.6%                     68.9%    62.8% 65.7%
+             Hierarchical Joint       70.4%    69.9% 70.2%                     72.9%    74.0% 73.4%
+ PRI         Just Parse               78.6%    77.0% 76.9%                                –
+             Just NER                            –                             81.3%    77.8% 79.5%
+             Baseline Joint           78.0%    78.6% 78.3%                     86.3%    86.0% 86.2%
+             Hierarchical Joint       79.2%    78.5% 78.8%                     84.2%    85.5% 84.8%
+ VOA         Just Parse               77.5%    76.5% 77.0%                                –
+             Just NER                            –                             85.2%    80.3% 82.7%
+             Baseline Joint           77.2%    77.8% 77.5%                     87.5%    86.7% 87.1%
+             Hierarchical Joint       79.8%    77.8% 78.8%                     87.7%    88.9% 88.3%
+Table 2: Full parse and NER results for the six datasets. Parse trees were evaluated using evalB, and
+named entities were scored using micro-averaged F-measure (conlleval).
+
+
+get the most similar annotated data available – data           was trained on only the jointly annotated data.
+which was annotated by the same annotators, and                   Future directions for this work include automat-
+all of which is broadcast news – these are still dif-          ically learning the variances, σm and σ∗ in the hi-
+ferent domains. While this is likely to have a nega-           erarchical model, so that the degree of information
+tive effect on results, we also believe this scenario          sharing between the models is optimized based on
+to be a more realistic than if it were to also be data         the training data available. We are also interested
+drawn from the exact same distribution.                        in ways to modify the objective function to place
+                                                               more emphasis on learning a good joint model, in-
+6 Conclusion                                                   stead of equally weighting the learning of the joint
+In this paper we presented a novel method for                  and single-task models.
+improving joint modeling using additional data
+which has not been labeled with the entire joint
+structure. While conventional wisdom says that                 Acknowledgments
+adding more training data should always improve
+performance, this work is the first to our knowl-              Many thanks to Daphne Koller for discussions
+edge to incorporate singly-annotated data into a               which led to this work, and to Richard Socher
+joint model, thereby providing a method for this               for his assistance and input. Thanks also to our
+additional data, which cannot be directly used by              anonymous reviewers and Yoav Goldberg for use-
+the non-hierarchical joint model, to help improve              ful feedback on an earlier draft of this paper.
+joint modeling performance. We built single-task                  This material is based upon work supported by
+models for the non-jointly labeled data, designing             the Air Force Research Laboratory (AFRL) un-
+those single-task models so that they have features            der prime contract no. FA8750-09-C-0181. Any
+in common with the joint model, and then linked                opinions, findings, and conclusion or recommen-
+all of the different single-task and joint models              dations expressed in this material are those of the
+via a hierarchical prior. We performed experi-                 author(s) and do not necessarily reflect the view of
+ments on joint parsing and named entity recogni-               the Air Force Research Laboratory (AFRL). The
+tion, and found that our hierarchical joint model              first author is additionally supported by a Stanford
+substantially outperformed a joint model which                 Graduate Fellowship.
+
+
+                                                         727
+
+
+References                                                        Scott Miller, Heidi Fox, Lance Ramshaw, and Ralph
+                                                                     Weischedel. 2000. A novel use of statistical parsing to
+Meni Adler and Michael Elhadad. 2006. An unsupervised                extract information from text. In In 6th Applied Natural
+   morpheme-based hmm for hebrew morphological disam-                Language Processing Conference, pages 226–233.
+   biguation. In Proceedings of the 21st International Con-       Sunita Sarawagi and William W. Cohen. 2004. Semi-markov
+   ference on Computational Linguistics and the 44th annual          conditional random fields for information extraction. In In
+   meeting of the Association for Computational Linguistics,         Advances in Neural Information Processing Systems 17,
+   pages 665–672, Morristown, NJ, USA. Association for               pages 1185–1192.
+   Computational Linguistics.                                     Mihai Surdeanu, Richard Johansson, Adam Meyers, Lluı́s
+Rie Kubota Ando and Tong Zhang. 2005. A high-                        Màrquez, and Joakim Nivre. 2008. The CoNLL-2008
+   performance semi-supervised learning method for text              shared task on joint parsing of syntactic and semantic
+   chunking. In ACL ’05: Proceedings of the 43rd Annual              dependencies. In Proceedings of the 12th Conference
+   Meeting on Association for Computational Linguistics,             on Computational Natural Language Learning (CoNLL),
+   pages 1–9, Morristown, NJ, USA. Association for Com-              Manchester, UK.
+   putational Linguistics.                                        Charles Sutton and Andrew McCallum. 2005. Joint pars-
+Galen Andrew. 2006. A hybrid markov/semi-markov con-                 ing and semantic role labeling. In Conference on Natural
+   ditional random field for sequence segmentation. In Pro-          Language Learning (CoNLL).
+   ceedings of the Conference on Empirical Methods in Nat-        Kristina Toutanova and Colin Cherry. 2009. A global model
+   ural Language Processing (EMNLP 2006).                            for joint lemmatization and part-of-speech prediction. In
+J. Baxter. 1997. A bayesian/information theoretic model of           Proceedings of the Joint Conference of the 47th Annual
+   learning to learn via multiple task sampling. In Machine          Meeting of the ACL and the 4th International Joint Con-
+   Learning, volume 28.                                              ference on Natural Language Processing of the AFNLP,
+R. Caruana. 1997. Multitask learning. In Machine Learning,           pages 486–494, Suntec, Singapore, August. Association
+   volume 28.                                                        for Computational Linguistics.
+Michael Collins. 1997. Three generative, lexicalised models       Ya Xue, Xuejun Liao, Lawrence Carin, and Balaji Krishna-
+   for statistical parsing. In ACL 1997.                             puram. 2007. Multi-task learning for classification with
+Hal Daumé III. 2007. Frustratingly easy domain adaptation.          dirichlet process priors. J. Mach. Learn. Res., 8.
+   In Conference of the Association for Computational Lin-        Kai Yu, Volker Tresp, and Anton Schwaighofer. 2005. Learn-
+   guistics (ACL), Prague, Czech Republic.                           ing gaussian processes from multiple tasks. In ICML ’05:
+Gal Elidan, Benjamin Packer, Geremy Heitz, and Daphne                Proceedings of the 22nd international conference on Ma-
+   Koller. 2008. Convex point estimation using undirected            chine learning.
+   bayesian transfer hierarchies. In UAI 2008.                    Yue Zhang and Stephen Clark. 2008. Joint word segmenta-
+                                                                     tion and POS tagging using a single perceptron. In ACL
+T. Evgeniou, C. Micchelli, and M. Pontil. 2005. Learning             2008.
+   multiple tasks with kernel methods. In Journal of Machine
+   Learning Research.
+Jenny Rose Finkel and Christopher D. Manning. 2009a. Hi-
+   erarchical bayesian domain adaptation. In Proceedings
+   of the North American Association of Computational Lin-
+   guistics (NAACL 2009).
+Jenny Rose Finkel and Christopher D. Manning. 2009b. Joint
+   parsing and named entity recognition. In Proceedings of
+   the North American Association of Computational Lin-
+   guistics (NAACL 2009).
+Jenny Rose Finkel and Christopher D. Manning. 2009c.
+   Nested named entity recognition. In Proceedings of
+   EMNLP 2009.
+Jenny Rose Finkel, Alex Kleeman, and Christopher D. Man-
+   ning. 2008. Efficient, feature-based conditional random
+   field parsing. In ACL/HLT-2008.
+Andrew Gelman and Jennifer Hill. 2006. Data Analysis Us-
+   ing Regression and Multilevel/Hierarchical Models. Cam-
+   bridge University Press.
+A. Gelman, J. B. Carlin, H. S. Stern, and Donald D. B. Rubin.
+   2003. Bayesian Data Analysis. Chapman & Hall.
+Yoav Goldberg and Reut Tsarfaty. 2008. A single genera-
+   tive model for joint morphological segmentation and syn-
+   tactic parsing. In Proceedings of ACL-08: HLT, pages
+   371–379, Columbus, Ohio, June. Association for Compu-
+   tational Linguistics.
+Eduard Hovy, Mitchell Marcus, Martha Palmer, Lance
+   Ramshaw, and Ralph Weischedel. 2006. Ontonotes: The
+   90% solution. In HLT-NAACL 2006.
+Richard Johansson and Pierre Nugues. 2008. Dependency-
+   based syntactic-semantic analysis with propbank and
+   nombank. In CoNLL ’08: Proceedings of the Twelfth
+   Conference on Computational Natural Language Learn-
+   ing, pages 183–187, Morristown, NJ, USA. Association
+   for Computational Linguistics.
+
+
+                                                            728
+

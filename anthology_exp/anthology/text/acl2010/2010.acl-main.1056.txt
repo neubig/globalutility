@@ -1,0 +1,659 @@
+          Automatic Evaluation of Linguistic Quality in Multi-Document
+                                Summarization
+                              Emily Pitler, Annie Louis, Ani Nenkova
+                                 Computer and Information Science
+                                    University of Pennsylvania
+                                   Philadelphia, PA 19104, USA
+                          epitler,lannie,nenkova@seas.upenn.edu
+
+
+                        Abstract                                 quality and none have been validated on data from
+                                                                 NIST evaluations.
+      To date, few attempts have been made                          In their pioneering work on automatic evalua-
+      to develop and validate methods for au-                    tion of summary coherence, Lapata and Barzilay
+      tomatic evaluation of linguistic quality in                (2005) provide a correlation analysis between hu-
+      text summarization. We present the first                   man coherence assessments and (1) semantic re-
+      systematic assessment of several diverse                   latedness between adjacent sentences and (2) mea-
+      classes of metrics designed to capture var-                sures that characterize how mentions of the same
+      ious aspects of well-written text. We train                entity in different syntactic positions are spread
+      and test linguistic quality models on con-                 across adjacent sentences. Several of their models
+      secutive years of NIST evaluation data in                  exhibit a statistically significant agreement with
+      order to show the generality of results. For               human ratings and complement each other, yield-
+      grammaticality, the best results come from                 ing an even higher correlation when combined.
+      a set of syntactic features. Focus, coher-
+                                                                    Lapata and Barzilay (2005) and Barzilay and
+      ence and referential clarity are best evalu-
+                                                                 Lapata (2008) both show the effectiveness of
+      ated by a class of features measuring local
+                                                                 entity-based coherence in evaluating summaries.
+      coherence on the basis of cosine similarity
+                                                                 However, fewer than five automatic summarizers
+      between sentences, coreference informa-
+                                                                 were used in these studies. Further, both sets
+      tion, and summarization specific features.
+                                                                 of experiments perform evaluations of mixed sets
+      Our best results are 90% accuracy for pair-
+                                                                 of human-produced and machine-produced sum-
+      wise comparisons of competing systems
+                                                                 maries, so the results may be influenced by the
+      over a test set of several inputs and 70%
+                                                                 ease of discriminating between a human and ma-
+      for ranking summaries of a specific input.
+                                                                 chine written summary. Therefore, we believe it is
+1 Introduction                                                   an open question how well these features predict
+                                                                 the quality of automatically generated summaries.
+Efforts for the development of automatic text sum-                  In this work, we focus on linguistic quality eval-
+marizers have focused almost exclusively on im-                  uation for automatic systems only. We analyze
+proving content selection capabilities of systems,               how well different types of features can rank good
+ignoring the linguistic quality of the system out-               and poor machine-produced summaries. Good
+put. Part of the reason for this imbalance is the                performance on this task is the most desired prop-
+existence of ROUGE (Lin and Hovy, 2003; Lin,                     erty of evaluation metrics during system develop-
+2004), the system for automatic evaluation of con-               ment. We begin in Section 2 by reviewing the
+tent selection, which allows for frequent evalua-                various aspects of linguistic quality that are rel-
+tion during system development and for report-                   evant for machine-produced summaries and cur-
+ing results of experiments performed outside of                  rently used in manual evaluations. In Section 3,
+the annual NIST-led evaluations, the Document                    we introduce and motivate diverse classes of fea-
+Understanding Conference (DUC)1 and the Text                     tures to capture vocabulary, sentence fluency, and
+Analysis Conference (TAC)2 . Few metrics, how-                   local coherence properties of summaries. We eval-
+ever, have been proposed for evaluating linguistic               uate the predictive power of these linguistic qual-
+  1
+      http://duc.nist.gov/                                       ity metrics by training and testing models on con-
+  2
+      http://www.nist.gov/tac/                                   secutive years of NIST evaluations (data described
+
+
+                                                           544
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 544–554,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+in Section 4). We test the performance of differ-                           All of the features we investigate can be com-
+ent sets of features separately and in combination                       puted automatically directly from text, but some
+with each other (Section 5). Results are presented                       require considerable linguistic processing. Several
+in Section 6, showing the robustness of each class                       of our features require a syntactic parse. To extract
+and their abilities to reproduce human rankings of                       these, all summaries were parsed by the Stanford
+systems and summaries with high accuracy.                                parser (Klein and Manning, 2003).
+
+2 Aspects of linguistic quality                                          3.1 Word choice: language models
+We focus on the five aspects of linguistic qual-                         Psycholinguistic studies have shown that people
+ity that were used to evaluate summaries in DUC:                         read frequent words and phrases more quickly
+grammaticality, non-redundancy, referential clar-                        (Haberlandt and Graesser, 1985; Just and Carpen-
+ity, focus, and structure/coherence.3 For each of                        ter, 1987), so the words that appear in a text might
+the questions, all summaries were manually rated                         influence people’s perception of its quality. Lan-
+on a scale from 1 to 5, in which 5 is the best.                          guage models (LM) are a way of computing how
+   The exact definitions that were provided to the                       familiar a text is to readers using the distribution
+human assessors are reproduced below.                                    of words from a large background corpus. Bigram
+Grammaticality: The summary should have no datelines,                    and trigram LMs additionally capture grammati-
+system-internal formatting, capitalization errors or obviously           cality of sentences using properties of local tran-
+ungrammatical sentences (e.g., fragments, missing compo-
+nents) that make the text difficult to read.                             sitions between words. For this reason, LMs are
+Non-redundancy: There should be no unnecessary repeti-                   widely used in applications such as generation and
+tion in the summary. Unnecessary repetition might take the               machine translation to guide the production of sen-
+form of whole sentences that are repeated, or repeated facts,            tences. Judging from the effectiveness of LMs in
+or the repeated use of a noun or noun phrase (e.g., “Bill Clin-
+ton”) when a pronoun (“he”) would suffice.                               these applications, we expect that they will pro-
+Referential clarity: It should be easy to identify who or what           vide a strong baseline for the evaluation of at least
+the pronouns and noun phrases in the summary are referring               some of the linguistic quality aspects.
+to. If a person or other entity is mentioned, it should be clear
+what their role in the story is. So, a reference would be un-               We built unigram, bigram, and trigram lan-
+clear if an entity is referenced but its identity or relation to         guage models with Good-Turing smoothing over
+the story remains unclear.                                               the New York Times (NYT) section of the English
+Focus: The summary should have a focus; sentences should                 Gigaword corpus (over 900 million words). We
+only contain information that is related to the rest of the sum-
+mary.                                                                    used the SRI Language Modeling Toolkit (Stol-
+Structure and Coherence: The summary should be well-                     cke, 2002) for this purpose. For each of the three
+structured and well-organized. The summary should not just               ngram language models, we include the min, max,
+be a heap of related information, but should build from sen-
+tence to sentence to a coherent body of information about a              and average log probability of the sentences con-
+topic.                                                                   tained in a summary, as well as the overall log
+   These five questions get at different aspects of                      probability of the entire summary.
+what makes a well-written text. We therefore pre-
+                                                                         3.2 Reference form: Named entities
+dict each aspect of linguistic quality separately.
+                                                                         This set of features examines whether named enti-
+3 Indicators of linguistic quality                                       ties have informative descriptions in the summary.
+Multiple factors influence the linguistic quality of                     We focus on named entities because they appear
+text in general, including: word choice, the ref-                        often in summaries of news documents and are of-
+erence form of entities, and local coherence. We                         ten not known to the reader beforehand. In addi-
+extract features which serve as proxies for each of                      tion, first mentions of entities in text introduce the
+the factors mentioned above (Sections 3.1 to 3.5).                       entity into the discourse and so must be informa-
+In addition, we investigate some models of gram-                         tive and properly descriptive (Prince, 1981; Frau-
+maticality (Chae and Nenkova, 2009) and coher-                           rud, 1990; Elsner and Charniak, 2008).
+ence (Graesser et al., 2004; Soricut and Marcu,                             We run the Stanford Named Entity Recognizer
+2006; Barzilay and Lapata, 2008) from prior work                         (Finkel et al., 2005) and record the number of
+(Sections 3.6 to 3.9).                                                   PERSONs, ORGANIZATIONs, and LOCATIONs.
+  3
+    http://www-nlpir.nist.gov/projects/                                  First mentions to people Feature exploration on
+duc/duc2006/quality-questions.txt                                        our development set found that under-specified
+
+
+                                                                   545
+
+
+references to people are much more disruptive                          3.4 Local coherence: Cohesive devices
+to a summary than short references to organiza-                        In coherent text, constituent clauses and sentences
+tions or locations. In fact, prior work in Nenkova                     are related and depend on each other for their in-
+and McKeown (2003) found that summaries that                           terpretation. Referring expressions such as pro-
+have been rewritten so that first mentions of peo-                     nouns link the current utterance to those where the
+ple are informative descriptions and subsequent                        entities were previously mentioned. In addition,
+mentions are replaced with more concise reference                      discourse connectives such as “but” or “because”
+forms are overwhelmingly preferred to summaries                        relate propositions or events expressed by differ-
+whose entity references have not been rewritten.                       ent clauses or sentences. Both these categories
+   In this class, we include features that reflect                     are known cohesive or linking devices in human-
+the modification properties of noun phrases (NPs)                      produced text (Halliday and Hasan, 1976). The
+in the summary that are first mentions to people.                      mere presence of such items in a text would be in-
+Noun phrases can include pre-modifiers, apposi-                        dicative of better structure and coherence.
+tives, prepositional phrases, etc. Rather than pre-                       We compute a number of shallow features that
+specifying all the different ways a person expres-                     provide a cheap way of capturing the above intu-
+sion can be modified, we hoped to discover the                         itions: the number of demonstratives, pronouns,
+best patterns automatically, by including features                     and definite descriptions as well as the number of
+for the average number of each Part of Speech                          sentence-initial discourse connectives.
+(POS) tag occurring before, each syntactic phrase
+occurring before4 , each POS tag occurring after,                      3.5 Local coherence: Continuity
+and each syntactic phrase occurring after the head                     This class of linguistic quality indicators is a com-
+of the first mention NP for a PERSON. To measure                       bination of factors related to coreference, adjacent
+if the lack of pre or post modification is particu-                    sentence similarity, and summary-specific context
+larly detrimental, we also include the proportion                      of surface cohesive devices.
+of PERSON first mention NPs with no words be-
+                                                                       Summarization specific Extractive multi-
+fore and with no words after the head of the NP.
+                                                                       document summaries often lack appropriate
+Summarization specific Most summarization                              antecedents for pronouns and proper context for
+systems today are extractive and create summaries                      the use of discourse connectives.
+using complete sentences from the source docu-                            In fact, early work in summarization (Paice,
+ments. A subsequent mention of an entity in a                          1980; Paice, 1990) has pointed out that the pres-
+source document which is extracted to be the first                     ence of cohesive devices described in the previous
+mention of the entity in the summary is proba-                         section might in fact be the source of problems.
+bly not informative enough. For each type of                           A manual analysis of automatic summaries (Ot-
+named entity (PERSON, ORGANIZATION, LO-                                terbacher et al., 2002) also revealed that anaphoric
+CATION), we separately record the number of in-                        references that cannot be resolved and unclear dis-
+stances which appear as first mentions in the sum-                     course relations constitute more than 30% of all
+mary but correspond to non-first mentions in the                       revisions required to manually rewrite summaries
+source documents.                                                      into a more coherent form.
+                                                                          To identify these potential problems, we adapt
+                                                                       the features for surface cohesive devices to indi-
+3.3    Reference form: NP syntax
+                                                                       cate whether referring expressions and discourse
+Some summaries might not include people and                            connectives appear in the summary with the same
+other named entities at all. To measure how en-                        context as in the input documents.
+tities are referred to more generally, we include                         For each of the cohesive devices discussed in
+features about the overall syntactic patterns found                    Section 3.4—demonstratives, pronouns, definite
+in NPs: the average number of each POS tag and                         descriptions, and sentence-initial discourse con-
+each syntactic phrase occurring inside NPs.                            nectives—we compare the previous sentence in
+                                                                       the summary with the previous sentence in the in-
+   4
+                                                                       put article. Two features are computed for each
+     We define a linear order based on a preorder traversal of
+the tree, so syntactic phrases which dominate the head are             type of cohesive device: (1) number of times the
+considered occurring before the head.                                  preceding sentence in the summary is the same
+
+
+                                                                 546
+
+
+as the preceding sentence in the input and (2) the              While some repetition is beneficial for cohe-
+number of times the preceding sentence in sum-               sion, too much repetition leads to redundancy in
+mary is different from that in the input. Since              the summary. Cosine similarity is thus indicative
+the previous sentence in the input text often con-           of both continuity and redundancy.
+tains the antecedent of pronouns in the current
+sentence, if the previous sentence from the input
+is also included in the summary, the pronoun is              3.6 Sentence fluency: Chae and Nenkova
+highly likely to have a proper antecedent.                       (2009)
+   We also compute the proportion of adjacent sen-
+                                                             We test the usefulness of a suite of 38 shallow
+tences in the summary that were extracted from the
+                                                             syntactic features studied by Chae and Nenkova
+same input document.
+                                                             (2009). These features are weakly but signif-
+Coreference Steinberger et al. (2007) compare the            icantly correlated with the fluency of machine
+coreference chains in input documents and in sum-            translated sentences. These include sentence
+maries in order to locate potential problems. We             length, number of fragments, average lengths of
+instead define a set of more general features re-            the different types of syntactic phrases, total length
+lated to coreference that are not specific to sum-           of modifiers in noun phrases, and various other
+marization and are applicable for any text. Our              syntactic features. We expect that these structural
+features check the existence of proper antecedents           features will be better at detecting ungrammatical
+for pronouns in the summary without reference to             sentences than the local language model features.
+the text of the input documents.                                Since all of these features are calculated over in-
+   We use the publicly available pronoun reso-               dividual sentences, we use the average value over
+lution system described in Charniak and Elsner               all the sentences in a summary in our experiments.
+(2009) to mark possible antecedents for pronouns
+in the summary. We then compute as features the
+number of times an antecedent for a pronoun was              3.7 Coh-Metrix: Graesser et al. (2004)
+found in the previous sentence, in the same sen-
+tence, or neither. In addition, we modified the pro-         The Coh-Metrix tool5 provides an implementation
+noun resolution system to also output the probabil-          of 54 features known in the psycholinguistic lit-
+ity of the most likely antecedent and include the            erature to correlate with the coherence of human-
+average antecedent probability for the pronouns              written texts (Graesser et al., 2004). These include
+in the text. Automatic coreference systems are               commonly used readability metrics based on sen-
+trained on human-produced texts and we expect                tence length and number of syllables in constituent
+their accuracies to drop when applied to automat-            words. Other measures implemented in the sys-
+ically generated summaries. However, the predic-             tem are surface text properties known to contribute
+tions and confidence scores still reflect whether            to text processing difficulty. Also included are
+or not possible antecedents exist in previous sen-           measures of cohesion between adjacent sentences
+tences that match in gender/number, and so may               such as similarity under a latent semantic analysis
+still be useful for coherence evaluation.                    (LSA) model (Deerwester et al., 1990), stem and
+                                                             content word overlap, syntactic similarity between
+Cosine similarity We use cosine similarity to                adjacent sentences, and use of discourse connec-
+compute the overlap of words in adjacent sen-                tives. Coh-Metrix has been designed with the
+tences si and si+1 as a measure of continuity.               goal of capturing properties of coherent text and
+                          vsi .vsi+1                         has been used for grade level assessment, predict-
+              cosθ =                           (1)
+                       ||vsi ||||vsi+1 ||                    ing student essay grades, and various other tasks.
+                                                             Given the heterogeneity of features in this class,
+   The dimensions of the two vectors (vsi and
+                                                             we expect that they will provide reasonable accu-
+vsi+1 ) are the total number of word types from
+                                                             racies for all the linguistic quality measures. In
+both sentences si and si+1 . Stop words were re-
+                                                             particular, the overlap features might serve as a
+tained. The value of each dimension for a sentence
+                                                             measure of redundancy and local coherence.
+is the number of tokens of that word type in that
+sentence. We compute the min, max, and average
+                                                                5
+value of cosine similarity over the entire summary.                 http://cohmetrix.memphis.edu/
+
+
+                                                       547
+
+
+3.8     Word coherence: Soricut and Marcu                      would differ from those in incoherent sequences.
+        (2006)                                                    We use the Brown Coherence Toolkit7 (Elsner
+Word co-occurrence patterns across adjacent sen-               et al., 2007) to construct the grids. The tool does
+tences provide a way of measuring local coherence              not perform full coreference resolution. Instead,
+that is not linguistically informed but which can              noun phrases are considered to refer to the same
+be easily computed using large amounts of unan-                entity if their heads are identical.
+notated text (Lapata, 2003; Soricut and Marcu,                    Entity coherence features are the only ones that
+2006). Word coherence can be considered as the                 have been previously applied with success for pre-
+analog of language models at the inter-sentence                dicting summary coherence. They can therefore
+level. Specifically, we used the two features in-              be considered to be the state-of-the-art approach
+troduced by Soricut and Marcu (2006).                          for automatic evaluation of linguistic quality.
+   Soricut and Marcu (2006) make an analogy to
+machine translation: two words are likely to be                4 Summarization data
+translations of each other if they often appear in
+                                                               For our experiments, we use data from the
+parallel sentences; in texts, two words are likely to
+                                                               multi-document summarization tasks of the Doc-
+signal local coherence if they often appear in ad-
+                                                               ument Understanding Conference (DUC) work-
+jacent sentences. The two features we computed
+                                                               shops (Over et al., 2007).
+are forward likelihood, the likelihood of observ-
+ing the words in sentence si conditioned on si−1 ,                Our training and development data comes from
+and backward likelihood, the likelihood of observ-             DUC 2006 and our test data from DUC 2007.
+ing the words in sentence si conditioned on sen-               These were the most recent years in which the
+tence si+1 . “Parallel texts” of 5 million adjacent            summaries were evaluated according to specific
+sentences were extracted from the NYT section of               linguistic quality questions. Each input consists
+GigaWord. We used the GIZA++6 implementa-                      of a set of 25 related documents on a topic and the
+tion of IBM Model 1 to align the words in adjacent             target length of summaries is 250 words.
+sentences and obtain all relevant probabilities.                  In DUC 2006, there were 50 inputs to be sum-
+                                                               marized and 35 summarization systems which par-
+3.9     Entity coherence: Barzilay and Lapata                  ticipated in the evaluation. This included 34 au-
+        (2008)                                                 tomatic systems submitted by participants, and a
+Linguistic theories, and Centering theory (Grosz               baseline system that simply extracted the lead-
+et al., 1995) in particular, have hypothesized that            ing sentences from the most recent article. In
+the properties of the transition of attention from             DUC 2007, there were 45 inputs and 32 different
+entities in one sentence to those in the next, play a          summarization systems. Apart from the leading
+major role in the determination of local coherence.            sentences baseline, a high performance automatic
+Barzilay and Lapata (2008), inspired by Center-                summarizer from a previous year was also used
+ing, proposed a method to compute the local co-                as a baseline. All these automatic systems are in-
+herence of texts on the basis of the sequences of              cluded in our evaluation experiments.
+entity mentions appearing in them.
+                                                               4.1 System performance on linguistic quality
+   In their Entity Grid model, a text is represented
+by a matrix with rows corresponding to each sen-               Each summary was evaluated according to the
+tence in a text, and columns to each entity men-               five linguistic quality questions introduced in Sec-
+tioned anywhere in the text. The value of a cell               tion 2: grammaticality, non-redundancy, referen-
+in the grid is the entity’s grammatical role in that           tial clarity, focus, and structure. For each of these
+sentence (Subject, Object, Neither, or Absent). An             questions, all summaries were manually rated on a
+entity transition is a particular entity’s role in two         scale from 1 to 5, in which 5 is the best.
+adjacent sentences. The actual entity coherence                   The distributions of system scores in the 2006
+features are the fraction of each type of these tran-          data are shown in Figure 1. Systems are currently
+sitions in the entire entity grid for the text. One            the worst at structure, middling at referential clar-
+would expect that coherent texts would contain                 ity, and relatively better at grammaticality, focus,
+a certain distribution of entity transitions which
+                                                                 7
+                                                                   http://www.cs.brown.edu/˜melsner/
+   6
+       http://www.fjoch.com/GIZA++.html                        manual.html
+
+
+                                                         548
+
+
+                                                                   5 Experimental setup
+                                                                   We use the summaries from DUC 2006 for train-
+                                                                   ing and feature development and DUC 2007
+                                                                   served as the test set. Validating the results on con-
+                                                                   secutive years of evaluation is important, as results
+                                                                   that hold for the data in one year might not carry
+                                                                   over to the next, as happened for example in Con-
+                                                                   roy and Dang (2008)’s work.
+                                                                      Following Barzilay and Lapata (2008), we re-
+                                                                   port summary ranking accuracy as the fraction of
+                                                                   correct pairwise rankings in the test set.
+                                                                      We use a Ranking SVM (SV M light (Joachims,
+Figure 1: Distribution of system scores on the five                2002)) to score summaries using our features. The
+linguistic quality questions                                       Ranking SVM seeks to minimize the number of
+                                                                   discordant pairs (pairs in which the gold stan-
+               Gram    Non-redun     Ref    Focus    Struct        dard has x1 ranked strictly higher than x2 , but the
+ Content       .02     -.40 *         .29    .28     .09           learner ranks x2 strictly higher than x1 ). The out-
+ Gram                   .38 *         .25    .24     .54 *         put of the ranker is always a real valued score, so a
+ Non-redun                           -.07   -.09     .27
+ Ref                                         .89 *   .76 *         global rank order is always obtained. The default
+ Focus                                               .80 *         regularization parameter was used.
+Table 1: Spearman correlations between the man-                    5.1 Combining predictions
+ual ratings for systems averaged over the 50 inputs
+                                                                   To combine information from the different feature
+in 2006; * p < .05
+                                                                   classes, we train a meta ranker using the predic-
+                                                                   tions from each class as features.
+                                                                      First, we use a leave-one out (jackknife) pro-
+and non-redundancy. Structure is the aspect of lin-                cedure to get the predictions of our features for
+guistic quality where there is the most room for                   the entire 2006 data set. To predict rankings of
+improvement. The only system with an average                       systems on one input, we train all the individual
+structure score above 3.5 in DUC 2006 was the                      rankers, one for each of the classes of features in-
+leading sentences baseline system.                                 troduced above, on data from the remaining in-
+   As can be expected, people are unlikely to be                   puts. We then apply these rankers to the sum-
+able to focus on a single aspect of linguistic quality             maries produced for the held-out input. By repeat-
+exclusively while ignoring the rest. Some of the                   ing this process for each input in turn, we obtain
+linguistic quality ratings are significantly corre-                the predicted scores for each summary.
+lated with each other, particularly referential clar-                 Once this is done, we use these predicted scores
+ity, focus, and structure (Table 1).                               as features for the meta ranker, which is trained on
+   More importantly, the systems that produce                      all 2006 data. To test on a new summary pair in
+summaries with good content8 are not necessar-                     2007, we first apply each individual ranker to get
+ily the systems producing the most readable sum-                   its predictions, and then apply the meta ranker.
+maries. Notice from the first row of Table 1 that                     In either case (meta ranker or individual feature
+none of the system rankings based on these mea-                    class), all training is performed on 2006 data, and
+sures of linguistic quality are significantly posi-                all testing is done on 2007 data which guarantees
+tively correlated with system rankings of content.                 the results generalize well at least from one year
+The development of automatic linguistic quality                    of evaluation to the next.
+measurements will allow researchers to optimize                    5.2 Evaluation of rankings
+both content and linguistic quality.
+                                                                   We examine the predictive power of our features
+                                                                   for each of the five linguistic quality questions in
+    8
+      as measured by summary responsiveness ratings on a 1         two settings. In system-level evaluation, we would
+to 5 scale, without regard to linguistic quality                   like to rank all participating systems according to
+
+
+                                                             549
+
+
+their performance on the entire test set. In input-            Feature set     Gram.   Redun.    Ref.   Focus   Struct.
+                                                               Lang. models     87.6    83.0     91.2    85.2    86.3
+level evaluation, we would like to rank all sum-               Named ent.       78.5    83.6     82.1    74.0    69.6
+maries produced for a single given input.                      NP syntax        85.0    83.8     87.0    76.6    79.2
+                                                               Coh. devices     82.1    79.5     82.7    82.3    83.7
+   For input-level evaluation, the pairs are formed            Continuity       88.8    88.5     92.9    89.2    91.4
+from summaries of the same input. Pairs in which               Sent. fluency    91.7    78.9     87.6    82.3    84.9
+the gold standard ratings are tied are not included.           Coh-Metrix       87.2    86.0     88.6    83.9    86.3
+                                                               Word coh.        81.7    76.0     87.8    81.7    79.0
+After removing the ties, the test set consists of 13K          Entity coh.      90.2    88.1     89.6    85.0    87.1
+to 16K pairs for each linguistic quality question.             Meta ranker      92.9    87.9     91.9    87.8    90.0
+Note that there were 45 inputs and 32 automatic
+systems    in DUC 2007. So, there are a total of               Table 2: System-level prediction accuracies (%)
+45· 32
+        
+      2   =  22, 320 possible summary pairs.
+   For system-level evaluation, we treat the real-            model features are within 1% of entity coherence
+valued output of the SVM ranker for each sum-                 for these three aspects of summary quality.
+mary as the linguistic quality score. The 45 indi-               Coh-Metrix, which has been proposed as a com-
+vidual scores for summaries produced by a given               prehensive characterization of text, does not per-
+system are averaged to obtain an overall score for            form as well as the language model and the en-
+the system. The gold-standard system-level qual-              tity coherence classes, which contain considerably
+ity rating is equal to the average human ratings for          fewer features related to only one aspect of text.
+the system’s summaries over the 45 inputs. At the                The classes of features specific to named enti-
+system level, there are about 500 non-tied pairs in           ties and noun phrase syntax are the weakest pre-
+the test set for each question.                               dictors. It is apparent from the results that conti-
+   For both evaluation settings, a random baseline            nuity, entity coherence, sentence fluency and lan-
+which ranked the summaries in a random order                  guage models are the most powerful classes of fea-
+would have an expected pairwise accuracy of 50%.              tures that should be used in automation of evalu-
+                                                              ation and against which novel predictors of text
+6 Results and discussion
+                                                              quality should be compared.
+6.1   System-level evaluation                                    Combining all feature classes with the meta
+System-level accuracies for each class of features            ranker only yields higher results for grammatical-
+are shown in Table 2. All classes of features per-            ity. For the other aspects of linguistic quality, it is
+form well, with at least a 20% absolute increase              better to use Continuity by itself to rank systems.
+in accuracy over the random baseline (50% ac-                    One certainly unexpected result is that features
+curacy). For each of the linguistic quality ques-             designed to capture one aspect of well-written text
+tions, the corresponding best class of features               turn out to perform well for other questions as
+gives prediction accuracies around 90%. In other              well. For instance, entity coherence and continuity
+words, if these features were used to fully auto-             features predict grammaticality with very high ac-
+matically compare systems that participated in the            curacy of around 90%, and are surpassed only by
+2007 DUC evaluation, only one out of ten com-                 the sentence fluency features. These findings war-
+parisons would have been incorrect. These results             rant further investigation because we would not
+set a high standard for future work on automatic              expect characteristics of local transitions indica-
+system-level evaluation of linguistic quality.                tive of text structure to have anything to do with
+   The state-of-the-art entity coherence features             sentence grammaticality or fluency. The results
+perform well but are not the best for any of the five         are probably due to the significant correlation be-
+aspects of linguistic quality. As expected, sentence          tween structure and grammaticality (Table 1).
+fluency is the best feature class for grammatical-
+                                                              6.2 Input-level evaluation
+ity. For all four other questions, the best feature
+set is Continuity, which is a combination of sum-             The results of the input-level ranking experiments
+marization specific features, coreference features            are shown in Table 3. Understandably, input-
+and cosine similarity of adjacent sentences. Conti-           level prediction is more difficult and the results are
+nuity features outperform entity coherence by 3 to            lower compared to the system-level predictions:
+4% absolute difference on referential quality, fo-            even with wrong predictions for some of the sum-
+cus, and coherence. Accuracies from the language              maries by two systems, the overall judgment that
+
+
+                                                        550
+
+
+one system is better than the other over the entire            Feature set     Gram.   Redun.   Ref.   Focus   Struct.
+                                                               Lang. models     66.3    57.6    62.2    60.5    62.5
+test set can still be accurate.                                Named ent.       52.9    54.4    60.0    54.1    52.5
+   While for system-level predictions the meta                 NP Syntax        59.0    50.8    59.1    54.5    55.1
+                                                               Coh. devices     56.8    54.4    55.2    52.7    53.6
+ranker was only useful for grammaticality, at the              Continuity       61.7    62.5    69.7    65.4    70.4
+input level it outperforms every individual feature            Sent. fluency    69.4    52.5    64.4    61.9    62.6
+class for each of the five questions, obtaining ac-            Coh-Metrix       65.5    67.6    67.9    63.0    62.4
+                                                               Word coh.        54.7    55.5    53.3    53.2    53.7
+curacies around 70%.                                           Entity coh.      61.3    62.0    64.3    64.2    63.6
+   These input-level accuracies compare favorably              Meta ranker      71.0    68.6    73.1    67.4    70.7
+with automatic evaluation metrics for other nat-
+                                                                Table 3: Input-level prediction accuracies (%)
+ural language processing tasks. For example, at
+the 2008 ACL Workshop on Statistical Machine
+Translation, all fifteen automatic evaluation met-            tures, which compare the context of a sentence
+rics, including variants of BLEU scores, achieved             in the summary with the context in the original
+between 42% and 56% pairwise accuracy with hu-                document where it appeared, also contribute sub-
+man judgments at the sentence level (Callison-                stantially to the success of the Continuity class in
+Burch et al., 2008).                                          predicting structure and referential clarity. Accu-
+   As in system-level prediction, for referential             racies drop by about 7% when these features are
+clarity, focus, and structure, the best feature class         excluded. However, the coreference features do
+is Continuity. Sentence fluency again is the best             not seem to contribute much towards predicting
+class for identifying grammaticality.                         summary linguistic quality. The accuracies of the
+   Coh-Metrix features are now best for determin-             Continuity class are not affected at all when these
+ing redundancy. Both Coh-Metrix and Continuity                coreference features are not included.
+(the top two features for redundancy) include over-
+lap measures between adjacent sentences, which                6.4 Impact of summarization methods
+serve as a good proxy for redundancy.                         In this paper, we have discussed an analysis of the
+   Surprisingly, the relative performance of the              outputs of current research systems. Almost all
+feature classes at input level is not the same as             of these systems still use extractive methods. The
+for system-level prediction. For example, the lan-            summarization specific continuity features reward
+guage model features, which are the second best               systems that include the necessary preceding con-
+class for the system-level, do not fare as well at            text from the original document. These features
+the input-level. Word co-occurrence which ob-                 have high prediction accuracies (Section 6.3) of
+tained good accuracies at the system level is the             linguistic quality, however note that the support-
+least useful class at the input level with accuracies         ing context could often contain less important con-
+just above chance in all cases.                               tent. Therefore, there is a tension between strate-
+                                                              gies for optimizing linguistic quality and for op-
+6.3   Components of continuity                                timizing content, which warrants the development
+The class of features capturing sentence-to-                  of abstractive methods.
+sentence continuity in the summary (Section 3.5)                 As the field moves towards more abstractive
+are the most effective for predicting referential             summaries, we expect to see differences in both
+clarity, focus, and structure at the input level.             a) summary linguistic quality and b) the features
+We now investigate to what extent each of its                 predictive of linguistic aspects.
+components–summary-specific features, corefer-                   As discussed in Section 4.1, systems are cur-
+ence, and cosine similarity between adjacent                  rently worst at structure/coherence. However,
+sentences–contribute to performance.                          grammaticality will become more of an issue as
+   Results obtained after excluding each of the               systems use sentence compression (Knight and
+components of continuity is shown in Table 4;                 Marcu, 2002), reference rewriting (Nenkova and
+each line in the table represents Continuity mi-              McKeown, 2003), and other techniques to produce
+nus a feature subclass. Removing cosine over-                 their own sentences.
+lap causes the largest drop in prediction accuracy,              The number of discourse connectives is cur-
+with results about 10% lower than those for the               rently significantly negatively correlated with
+complete Continuity class. Summary specific fea-              structure/coherence (Spearman correlation of r =
+
+
+                                                        551
+
+
+                         Ref.   Focus   Struct.                 Feature set     Gram.   Redun.   Ref.   Focus   Struct.
+        Continuity       69.7    65.4     70.4                  Lang. models     52.1    60.8    76.5    71.9    78.4
+        - Sum-specific   63.9    64.2     63.5                  Named ent.       62.5    66.7    47.1    43.9    59.1
+        - Coref          70.1    65.2     70.6                  NP Syntax        64.6    49.0    43.1    49.1    58.0
+        - Cosine         60.2    56.6     60.7                  Coh. devices     54.2    68.6    66.7    49.1    64.8
+                                                                Continuity       54.2    49.0    62.7    61.4    71.6
+Table 4: Ablation within the Continuity class;                  Sent. fluency    54.2    64.7    80.4    71.9    72.7
+                                                                Coh-Metrix       54.2    52.9    68.6    56.1    69.3
+pairwise accuracy for input-level predictions (%)               Word coh.        62.5    58.8    62.7    70.2    60.2
+                                                                Entity coh.      45.8    49.0    54.9    52.6    56.8
+                                                                Meta ranker      62.5    56.9    80.4    50.9    67.0
+-.06, p = .008 on DUC 2006 system summaries).
+This can be explained by the fact that they of-                Table 5: Input-level prediction accuracies for
+ten lack proper context in an extractive summary.              human-written summaries (%)
+However, an abstractive system could plan a dis-
+course structure and insert appropriate connectives
+                                                               these three aspects of linguistic quality. A possi-
+(Saggion, 2009). In this case, we would expect the
+                                                               ble explanation for this difference could be that in
+presence of discourse connectives to be a mark of
+                                                               system-produced extracts, incoherent organization
+a well-written summary.
+                                                               influences human perception of linguistic quality
+6.5   Results on human-written abstracts                       to a great extent and so local coherence features
+                                                               turned out very predictive. But in human sum-
+Since abstractive summaries would have markedly
+                                                               maries, sentences are clearly well-organized and
+different properties from extracts, it would be in-
+                                                               here, continuity features appear less useful. Sen-
+teresting to know how well these sets of features
+                                                               tence level fluency seems to be more predictive of
+would work for predicting the quality of machine-
+                                                               the linguistic quality of these summaries.
+produced abstracts. However, since current sys-
+tems are extractive, such a data set is not available.
+                                                               7 Conclusion
+   Therefore we experiment on human-written ab-
+stracts to get an estimate of the expected per-                We have presented an analysis of a wide variety
+formance of our features on abstractive system                 of features for the linguistic quality of summaries.
+summaries. In both DUC 2006 and DUC 2007,                      Continuity between adjacent sentences was con-
+ten NIST assessors wrote summaries for the var-                sistently indicative of the quality of machine gen-
+ious inputs. There are four human-written sum-                 erated summaries. Sentence fluency was useful for
+maries for each input and these summaries were                 identifying grammaticality. Language model and
+judged on the same five linguistic quality aspects             entity coherence features also performed well and
+as the machine-written summaries. We train on the              should be considered in future endeavors for auto-
+human-written summaries from DUC 2006 and                      matic linguistic quality evaluation.
+test on the human-written summaries from DUC                      The high prediction accuracies for input-level
+2007, using the same set-up as in Section 5.                   evaluation and the even higher accuracies for
+   These results are shown in Table 5. We only re-             system-level evaluation confirm that questions re-
+port results on the input level, as we are interested          garding the linguistic quality of summaries can be
+in distinguishing between the quality of the sum-              answered reasonably using existing computational
+maries, not the NIST assessors’ writing skills.                techniques. Automatic evaluation will make test-
+   Except for grammaticality, the prediction accu-             ing easier during system development and enable
+racies of the best feature classes for human ab-               reporting results obtained outside of the cycles of
+stracts are better than those at input level for ma-           NIST evaluation.
+chine extracts. This result is promising, as it shows
+that similar features for evaluating linguistic qual-          Acknowledgments
+ity will be valid for abstractive summaries as well.
+   Note however that the relative performance of               This material is based upon work supported under
+the feature sets changes between the machine and               a National Science Foundation Graduate Research
+human results. While for the machines Continu-                 Fellowship and NSF CAREER award 0953445.
+ity feature class is the best predictor of referential         We would like to thank Bonnie Webber for pro-
+clarity, focus, and structure (Table 3), for humans,           ductive discussions.
+language models and sentence fluency are best for
+
+
+                                                         552
+
+
+References                                                      T. Joachims. 2002. Optimizing search engines us-
+                                                                   ing clickthrough data. In Proceedings of the eighth
+R. Barzilay and M. Lapata. 2008. Modeling local co-                ACM SIGKDD international conference on Knowl-
+   herence: An entity-based approach. Computational                edge discovery and data mining, pages 133–142.
+   Linguistics, 34(1):1–34.
+                                                                M.A. Just and P.A. Carpenter. 1987. The psychology
+C. Callison-Burch, C. Fordyce, P. Koehn, C. Monz, and             of reading and language comprehension. Allyn and
+   J. Schroeder. 2008. Further meta-evaluation of ma-             Bacon Boston, MA.
+   chine translation. In Proceedings of the Third Work-
+   shop on Statistical Machine Translation, pages 70–           D. Klein and C.D. Manning. 2003. Accurate unlexi-
+   106.                                                           calized parsing. In Proceedings of ACL, pages 423–
+                                                                  430.
+J. Chae and A. Nenkova. 2009. Predicting the fluency
+   of text with shallow structural features: case studies       K. Knight and D. Marcu. 2002. Summarization be-
+   of machine translation and human-written text. In              yond sentence extraction: A probabilistic approach
+   Proceedings of EACL, pages 139–147.                            to sentence compression. Artificial Intelligence,
+                                                                  139(1):91–107.
+E. Charniak and M. Elsner. 2009. EM works for pro-
+   noun anaphora resolution. In Proceedings of EACL,            M. Lapata and R. Barzilay. 2005. Automatic evalua-
+   pages 148–156.                                                 tion of text coherence: Models and representations.
+                                                                  In International Joint Conference On Artificial In-
+J.M. Conroy and H.T. Dang. 2008. Mind the gap: dan-               telligence, volume 19, page 1085.
+   gers of divorcing evaluations of summary content
+   from linguistic quality. In Proceedings of COLING,           M. Lapata. 2003. Probabilistic text structuring: Ex-
+   pages 145–152.                                                 periments with sentence ordering. In Proceedings
+                                                                  of ACL, pages 545–552.
+S. Deerwester, S.T. Dumais, G.W. Furnas, T.K. Lan-
+   dauer, and R. Harshman. 1990. Indexing by latent             C.Y. Lin and E. Hovy. 2003. Automatic evaluation of
+   semantic analysis. Journal of the American Society             summaries using n-gram co-occurrence statistics. In
+   for Information Science, 41:391–407.                           Proceedings of NAACL/HLT, page 78.
+
+M. Elsner and E. Charniak. 2008. Coreference-                   C.Y. Lin. 2004. Rouge: A package for automatic eval-
+  inspired coherence modeling. In Proceedings of                  uation of summaries. In Proceedings of the Work-
+  ACL/HLT: Short Papers, pages 41–44.                             shop on Text Summarization Branches Out (WAS
+                                                                  2004), pages 25–26.
+M. Elsner, J. Austerweil, and E. Charniak. 2007. A
+                                                                A. Nenkova and K. McKeown. 2003. References to
+  unified local and global model for discourse coher-
+                                                                  named entities: a corpus study. In Proceedings of
+  ence. In Proceedings of NAACL/HLT.
+                                                                  HLT/NAACL 2003 (short paper).
+J.R. Finkel, T. Grenager, and C. Manning. 2005. In-             J. Otterbacher, D. Radev, and A. Luo. 2002. Revi-
+   corporating non-local information into information              sions that improve cohesion in multi-document sum-
+   extraction systems by gibbs sampling. In Proceed-               maries: a preliminary study. In Proceedings of the
+   ings of ACL, pages 363–370.                                     Workshop on Automatic Summarization, ACL.
+K. Fraurud. 1990. Definiteness and the processing of            P. Over, H. Dang, and D. Harman. 2007. Duc
+  noun phrases in natural discourse. Journal of Se-                in context. Information Processing Management,
+  mantics, 7(4):395.                                               43(6):1506–1520.
+A.C. Graesser, D.S. McNamara, M.M. Louwerse, and                C.D. Paice. 1980. The automatic generation of litera-
+  Z. Cai. 2004. Coh-Metrix: Analysis of text on co-               ture abstracts: an approach based on the identifica-
+  hesion and language. Behavior Research Methods                  tion of self-indicating phrases. In Proceedings of the
+  Instruments and Computers, 36(2):193–202.                       3rd annual ACM conference on Research and devel-
+                                                                  opment in information retrieval, pages 172–191.
+B. Grosz, A. Joshi, and S. Weinstein. 1995. Centering:
+   a framework for modelling the local coherence of             C.D. Paice. 1990. Constructing literature abstracts by
+   discourse. Computational Linguistics, 21(2):203–               computer: Techniques and prospects. Information
+   226.                                                           Processing Management, 26(1):171–186.
+K.F. Haberlandt and A.C. Graesser. 1985. Component              E.F. Prince. 1981. Toward a taxonomy of given-new
+  processes in text comprehension and some of their               information. Radical pragmatics, 223:255.
+  interactions. Journal of Experimental Psychology:
+  General, 114(3):357–374.                                      H. Saggion. 2009. A Classification Algorithm for Pre-
+                                                                   dicting the Structure of Summaries. Proceedings
+M.A.K. Halliday and R. Hasan. 1976. Cohesion in                    of the 2009 Workshop on Language Generation and
+  English. Longman Group Ltd, London, U.K.                         Summarisation, page 31.
+
+
+                                                          553
+
+
+R. Soricut and D. Marcu. 2006. Discourse generation
+   using utility-trained coherence models. In Proceed-
+   ings of ACL.
+J. Steinberger, M. Poesio, M.A. Kabadjov, and K. Jeek.
+   2007. Two uses of anaphora resolution in sum-
+   marization. Information Processing Management,
+   43(6):1663–1680.
+A. Stolcke. 2002. SRILM-an extensible language
+  modeling toolkit. In Seventh International Confer-
+  ence on Spoken Language Processing, volume 3.
+
+
+
+
+                                                     554
+

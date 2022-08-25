@@ -1,0 +1,636 @@
+              Generating Focused Topic-specific Sentiment Lexicons
+
+                Valentin Jijkoun     Maarten de Rijke       Wouter Weerkamp
+                        ISLA, University of Amsterdam, The Netherlands
+                        jijkoun,derijke,w.weerkamp@uva.nl
+
+
+
+
+                      Abstract                                 networks etc. (Altheide, 1996). Recent advances
+                                                               in language technology, especially in sentiment
+    We present a method for automatically                      analysis, promise to (partially) automate this task.
+    generating focused and accurate topic-                       Sentiment analysis is often considered in the
+    specific subjectivity lexicons from a gen-                 context of the following two tasks:
+    eral purpose polarity lexicon that allow
+    users to pin-point subjective on-topic in-                   • sentiment extraction: given a set of textual
+    formation in a set of relevant documents.                      documents, identify phrases, clauses, sen-
+    We motivate the need for such lexicons                         tences or entire documents that express atti-
+    in the field of media analysis, describe                       tudes, and determine the polarity of these at-
+    a bootstrapping method for generating a                        titudes (Kim and Hovy, 2004); and
+    topic-specific lexicon from a general pur-                   • sentiment retrieval: given a topic (and possi-
+    pose polarity lexicon, and evaluate the                        bly, a list of documents relevant to the topic),
+    quality of the generated lexicons both                         identify documents that express attitudes to-
+    manually and using a TREC Blog track                           ward this topic (Ounis et al., 2007).
+    test set for opinionated blog post retrieval.
+    Although the generated lexicons can be an                  How can technology developed for sentiment
+    order of magnitude more selective than the                 analysis be applied to media analysis? In order
+    general purpose lexicon, they maintain, or                 to use a sentiment extraction system for a media
+    even improve, the performance of an opin-                  analysis problem, a system would have to be able
+    ion retrieval system.                                      to determine which of the extracted sentiments are
+                                                               actually relevant, i.e., it would not only have to
+1   Introduction
+                                                               identify specific targets of all extracted sentiments,
+In the area of media analysis, one of the key                  but also decide which of the targets are relevant
+tasks is collecting detailed information about opin-           for the topic at hand. This is a difficult task, as
+ions and attitudes toward specific topics from var-            the relation between a topic (e.g., a movie) and
+ious sources, both offline (traditional newspapers,            specific targets of sentiments (e.g., acting or spe-
+archives) and online (news sites, blogs, forums).              cial effects in the movie) is not always straight-
+Specifically, media analysis concerns the follow-              forward, in the face of ubiquitous complex lin-
+ing system task: given a topic and list of docu-               guistic phenomena such as referential expressions
+ments (discussing the topic), find all instances of            (“. . . this beautifully shot documentary”) or bridg-
+attitudes toward the topic (e.g., positive/negative            ing anaphora (“the director did an excellent jobs”).
+sentiments, or, if the topic is an organization or                 In sentiment retrieval, on the other hand, the
+person, support/criticism of this entity). For every           topic is initially present in the task definition, but
+such instance, one should identify the source of               it is left to the user to identify sources and targets
+the sentiment, the polarity and, possibly, subtopics           of sentiments, as systems typically return a list
+that this attitude relates to (e.g., specific targets          of documents ranked by relevance and opinion-
+of criticism or support). Subsequently, a (hu-                 atedness. To use a traditional sentiment retrieval
+man) media analyst must be able to aggregate                   system in media analysis, one would still have to
+the extracted information by source, polarity or               manually go through ranked lists of documents re-
+subtopics, allowing him to build support/criticism             turned by the system.
+
+
+                                                         585
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 585–594,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   To be able to support media analysis, we need to           Most approaches first try to identify subjective
+combine the specificity of (phrase- or word-level)            units (documents, sentences), and for each of these
+sentiment analysis with the topicality provided by            determine whether it is positive or negative. Kim
+sentiment retrieval. Moreover, we should be able              and Hovy (2004) select candidate sentiment sen-
+to identify sources and specific targets of opinions.         tences and use word-based sentiment classifiers
+   Another important issue in the media analysis              to classify unseen words into a negative or posi-
+context is evidence for a system’s decision. If the           tive class. First, the lexicon is constructed from
+output of a system is to be used to inform actions,           WordNet: from several seed words, the structure
+the system should present evidence, e.g., high-               of WordNet is used to expand this seed to a full
+lighting words or phrases that indicate a specific            lexicon. Next, this lexicon is used to measure the
+attitude. Most modern approaches to sentiment                 distance between unseen words and words in the
+analysis, however, use various flavors of classifi-           positive and negative classes. Based on word sen-
+cation, where decisions (typically) come with con-            timents, a decision is made at the sentence level.
+fidence scores, but without explicit support.                    A similar approach is taken by Wilson et al.
+   In order to move towards the requirements of               (2005): a classifier is learnt that distinguishes be-
+media analysis, in this paper we focus on two of              tween polar and neutral sentences, based on a prior
+the problems identified above: (1) pinpointing ev-            polarity lexicon and an annotated corpus. Among
+idence for a system’s decisions about the presence            the features used are syntactic features. After this
+of sentiment in text, and (2) identifying specific            initial step, the sentiment sentences are classified
+targets of sentiment.                                         as negative or positive; again, a prior polarity lexi-
+   We address these problems by introducing a                 con and syntactic features are used. The authors
+special type of lexical resource: a topic-specific            later explored the difference between prior and
+subjectivity lexicon that indicates specific relevant         contextual polarity (Wilson et al., 2009): words
+targets for which sentiments may be expressed; for            that lose polarity in context, or whose polarity is
+a given topic, such a lexicon consists of pairs (syn-         reversed because of context.
+tactic clue, target). We present a method for au-                Riloff and Wiebe (2003) describe a bootstrap-
+tomatically generating a topic-specific lexicon for           ping method to learn subjective extraction pat-
+a given topic and query-biased set of documents.              terns that match specific syntactic templates, using
+We evaluate the quality of the lexicon both manu-             a high-precision sentence-level subjectivity clas-
+ally and in the setting of an opinionated blog post           sifier and a large unannotated corpus. In our
+retrieval task. We demonstrate that such a lexi-              method, we bootstrap from a subjectivity lexi-
+con is highly focused, allowing one to effectively            cion rather than a classifier, and perform a topic-
+pinpoint evidence for sentiment, while being com-             specific analysis, learning indicators of subjectiv-
+petetive with traditional subjectivity lexicons con-          ity toward a specific topic.
+sisting of (a large number of) clue words.
+   Unlike other methods for topic-specific senti-             2.2   Domain- and target-specific sentiment
+ment analysis, we do not expand a seed lexicon.
+                                                              The way authors express their attitudes varies
+Instead, we make an existing lexicon more fo-
+                                                              with the domain: An unpredictable movie can be
+cused, so that it can be used to actually pin-point
+                                                              positive, but unpredictable politicians are usually
+subjectivity in documents relevant to a given topic.
+                                                              something negative. Since it is unrealistic to con-
+2     Related Work                                            struct sentiment lexicons, or manually annotate
+                                                              text for learning, for every imaginable domain or
+Much work has been done in sentiment analy-                   topic, automatic methods have been developed.
+sis. We discuss related work in four parts: sen-                 Godbole et al. (2007) aim at measuring over-
+timent analysis in general, domain- and target-               all subjectivity or polarity towards a certain entity;
+specific sentiment analysis, product review mining            they identify sentiments using domain-specific
+and sentiment retrieval.                                      lexicons. The lexicons are generated from man-
+                                                              ually selected seeds for a broad domain such as
+2.1    Sentiment analysis                                     Health or Business, following an approach simi-
+Sentiment analysis is often seen as two separate              lar to (Kim and Hovy, 2004). All named entites
+steps for determining subjectivity and polarity.              in a sentence containing a clue from a lexicon are
+
+
+                                                        586
+
+
+considered targets of sentiment for counting. Be-             yond concrete products, and the diversity and gen-
+cause of the data volume, no expensive linguistic             erality of possible topics makes it difficult to ap-
+processing is performed.                                      ply such supervised or thesaurus-based methods to
+   Choi et al. (2009) advocate a joint topic-                 identify opinion targets. Moreover, in our method
+sentiment analysis. They identify “sentiment top-             we directly use associations between targets and
+ics,” noun phrases assumed to be linked to a sen-             opinions to extract both.
+timent clue in the same expression. They address
+two tasks: identifying sentiment clues, and clas-             2.4    Sentiment retrieval
+sifying sentences into positive, negative, or neu-            At TREC, the Text REtrieval Conference, there
+tral. They start by selecting initial clues from Sen-         has been interest in a specific type of sentiment
+tiWordNet, based on sentences with known polar-               analysis: opinion retrieval. This interest materi-
+ity. Next, the sentiment topics are identified, and           alized in 2006 (Ounis et al., 2007), with the opin-
+based on these sentiment topics and the current list          ionated blog post retrieval task. Finding blog posts
+of clues, new potential clues are extracted. The              that are not just about a topic, but also contain an
+clues can be used to classifiy sentences.                     opinion on the topic, proves to be a difficult task.
+   Fahrni and Klenner (2008) identify potential               Performance on the opinion-finding task is domi-
+targets in a given domain, and create a target-               nated by performance on the underlying document
+specific polarity adjective lexicon. To this end,             retrieval task (the topical baseline).
+they find targets using Wikipedia, and associated                Opinion finding is often approached as a two-
+adjectives. Next, the target-specific polarity of ad-         stage problem: (1) identify documents relevant to
+jectives is detemined using Hearst-like patterns.             the query, (2) identify opinions. In stage (2) one
+   Kanayama and Nasukawa (2006) introduce po-                 commonly uses either a binary classifier to distin-
+lar atoms: minimal human-understandable syn-                  guish between opinionated and non-opinionated
+tactic structures that specify polarity of clauses.           documents or applies reranking of the initial result
+The goal is to learn new domain-specific polar                list using some opinion score. Opinion add-ons
+atoms, but these are not target-specific. They                show only slight improvements over relevance-
+use manually-created syntactic patterns to identify           only baselines.
+atoms and coherency to determine polarity.                       The best performing opinion finding system at
+   In contrast to much of the work in the literature,         TREC 2008 is a two-stage approach using rerank-
+we need to specialize subjectivity lexicons not for           ing in stage (2) (Lee et al., 2008). The authors
+a domain and target, but for “topics.”                        use SentiWordNet and a corpus-derived lexicon
+                                                              to construct an opinion score for each post in an
+2.3   Product features and opinions                           initial ranking of blog posts. This opinion score
+                                                              is combined with the relevance score, and posts
+Much work has been carried out for the task of
+                                                              are reranked according to this new score. We de-
+mining product reviews, where the goal is to iden-
+                                                              tail this approach in Section 6. Later, the authors
+tify features of specific products (such as picture,
+                                                              use domain-specific opinion indicators (Na et al.,
+zoom, size, weight for digital cameras) and opin-
+                                                              2009), like “interesting story” (movie review), and
+ions about these specific features in user reviews.
+                                                              “light” (notebook review). This domain-specific
+Liu et al. (2005) describe a system that identifies
+                                                              lexicon is constructed using feedback-style learn-
+such features via rules learned from a manually
+                                                              ing: retrieve an initial list of documents and use
+annotated corpus of reviews; opinions on features
+                                                              the top documents as training data to learn an opin-
+are extracted from the structure of reviews (which
+                                                              ion lexicon. Opinion scores per document are then
+explicitly separate positive and negative opinions).
+                                                              computed as an average of opinion scores over
+   Popescu and Etzioni (2005) present a method
+                                                              all its words. Results show slight improvements
+that identifies product features for using corpus
+                                                              (+3%) on mean average precision.
+statistics, WordNet relations and morphological
+cues. Opinions about the features are extracted us-
+                                                              3     Generating Topic-Specific Lexicons
+ing a hand-crafted set of syntactic rules.
+   Targets extracted in our method for a topic are            In this section we describe how we generate a lex-
+similar to features extracted in review mining for            icon of subjectivity clues and targets for a given
+products. However, topics in our setting go be-               topic and a list of relevant documents (e.g., re-
+
+
+                                                        587
+
+
+                 Background             Topic-independent
+                                                                                 attitude: we try to find how a clue word can be syn-
+                   corpus               subjectivity lexicon                     tactically linked to targets of sentiments. We take a
+                                  Extract all                                    simple definition of the syntactic context: a single
+                              syntactic contexts
+                                of clue words
+                                                                                 labeled directed dependency relation. For every
+      Step 1
+                                For each clue                                    clue word, we extract all syntactic contexts, i.e.,
+                               word, select D
+                                contexts with                                    all dependencies, in which the word is involved
+                               highest entropy
+                                                                                 (as head or as modifier) in the background corpus,
+                            List of syntactic clues:           Topic
+                                                                                 along with their endpoints. Table 1 shows exam-
+                           (clue word, syn. context)       Relevant docs         ples of clue words and contexts that indicate sen-
+                                                  Extract all
+                                                                                 timents. For every clue, we only select those con-
+                   Extract all
+                  occurrences                    occurrences                     texts that exhibit a high entropy among the lemmas
+                  endpoints of                   endpoints of
+                 syntactic clues                syntactic clues                  at the other endpoint of the dependencies. E.g.,
+      Step 2
+               Potential targets in           Potential targets in
+                                                                                 in our background corpus, the verb to like occurs
+               background corpus               relevant doc. list                97,179 times with a nominal subject and 52,904
+                                                                                 times with a direct object; however, the entropy of
+                            Compare frequencies
+                              using chi-square;                                  lemmas of the subjects is 4.33, compared to 9.56
+                             select top T targets
+                                                                                 for the direct objects. In other words, subjects of
+                                                                                 like are more “predictable.” Indeed, the pronoun
+                               List of T targets
+                                                                                 I accounts for 50% of subjects, followed by you
+                                                                                 (14%), they (4%), we (4%) and people (2%). The
+                               For each target,
+      Step 3                   find syn. clues it                                most frequent objects of like are it (12%), what
+                                co-occurs with
+                                                                                 (4%), idea (2%), they (2%). Thus, objects of to
+                       Topic-specific lexicon of tuples:                         like will be preferred by the method.
+                           (syntactic clue, target)
+                                                                                    Our entropy-driven selection of syntactic con-
+                                                                                 texts of a clue word is based on the following as-
+Figure 1: Our method for learning a topic-                                       sumption:
+dependent subjectivity lexicon.
+                                                                                       Assumption 1: In text, targets of sentiments
+                                                                                       are more diverse than sources of sentiments
+trieved by a search engine for the topic). As an ad-                                   or other accompanying attributes such as lo-
+ditional resource, we use a large background cor-                                      cation, time, manner, etc. Therefore targets
+pus of text documents of a similar style but with                                      exhibit higher entropy than other attributes.
+diverse subjects; we assume that the relevant doc-
+uments are part of this corpus as well. As the back-                             For every clue word, we select the top D syntac-
+ground corpus, we used the set of documents from                                 tic contexts whose entropy is at least half of the
+the assessment pools of TREC 2006–2008 opin-                                     maximum entropy for this clue.
+ion retrieval tasks (described in detail in section 4).                             To summarize, at the end of Step 1 of our
+We use the Stanford lexicalized parser1 to extract                               method, we have extracted a list of pairs (clue
+labeled dependency triples (head, label, modifier).                              word, syntactic context) such that for occurrences
+In the extracted triples, all words indicate their cat-                          of the clue word, the words at the endpoint of the
+egory (noun, adjective, verb, adverb, etc.) and are                              syntactic dependency are likely to be targets of
+normalized to lemmas.                                                            sentiments. We call such a pair a syntactic clue.
+   Figure 1 provides an overview of our method;
+below we describe it in more detail.                                             3.2   Step 2: Selecting potential targets
+                                                                                 Here, we use the extracted syntantic clues to iden-
+3.1     Step 1: Extracting syntactic contexts
+                                                                                 tify words that are likely to serve as specific tar-
+We start with a general domain-independent prior                                 gets for opinions about the topic in the relevant
+polarity lexicon of 8,821 clue words (Wilson et al.,                             documents. In this work we only consider individ-
+2005). First, we identify syntactic contexts in                                  ual words as potential targets and leave exploring
+which specific clue words can be used to express                                 other options (e.g., NPs and VPs as targets) for fu-
+  1
+    http://nlp.stanford.edu/software/                                            ture work. In extracting targets, we rely on the
+lex-parser.shtml                                                                 following assumption:
+
+
+                                                                           588
+
+
+         Clue word   Syntactic context           Target       Example
+         to like     has direct object           u2           I do still like U2 very much
+         to like     has clausal complement      criticize    I don’t like to criticize our intelligence services
+         to like     has about-modifier          olympics     That’s what I like about Winter Olympics
+         terrible    is adjectival modifier of   idea         it’s a terrible idea to recall judges for...
+         terrible    has nominal subject         shirt        And Neil, that shirt is terrible!
+         terrible    has clausal complement      can          It is terrible that a small group of extremists can . . .
+
+  Table 1: Examples of subjective syntactic contexts of clue words (based on Stanford dependencies).
+
+
+      Assumption 2: The list of relevant documents                 Topic “Relationship between Abramoff and Bush”
+                                                                   abramoff lobbyist scandal fundraiser bush fund-raiser re-
+      contains a substantial number of documents                   publican prosecutor tribe swirl corrupt corruption norquist
+      on the topic which, moreover, contain senti-                 democrat lobbying investigation scanlon reid lawmaker
+      ments about the topic.                                       dealings president
+                                                                   Topic “MacBook Pro”
+                                                                   macbook laptop powerbook connector mac processor note-
+We extract all endpoints of all occurrences of the                 book fw800 spec firewire imac pro machine apple power-
+syntactic clues in the relevant documents, as well                 books ibook ghz g4 ata binary keynote drive modem
+as in the background corpus. To identify potential                 Topic: “Super Bowl ads”
+attitude targets in the relevant documents, we com-                ad bowl commercial fridge caveman xl endorsement adver-
+                                                                   tising spot advertiser game super essential celebrity payoff
+pare their frequency in the relevant documents to                  marketing publicity brand advertise watch viewer tv football
+the frequency in the background corpus using the                   venue
+standard χ2 statistics. This technique is based on
+the following assumption:                                          Table 2: Examples of targets extracted at Step 2.
+
+      Assumption 3: Sentiment targets related to                   4       Data and Experimental Setup
+      the topic occur more often in subjective con-
+      text in the set of relevant documents, than                  We consider two types of evaluation. In the next
+      in the background corpus. In other words,                    section, we examine the quality of the lexicons
+      while the background corpus contains senti-                  we generate. In the section after that we evaluate
+      ments towards very diverse subjects, the rel-                lexicons quantitatively using the TREC Blog track
+      evant documents tend to express attitudes re-                benchmark.
+      lated to the topic.                                             For extrinsic evaluation we apply our lexi-
+                                                                   con generation method to a collection of doc-
+For every potential target, we compute the χ2 -                    uments containing opinionated utterances: blog
+score and select the top T highest scoring targets.                posts. The Blogs06 collection (Macdonald and
+   As the result of Steps 1 and 2, as candidate tar-               Ounis, 2006) is a crawl of blog posts from 100,649
+gets for a given topic, we only select words that oc-              blogs over a period of 11 weeks (06/12/2005–
+cur in subjective contexts, and that do so more of-                21/02/2006), with 3,215,171 posts in total. Be-
+ten than we would normally expect. Table 2 shows                   fore indexing the collection, we perform two pre-
+examples of extracted targets for three TREC top-                  processing steps: (i) when extracting plain text
+ics (see below for a description of our experimen-                 from HTML, we only keep block-level elements
+tal data).                                                         longer than 15 words (to remove boilerplate mate-
+                                                                   rial), and (ii) we remove non-English posts using
+3.3   Step 3: Generating topic-specific lexicons                   TextCat2 for language detection. This leaves us
+In the last step of the method, we combine clues                   with 2,574,356 posts with 506 words per post on
+and targets. For each target identified in Step 2,                 average. We index the collection using Indri,3 ver-
+we take all syntactic clues extracted in Step 1 that               sion 2.10.
+co-occur with the target in the relevant documents.                   TREC 2006–2008 came with the task of opin-
+The resulting list of triples (clue word, syntactic                ionated blog post retrieval (Ounis et al., 2007).
+context, target) constitute the lexicon. We conjec-                For each year a set of 50 topics was created, giv-
+ture that an occurrence of a lexicon entry in a text                   2
+                                                                       http://odur.let.rug.nl/∼vannoord/
+indicates, with reasonable confidence, a subjective                TextCat/
+                                                                     3
+attitude towards the target.                                           http://www.lemurproject.org/indri/
+
+
+                                                             589
+
+
+ing us 150 topics in total. Every topic comes with              There are some tragic mo-     There are some tragic mo-
+                                                                ments like eggs freezing ,    ments l ike eggs freezing ,
+a set of relevance judgments: Given a topic, a blog             and predators snatching the   and predators snatching the
+post can be either (i) nonrelevant, (ii) relevant, but          females and little ones-you   females and little ones-you
+not opinionated, or (iii) relevant and opinionated.             know the whole NATURE         know the whole NATURE
+                                                                thing ... but this movie is   thing ... but this movie is
+TREC topics consist of three fields (title, descrip-            awesome                       awesome
+tion, and narrative), of which we only use the title            Saturday was more errands,    Saturday was more errands,
+field: a query of 1–3 keywords.                                 then spent the evening with   then spent the evening with
+                                                                Dad and Stepmum, and fi-      Dad and Stepmum, and fi-
+   We use standard TREC evaluation measures for                 nally was able to see March   nally was able to see March
+opinion retrieval: MAP (mean average precision),                of the Penguins, which        of the Penguins, which
+R-precision (precision within the top R retrieved               was wonderful. Christmas      was wonderful. Christmas
+                                                                Day was lovely, surrounded    Day was lovely, surrounded
+documents, where R is the number of known rel-                  by family, good food and      by family, good food and
+evant documents in the collection), MRR (mean                   drink, and little L to play   drink, and little L to play
+reciprocal rank), P@10 and P@100 (precision                     with.                         with.
+within the top 10 and 100 retrieved documents).                Table 3: Posts with highlighted targets (bold) and
+In the context of media analysis, recall-oriented              subjectivity clues (blue) using topic-independent
+measures such as MAP and R-precision are more                  (left) and topic-specific (right) lexicons.
+meaningful than the other, early precision-oriented
+measures. Note that for the opinion retrieval task
+a document is considered relevant if it is on topic            tated using the smallest lexicon in Table 4 for the
+and contains opinions or sentiments towards the                topic “March of the Pinguins.” We assigned 186
+topic.                                                         matches of lexicon entries in 30 documents into
+   Throughout Section 6 below, we test for signif-             four classes:
+icant differences using a two-tailed paired t-test,
+                                                                   • REL: sentiment towards a relevant target;
+and report on significant differences for α = 0.01
+                                                                   • CONTEXT: sentiment towards a target that
+(N and H ), and α = 0.05 (M and O ).
+                                                                     is irrelevant to the topic due to context (e.g.,
+   For the quantative experiments in Section 6 we
+                                                                     opinion about a target “film”, but refering to
+need a topical baseline: a set of blog posts po-
+                                                                     a film different from the topic);
+tentially relevant to each topic. For this, we use
+                                                                   • IRREL: sentiment towards irrelevant target
+the Indri retrieval engine, and apply the Markov
+                                                                     (e.g., “game” for a topic about a movie);
+Random Fields to model term dependencies in the
+                                                                   • NOSENT: no sentiment at all
+query (Metzler and Croft, 2005) to improve topi-
+cal retrieval. We retrieve the top 1,000 posts for             In total only 8% of matches were manually clas-
+each query.                                                    sified as REL, with 62% classified as NOSENT,
+                                                               23% as CONTEXT, and 6% as IRREL. On the
+5   Qualitative Analysis of Lexicons                           other hand, among documents assessed as opio-
+Lexicon size (the number of entries) and selectiv-             nionated by TREC assessors, only 13% did not
+ity (how often entries match in text) of the gen-              contain matches of the lexicon entries, compared
+erated lexicons vary depending on the parame-                  to 27% of non-opinionated documents, which
+ters D and T introduced above. The two right-                  does indicate that our lexicon does attempt to sep-
+most columns of Table 4 show the lexicon size                  arate non-opinionated documents from opinion-
+and the average number of matches per topic. Be-               ated.
+cause our topic-specific lexicons consist of triples
+                                                               6    Quantitative Evaluation of Lexicons
+(clue word, syntactic context, target), they actu-
+ally contain more words than topic-independent                 In this section we assess the quality of the gen-
+lexicons of the same size, but topic-specific en-              erated topic-specific lexicons numerically and ex-
+tries are more selective, which makes the lexicon              trinsically. To this end we deploy our lexicons to
+more focused. Table 3 compares the application                 the task of opinionated blog post retrieval (Ounis
+of topic-independent and topic-specific lexicons to            et al., 2007). A commonly used approach to this
+on-topic blog text.                                            task works in two stages: (1) identify topically rel-
+   We manually performed an explorative error                  evant blog posts, and (2) classify these posts as
+analysis on a small number of documents, anno-                 being opinionated or not. In stage 2 the standard
+
+
+                                                         590
+
+
+approach is to rerank the results from stage 1, in-                topic-independent lexicon to the topic-dependent
+stead of doing actual binary classification. We take               lexicons our method generates, which are also
+this approach, as it has shown good performance                    plugged into the reranking of Lee et al. (2008).
+in the past TREC editions (Ounis et al., 2007) and                    In addition to using Okapi BM25 for opinion
+is fairly straightforward to implement. We also ex-                scoring, we also consider a simpler method. As
+plore another way of using the lexicon: as a source                we observed in Section 5, our topic-specific lexi-
+for query expansion (i.e., adding new terms to the                 cons are more selective than the topic-independent
+original query) in Section 6.2. For all experiments                lexicon, and a simple number of lexicon matches
+we use the collection described in Section 4.                      can give a good indication of opinionatedness of a
+   Our experiments have two goals: to compare                      document:
+the use of topic-independent and topic-specific
+lexicons for the opinionated post retrieval task,                          Sop (D) = min(n(O, D), 10)/10,          (3)
+and to examine how different settings for the pa-                  where n(O, D) is the number of matches of the
+rameters of the lexicon generation affect the em-                  term of sentiment lexicon O in document D.
+pirical quality.
+                                                                   6.1.1 Results and observations
+6.1     Reranking using a lexicon                                  There are several parameters that we can vary
+To rerank a list of posts retrieved for a given topic,             when generating a topic-specific lexicon and when
+we opt to use the method that showed best per-                     using it for reranking:
+formance at TREC 2008. The approach taken
+by Lee et al. (2008) linearly combines a (top-                     D: the number of syntactic contexts per clue
+                                                                   T : the number of extracted targets
+ical) relevance score with an opinion score for
+                                                                   Sop (D): the opinion scoring function.
+each post. For the opinion score, terms from a
+                                                                   α: the weight of the opinion score in the linear
+(topic-independent) lexicon are matched against
+                                                                        combination with the relevance score.
+the post content, and weighted with the probability
+of term’s subjectivity. Finally, the sum is normal-                Note that α does not affect the lexicon creation,
+ized using the Okapi BM25 framework. The final                     but only how the lexicon is used in reranking.
+opinion score Sop is computed as in Eq. 1:                         Since we want to assess the quality of lexicons,
+                                                                   not in the opinionated retrieval performance as
+       Sop (D) =                                                   such, we factor out α by selecting the best setting
+                   Opinion(D) · (k1 + 1)                           for each lexicon (including the topic-independent)
+                                           b·|D|
+                                                     , (1)
+           Opinion(D) + k1 · (1 − b +      avgdl )
+                                                                   and each evaluation measure.
+                                                                      In Table 4 we present the results of evaluation
+where k1 , and b are Okapi parameters (set to their                of several lexicons in the context of opinionated
+default values k1 = 2.0, and b = 0.75), |D| is the                 blog post retrieval.
+length of document D, and avgdl is the average                        First, we note that reranking using all lexi-
+document length in the collection. The opinion                     cons in Table 4 significantly improves over the
+score Opinion(D) is calculated using Eq. 2:                        relevance-only baseline for all evaluation mea-
+                                                                   sures. When comparing topic-specific lexicons to
+                    X
+  Opinion(D) =         P (sub|w) · n(w, D), (2)
+                      w∈O
+                                                                   the topic-independent one, most of the differences
+                                                                   are not statistically significant, which is surpris-
+where O is the set of terms in the sentiment lex-                  ing given the fact that most topic-specific lexicons
+icon, P (sub|w) indicates the probability of term                  we evaluated are substantially smaller (see the two
+w being subjective, and n(w, D) is the number of                   rightmost columns in the table). The smallest lex-
+times term w occurs in document D. The opinion                     icon in Table 4 is seven times more selective than
+scoring can weigh lexicon terms differently, using                 the general one, in terms of the number of lexicon
+P (sub|w); it normalizes scores to cancel out the                  matches per document.
+effect of varying document sizes.                                     The only evaluation measure where the topic-
+   In our experiments we use the method de-                        independent lexicon consistently outperforms
+scribed above, and plug in the MPQA polarity                       topic-specific ones, is Mean Reciprocal Rank that
+lexicon.4 We compare the results of using this                     depends on a single relevant opinionated docu-
+   4
+       http://www.cs.pitt.edu/mpqa/                                ment high in a ranking. A possible explanation
+
+
+                                                             591
+
+
+          Lexicon             MAP       R-prec   MRR          P@10       P@100       |lexicon|    hits per doc
+          no reranking        0.2966    0.3556   0.6750       0.4820     0.3666             —               —
+          topic-independent   0.3182    0.3776   0.7714       0.5607     0.3980          8,221           36.17
+          D       T     Sop
+           3     50   count   0.3191    0.3769   0.7276O      0.5547     0.3963         2,327             5.02
+           3    100   count   0.3191    0.3777   0.7416       0.5573     0.3971         3,977             8.58
+           5     50   count   0.3178    0.3775   0.7246O      0.5560     0.3931         2,784             5.73
+           5    100   count   0.3178    0.3784   0.7316O      0.5513     0.3961         4,910            10.06
+          all    50   count   0.3167    0.3753   0.7264O      0.5520     0.3957         4,505             9.34
+          all   100   count   0.3146    0.3761   0.7283O      0.5347O    0.3955         8,217            16.72
+          all    50   okapi   0.3129    0.3713   0.7247H      0.5333O    0.3833O        4,505             9.34
+          all   100   okapi   0.3189    0.3755   0.7162H      0.5473     0.3921         8,217            16.72
+          all   200   okapi   0.3229N   0.3803   0.7389       0.5547     0.3987        14,581            29.14
+
+Table 4: Evaluation of topic-specific lexicons applied to the opinion retrieval task, compared to the topic-
+independent lexicon. The two rightmost columns show the number of lexicon entries (average per topic)
+and the number of matches of lexicon entries in blog posts (average for top 1,000 posts).
+
+
+is that the large general lexicon easily finds a few              Run              MAP           P@10      MRR
+“obviously subjective” posts (those with heavily                             Topical blog post retrieval
+used subjective words), but is not better at detect-              Baseline        0.4086     0.7053      0.7984
+                                                                  Rel. models     0.4017O 0.6867         0.7383H
+ing less obvious ones, as indicated by the recall-                Subj. targets 0.4190   M
+                                                                                             0.7373  M
+                                                                                                         0.8470M
+oriented MAP and R-precision.
+                                                                                   Opinion retrieval
+   Interestingly, increasing the number of syntac-                Baseline         0.2966      0.4820      0.6750
+tic contexts considered for a clue word (parame-                  Rel. models      0.2841H 0.4467H         0.5479H
+                                                                  Subj. targets    0.3075      0.5227N     0.7196
+ter D) and the number of selected targets (param-
+eter T ) leads to substantially larger lexicons, but         Table 5: Query expansion using relevance mod-
+only gives marginal improvements when lexicons               els and topic-specific subjectivity targets. Signifi-
+are used for opinion retrieval. This shows that our          cance tested against the baseline.
+bootstrapping method is effective at filtering out
+non-relevant sentiment targets and syntactic clues.
+   The evaluation results also show that the choice
+of opinion scoring function (Okapi or raw counts)            with the topic, the extracted targets should be good
+depends on the lexicon size: for smaller, more fo-           candidates for query expansion. The experiments
+cused lexicons unnormalized counts are more ef-              described below test this hypothesis.
+fective. This also confirms our intuition that for              For every test topic, we select the 20 top-scoring
+small, focused lexicons simple presence of a sen-            targets as expansion terms, and use Indri to re-
+timent clue in text is a good indication of subjec-          turn 1,000 most relevant documents for the ex-
+tivity, while for larger lexicons an overall subjec-         panded query. We evaluate the resulting ranking
+tivity scoring of texts has to be used, which can be         using both topical retrieval and opinionated re-
+hard to interpret for (media analysis) users.                trieval measures. For the sake of comparison, we
+                                                             also implemented a well-known query expansion
+6.2   Query expansion with lexicons                          method based on Relevance Models (Lavrenko
+In this section we evaluate the quality of targets           and Croft, 2001): this method has been shown to
+extracted as part of the lexicons by using them for          work well in many settings. Table 5 shows evalu-
+query expansion. Query expansion is a commonly               ation results for these two query expansion meth-
+used technique in information retrieval, aimed at            ods, compared to the baseline retrieval run.
+getting a better representation of the user’s in-               The results show that on topical retrieval query
+formation need by adding terms to the original               expansion using targets significantly improves re-
+retrieval query; for user-generated content, se-             trieval performance, while using relevance mod-
+lective query expansion has proved very benefi-              els actually hurts all evaluation measures. The
+cial (Weerkamp et al., 2009). We hypothesize that            failure of the latter expansion method can be at-
+if our method manages to identify targets that cor-          tributed to the relatively large amount of noise
+respond to issues, subtopics or features associated          in user-generated content, such as boilerplate
+
+
+                                                       592
+
+
+material, timestamps of blog posts, comments                 by the Dutch and Flemish Governments under
+etc. (Weerkamp and de Rijke, 2008). Our method               project nr STE-09-12, and by the Netherlands Or-
+uses full syntactic parsing of the retrieved doc-            ganisation for Scientific Research (NWO) under
+uments, which might substantially reduce the                 project nrs 612.066.512, 612.061.814, 612.061.-
+amount of noise since only (relatively) well-                815, 640.004.802.
+formed English sentences are used in lexicon gen-
+eration.                                                     References
+   For opinionated retrieval, target-based expan-
+                                                             Altheide, D. (1996). Qualitative Media Analysis. Sage.
+sion also improves over the baseline, although the           Choi, Y., Kim, Y., and Myaeng, S.-H. (2009). Domain-
+differences are only significant for P@10. The                  specific sentiment analysis using contextual feature gen-
+consistent improvement for topical retrieval sug-               eration. In TSA ’09: Proceeding of the 1st international
+                                                                CIKM workshop on Topic-sentiment analysis for mass
+gests that a topic-specific lexicon can be used both            opinion, pages 37–44, New York, NY, USA. ACM.
+for query expansion (as described in this section)           Fahrni, A. and Klenner, M. (2008). Old Wine or Warm
+                                                                Beer: Target-Specific Sentiment Analysis of Adjectives.
+and for opinion reranking (as described in Sec-                 In Proc.of the Symposium on Affective Language in Hu-
+tion 6.1). We leave this combination for future                 man and Machine, AISB 2008 Convention, 1st-2nd April
+work.                                                           2008. University of Aberdeen, Aberdeen, Scotland, pages
+                                                                60 – 63.
+                                                             Godbole, N., Srinivasaiah, M., and Skiena, S. (2007). Large-
+7   Conclusions and Future Work                                 scale sentiment analysis for news and blogs. In Proceed-
+                                                                ings of the International Conference on Weblogs and So-
+We have described a bootstrapping method for de-                cial Media (ICWSM).
+riving a topic-specific lexicon from a general pur-          Kanayama, H. and Nasukawa, T. (2006). Fully automatic lex-
+                                                                icon expansion for domain-oriented sentiment analysis. In
+pose polarity lexicon. We have evaluated the qual-              EMNLP ’06: Proceedings of the 2006 Conference on Em-
+ity of generated lexicons both manually and using               pirical Methods in Natural Language Processing, pages
+a TREC Blog track test set for opinionated blog                 355–363, Morristown, NJ, USA. Association for Compu-
+                                                                tational Linguistics.
+post retrieval. Although the generated lexicons              Kim, S. and Hovy, E. (2004). Determining the sentiment of
+can be an order of magnitude more selective, they               opinions. In Proceedings of COLING 2004.
+maintain, or even improve, the performance of an             Lavrenko, V. and Croft, B. (2001). Relevance-based language
+                                                                models. In SIGIR ’01: Proceedings of the 24th annual
+opinion retrieval system.                                       international ACM SIGIR conference on research and de-
+   As to future work, we intend to combine our                  velopment in information retrieval.
+                                                             Lee, Y., Na, S.-H., Kim, J., Nam, S.-H., Jung, H.-Y., and Lee,
+method with known methods for topic-specific                    J.-H. (2008). KLE at TREC 2008 Blog Track: Blog Post
+lexicon expansion (our method is rather concerned               and Feed Retrieval. In Proceedings of TREC 2008.
+with lexicon “restriction”). Existing sentence-              Liu, B., Hu, M., and Cheng, J. (2005). Opinion observer: an-
+                                                                alyzing and comparing opinions on the web. In Proceed-
+or phrase-level (trained) sentiment classifiers can             ings of the 14th international conference on World Wide
+also be used easily: when collecting/counting tar-              Web.
+gets we can weigh them by “prior” score provided             Macdonald, C. and Ounis, I. (2006). The TREC Blogs06
+                                                                collection: Creating and analysing a blog test collection.
+by such classifiers. We also want to look at more               Technical Report TR-2006-224, Department of Computer
+complex syntactic patterns: Choi et al. (2009) re-              Science, University of Glasgow.
+port that many errors are due to exclusive use of            Metzler, D. and Croft, W. B. (2005). A markov random feld
+                                                                model for term dependencies. In SIGIR ’05: Proceed-
+unigrams. We would also like to extend poten-                   ings of the 28th annual international ACM SIGIR con-
+tial opinion targets to include multi-word phrases              ference on research and development in information re-
+                                                                trieval, pages 472–479, New York, NY, USA. ACM Press.
+(NPs and VPs), in addition to individual words.              Na, S.-H., Lee, Y., Nam, S.-H., and Lee, J.-H. (2009). Im-
+Finally, we do not identify polarity yet: this can              proving opinion retrieval based on query-specific senti-
+be partially inherited from the initial lexicon and             ment lexicon. In ECIR ’09: Proceedings of the 31th Eu-
+                                                                ropean Conference on IR Research on Advances in In-
+refined automatically via bootstrapping.                        formation Retrieval, pages 734–738, Berlin, Heidelberg.
+                                                                Springer-Verlag.
+Acknowledgements                                             Ounis, I., Macdonald, C., de Rijke, M., Mishne, G., and
+                                                                Soboroff, I. (2007). Overview of the TREC 2006 blog
+This research was supported by the European                     track. In The Fifteenth Text REtrieval Conference (TREC
+                                                                2006). NIST.
+Union’s ICT Policy Support Programme as part                 Popescu, A.-M. and Etzioni, O. (2005). Extracting prod-
+of the Competitiveness and Innovation Framework                 uct features and opinions from reviews. In Proceedings
+Programme, CIP ICT-PSP under grant agreement                    of Human Language Technology Conference and Confer-
+                                                                ence on Empirical Methods in Natural Language Process-
+nr 250430, by the DuOMAn project carried out                    ing (HLT/EMNLP).
+within the STEVIN programme which is funded                  Riloff, E. and Wiebe, J. (2003). Learning extraction patterns
+
+
+                                                       593
+
+
+  for subjective expressions. In Proceedings of the 2003
+  Conference on Empirical methods in Natural Language
+  Processing (EMNLP).
+Weerkamp, W., Balog, K., and de Rijke, M. (2009). A gener-
+  ative blog post retrieval model that uses query expansion
+  based on external collections. In Joint conference of the
+  47th Annual Meeting of the Association for Computational
+  Linguistics and the 4th International Joint Conference on
+  Natural Language Processing of the Asian Federation of
+  Natural Language Processing (ACL-ICNLP 2009), Singa-
+  pore.
+Weerkamp, W. and de Rijke, M. (2008). Credibility im-
+  proves topical blog post retrieval. In Proceedings of ACL-
+  08: HLT, page 923931, Columbus, Ohio. Association
+  for Computational Linguistics, Association for Computa-
+  tional Linguistics.
+Wilson, T., Wiebe, J., and Hoffmann, P. (2005). Recognizing
+  contextual polarity in phrase-level sentiment analysis. In
+  HLT ’05: Proceedings of the conference on Human Lan-
+  guage Technology and Empirical Methods in Natural Lan-
+  guage Processing, pages 347–354, Morristown, NJ, USA.
+  Association for Computational Linguistics.
+Wilson, T., Wiebe, J., and Hoffmann, P. (2009). Recog-
+  nizing contextual polarity: an exploration of features for
+  phrase-level sentiment analysis. Computational Linguis-
+  tics, 35(3):399–433.
+
+
+
+
+                                                               594
+

@@ -1,0 +1,248 @@
+           Simple semi-supervised training of part-of-speech taggers
+
+                                            Anders Søgaard
+                                    Center for Language Technology
+                                      University of Copenhagen
+                                         soegaard@hum.ku.dk
+
+
+
+                    Abstract                                 POS tagger with 4–5% error reduction. Finally,
+                                                             Søgaard (2009) stacks a POS tagger on an un-
+    Most attempts to train part-of-speech tag-               supervised clustering algorithm trained on large
+    gers on a mixture of labeled and unlabeled               amounts of unlabeled data with mixed results.
+    data have failed. In this work stacked                      This work combines a new semi-supervised
+    learning is used to reduce tagging to a                  learning method to POS tagging, namely tri-
+    classification task. This simplifies semi-               training (Li and Zhou, 2005), with stacking on un-
+    supervised training considerably. Our                    supervised clustering. It is shown that this method
+    prefered semi-supervised method com-                     can be used to improve a state-of-the-art POS tag-
+    bines tri-training (Li and Zhou, 2005) and               ger, SVMTool (Gimenez and Marquez, 2004). Fi-
+    disagreement-based co-training. On the                   nally, we introduce a variant of tri-training called
+    Wall Street Journal, we obtain an error re-              tri-training with disagreement, which seems to
+    duction of 4.2% with SVMTool (Gimenez                    perform equally well, but which imports much less
+    and Marquez, 2004).                                      unlabeled data and is therefore more efficient.
+1   Introduction                                             2     Tagging as classification
+Semi-supervised part-of-speech (POS) tagging is              This section describes our dataset and our input
+relatively rare, and the main reason seems to be             tagger. We also describe how stacking is used to
+that results have mostly been negative. Meri-                reduce POS tagging to a classification task. Fi-
+aldo (1994), in a now famous negative result, at-            nally, we introduce the supervised learning algo-
+tempted to improve HMM POS tagging by expec-                 rithms used in our experiments.
+tation maximization with unlabeled data. Clark
+et al. (2003) reported positive results with little          2.1    Data
+labeled training data but negative results when              We use the POS-tagged WSJ from the Penn Tree-
+the amount of labeled training data increased; the           bank Release 3 (Marcus et al., 1993) with the
+same seems to be the case in Wang et al. (2007)              standard split: Sect. 0–18 is used for training,
+who use co-training of two diverse POS taggers.              Sect. 19–21 for development, and Sect. 22–24 for
+Huang et al. (2009) present positive results for             testing. Since we need to train our classifiers on
+self-training a simple bigram POS tagger, but re-            material distinct from the training material for our
+sults are considerably below state-of-the-art.               input POS tagger, we save Sect. 19 for training our
+   Recently researchers have explored alternative            classifiers. Finally, we use the (untagged) Brown
+methods. Suzuki and Isozaki (2008) introduce                 corpus as our unlabeled data. The number of to-
+a semi-supervised extension of conditional ran-              kens we use for training, developing and testing
+dom fields that combines supervised and unsuper-             the classifiers, and the amount of unlabeled data
+vised probability models by so-called MDF pa-                available to it, are thus:
+rameter estimation, which reduces error on Wall
+                                                                                              tokens
+Street Journal (WSJ) standard splits by about 7%
+                                                                           train              44,472
+relative to their supervised baseline. Spoustova
+                                                                           development       103,686
+et al. (2009) use a new pool of unlabeled data
+                                                                           test              129,281
+tagged by an ensemble of state-of-the-art taggers
+                                                                           unlabeled       1,170,811
+in every training step of an averaged perceptron
+
+
+                                                       205
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 205–208,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   The amount of unlabeled data available to our                    the-shelf implementations of supervised learning
+classifiers is thus a bit more than 25 times the                    algorithms. Specifically we have experimented
+amount of labeled data.                                             with support vector machines (SVMs), decision
+                                                                    trees, bagging and random forests. Tri-training,
+2.2   Input tagger                                                  explained below, is a semi-supervised learning
+In our experiments we use SVMTool (Gimenez                          method which requires large amounts of data.
+and Marquez, 2004) with model type 4 run incre-                     Consequently, we only used very fast learning al-
+mentally in both directions. SVMTool has an ac-                     gorithms in the context of tri-training. On the de-
+curacy of 97.15% on WSJ Sect. 22-24 with this                       velopment section, decisions trees performed bet-
+parameter setting. Gimenez and Marquez (2004)                       ter than bagging and random forests. The de-
+report that SVMTool has an accuracy of 97.16%                       cision tree algorithm is the C4.5 algorithm first
+with an optimized parameter setting.                                introduced in Quinlan (1993). We used SVMs
+                                                                    with polynomial kernels of degree 2 to provide a
+2.3   Classifier input
+                                                                    stronger stacking-only baseline.
+The way classifiers are constructed in our experi-
+ments is very simple. We train SVMTool and an                       3   Tri-training
+unsupervised tagger, Unsupos (Biemann, 2006),
+                                                                    This section first presents the tri-training algo-
+on our training sections and apply them to the de-
+                                                                    rithm originally proposed by Li and Zhou (2005)
+velopment, test and unlabeled sections. The re-
+                                                                    and then considers a novel variant: tri-training
+sults are combined in tables that will be the input
+                                                                    with disagreement.
+of our classifiers. Here is an excerpt:1
+                                                                       Let L denote the labeled data and U the unla-
+      Gold standard       SVMTool        Unsupos                    beled data. Assume that three classifiers c1 , c2 , c3
+      DT                  DT             17                         (same learning algorithm) have been trained on
+      NNP                 NNP            27                         three bootstrap samples of L. In tri-training, an
+      NNP                 NNS            17*                        unlabeled datapoint in U is now labeled for a clas-
+      NNP                 NNP            17                         sifier, say c1 , if the other two classifiers agree on
+      VBD                 VBD            26                         its label, i.e. c2 and c3 . Two classifiers inform
+   Each row represents a word and lists the gold                    the third. If the two classifiers agree on a label-
+standard POS tag, the predicted POS tag and the                     ing, there is a good chance that they are right.
+word cluster selected by Unsupos. For example,                      The algorithm stops when the classifiers no longer
+the first word is labeled ’DT’, which SVMTool                       change. The three classifiers are combined by ma-
+correctly predicts, and it belongs to cluster 17 of                 jority voting. Li and Zhou (2005) show that un-
+about 500 word clusters. The first column is blank                  der certain conditions the increase in classification
+in the table for the unlabeled section.                             noise rate is compensated by the amount of newly
+   Generally, the idea is that a classifier will learn              labeled data points.
+to trust SVMTool in some cases, but that it may                        The most important condition is that the three
+also learn that if SVMTool predicts a certain tag                   classifiers are diverse. If the three classifiers are
+for some word cluster the correct label is another                  identical, tri-training degenerates to self-training.
+tag. This way of combining taggers into a single                    Diversity is obtained in Li and Zhou (2005) by
+end classifier can be seen as a form of stacking                    training classifiers on bootstrap samples. In their
+(Wolpert, 1992). It has the advantage that it re-                   experiments, they consider classifiers based on the
+duces POS tagging to a classification task. This                    C4.5 algorithm, BP neural networks and naive
+may simplify semi-supervised learning consider-                     Bayes classifiers. The algorithm is sketched
+ably.                                                               in a simplified form in Figure 1; see Li and
+                                                                    Zhou (2005) for all the details.
+2.4   Learning algorithms                                              Tri-training has to the best of our knowledge not
+We assume some knowledge of supervised learn-                       been applied to POS tagging before, but it has been
+ing algorithms. Most of our experiments are im-                     applied to other NLP classification tasks, incl. Chi-
+plementations of wrapper methods that call off-                     nese chunking (Chen et al., 2006) and question
+   1
+                                                                    classification (Nguyen et al., 2008).
+     The numbers provided by Unsupos refer to clusters; ”*”
+marks out-of-vocabulary words.
+
+
+
+                                                              206
+
+
+    1:   for i ∈ {1..3} do                                      self-training if the three classifiers are trained on
+    2:     Si ← bootstrap sample(L)                             the same sample, we used our implementation of
+    3:     ci ← train classifier (Si )                          tri-training to obtain self-training results and vali-
+    4:   end for                                                dated our results by a simpler implementation. We
+    5:   repeat                                                 varied poolsize to optimize self-training. Finally,
+    6:     for i ∈ {1..3} do                                    we list results for a technique called co-forests (Li
+    7:         for x ∈ U do                                     and Zhou, 2007), which is a recent alternative to
+    8:            Li ← ∅                                        tri-training presented by the same authors, and for
+    9:            if cj (x) = ck (x)(j, k 6= i) then            tri-training with disagreement (tri-disagr). The p-
+10:                  Li ← Li ∪ {(x, cj (x)}                     values are computed using 10,000 stratified shuf-
+11:               end if                                        fles.
+12:            end for                                             Tri-training and tri-training with disagreement
+13:            ci ← train classifier (L ∪ Li )                  gave the best results. Note that since tri-training
+14:        end for                                              leads to much better results than stacking alone,
+15:      until none of ci changes                               it is unlabeled data that gives us most of the im-
+16:      apply majority vote over ci                            provement, not the stacking itself. The differ-
+                                                                ence between tri-training and self-training is near-
+         Figure 1: Tri-training (Li and Zhou, 2005).
+                                                                significant (p <0.0150). It seems that tri-training
+                                                                with disagreement is a competitive technique in
+                                                                terms of accuracy. The main advantage of tri-
+                                                                training with disagreement compared to ordinary
+                                                                tri-training, however, is that it is very efficient.
+3.1        Tri-training with disagreement                       This is reflected by the average number of tokens
+We introduce a possible improvement of the tri-                 in Li over the three learners in the worst round of
+training algorithm: If we change lines 9–10 in the              learning:
+algorithm in Figure 1 with the lines:
+                                                                                          av. tokens in Li
+         if cj (x) = ck (x) 6= ci (x)(j, k 6= i) then                      tri-training         1,170,811
+            Li ← Li ∪ {(x, cj (x)}                                         tri-disagr                 173
+         end if                                                    Note also that self-training gave very good re-
+   two classifiers, say c1 and c2 , only label a data-          sults. Self-training was, again, much slower than
+point for the third classifier, c3 , if c1 and c2 agree         tri-training with disagreement since we had to
+on its label, but c3 disagrees. The intuition is                train on a large pool of unlabeled data (but only
+that we only want to strengthen a classifier in its             once). Of course this is not a standard self-training
+weak points, and we want to avoid skewing our                   set-up, but self-training informed by unsupervised
+labeled data by easy data points. Finally, since tri-           word clusters.
+training with disagreement imports less unlabeled
+data, it is much more efficient than tri-training. No           4.1   Follow-up experiments
+one has to the best of our knowledge applied tri-               SVMTool is one of the most accurate POS tag-
+training with disagreement to real-life classifica-             gers available. This means that the predictions
+tion tasks before.                                              that are added to the labeled data are of very
+                                                                high quality. To test if our semi-supervised learn-
+4        Results                                                ing methods were sensitive to the quality of the
+Our results are presented in Figure 2. The stacking             input taggers we repeated the self-training and
+result was obtained by training a SVM on top of                 tri-training experiments with a less competitive
+the predictions of SVMTool and the word clusters                POS tagger, namely the maximum entropy-based
+of Unsupos. SVMs performed better than deci-                    POS tagger first described in (Ratnaparkhi, 1998)
+sion trees, bagging and random forests on our de-               that comes with the maximum entropy library in
+velopment section, but improvements on test data                (Zhang, 2004). Results are presented as the sec-
+were modest. Tri-training refers to the original al-            ond line in Figure 2. Note that error reduction is
+gorithm sketched in Figure 1 with C4.5 as learn-                much lower in this case.
+ing algorithm. Since tri-training degenerates to
+
+
+                                                          207
+
+
+                   BL      stacking      tri-tr.    self-tr.       co-forests   tri-disagr   error red.    p-value
+    SVMTool    97.15%       97.19%     97.27%      97.26%            97.13%       97.27%        4.21%     <0.0001
+    MaxEnt     96.31%             -    96.36%      96.36%            96.28%       96.36%        1.36%     <0.0001
+
+      Figure 2: Results on Wall Street Journal Sect. 22-24 with different semi-supervised methods.
+
+
+5    Conclusion                                                 Mitchell Marcus, Mary Marcinkiewicz, and Beatrice
+                                                                  Santorini. 1993. Building a large annotated cor-
+This paper first shows how stacking can be used to                pus of English: the Penn Treebank. Computational
+reduce POS tagging to a classification task. This                 Linguistics, 19(2):313–330.
+reduction seems to enable robust semi-supervised                Bernard Merialdo. 1994. Tagging English text with
+learning. The technique was used to improve the                   a probabilistic model. Computational Linguistics,
+accuracy of a state-of-the-art POS tagger, namely                 20(2):155–171.
+SVMTool. Four semi-supervised learning meth-
+                                                                Tri Nguyen, Le Nguyen, and Akira Shimazu. 2008.
+ods were tested, incl. self-training, tri-training, co-            Using semi-supervised learning for question classi-
+forests and tri-training with disagreement. All                    fication. Journal of Natural Language Processing,
+methods increased the accuracy of SVMTool sig-                     15:3–21.
+nificantly. Error reduction on Wall Street Jour-                Ross Quinlan. 1993. Programs for machine learning.
+nal Sect. 22-24 was 4.2%, which is comparable                     Morgan Kaufmann.
+to related work in the literature, e.g. Suzuki and
+                                                                Adwait Ratnaparkhi. 1998. Maximum entropy mod-
+Isozaki (2008) (7%) and Spoustova et al. (2009)
+                                                                  els for natural language ambiguity resolution. Ph.D.
+(4–5%).                                                           thesis, University of Pennsylvania.
+                                                                Anders Søgaard. 2009. Ensemble-based POS tagging
+References                                                        of italian. In IAAI-EVALITA, Reggio Emilia, Italy.
+
+Chris Biemann. 2006. Unsupervised part-of-speech                Drahomira Spoustova, Jan Hajic, Jan Raab, and
+  tagging employing efficient graph clustering. In                Miroslav Spousta. 2009. Semi-supervised training
+  COLING-ACL Student Session, Sydney, Australia.                  for the averaged perceptron POS tagger. In EACL,
+                                                                  Athens, Greece.
+Wenliang Chen, Yujie Zhang, and Hitoshi Isahara.
+  2006. Chinese chunking with tri-training learn-               Jun Suzuki and Hideki Isozaki. 2008. Semi-supervised
+  ing. In Computer processing of oriental languages,              sequential labeling and segmentation using giga-
+  pages 466–473. Springer, Berlin, Germany.                       word scale unlabeled data. In ACL, pages 665–673,
+                                                                  Columbus, Ohio.
+Stephen Clark, James Curran, and Mike Osborne.
+   2003. Bootstrapping POS taggers using unlabeled              Wen Wang, Zhongqiang Huang, and Mary Harper.
+   data. In CONLL, Edmonton, Canada.                              2007. Semi-supervised learning for part-of-speech
+                                                                  tagging of Mandarin transcribed speech. In ICASSP,
+Jesus Gimenez and Lluis Marquez. 2004. SVMTool: a                 Hawaii.
+   general POS tagger generator based on support vec-
+   tor machines. In LREC, Lisbon, Portugal.                     David Wolpert. 1992. Stacked generalization. Neural
+                                                                  Networks, 5:241–259.
+Zhongqiang Huang, Vladimir Eidelman, and Mary
+  Harper. 2009. Improving a simple bigram HMM                   Le Zhang. 2004. Maximum entropy modeling toolkit
+  part-of-speech tagger by latent annotation and self-            for Python and C++. University of Edinburgh.
+  training. In NAACL-HLT, Boulder, CO.
+Ming Li and Zhi-Hua Zhou. 2005. Tri-training: ex-
+  ploiting unlabeled data using three classifiers. IEEE
+  Transactions on Knowledge and Data Engineering,
+  17(11):1529–1541.
+Ming Li and Zhi-Hua Zhou. 2007. Improve computer-
+  aided diagnosis with machine learning techniques
+  using undiagnosed samples. IEEE Transactions on
+  Systems, Man and Cybernetics, 37(6):1088–1098.
+
+
+
+
+                                                          208
+

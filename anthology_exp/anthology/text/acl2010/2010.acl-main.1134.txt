@@ -1,0 +1,672 @@
+    Learning Word-Class Lattices for Definition and Hypernym Extraction
+
+                                  Roberto Navigli and Paola Velardi
+                                     Dipartimento di Informatica
+                                     Sapienza Università di Roma
+                              {navigli,velardi}@di.uniroma1.it
+
+
+
+                       Abstract                                in many other NLP tasks. In ontology learning,
+     Definition extraction is the task of au-                  definitions are used to create and enrich concepts
+     tomatically identifying definitional sen-                 with textual information (Gangemi et al., 2003),
+     tences within texts. The task has proven                  and extract taxonomic and non-taxonomic rela-
+     useful in many research areas including                   tions (Snow et al., 2004; Navigli and Velardi,
+     ontology learning, relation extraction and                2006; Navigli, 2009a). Definitions are also har-
+     question answering. However, current ap-                  vested in Question Answering to deal with “what
+     proaches – mostly focused on lexico-                      is” questions (Cui et al., 2007; Saggion, 2004).
+     syntactic patterns – suffer from both low                 In eLearning, they are used to help students as-
+     recall and precision, as definitional sen-                similate knowledge (Westerhout and Monachesi,
+     tences occur in highly variable syntactic                 2007), etc.
+     structures. In this paper, we propose Word-                  Much of the current literature focuses on the use
+     Class Lattices (WCLs), a generalization of                of lexico-syntactic patterns, inspired by Hearst’s
+     word lattices that we use to model tex-                   (1992) seminal work. However, these methods
+     tual definitions. Lattices are learned from               suffer both from low recall and precision, as defi-
+     a dataset of definitions from Wikipedia.                  nitional sentences occur in highly variable syntac-
+     Our method is applied to the task of def-                 tic structures, and because the most frequent def-
+     inition and hypernym extraction and com-                  initional pattern – X is a Y – is inherently very
+     pares favorably to other pattern general-                 noisy.
+     ization methods proposed in the literature.                  In this paper we propose a generalized form of
+                                                               word lattices, called Word-Class Lattices (WCLs),
+1    Introduction
+                                                               as an alternative to lexico-syntactic pattern learn-
+Textual definitions constitute a fundamental                   ing. A lattice is a directed acyclic graph (DAG), a
+source to look up when the meaning of a term is                subclass of non-deterministic finite state automata
+sought. Definitions are usually collected in dictio-           (NFA). The lattice structure has the purpose of
+naries and domain glossaries for consultation pur-             preserving the salient differences among distinct
+poses. However, manually constructing and up-                  sequences, while eliminating redundant informa-
+dating glossaries requires the cooperative effort of           tion. In computational linguistics, lattices have
+a team of domain experts. Further, in the presence             been used to model in a compact way many se-
+of new words or usages, and – even worse – new                 quences of symbols, each representing an alter-
+domains, such resources are of no help. Nonethe-               native hypothesis. Lattice-based methods differ
+less, terms are attested in texts and some (usually            in the types of nodes (words, phonemes, con-
+few) of the sentences in which a term occurs are               cepts), the interpretation of links (representing ei-
+typically definitional, that is they provide a formal          ther a sequential or hierarchical ordering between
+explanation for the term of interest. While it is not          nodes), their means of creation, and the scor-
+feasible to manually search texts for definitions,             ing method used to extract the best consensus
+this task can be automatized by means of Machine               output from the lattice (Schroeder et al., 2009).
+Learning (ML) and Natural Language Processing                  In speech processing, phoneme or word lattices
+(NLP) techniques.                                              (Campbell et al., 2007; Mathias and Byrne, 2006;
+   Automatic definition extraction is useful not               Collins et al., 2004) are used as an interface be-
+only in the construction of glossaries, but also               tween speech recognition and understanding. Lat-
+
+
+                                                         1318
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1318–1327,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+tices are adopted also in Chinese word segmenta-         Iftene et al., 2007; Westerhout and Monachesi,
+tion (Jiang et al., 2008), decompounding in Ger-         2007; Przepiórkowski et al., 2007; Degórski et
+man (Dyer, 2009), and to represent classes of            al., 2008). The majority of these approaches use
+translation models in machine translation (Dyer et       symbolic methods that depend on lexico-syntactic
+al., 2008; Schroeder et al., 2009). In more com-         patterns or features, which are manually crafted
+plex text processing tasks, such as information re-      or semi-automatically learned (Zhang and Jiang,
+trieval, information extraction and summarization,       2009; Hovy et al., 2003; Fahmi and Bouma, 2006;
+the use of word lattices has been postulated but is      Westerhout, 2009). Patterns are either very sim-
+considered unrealistic because of the dimension of       ple sequences of words (e.g. “refers to”, “is de-
+the hypothesis space.                                    fined as”, “is a”) or more complex sequences of
+   To reduce this problem, concept lattices have         words, parts of speech and chunks. A fully au-
+been proposed (Carpineto and Romano, 2005;               tomated method is instead proposed by Borg et
+Klein, 2008; Zhong et al., 2008). Here links repre-      al. (2009): they use genetic programming to learn
+sent hierarchical relations, rather than the sequen-     simple features to distinguish between definitions
+tial order of symbols like in word/phoneme lat-          and non-definitions, and then they apply a genetic
+tices, and nodes are clusters of salient words ag-       algorithm to learn individual weights of features.
+gregated using synonymy, similarity, or subtrees         However, rules are learned for only one category
+of a thesaurus. However, salient word selection          of patterns, namely “is” patterns. As we already
+and aggregation is non-obvious and furthermore           remarked, most methods suffer from both low re-
+it falls into word sense disambiguation, a notori-       call and precision, because definitional sentences
+ously AI-hard problem (Navigli, 2009b).                  occur in highly variable and potentially noisy syn-
+   In definition extraction, the variability of pat-     tactic structures. Higher performance (around 60-
+terns is higher than for “traditional” applications      70% F1 -measure) is obtained only for specific do-
+of lattices, such as translation and speech, how-        mains (e.g., an ICT corpus) and patterns (Borg et
+ever not as high as in unconstrained sentences.          al., 2009).
+The methodology that we propose to align patterns           Only few papers try to cope with the general-
+is based on the use of star (wildcard *) charac-         ity of patterns and domains in real-world corpora
+ters to facilitate sentence clustering. Each clus-       (like the Web). In the GlossExtractor web-based
+ter of sentences is then generalized to a lattice of     system (Velardi et al., 2008), to improve precision
+word classes (each class being either a frequent         while keeping pattern generality, candidates are
+word or a part of speech). A key feature of our          pruned using more refined stylistic patterns and
+approach is its inherent ability to both identify def-   lexical filters. Cui et al. (2007) propose the use
+initions and extract hypernyms. The method is            of probabilistic lexico-semantic patterns, called
+tested on an annotated corpus of Wikipedia sen-          soft patterns, for definitional question answering
+tences and a large Web corpus, in order to demon-        in the TREC contest1 . The authors describe two
+strate the independence of the method from the           soft matching models: one is based on an n-gram
+annotated dataset. WCLs are shown to general-            language model (with the Expectation Maximiza-
+ize over lexico-syntactic patterns, and outperform       tion algorithm used to estimate the model param-
+well-known approaches to definition and hyper-           eter), the other on Profile Hidden Markov Mod-
+nym extraction.                                          els (PHMM). Soft patterns generalize over lexico-
+   The paper is organized as follows: Section 2          syntactic “hard” patterns in that they allow a par-
+discusses related work, WCLs are introduced in           tial matching by calculating a generative degree
+Section 3 and illustrated by means of an example         of match probability between the test instance and
+in Section 4, experiments are presented in Section       the set of training instances. Thanks to its gen-
+5. We conclude the paper in Section 6.                   eralization power, this method is the most closely
+                                                         related to our work, however the task of defini-
+2   Related Work                                         tional question answering to which it is applied is
+                                                         slightly different from that of definition extraction,
+Definition Extraction. A great deal of work              so a direct performance comparison is not possi-
+is concerned with definition extraction in several
+languages (Klavans and Muresan, 2001; Storrer              1
+                                                             Text REtrieval Conferences: http://trec.nist.
+and Wellinghoff, 2006; Gaudio and Branco, 2007;          gov
+
+
+                                                     1319
+
+
+ble2 . In fact, the TREC evaluation datasets cannot                     • The D EFINIENS field (GF): it includes the
+be considered true definitions, but rather text frag-                     genus phrase (usually including the hyper-
+ments providing some relevant fact about a target                         nym, e.g., “a first-class function”);
+term. For example, sentences like: “Bollywood is
+                                                                        • The R EST field (RF): it includes additional
+a Bombay-based film industry” and “700 or more
+                                                                          clauses that further specify the differentia of
+films produced by India with 200 or more from
+                                                                          the definiendum with respect to its genus
+Bollywood” are both “vital” answers for the ques-
+                                                                          (e.g., “with free variables that are bound in
+tion “Bollywood”, according to TREC classifica-
+                                                                          the lexical environment”).
+tion, but the second sentence is not a definition.
+                                                                        Further examples of definitional sentences an-
+Hypernym Extraction. The literature on hy-                           notated with the above fields are shown in Table
+pernym extraction offers a higher variability of                     1. For each sentence, the definiendum (that is, the
+methods, from simple lexical patterns (Hearst,                       word being defined) and its hypernym are marked
+1992; Oakes, 2005) to statistical and machine                        in bold and italic, respectively. Given the lexico-
+learning techniques (Agirre et al., 2000; Cara-                      syntactic nature of the definition extraction mod-
+ballo, 1999; Dolan et al., 1993; Sanfilippo and                      els we experiment with, training and test sentences
+Poznański, 1992; Ritter et al., 2009). One of the                   are part-of-speech tagged with the TreeTagger sys-
+highest-coverage methods is proposed by Snow et                      tem, a part-of-speech tagger available for many
+al. (2004). They first search sentences that con-                    languages (Schmid, 1995).
+tain two terms which are known to be in a taxo-
+nomic relation (term pairs are taken from Word-                      Word Classes and Generalized Sentences. We
+Net (Miller et al., 1990)); then they parse the sen-                 now introduce our notion of word class, on which
+tences, and automatically extract patterns from the                  our learning model is based. Let T be the set
+parse trees. Finally, they train a hypernym clas-                    of training sentences, manually bracketed with the
+sifer based on these features. Lexico-syntactic pat-                 DF, VF, GF and RF fields. We first determine the
+terns are generated for each sentence relating a                     set F of words in T whose frequency is above a
+term to its hypernym, and a dependency parser is                     threshold θ (e.g., the, a, is, of, refer, etc.). In our
+used to represent them.                                              training sentences, we replace the term being de-
+                                                                     fined with hTARGETi, thus this frequent token is
+3     Word-Class Lattices                                            also included in F .
+                                                                        We use the set of frequent words F to generalize
+3.1    Preliminaries
+                                                                     words to “word classes”. We define a word class
+Notion of definition. In our work, we rely on                        as either a word itself or its part of speech. Given
+a formal notion of textual definition. Specifically,                 a sentence s = w1 , w2 , . . . , w|s| , where wi is the
+given a definition, e.g.: “In computer science, a                    i-th word of s, we generalize its words wi to word
+closure is a first-class function with free variables                classes ωi as follows:
+that are bound in the lexical environment”, we as-
+                                                                                      (
+                                                                                        wi              if wi ∈ F
+sume that it contains the following fields (Storrer                             ωi =
+                                                                                        P OS(wi ) otherwise
+and Wellinghoff, 2006):
+                                                                     that is, a word wi is left unchanged if it occurs
+    • The D EFINIENDUM field (DF): this part of                      frequently in the training corpus (i.e., wi ∈ F )
+      the definition includes the definiendum (that                  or is transformed to its part of speech (P OS(wi ))
+      is, the word being defined) and its modifiers                  otherwise. As a result, we obtain a general-
+      (e.g., “In computer science, a closure”);                      ized sentence s0 = ω1 , ω2 , . . . , ω|s| . For instance,
+                                                                     given the first sentence in Table 1, we obtain the
+    • The D EFINITOR field (VF): it includes the                     corresponding generalized sentence: “In NN, a
+      verb phrase used to introduce the definition                   hTARGETi is a JJ NN”, where NN and JJ indicate
+      (e.g., “is”);                                                  the noun and adjective classes, respectively.
+    2
+      In the paper, a 55% recall and 34% precision is achieved
+with the best experiment on TREC-13 data. Furthermore, the
+                                                                     3.2   Algorithm
+classifier of Cui et al. (2007) is based on soft patterns but also   We now describe our learning algorithm based
+on a bag-of-word relevance heuristic. However, the relative
+influence of the two methods on the final performance is not         on Word-Class Lattices. The algorithm consists of
+discussed.                                                           three steps:
+
+
+                                                                 1320
+
+
+        [In arts, a chiaroscuro]DF [is]VF [a monochrome picture]GF .
+        [In mathematics, a graph]DF [is]VF [a data structure]GF [that consists of . . . ]R EST .
+        [In computer science, a pixel]DF [is]VF [a dot]GF [that is part of a computer image]R EST .
+
+    Table 1: Example definitions (defined terms are marked in bold face, their hypernyms in italic).
+
+
+  • Star patterns: each sentence in the training             As an example, assume σ3 = “In *, a
+    set is pre-processed and generalized to a star        hTARGETi is a *”. The sentences reported in Ta-
+    pattern. For instance, “In arts, a chiaroscuro        ble 1 are all grouped into cluster C3 . We note that
+    is a monochrome picture” is transformed to            each cluster Ci contains sentences whose degree
+    “In *, a hTARGETi is a *” (Section 3.2.1);            of variability is generally much lower than for any
+                                                          pair of sentences in T belonging to two different
+  • Sentence clustering: the training sentences           clusters.
+    are then clustered based on the star patterns
+    to which they belong (Section 3.2.2);                 3.2.3    Word-Class Lattice Construction
+                                                          Finally, the third step consists of the construction
+  • Word-Class Lattice construction: for each             of a Word-Class Lattice for each sentence cluster.
+    sentence cluster, a WCL is created by means           Given such a cluster Ci ∈ C, we apply a greedy
+    of a greedy alignment algorithm (Section              algorithm that iteratively constructs the WCL.
+    3.2.3).                                                  Let Ci = {s1 , s2 , . . . , s|Ci | } and consider
+  We present two variants of our WCL model,               its first sentence s1 = w11 , w21 , . . . , w|s          1
+                                                                                                                     1|
+                                                                                                                        (wij
+dealing either globally with the entire sentence or       denotes the i-th token of the j-th sentence).
+separately with its definition fields (Section 3.2.4).    We first produce the corresponding general-
+The WCL models can then be used to classify any           ized sentence s01 = ω11 , ω21 , . . . , ω|s     1
+                                                                                                            1|
+                                                                                                                 (cf. Sec-
+input sentence of interest (Section 3.2.5).               tion 3.1). We then create a directed graph
+                                                          G = (V, E) such that V = {ω11 , . . . , ω|s             1 } and
+                                                                                                                     1|
+3.2.1   Star Patterns                                     E = {(ω11 , ω21 ), (ω21 , ω31 ), . . . , (ω|s
+                                                                                                     1         , ω 1 )}.
+                                                                                                       1 |−1      |s 1|
+Let T be the set of training sentences. In this step,     Next, for the subsequent sentences in Ci , that
+we associate a star pattern σ(s) with each sentence       is, for each j = 2, . . . , |Ci |, we determine the
+s ∈ T . To do so, let s ∈ T be a sentence such that       alignment between the sentence sj and each
+s = w1 , w2 , . . . , w|s| , where wi is its i-th word.   sentence sk ∈ Ci such that k < j based on the
+Given the set F of most frequent words in T (cf.          following dynamic programming formulation
+Section 3.1), the star pattern σ(s) associated with       (Cormen et al., 1990, pp. 314–319):
+s is obtained by replacing with * all the words
+                                                          Ma,b = max {Ma−1,b−1 + Sa,b , Ma,b−1 , Ma−1,b }
+wi 6∈ F , that is all the tokens that are non-frequent
+words. For instance, given the sentence “In arts,         where a ∈ {1, . . . , |sk |} and b ∈ {1, . . . , |sj |},
+a chiaroscuro is a monochrome picture”, the cor-          Sa,b is a score of the matching between the a-th
+responding star pattern is “In *, a hTARGETi is a         token of sk and the b-th token of sj , and M0,0 ,
+*”, where hTARGETi is the defined term.                   M0,b and Ma,0 are initially set to 0 for all a and b.
+   Note that, here and in what follows, we discard          The matching score Sa,b is calculated on the
+the sentence fragments tagged with the R EST field,       generalized sentences s0k of sk and s0j of sj as fol-
+which is used only to delimit the core part of defi-      lows:
+                                                                               (
+nitional sentences.                                                               1 if ωak = ωbj
+                                                                       Sa,b =
+3.2.2   Sentence Clustering                                                       0 otherwise
+In the second step, we cluster the sentences in our       where ωak and ωbj are the a-th and b-th word classes
+training set T based on their star patterns. For-         of s0k and s0j , respectively. In other words, the
+mally, let Σ = (σ1 , . . . , σm ) be the set of star      matching score equals 1 if the a-th and the b-th
+patterns associated with the sentences in T . We          tokens of the two original sentences have the same
+create a clustering C = (C1 , . . . , Cm ) such that      word class.
+Ci = {s ∈ T : σ(s) = σi }, that is Ci contains all           Finally, the alignment score between sk and sj
+the sentences whose star pattern is σi .                  is given by M|sk |,|sj | , which calculates the mini-
+
+
+                                                      1321
+
+
+                           arts                                                                structure
+                          science                                                               picture
+                        mathematics                                                                dot
+                                                                                      monochrome
+                  In        NN1        ,      a          hTARGETi           is    a       JJ      NN2
+                                                            pixel
+                        NN4                                graph                         NN3
+                       computer                          chiaroscuro                      data
+
+Figure 1: The Word-Class Lattice for the sentences in Table 1. The support of each word class is reported
+beside the corresponding node.
+
+
+mal number of misalignments between the two to-                 of D EFINIENDUM, D EFINITOR and D EFINIENS
+ken sequences. We repeat this calculation for each              lattices. While WCL-1 is applied as a yes-no clas-
+sentence sk (k = 1, . . . , j − 1) and choose the               sifier as there is a single WCL that can possibly
+one that maximizes its alignment score with sj .                match the input sentence, WCL-3 selects, if any,
+We then use the best alignment to add sj to the                 the combination of the three WCLs that best fits
+graph G. Such alignment is obtained by means                    the sentence. In fact, choosing the most appro-
+of backtracking from M|sk |,|sj | to M0,0 . We add              priate combination of lattices impacts the perfor-
+to the set of vertices V the tokens of the gen-                 mance of hypernym extraction. The best combi-
+eralized sentence s0j for which there is no align-              nation of WCLs is selected by maximizing the fol-
+ment to s0k and we add to E the edges (ω1j , ω2j ),             lowing confidence score:
+          j           j
+. . . , (ω|s j |−1
+                   , ω|s j|
+                            ). Furthermore, in the final lat-
+                                                                score(s, lDF , lVF , lGF ) = coverage · log(support)
+tice, nodes associated with the hypernym words in
+the learning sentences are marked as hypernyms
+                                                                where s is the candidate sentence, lDF , lVF and lGF
+in order to be able to determine the hypernym of a
+                                                                are three lattices one for each definition field, cov-
+test sentence at classification time.
+                                                                erage is the fraction of words of the input sentence
+3.2.4    Variants of the WCL Model                              covered by the three lattices, and support is the
+                                                                sum of the number of sentences in the star patterns
+So far, we have assumed that our WCL model
+                                                                corresponding to the three lattices.
+learns lattices from the training sentences in
+                                                                   Finally, when a sentence is classified as a def-
+their entirety (we call this model WCL-1). We
+                                                                inition, its hypernym is extracted by selecting the
+now propose a second model that learns separate
+                                                                words in the input sentence that are marked as “hy-
+WCLs for each field of the definition, namely:
+                                                                pernyms” in the WCL-1 lattice (or in the WCL-3
+the D EFINIENDUM (DF), D EFINITOR (VF) and
+                                                                GF lattice).
+D EFINIENS (GF) fields (see Section 3.1). We re-
+fer to this latter model as WCL-3. Rather than ap-              4   Example
+plying the WCL algorithm to the entire sentence,
+the very same method is applied to the sentence                 As an example, consider the definitions in Table
+fragments tagged with one of the three definition               1. As illustrated in Section 3.2.2, their star pat-
+fields. The reason for introducing the WCL-3                    tern is “In *, a hTARGETi is a *”. The corre-
+model is that, while definitional patterns are highly           sponding WCL is built as follows: the first part-
+variable, DF, VF and GF individually exhibit a                  of-speech tagged sentence, “In/IN arts/NN , a/DT
+lower variability, thus WCL-3 should improve the                hTARGETi/NN is/VBZ a/DT monochrome/JJ pic-
+generalization power.                                           ture/NN”, is considered. The corresponding gen-
+                                                                eralized sentence is “In NN , a hTARGETi is a
+3.2.5    Classification                                         JJ NN”. The initially empty graph is thus popu-
+Once the learning process is over, a set of WCLs is             lated with one node for each word class and one
+produced. Given a test sentence s, the classifica-              edge for each pair of consecutive tokens, as shown
+tion phase for the WCL-1 model consists of deter-               in Figure 1 (the central sequence of nodes in the
+mining whether it exists a lattice that matches s. In           graph). Note that we draw the hypernym token
+the case of WCL-3, we consider any combination                   NN2 with a rectangle shape. We also add to the
+
+
+                                                            1322
+
+
+graph a start node • and an end node • , and con-                    ENCE , ASTRONOMY , CARDIOLOGY , AVIA -
+nect them to the corresponding initial and final                     TION ).
+sentence tokens. Next, the second sentence, “In
+                                                                The reason for using the ukWaC corpus is that, un-
+mathematics, a graph is a data structure that con-
+                                                                like the “clean” Wikipedia dataset, in which rel-
+sists of...”, is aligned to the first sentence. The
+                                                                atively simple patterns can achieve good results,
+alignment of the generalized sentence is perfect,
+                                                                ukWaC represents a real-world test, with many
+apart from the NN3 node corresponding to “data”.
+                                                                complex cases. For example, there are sentences
+The node is added to the graph together with the
+                                                                that should be classified as definitional according
+edges a→ NN3 and NN3 → NN2 . Finally, the
+                                                                to Section 3.1 but are rather uninformative, like
+third sentence in Table 1, “In computer science, a
+                                                                “dynamic programming was the brainchild of an
+pixel is a dot that is part of a computer image”,
+                                                                american mathematician”, as well as informative
+is generalized as “In NN NN , a hTARGETi is
+                                                                sentences that are not definitional (e.g., they do not
+a NN”. Thus, a new node NN4 is added, corre-
+                                                                have a hypernym), like “cubism was characterised
+sponding to “computer” and new edges are added:
+                                                                by muted colours and fragmented images”. Even
+In→NN4 and NN4 →NN1 . Figure 1 shows the re-
+                                                                more frequently, the dataset includes sentences
+sulting WCL-1 lattice.
+                                                                which are not definitions but have a definitional
+5     Experiments                                               pattern (“A Pacific Northwest tribe’s saga refers to
+                                                                a young woman who [..]”), or sentences with very
+5.1    Experimental Setup                                       complex definitional patterns (“white body cells
+Datasets. We conducted experiments on two                       are the body’s clean up squad” and “joule is also
+different datasets:                                             an expression of electric energy”). These cases can
+                                                                be correctly handled only with fine-grained pat-
+    • A corpus of 4,619 Wikipedia sentences, that               terns. Additional details on the corpus and a more
+      contains 1,908 definitional and 2,711 non-                thorough linguistic analysis of complex cases can
+      definitional sentences. The former were ob-               be found in Navigli et al. (2010).
+      tained from a random selection of the first               Systems. For definition extraction, we experi-
+      sentences of Wikipedia articles3 . The de-                ment with the following systems:
+      fined terms belong to different Wikipedia
+      domain categories4 , so as to capture a                      • WCL-1 and WCL-3: these two classifiers
+      representative and cross-domain sample of                      are based on our Word-Class Lattice model.
+      lexical and syntactic patterns for defini-                     WCL-1 learns from the training set a lattice
+      tions. These sentences were manually an-                       for each cluster of sentences, whereas WCL-
+      notated with D EFINIENDUM, D EFINITOR,                         3 identifies clusters (and lattices) separately
+      D EFINIENS and R EST fields by an expert                       for each sentence field (DEFINIENDUM,
+      annotator, who also marked the hypernyms.                      DEFINITOR and DEFINIENS ) and classifies a
+      The associated set of negative examples                        sentence as a definition if any combination
+      (“syntactically plausible” false definitions)                  from the three sets of lattices matches (cf.
+      was obtained by extracting from the same                       Section 3.2.4, the best combination is se-
+      Wikipedia articles sentences in which the                      lected).
+      page title occurs.
+                                                                   • Star patterns: a simple classifier based on
+    • A subset of the ukWaC Web corpus (Fer-                         the patterns learned as a result of step 1 of our
+      raresi et al., 2008), a large corpus of the En-                WCL learning algorithm (cf. Section 3.2.1):
+      glish language constructed by crawling the                     a sentence is classified as a definition if it
+      .uk domain of the Web. The subset includes                     matches any of the star patterns in the model.
+      over 300,000 sentences in which occur any
+      of 239 terms selected from the terminology                   • Bigrams: an implementation of the bigram
+      of four different domains (COMPUTER SCI -                      classifier for soft pattern matching proposed
+                                                                     by Cui et al. (2007). The classifier selects as
+   3
+     The first sentence of Wikipedia entries is, in the large        definitions all the sentences whose probabil-
+majority of cases, a definition of the page title.
+   4
+     en.wikipedia.org/wiki/Wikipedia:Cate-                           ity is above a specific threshold. The proba-
+gories                                                               bility is calculated as a mixture of bigram and
+
+
+                                                            1323
+
+
+  Algorithm         P       R       F1        A                   Algorithm         P      R†
+  WCL-1           99.88   42.09    59.22    76.06                 WCL-1           98.33   39.39
+  WCL-3           98.81   60.74    75.23    83.48                 WCL-3           94.87   56.57
+  Star patterns   86.74   66.14    75.05    81.84                 Star patterns   44.01   63.63
+  Bigrams         66.70   82.70    73.84    75.80                 Bigrams         46.60   45.45
+  Random BL       50.00   50.00    50.00    50.00                 Random BL       50.00   50.00
+
+Table 2: Performance on the Wikipedia dataset.         Table 3: Performance on the ukWaC dataset († Re-
+                                                       call is estimated).
+     unigram probabilities, with Laplace smooth-
+     ing on the latter. We use the very same set-      Measures. To assess the performance of our
+     tings of Cui et al. (2007), including threshold   systems, we calculated the following measures:
+     values. While the authors propose a second
+     soft-pattern approach based on Profile HMM            • precision – the number of definitional sen-
+     (cf. Section 2), their results do not show sig-         tences correctly retrieved by the system over
+     nificant improvements over the bigram lan-              the number of sentences marked by the sys-
+     guage model.                                            tem as definitional.
+                                                           • recall – the number of definitional sen-
+   For hypernym extraction, we compared WCL-                 tences correctly retrieved by the system over
+1 and WCL-3 with Hearst’s patterns, a system                 the number of definitional sentences in the
+that extracts hypernyms from sentences based on              dataset.
+the lexico-syntactic patterns specified in Hearst’s
+                                                           • the F1 -measure – a harmonic mean of preci-
+seminal work (1992). These include (hypernym
+                                                             sion (P) and recall (R) given by P2P+R
+                                                                                                  R
+                                                                                                    .
+in italic): “such NP as {NP ,} {(or | and)} NP”,
+“NP {, NP} {,} or other NP”, “NP {,} includ-               • accuracy – the number of correctly classi-
+ing { NP ,} {or | and} NP”, “NP {,} especially {             fied sentences (either as definitional or non-
+NP ,} {or | and} NP”, and variants thereof. How-             definitional) over the total number of sen-
+ever, it should be noted that hypernym extraction            tences in the dataset.
+methods in the literature do not extract hypernyms
+from definitional sentences, like we do, but rather    5.2    Results and Discussion
+from specific patterns like “X such as Y”. There-      Definition Extraction. In Table 2 we report
+fore a direct comparison with these methods is not     the results of definition extraction systems on the
+possible. Nonetheless, we decided to implement         Wikipedia dataset. Given this dataset is also used
+Hearst’s patterns for the sake of completeness. We     for training, experiments are performed with 10-
+could not replicate the more refined approach by       fold cross validation. The results show very high
+Snow et al. (2004) because it requires the annota-     precision for WCL-1, WCL-3 (around 99%) and
+tion of a possibly very large dataset of sentence      star patterns (86%). As expected, bigrams and star
+fragments. In any case Snow et al. (2004) re-          patterns exhibit a higher recall (82% and 66%, re-
+ported the following performance figures on a cor-     spectively). The lower recall of WCL-1 is due to
+pus of dimension and complexity comparable with        its limited ability to generalize compared to WCL-
+ukWaC: the recall-precision graph indicates preci-     3 and the other methods. In terms of F1 -measure,
+sion 85% at recall 10% and precision 25% at re-        star patterns and WCL-3 achieve 75%, and are
+call of 30% for the hypernym classifier. A variant     thus the best systems. Similar performance is ob-
+of the classifier that includes evidence from coor-    served when we also account for negative sen-
+dinate terms (terms with a common ancestor in a        tences – that is we calculate accuracy (with WCL-
+taxonomy) obtains an increased precision of 35%        3 performing better). All the systems perform sig-
+at recall 30%. We see no reasons why these figures     nificantly better than the random baseline.
+should vary dramatically on the ukWaC.                    From our Wikipedia corpus, we learned over
+   Finally, we compare all systems with the ran-       1,000 lattices (and star patterns). Using WCL-
+dom baseline, that classifies a sentence as a defi-    3, we learned 381 DF, 252 VF and 395 GF lat-
+nition with probability 21 .                           tices, that then we used to extract definitions from
+
+
+                                                    1324
+
+
+          Algorithm         Full     Substring                      Algorithm         Full          Substring
+          WCL-1            42.75       77.00                        WCL-1         86.19 (206)      96.23 (230)
+          WCL-3            40.73       78.58                        WCL-3         89.27 (383)      96.27 (413)
+                                                                    Hearst        65.26 (62)       88.42 (84)
+Table 4: Precision in hypernym extraction on the
+Wikipedia dataset                                               Table 5: Precision in hypernym extraction on the
+                                                                ukWaC dataset (number of hypernyms in paren-
+the ukWaC dataset. To calculate precision on this               theses).
+dataset, we manually validated the definitions out-
+put by each system. However, given the large size               tively imaging method and project as hypernyms.
+of the test set, recall could only be estimated. To             For the above reasons it is difficult to achieve high
+this end, we manually analyzed 50,000 sentences                 performance in capturing the correct hypernym
+and identified 99 definitions, against which recall             (e.g. 40.73% with WCL-3 on Wikipedia). How-
+was calculated. The results are shown in Table 3.               ever, our performance of identifying a substring
+On the ukWaC dataset, WCL-3 performs best, ob-                  of the correct hypernym is much higher (around
+taining 94.87% precision and 56.57% recall (we                  78.58%). In Table 4 we do not report the preci-
+did not calculate F1 , as recall is estimated). In-             sion of Hearst’s patterns, as only one hypernym
+terestingly, star patterns obtain only 44% preci-               was found, due to the inherently low coverage of
+sion and around 63% recall. Bigrams achieve                     the method.
+even lower performance, namely 46.60% preci-                       On the ukWaC dataset, the hypernyms returned
+sion, 45.45% recall. The reason for such bad                    by the three systems were manually validated and
+performance on ukWaC is due to the very dif-                    precision was calculated. Both WCL-1 and WCL-
+ferent nature of the two datasets: for example, in              3 obtained a very high precision (86-89% and 96%
+Wikipedia most “is a” sentences are definitional,               in identifying the exact hypernym and a substring
+whereas this property is not verified in the real               of it, respectively). Both WCL models are thus
+world (that is, on the Web, of which ukWaC is                   equally robust in identifying hypernyms, whereas
+a sample). Also, while WCL does not need any                    WCL-1 suffers from a lack of generalization in
+parameter tuning5 , the same does not hold for bi-              definition extraction (cf. Tables 2 and 3). Also,
+grams6 , whose probability threshold and mixture                given that the ukWaC dataset contains sentences
+weights need to be best tuned on the task at hand.              in which any of 239 domain terms occur, WCL-3
+                                                                extracts on average 1.6 and 1.7 full and substring
+Hypernym Extraction. For hypernym extrac-                       hypernyms per term, respectively. Hearst’s pat-
+tion, we tested WCL-1, WCL-3 and Hearst’s pat-                  terns also obtain high precision, especially when
+terns. Precision results are reported in Tables 4               substrings are taken into account. However, the
+and 5 for the two datasets, respectively. The Sub-              number of hypernyms returned by this method is
+string column refers to the case in which the cap-              much lower, due to the specificity of the patterns
+tured hypernym is a substring of what the annota-               (62 vs. 383 hypernyms returned by WCL-3).
+tor considered to be the correct hypernym. Notice
+that this is a complex matter, because often the se-            6     Conclusions
+lection of a hypernym depends on semantic and
+                                                                In this paper, we have presented a lattice-based ap-
+contextual issues. For example, “Fluoroscopy is
+                                                                proach to definition and hypernym extraction. The
+an imaging method” and “the Mosaic was an in-
+                                                                novelty of our approach is:
+teresting project” have precisely the same genus
+pattern, but (probably depending on the vagueness                   1. The use of a lattice structure to generalize
+of the noun in the first sentence, and of the adjec-                   over lexico-syntactic definitional patterns;
+tive in the second) the annotator selected respec-
+                                                                    2. The ability of the system to jointly identify
+   5
+      WCL has only one threshold value θ to be set for deter-          definitions and extract hypernyms;
+mining frequent words (cf. Section 3.1). However, no tuning
+was made for choosing the best value of θ.                          3. The generality of the method, which applies
+    6
+      We had to re-tune the system parameters on ukWaC,
+since with the original settings of Cui et al. (2007) perfor-          to generic Web documents in any domain and
+mance was much lower.                                                  style, and needs no parameter tuning;
+
+
+                                                            1325
+
+
+  4. The high performance as compared with the                    Computational Linguistics (ACL’04), Main Volume,
+     best-known methods for both definition and                   pages 231–238, Barcelona, Spain, July.
+     hypernym extraction. Our approach outper-                  Thomas H. Cormen, Charles E. Leiserson, and
+     forms the other systems particularly where                   Ronald L. Rivest. 1990. Introduction to algorithms.
+                                                                  the MIT Electrical Engineering and Computer Sci-
+     the task is more complex, as in real-world                   ence Series. MIT Press, Cambridge, MA.
+     documents (i.e., the ukWaC corpus).
+                                                                Hang Cui, Min-Yen Kan, and Tat-Seng Chua. 2007.
+                                                                  Soft pattern matching models for definitional ques-
+   Even though definitional patterns are learned                  tion answering. ACM Transactions on Information
+from a manually annotated dataset, the dimension                  Systems, 25(2):8.
+and heterogeneity of the training dataset ensures               Łukasz Degórski, Michał Marcinczuk, and Adam
+that training needs not to be repeated for specific               Przepiórkowski. 2008. Definition extraction us-
+domains7 , as demonstrated by the cross-domain                    ing a sequential combination of baseline grammars
+                                                                  and machine learning classifiers. In Proceedings of
+evaluation on the ukWaC corpus.                                   the Sixth International Conference on Language Re-
+   The datasets used in our experiments are avail-                sources and Evaluation (LREC 2008), Marrakech,
+able from http://lcl.uniroma1.it/wcl.                             Morocco.
+We also plan to release our system to the research              William Dolan, Lucy Vanderwende, and Stephen D.
+community. In the near future, we aim to apply the                Richardson. 1993. Automatically deriving struc-
+output of our classifiers to the task of automated                tured knowledge bases from on-line dictionaries. In
+                                                                  Proceedings of the First Conference of the Pacific
+taxonomy building, and to test the WCL approach                   Association for Computational Linguistics, pages 5–
+on other information extraction tasks, like hyper-                14.
+nym extraction from generic sentence fragments,                 Christopher Dyer, Smaranda Muresan, and Philip
+as in Snow et al. (2004).                                         Resnik. 2008. Generalizing word lattice translation.
+                                                                  In Proceedings of the Annual Meeting of the Asso-
+                                                                  ciation for Computational Linguistics (ACL 2008),
+References                                                        pages 1012–1020, Columbus, Ohio, USA.
+                                                                Christopher Dyer. 2009. Using a maximum en-
+Eneko Agirre, Ansa Olatz, Xabier Arregi, Xabier Ar-               tropy model to build segmentation lattices for mt.
+  tola, Arantza Daz de Ilarraza Snchez, Mikel Ler-                In Proceedings of Human Language Technologies:
+  sundi, David Martnez, Kepa Sarasola, and Ruben                  The 2009 Annual Conference of the North American
+  Urizar. 2000. Extraction of semantic relations from             Chapter of the Association for Computational Lin-
+  a basque monolingual dictionary using constraint                guistics (HLT-NAACL 2009), pages 406–414, Boul-
+  grammar. In Proceedings of Euralex.                             der, Colorado, USA.
+Claudia Borg, Mike Rosner, and Gordon Pace. 2009.               Ismail Fahmi and Gosse Bouma. 2006. Learning to
+  Evolutionary algorithms for definition extraction. In           identify definitions using syntactic features. In Pro-
+  Proceedings of the 1st Workshop on Definition Ex-               ceedings of the EACL 2006 workshop on Learning
+  traction 2009 (wDE’09).                                         Structured Information in Natural Language Appli-
+William M. Campbell, M. F. Richardson, and D. A.                  cations, pages 64–71, Trento, Italy.
+  Reynolds. 2007. Language recognition with word
+                                                                Adriano Ferraresi, Eros Zanchetta, Marco Baroni, and
+  lattices and support vector machines. In Proceed-
+                                                                  Silvia Bernardini. 2008. Introducing and evaluating
+  ings of the IEEE International Conference on Acous-
+                                                                  ukwac, a very large Web-derived corpus of english.
+  tics, Speech and Signal Processing (ICASSP 2007),
+                                                                  In Proceedings of the 4th Web as Corpus Workshop
+  pages 989–992, Honolulu, HI.
+                                                                  (WAC-4), Marrakech, Morocco.
+Sharon A. Caraballo. 1999. Automatic construction
+                                                                Aldo Gangemi, Roberto Navigli, and Paola Velardi.
+  of a hypernym-labeled noun hierarchy from text. In
+                                                                  2003. The OntoWordNet project: Extension and ax-
+  Proceedings of the 37th Annual Meeting of the Asso-
+                                                                  iomatization of conceptual relations in WordNet. In
+  ciation for Computational Linguistics (ACL), pages
+                                                                  Proceedings of the International Conference on On-
+  120–126, Maryland, USA.
+                                                                  tologies, Databases and Applications of SEmantics
+Claudio Carpineto and Giovanni Romano. 2005. Us-                  (ODBASE 2003), pages 820–838, Catania, Italy.
+  ing concept lattices for text retrieval and mining. In
+  B. Ganter, G. Stumme, and R. Wille, editors, Formal           Rosa Del Gaudio and António Branco. 2007. Auto-
+  Concept Analysis, pages 161–179.                                matic extraction of definitions in portuguese: A rule-
+                                                                  based approach. In Proceedings of the TeMa Work-
+Christopher Collins, Bob Carpenter, and Gerald Penn.              shop.
+  2004. Head-driven parsing for word lattices. In Pro-
+  ceedings of the 42nd Meeting of the Association for           Marti Hearst. 1992. Automatic acquisition of hy-
+                                                                  ponyms from large text corpora. In Proceed-
+   7
+     Of course, it would need some additional work if applied     ings of the 14th International Conference on Com-
+to languages other than English. However, the approach does       putational Linguistics (COLING), pages 539–545,
+not need to be adapted to the language of interest.               Nantes, France.
+
+
+                                                            1326
+
+
+Eduard Hovy, Andrew Philpot, Judith Klavans, Ulrich          Kiril Simov, Petya Osenova, and Lothar Lemnitzer.
+  Germann, and Peter T. Davis. 2003. Extending               2007. Towards the automatic extraction of defini-
+  metadata definitions by automatically extracting and       tions in slavic. In Proceedings of the Workshop
+  organizing glossary definitions. In Proceedings of         on Balto-Slavonic Natural Language Processing (in
+  the 2003 Annual National Conference on Digital             ACL ’07), pages 43–50, Prague, Czech Republic.
+  Government Research, pages 1–6. Digital Govern-            Association for Computational Linguistics.
+  ment Society of North America.                          Alan Ritter, Stephen Soderland, and Oren Etzioni.
+Adrian Iftene, Diana Trandabă, and Ionut Pistol. 2007.      2009. What is this, anyway: Automatic hypernym
+  Natural language processing and knowledge repre-           discovery. In Proceedings of the 2009 AAAI Spring
+  sentation for elearning environments. In Proc. of          Symposium on Learning by Reading and Learning
+  Applications for Romanian. Proceedings of RANLP            to Read, pages 88–93.
+  workshop, pages 19–25.                                  Horacio Saggion. 2004. Identifying denitions in text
+Wenbin Jiang, Haitao Mi, and Qun Liu. 2008. Word             collections for question answering. In Proceedings
+  lattice reranking for chineseword segmentation and         of the Fourth International Conference on Language
+  part-of-speech tagging. In Proceedings of the 22nd         Resources and Evaluation (LREC 2004), Lisbon,
+  International Conference on Computational Lin-             Portugal.
+  guistics (COLING 2008), pages 385–392, Manch-           Antonio Sanfilippo and Victor Poznański. 1992. The
+  ester, UK.                                                 acquisition of lexical knowledge from combined
+Judith Klavans and Smaranda Muresan. 2001. Eval-             machine-readable dictionary sources. In Proceed-
+  uation of the DEFINDER system for fully auto-              ings of the third Conference on Applied Natural Lan-
+  matic glossary construction. In Proc. of the Amer-         guage Processing, pages 80–87.
+  ican Medical Informatics Association (AMIA) Sym-        Helmut Schmid. 1995. Improvements in part-of-
+  posium.                                                    speech tagging with an application to german. In
+Michael Tully Klein. 2008. Understanding English             Proceedings of the ACL SIGDAT-Workshop, pages
+  with Lattice-Learning, Master thesis. MIT, Cam-            47–50.
+  bridge, MA, USA.                                        Josh Schroeder, Trevor Cohn, and Philipp Koehn.
+Lambert Mathias and William Byrne. 2006. Statis-             2009. Word lattices for multi-source translation. In
+  tical phrase-based speech translation. In Proceed-         Proceedings of the European Chapter of the Asso-
+  ings of the IEEE International Conference on Acous-        ciation for Computation Linguistics (EACL 2009),
+  tics, Speech and Signal Processing (ICASSP 2006),          pages 719–727, Athens, Greece.
+  Toulouse, France.                                       Rion Snow, Dan Jurafsky, and Andrew Y. Ng. 2004.
+George A. Miller, R.T. Beckwith, Christiane D. Fell-         Learning syntactic patterns for automatic hypernym
+  baum, D. Gross, and K. Miller. 1990. WordNet:              discovery. In Proceedings of Advances in Neural
+  an online lexical database. International Journal of       Information Processing Systems, pages 1297–1304.
+  Lexicography, 3(4):235–244.                             Angelika Storrer and Sandra Wellinghoff. 2006. Auto-
+                                                             mated detection and annotation of term definitions in
+Roberto Navigli and Paola Velardi. 2006. Ontology
+                                                             german text corpora. In Proceedings of the Fifth In-
+  enrichment through automatic semantic annotation
+                                                             ternational Conference on Language Resources and
+  of on-line glossaries. In Proceedings of the 15th In-
+                                                             Evaluation (LREC 2006), Genova, Italy.
+  ternational Conference on Knowledge Engineering
+  and Knowledge Management (EKAW 2006), pages             Paola Velardi, Roberto Navigli, and Pierluigi
+  126–140, Podebrady, Czech Republic.                        D’Amadio. 2008. Mining the Web to create
+                                                             specialized glossaries. IEEE Intelligent Systems,
+Roberto Navigli, Paola Velardi, and Juana Marı́a Ruiz-       23(5):18–25.
+  Martı́nez. 2010. An annotated dataset for extract-
+  ing definitions and hypernyms from the Web. In          Eline Westerhout and Paola Monachesi. 2007. Extrac-
+  Proceedings of the 7th International Conference on         tion of dutch definitory contexts for eLearning pur-
+  Language Resources and Evaluation (LREC 2010),             poses. In Proceedings of CLIN.
+  Valletta, Malta.                                        Eline Westerhout. 2009. Definition extraction using
+Roberto Navigli. 2009a. Using cycles and quasi-cycles        linguistic and structural features. In Proceedings
+  to disambiguate dictionary glosses. In Proceed-            of the RANLP 2009 Workshop on Definition Extrac-
+  ings of the 12th Conference of the European Chap-          tion, pages 61–67.
+  ter of the Association for Computational Linguistics    Chunxia Zhang and Peng Jiang. 2009. Automatic ex-
+  (EACL 2009), pages 594–602, Athens, Greece.                traction of definitions. In Proceedings of 2nd IEEE
+                                                             International Conference on Computer Science and
+Roberto Navigli. 2009b. Word Sense Disambiguation:
+                                                             Information Technology, pages 364–368.
+  A survey. ACM Computing Surveys, 41(2):1–69.
+                                                          Zhao-man Zhong, Zong-tian Liu, and Yan Guan. 2008.
+Michael P. Oakes. 2005. Using hearst’s rules for             Precise information extraction from text based on
+  the automatic acquisition of hyponyms for mining a         two-level concept lattice. In Proceedings of the
+  pharmaceutical corpus. In Proceedings of the Work-         2008 International Symposiums on Information Pro-
+  shop Text Mining Research.                                 cessing (ISIP ’08), pages 275–279, Washington,
+Adam Przepiórkowski, Lukasz Degórski, Beata                DC, USA.
+  Wójtowicz, Miroslav Spousta, Vladislav Kuboň,
+
+
+                                                      1327
+

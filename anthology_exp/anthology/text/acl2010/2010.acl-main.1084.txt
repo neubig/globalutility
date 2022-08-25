@@ -1,0 +1,706 @@
+     A Hybrid Hierarchical Model for Multi-Document Summarization
+
+                  Asli Celikyilmaz                                    Dilek Hakkani-Tur
+           Computer Science Department                      International Computer Science Institute
+          University of California, Berkeley                              Berkeley, CA
+          asli@eecs.berkeley.edu                               dilek@icsi.berkeley.edu
+
+
+
+                      Abstract                                 Yeh et al., 2005). Each candidate sentence is
+    Scoring sentences in documents given ab-                   classified as summary or non-summary based on
+    stract summaries created by humans is im-                  the features that they pose and those with high-
+    portant in extractive multi-document sum-                  est scores are selected. Unsupervised methods
+    marization. In this paper, we formulate ex-                aim to score sentences based on semantic group-
+    tractive summarization as a two step learn-                ings extracted from documents, e.g., (DauméIII
+    ing problem building a generative model                    and Marcu, 2006; Titov and McDonald, 2008;
+    for pattern discovery and a regression                     Tang et al., 2009; Haghighi and Vanderwende,
+    model for inference. We calculate scores                   2009; Radev et al., 2004; Branavan et al., 2009),
+    for sentences in document clusters based                   etc. Such models can yield comparable or bet-
+    on their latent characteristics using a hi-                ter performance on DUC and other evaluations,
+    erarchical topic model. Then, using these                  since representing documents as topic distribu-
+    scores, we train a regression model based                  tions rather than bags of words diminishes the ef-
+    on the lexical and structural characteris-                 fect of lexical variability. To the best of our knowl-
+    tics of the sentences, and use the model to                edge, there is no previous research which utilizes
+    score sentences of new documents to form                   the best features of both approaches for MDS as
+    a summary. Our system advances current                     presented in this paper.
+    state-of-the-art improving ROUGE scores                       In this paper, we present a novel approach that
+    by ∼7%. Generated summaries are less                       formulates MDS as a prediction problem based
+    redundant and more coherent based upon                     on a two-step hybrid model: a generative model
+    manual quality evaluations.                                for hierarchical topic discovery and a regression
+                                                               model for inference. We investigate if a hierarchi-
+1   Introduction                                               cal model can be adopted to discover salient char-
+Extractive approach to multi-document summa-                   acteristics of sentences organized into hierarchies
+rization (MDS) produces a summary by select-                   utilizing human generated summary text.
+ing sentences from original documents. Doc-                       We present a probabilistic topic model on sen-
+ument Understanding Conferences (DUC), now                     tence level building on hierarchical Latent Dirich-
+TAC, fosters the effort on building MDS systems,               let Allocation (hLDA) (Blei et al., 2003a), which
+which take document clusters (documents on a                   is a generalization of LDA (Blei et al., 2003b). We
+same topic) and description of the desired sum-                construct a hybrid learning algorithm by extract-
+mary focus as input and output a word length lim-              ing salient features to characterize summary sen-
+ited summary. Human summaries are provided for                 tences, and implement a regression model for in-
+training summarization models and measuring the                ference (Fig.3). Contributions of this work are:
+performance of machine generated summaries.                    − construction of hierarchical probabilistic model
+   Extractive summarization methods can be clas-               designed to discover the topic structures of all sen-
+sified into two groups: supervised methods that                tences. Our focus is on identifying similarities of
+rely on provided document-summary pairs, and                   candidate sentences to summary sentences using a
+unsupervised methods based upon properties de-                 novel tree based sentence scoring algorithm, con-
+rived from document clusters. Supervised meth-                 cerning topic distributions at different levels of the
+ods treat the summarization task as a classifica-              discovered hierarchy as described in § 3 and § 4,
+tion/regression problem, e.g., (Shen et al., 2007;             − representation of sentences by meta-features to
+
+
+                                                         815
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 815–824,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+characterize their candidacy for inclusion in sum-              algorithms can limit the application areas. More-
+mary text. Our aim is to find features that can best            over, using information on the hidden semantic
+represent summary sentences as described in § 5,                structure of document clusters would improve the
+− implementation of a feasible inference method                 performance of these methods.
+based on a regression model to enable scoring of                   Recent studies focused on the discovery of la-
+sentences in test document clusters without re-                 tent topics of document sets in extracting sum-
+training, (which has not been investigated in gen-              maries. In these models, the challenges of infer-
+erative summarization models) described in § 5.2.               ring topics of test documents are not addressed
+   We show in § 6 that our hybrid summarizer                    in detail. One of the challenges of using a pre-
+achieves comparable (if not better) ROUGE score                 viously trained topic model is that the new docu-
+on the challenging task of extracting the sum-                  ment might have a totally new vocabulary or may
+maries of multiple newswire documents. The hu-                  include many other specific topics, which may or
+man evaluations confirm that our hybrid model can               may not exist in the trained model. A common
+produce coherent and non-redundant summaries.                   method is to re-build a topic model for new sets
+                                                                of documents (Haghighi and Vanderwende, 2009),
+2   Background and Motivation                                   which has proven to produce coherent summaries.
+                                                                An alternative yet feasible solution, presented in
+There are many studies on the principles govern-                this work, is building a model that can summa-
+ing multi-document summarization to produce co-                 rize new document clusters using characteristics
+herent and semantically relevant summaries. Pre-                of topic distributions of training documents. Our
+vious work (Nenkova and Vanderwende, 2005;                      approach differs from the early work, in that, we
+Conroy et al., 2006), focused on the fact that fre-             combine a generative hierarchical model and re-
+quency of words plays an important factor. While,               gression model to score sentences in new docu-
+earlier work on summarization depend on a word                  ments, eliminating the need for building a genera-
+score function, which is used to measure sentence               tive model for new document clusters.
+rank scores based on (semi-)supervised learn-
+ing methods, recent trend of purely data-driven                 3    Summary-Focused Hierarchical Model
+methods, (Barzilay and Lee, 2004; DauméIII and
+Marcu, 2006; Tang et al., 2009; Haghighi and                    Our MDS system, hybrid hierarchical summa-
+Vanderwende, 2009), have shown remarkable im-                   rizer, HybHSum, is based on an hybrid learn-
+provements. Our work builds on both methods by                  ing approach to extract sentences for generating
+constructing a hybrid approach to summarization.                summary. We discover hidden topic distributions
+   Our objective is to discover from document                   of sentences in a given document cluster along
+clusters, the latent topics that are organized into hi-         with provided summary sentences based on hLDA
+erarchies following (Haghighi and Vanderwende,                  described in (Blei et al., 2003a)1 . We build a
+2009). A hierarchical model is particularly ap-                 summary-focused hierarchical probabilistic topic
+pealing to summarization than a ”flat” model, e.g.              model, sumHLDA, for each document cluster at
+LDA (Blei et al., 2003b), in that one can discover              sentence level, because it enables capturing ex-
+”abstract” and ”specific” topics. For instance, dis-            pected topic distributions in given sentences di-
+covering that ”baseball” and ”football” are both                rectly from the model. Besides, document clusters
+contained in an abstract class ”sports” can help to             contain a relatively small number of documents,
+identify summary sentences. It follows that sum-                which may limit the variability of topics if they are
+mary topics are commonly shared by many docu-                   evaluated on the document level. As described in §
+ments, while specific topics are more likely to be              4, we present a new method for scoring candidate
+mentioned in rather a small subset of documents.                sentences from this hierarchical structure.
+   Feature based learning approaches to summa-                     Let a given document cluster D be represented
+rization methods discover salient features by mea-              with sentences O={om }|O|m=1 and its corresponding
+
+suring similarity between candidate sentences and               human summary be represented with sentences
+                                                                        |S|
+summary sentences (Nenkova and Vanderwende,                     S={sn}n=1  . All sentences are comprised of words
+2005; Conroy et al., 2006). While such methods                  V = w1 , w2 , ..w|V | in {O ∪ S}.
+are effective in extractive summarization, the fact                 1
+                                                                      Please refer to (Blei et al., 2003b) and (Blei et al., 2003a)
+that some of these methods are based on greedy                  for details and demonstrations of topic models.
+
+
+                                                          816
+
+
+   Summary hLDA (sumHLDA): The hLDA                           This can be achieved by using a small value for γs
+represents distribution of topics in sentences by             (0 < γs ≪ 1). We only let candidate sentences
+organizing topics into a tree of a fixed depth L              to have an option of creating a new child node
+(Fig.1.a). Each candidate sentence om is assigned             with a probability proportional to γo . By choos-
+to a path com in the tree and each word wi in a               ing γs ≪ γo we suppress the generation of new
+given sentence is assigned to a hidden topic zom              branches for summary sentences and modify the
+at a level l of com . Each node is associated with a          γ of nCRP prior in Eq.(1) using γs and γo hyper-
+topic distribution over words. The sampler method             parameters for different sentence types. In the ex-
+alternates between choosing a new path for each               periments, we discuss the effects of this modifica-
+sentence through the tree and assigning each word             tion on the hierarchical topic tree.
+in each sentence to a topic along that path. The                 The following is the generative process for
+structure of tree is learnt along with the topics us-         sumHLDA used in our HybHSum :
+ing a nested Chinese restaurant process (nCRP)                (1) For each topic k ∈ T , sample a distribution
+(Blei et al., 2003a), which is used as a prior.               βk v Dirichlet(η).
+   The nCRP is a stochastic process, which as-                (2) For each sentence d ∈ {O ∪ S},
+signs probability distributions to infinitely branch-            (a) if d ∈ O, draw a path cd v nCRP(γo ),
+ing and infinitely deep trees. In our model, nCRP                    else if d ∈ S, draw a path cd v nCRP(γs ).
+specifies a distribution of words into paths in an               (b) Sample L-vector θd mixing weights from
+L-level tree. The assignments of sentences to                        Dirichlet distribution θd ∼ Dir(α).
+paths are sampled sequentially: The first sentence               (c) For each word n, choose: (i) level zd,n |θd
+takes the initial L-level path, starting with a sin-                 and (ii) word wd,n | {zd,n , cd , β}
+gle branch tree. Later, mth subsequent sentence is               Given sentence d, θd is a vector of topic pro-
+assigned to a path drawn from the distribution:               portions from L dimensional Dirichlet parameter-
+                                                              ized by α (distribution over levels in the tree.) The
+                                       mc
+       p(pathold , c|m, mc ) =       γ+m−1                    nth word of d is sampled by first choosing a level
+                                       γ         (1)
+       p(pathnew , c|m, mc ) =       γ+m−1                    zd,n = l from the discrete distribution θd with
+                                                              probability θd,l . Dirichlet parameter η and γo con-
+pathold and pathnew represent an existing and                 trol the size of tree effecting the number of topics.
+novel (branch) path consecutively, mc is the num-             (Small values of γs do not effect the tree.) Large
+ber of previous sentences assigned to path c, m is            values of η favor more topics (Blei et al., 2003a).
+the total number of sentences seen so far, and γ is              Model Learning: Gibbs sampling is a common
+a hyper-parameter which controls the probability              method to fit the hLDA models. The aim is to ob-
+of creating new paths. Based on this probability              tain the following samples from the posterior of:
+each node can branch out a different number of                (i) the latent tree T , (ii) the level assignment z for
+child nodes proportional to γ. Small values of γ              all words, (iii) the path assignments c for all sen-
+suppress the number of branches.                              tences conditioned on the observed words w.
+   Summary sentences generally comprise abstract                 Given the assignment of words w to levels z and
+concepts of the content. With sumHLDA we want                 assignments of sentences to paths c, the expected
+to capture these abstract concepts in candidate sen-          posterior probability of a particular word w at a
+tences. The idea is to represent each path shared             given topic z=l of a path c=c is proportional to the
+by similar candidate sentences with representative            number of times w was generated by that topic:
+summary sentence(s). We let summary sentences
+share existing paths generated by similar candi-                    p(w|z, c, w, η) ∝ n(z=l,c=c,w=w) + η         (2)
+date sentences instead of sampling new paths and
+                                                              Similarly, posterior probability of a particular
+influence the tree structure by introducing two sep-
+                                                              topic z in a given sentence d is proportional to
+arate hyper-parameters for nCRP prior:
+                                                              number of times z was generated by that sentence:
+  • if a summary sentence is sampled, use γ = γs ,
+  • if a candidate sentence is sampled, use γ = γo .                    p(z|z, c, α) ∝ n(c=cd ,z=l) + α          (3)
+   At each node, we let summary sentences sample
+a path by choosing only from the existing children            n(.) is the count of elements of an array satisfy-
+of that node with a probability proportional to the           ing the condition. Note from Eq.(3) that two sen-
+number of other sentences assigned to that child.             tences d1 and d2 on the same path c would have
+
+
+                                                        817
+
+
+different words, and hence different posterior topic              words wsn in sn of the same topic. The proba-
+probabilities. Posterior probabilities are normal-                bility of each word in pom ,l and psn ,l are obtained
+ized with total counts and their hyperparameters.                 using Eq. (2) and then normalized (see Fig.1.b).
+
+4   Tree-Based Sentence Scoring                                   Algorithm 1 Tree-Based Sentence Scoring
+                                                                   1: Given tree T from sumHLDA, candidate and summary
+The sumHLDA constructs a hierarchical tree                            sentences: O = {o1 , ..., om } , S = {s1 , ..., sn }
+                                                                   2: for sentences m ← 1, ..., |O| do
+structure of candidate sentences (per document                     3:     - Find path com on tree T and summary sentences
+cluster) by positioning summary sentences on the                   4:     on path com : M = {sn ∈ S|csn = com }
+tree. Each sentence is represented by a path in the                5:     for summary sentences n ← 1, ..., |M | do
+                                                                   6:         - Find score(om )=maxsn sim(om , sn ),
+tree, and each path can be shared by many sen-                     7:         where sim(om , sn ) = sim1 ∗ sim2
+tences. The assumption is that sentences sharing                   8:         using Eq.(7) and Eq.(8)
+the same path should be more similar to each other                 9:     end for
+                                                                  10: end for
+because they share the same topics. Moreover, if                  11: Obtain scores Y = {score(om )}m=1|O|
+
+a path includes a summary sentence, then candi-
+date sentences on that path are more likely to be
+                                                                    The similarity between pom ,l and psn ,l is
+selected for summary text. In particular, the sim-
+                                                                  obtained by first calculating the divergence
+ilarity of a candidate sentence om to a summary
+                                                                  with information radius- IR based on Kullback-
+sentence sn sharing the same path is a measure
+                                                                  Liebler(KL) divergence, p=pom ,l , q=psn ,l :
+of strength, indicating how likely om is to be in-
+cluded in the generated summary (Algorithm 1):
+                                                                    IRcom ,l (pom ,l , psn ,l )=KL(p|| p+q
+                                                                                                        2 )
+                                                                                                           +KL(q|| p+q
+                                                                                                                    2 )
+                                                                                                                        (5)
+   Let com be the path for a given om . We find
+summary sentences that share the same path with                   where, KL(p||q)= i pi log pqii . Then the divergence
+                                                                                       P
+om via: M = {sn ∈ S|csn = com }. The score of                     is transformed into a similarity measure (Manning
+each sentence is calculated by similarity to the best             and Schuetze, 1999):
+matching summary sentence in M :
+                                                                     Wcom ,l (pom ,l , psn ,l ) = 10−IRcom ,l (pom ,l ,psn ,l )
+       score(om ) = maxsn ∈M sim(om , sn )           (4)                                                                       (6)
+                                                                  IR is a measure of total divergence from the av-
+If M=ø, then score(om )=ø. The efficiency of our                  erage, representing how much information is lost
+similarity measure in identifying the best match-                 when two distributions p and q are described in
+ing summary sentence, is tied to how expressive                   terms of average distributions. We opted for IR
+the extracted topics of our sumHLDA models are.                   instead of the commonly used KL because with
+Given path com , we calculate the similarity of om                IR there is no problem with infinite values since
+to each sn , n=1..|M | by measuring similarities on:              pi +qi
+                                                                     2 6=0 if either pi 6=0 or qi 6=0. Moreover, un-
+    ? sparse unigram distributions (sim1 ) at each                like KL, IR is symmetric, i.e., KL(p,q)6=KL(q,p).
+topic l on com : similarity between p(wom ,l |zom =                  Finally sim1 is obtained by average similarity of
+l, com , vl ) and p(wsn ,l |zsn = l, com , vl )                   sentences using Eq.(6) at each level of com by:
+    ?? distributions of topic proportions (sim2 );
+                                                                                        1   PL
+similarity between p(zom |com ) and p(zsn |com ).                  sim1 (om , sn ) =    L                           ∗l
+                                                                                              l=1 Wcom ,l (pom ,l , psn ,l )
+    − sim1 : We define two sparse (discrete) un-                                                                     (7)
+igram distributions for candidate om and sum-                     The similarity between pom ,l and psn ,l at each level
+mary sn at each node l on a vocabulary iden-                      is weighted proportional to the level l because the
+tified with words generated by the        topic at that          similarity between sentences should be rewarded
+node, vl ⊂ V . Given wom = w1 , ..., w|om | ,                     if there is a specific word overlap at child nodes.
+let wom ,l ⊂ wom be the set of words in om that                      −sim2 : We introduce another measure based
+are generated from topic zom at level l on path                   on sentence-topic mixing proportions to calculate
+com . The discrete unigram distribution pom l =                   the concept-based similarities between om and sn .
+p(wom ,l |zom = l, com , vl ) represents the probabil-            We calculate the topic proportions of om and sn ,
+ity over all words vl assigned to topic zom at level              represented by pzom = p(zom |com ) and pzsn =
+l, by sampling only for words in wom ,l . Similarly,              p(zsn |com ) via Eq.(3). The similarity between the
+psn ,l = p(wsn ,l |zsn , com , vl ) is the probability of         distributions is then measured with transformed IR
+
+
+                                                            818
+
+
+                                                                                        . Posterior
+                                                                                     .. . w
+                                                     Posterior Topic                                Topic-Word Distributions
+                                                      Distributions                           candidate o      summary s          m                                 n
+                      level:1     human
+                                                                                    . z w
+                                                                                                      1
+                          research     incidence                                                         v
+                           change z1                                                 . . w w w w w .... w w w w ....v
+                                                                       z                  1                                       z1                                    z1
+                                        global                                                        5
+                                                            z1 z2 z3                                      1       5   6       7         1       5       6       7
+                                                                                                  6
+                                                                                          w   7
+                                                                                             p(wo |z , co ) p(ws |z , cs )
+            level:2
+                  disease health
+                                                              pz
+                                                                om
+                                                                                    . . . .                       m,1
+                                                                                                                          1       m             n,1
+                                                                                                                                                            1       n
+
+
+                                                                                ... z .w
+                                      ...
+              warming z predict
+           temperature   2                zK-1                                                            v               v        z2
+                           forecast                                                   2                                                                                 z2
+                                                                                   . .w
+                                                                       z                          2
+                                                                                               w w ....       2w w ....
+                                                                                                                      8
+
+
+
+                                       ...
+                                                                                                                                            2       8
+                                                            z1 z2 z3                          8
+        level:3
+         slow         starving
+                                                         pz
+                                                            sn                .   . ..       p(wo |z , co ) p(ws |z , cs )
+                                                                                                                  m,2
+                                                                                                                          2       m             n,2
+                                                                                                                                                            2       n
+               z
+       malaria 3       siberia
+                                z4           zK
+                                                                             . z .                       v                v       z3                                    z3
+            sneeze         middle-east                                       ..   3
+                                                                                        .      w ....         5 w ....                          5
+
+      om: “Global1 warming2 may rise3 incidence4 of malaria5.”                    . .w    5 p(wo |z , co ) p(ws |z , cs )
+                                                                                                                  m,3
+                                                                                                                          3       m             n,3
+                                                                                                                                                            3       n
+      sn:“Global1 warming2 effects6 human7 health8.”
+        (a) Snapshot of Hierarchical Topic Structure of a              (b) Magnified view of sample path c [z1,z2,z3] showing
+        document cluster on “global warming”. (Duc06)                      om={w1,w2,w3,w4,w5} and sn={w1,w2,w6,w7,w8}
+
+
+Figure 1: (a) A sample 3-level tree using sumHLDA. Each sentence is associated with a path c through the hierarchy, where
+each node zl,c is associated with a distribution over terms (Most probable terms are illustrated). (b) magnified view of a path
+(darker nodes) in (a). Distribution of words in given two sentences, a candidate (om ) and a summary (sn ) using sub-vocabulary
+of words at each topic vzl . Discrete distributions on the left are topic mixtures for each sentence, pzom and pzsn .
+
+
+as in Eq.(6) by:                                                              (I) nGram Meta-Features (NMF): For each
+                                                                           document cluster D, we identify most fre-
+        sim2 (om , sn ) = 10−IRcom (pzom ,pzsn )             (8)           quent (non-stop word) unigrams, i.e., vf req =
+                                                                           {wi }ri=1 ⊂ V , where r is a model param-
+   sim1 provides information about the similarity                          eter of number of most frequent unigram fea-
+between two sentences, om and sn based on topic-                           tures. We measure observed unigram proba-
+word distributions. Similarly, sim2 provides in-                           bilities for each wi ∈ vf req with pD (wi ) =
+formation on the similarity between the weights of                                    P|V |
+                                                                           nD (wi )/ j=1 nD (wj ), where nD (wi ) is the
+the topics in each sentence. They jointly effect the
+                                                                           number of times wi appears in D and |V | is the
+sentence score and are combined in one measure:
+                                                                           total number of unigrams. For any ith feature, the
+ sim(om , sn ) = sim1 (om , sn ) ∗ sim2 (om , sn ) (9)                     value is fmi = 0, if given sentence does not con-
+                                                                           tain wi , otherwise fmi = pD (wi ). These features
+The final score for a given om is calculated from                          can be extended for any n-grams. We similarly
+Eq.(4). Fig.1.b depicts a sample path illustrating                         include bigram features in the experiments.
+sparse unigram distributions of om and sm at each                             (II) Document Word Frequency Meta-
+level as well as their topic proportions, pzom , and                       Features (DMF): The characteristics of sentences
+pzsn . In experiment 3, we discuss the effect of our                       at the document level can be important in sum-
+tree-based scoring on summarization performance                            mary generation. DMF identify whether a word
+in comparison to a classical scoring method pre-                           in a given sentence is specific to the document
+sented as our baseline model.                                              in consideration or it is commonly used in the
+                                                                           document cluster. This is important because
+5     Regression Model                                                     summary sentences usually contain abstract terms
+Each candidate sentence om , m = 1..|O| is rep-                            rather than specific terms.
+resented with a multi-dimensional vector of q fea-                            To characterize this feature, we re-use the r
+tures fm = {fm1 , ..., fmq }. We build a regression                        most frequent unigrams, i.e., wi ∈ vf req . Given
+model using sentence scores as output and selected                         sentence om , let d be the document that om be-
+salient features as input variables described below:                       longs to, i.e., om ∈ d. We measure unigram prob-
+                                                                           abilities for each wi by p(wi ∈ om ) = nd (wi ∈
+5.1     Feature Extraction                                                 om )/nD (wi ), where nd (wi ∈ om ) is the number
+We compile our training dataset using sentences                            of times wi appears in d and nD (wi ) is the number
+from different document clusters, which do not                             of times wi appears in D. For any ith feature, the
+necessarily share vocabularies. Thus, we create n-                         value is fmi = 0, if given sentence does not con-
+gram meta-features to represent sentences instead                          tain wi , otherwise fmi = p(wi ∈ om ). We also
+of word n-gram frequencies:                                                include bigram extensions of DMF features.
+
+
+                                                                   819
+
+
+   (III) Other Features (OF): Term frequency of                word long summary for each document cluster.
+sentences such as SUMBASIC are proven to be                       We use Gibbs sampling for inference in hLDA
+good predictors in sentence scoring (Nenkova and               and sumHLDA. The hLDA is used to capture ab-
+Vanderwende, 2005). We measure the average                     straction and specificity of words in documents
+unigram probability of a sentence by: p(om ) =                 (Blei et al., 2009). Contrary to typical hLDA mod-
+  w∈om |om | PD (w), where PD (w) is the observed
+P         1
+                                                               els, to efficiently represent sentences in summa-
+unigram probability in the document collection D               rization task, we set ascending values for Dirichlet
+and |om | is the total number of words in om . We              hyper-parameter η as the level increases, encour-
+use sentence bigram frequency, sentence rank in                aging mid to low level distributions to generate as
+a document, and sentence size as additional fea-               many words as in higher levels, e.g., for a tree of
+tures.                                                         depth=3, η = {0.125, 0.5, 1}. This causes sen-
+                                                               tences share paths only when they include similar
+5.2    Predicting Scores for New Sentences
+                                                               concepts, starting higher level topics of the tree.
+Due to the large feature space to explore, we chose            For SVR, we set  = 0.1 using the default choice,
+to work with support vector regression (SVR)                   which is the inverse of the average of φ(f)T φ(f)
+(Drucker et al., 1997) as the learning algorithm               (Joachims, 1999), dot product of kernelized input
+to predict sentence scores. Given training sen-                vectors. We use greedy optimization during train-
+                  |O|
+tences {fm , ym }m=1 , where fm = {fm1 , ..., fmq }            ing basedon ROUGE scores to find best regular-
+is a multi-dimensional vector of features and                  izer C = 10−1 ..102 using the Gaussian kernel.
+ym =score(om )∈ R are their scores obtained via                   We applied feature extraction of § 5.1 to com-
+Eq.(4), we train a regression model. In experi-                pile the training and testing datasets. ROUGE
+ments we use non-linear Gaussian kernel for SVR.               is used for performance measure (Lin and Hovy,
+Once the SVR model is trained, we use it to predict            2003; Lin, 2004), which evaluates summaries
+the scores of ntest number of sentences
+                                         in test (un-         based on the maxium number of overlapping units
+seen) document clusters, Otest = o1 , ...o|Otest | .           between generated summary text and a set of hu-
+    Our HybHSum captures the sentence character-               man summaries. We use R-1 (recall against uni-
+istics with a regression model using sentences in              grams), R-2 (recall against bigrams), and R-SU4
+different document clusters. At test time, this valu-          (recall against skip-4 bigrams).
+able information is used to score testing sentences.              Experiment 1: sumHLDA Parameter Analy-
+    Redundancy Elimination: To eliminate redun-                sis: In sumHLDA we introduce a prior different
+dant sentences in the generated summary, we in-                than the standard nested CRP (nCRP). Here, we
+crementally add onto the summary the highest                   illustrate that this prior is practical in learning hi-
+ranked sentence om and check if om significantly               erarchical topics for summarization task.
+repeats the information already included in the
+                                                                  We use sentences from the human generated
+summary until the algorithm reaches word count
+                                                               summaries during the discovery of hierarchical
+limit. We use a word overlap measure between
+                                                               topics of sentences in document clusters. Since
+sentences normalized to sentence length. A om is
+                                                               summary sentences generally contain abstract
+discarded if its similarity to any of the previously
+                                                               words, they are indicative of sentences in docu-
+selected sentences is greater than a threshold iden-
+                                                               ments and should produce minimal amount of new
+tified by a greedy search on the training dataset.
+                                                               topics (if not none). To implement this, in nCRP
+6     Experiments and Discussions                              prior of sumHLDA, we use dual hyper-parameters
+                                                               and choose a very small value for summary sen-
+In this section we describe a number of experi-                tences, γs = 10e−4  γo . We compare the re-
+ments using our hybrid model on 100 document                   sults to hLDA (Blei et al., 2003a) with nCRP prior
+clusters each containing 25 news articles from                 which uses only one free parameter, γ. To ana-
+DUC2005-2006 tasks. We evaluate the perfor-                    lyze this prior, we generate a corpus of v1300 sen-
+mance of HybHSum using 45 document clusters                    tences of a document cluster in DUC2005. We re-
+each containing 25 news articles from DUC2007                  peated the experiment for 9 other clusters of sim-
+task. From these sets, we collected v80K and                   ilar size and averaged the total number of gener-
+v25K sentences to compile training and testing                 ated topics. We show results for different values
+data respectively. The task is to create max. 250              of γ and γo hyper-parameters and tree depths.
+
+
+                                                         820
+
+
+   γ = γo      0.1               1                       10                 features on individual document level and OF rep-
+      depth   3 5 8         3    5      8           3     5    8            resents sentence term frequency, location, and size
+     hLDA     3 5 8     41 267 1509            1522 4080 8015               features. In comparison to the baseline, OF has a
+  sumHLDA     3 5 8     27 162         671     1207 3598 7050               significant effect on the ROUGE scores. In addi-
+                                                                            tion, DMF together with OF has shown to improve
+Table 1: Average # of topics per document cluster from                      all scores, in comparison to baseline, on average
+sumHLDA and hLDA for different γ and γo and tree depths.                    by 10%. Although the NMF have minimal indi-
+γs = 10e−4 is used for sumHLDA for each depth.                              vidual improvement, all these features can statis-
+                                                                            tically improve R-2 without stop words by 12%
+ Features            Baseline                       HybHSum
+                                                                            (significance is measured by t-test statistics).
+              R-1     R-2       R-SU4        R-1        R-2   R-SU4
+ NMF (1)      40.3    7.8       13.7         41.6       8.4   12.3             Experiment 3: ROUGE Evaluations
+ DMF (2)      41.3    7.5       14.3         41.3       8.0   13.9          We use the following multi-document summariza-
+ OF (3)       40.3    7.4       13.7         42.4       8.0   14.4          tion models along with the Baseline presented in
+ (1+2)        41.5    7.9       14.0         41.8       8.5   14.5          Experiment 2 to evaluate HybSumm.
+ (1+3)        40.8    7.5       13.8         41.6       8.2   14.1             ? PYTHY : (Toutanova et al., 2007) A state-
+ (2+3)        40.7    7.4       13.8         42.7       8.7   14.9          of-the-art supervised summarization system that
+ (1+2+3)      41.4    8.1       13.7         43.0       9.1   15.1          ranked first in overall ROUGE evaluations in
+                                                                            DUC2007. Similar to HybHSum, human gener-
+Table 2: ROUGE results (with stop-words) on DUC2006                         ated summaries are used to train a sentence rank-
+for different features and methods. Results in bold show sta-
+tistical significance over baseline in corresponding metric.
+                                                                            ing system using a classifier model.
+                                                                               ? HIERSUM : (Haghighi and Vanderwende,
+                                                                            2009) A generative summarization method based
+   As shown in Table 1, the nCRP prior for                                  on topic models, which uses sentences as an addi-
+sumHLDA is more effective than hLDA prior in                                tional level. Using an approximation for inference,
+the summarization task. Less number of top-                                 sentences are greedily added to a summary so long
+ics(nodes) in sumHLDA suggests that summary                                 as they decrease KL-divergence.
+sentences share pre-existing paths and no new                                 ? HybFSum (Hybrid Flat Summarizer): To
+paths or nodes are sampled for them. We also                                investigate the performance of hierarchical topic
+observe that using γo = 0.1 causes the model                                model, we build another hybrid model using flat
+to generate minimum number of topics (# of top-                             LDA (Blei et al., 2003b). In LDA each sentence
+ics=depth), while setting γo = 10 creates exces-                            is a superposition of all K topics with sentence
+sive amount of topics. γ0 = 1 gives reasonable                              specific weights, there is no hierarchical relation
+number of topics, thus we use this value for the                            between topics. We keep the parameters and the
+rest of the experiments. In experiment 3, we use                            features of the regression model of hierarchical
+both nCRP priors in HybHSum to analyze whether                              HybHSum intact for consistency. We only change
+there is any performance gain with the new prior.                           the sentence scoring method. Instead of the new
+   Experiment 2: Feature Selection Analysis                                 tree-based sentence scoring (§ 4), we present a
+Here we test individual contribution of each set                            similar method using topics from LDA on sen-
+of features on our HybHSum (using sumHLDA).                                 tence level. Note that in LDA the topic-word dis-
+We use a Baseline by replacing the scoring algo-                            tributions φ are over entire vocabulary, and topic
+rithm of HybHSum with a simple cosine distance                              mixing proportions for sentences θ are over all
+measure. The score of a candidate sentence is the                           the topics discovered from sentences in a docu-
+cosine similarity to the maximum matching sum-                              ment cluster. Hence, we define sim1 and sim2
+mary sentence. Later, we build a regression model                           measures for LDA using topic-word proportions φ
+with the same features as our HybHSum to create                             (in place of discrete topic-word distributions from
+a summary. We train models with DUC2005 and                                 each level in Eq.2) and topic mixing weights θ in
+evaluate performance on DUC2006 documents for                               sentences (in place of topic proportions in Eq.3)
+different parameter values as shown in Table 2.                             respectively. Maximum matching score is calcu-
+  As presented in § 5, NMF is the bundle of fre-                            lated as same as in HybHSum.
+quency based meta-features on document cluster                               ? HybHSum1 and HybHSum2 : To analyze the ef-
+level, DMF is a bundle of frequency based meta-                             fect of the new nCRP prior of sumHLDA on sum-
+
+
+                                                                      821
+
+
+ ROUGE         w/o stop words      w/ stop words                  (a) Ref. Output                    (b) HybHSum2 Output
+              R-1   R-2    R-4   R-1    R-2    R-4
+                                                              The Agriculture Department                 New federal rules for organic
+ Baseline    32.4   7.4   10.6   41.0   9.3    15.2           began to propose standards for             food will assure consumers that
+                                                              all organic foods in the late              the products are grown and
+ PYTHY       35.7   8.9   12.1   42.6   11.9   16.8           1990's because their sale had              processed to the same standards
+                                                              grown more than 20 per cent a              nationwide. But as sales grew
+ HIERSUM     33.8   9.3   11.6   42.4   11.8   16.7           year in that decade. In January            more than 20 percent a year
+ HybFSum     34.5   8.6   10.9   43.6   9.5    15.7           1999 the USDA approved a                   through the 1990s, organic food
+                                                              "certified organic" label for              came to account for $1 of every
+ HybHSum1    34.0   7.9   11.5   44.8   11.0   16.7           meats and poultry that were                $100 spent on food, and in 1997
+                                                              raised without growth hormones,            the agency took notice,
+ HybHSum2    35.1   8.3   11.8   45.6   11.4   17.2           pesticide-treated feed, and                proposing national organic
+                                                              antibiotics.                               standards for all food.
+
+
+
+
+                                                                                                                                     bF 2
+                                                                                                                                   Hy Sum
+                                                              (c) HybFSum Output
+
+
+
+
+                                                                                                                                          m
+Table 3: ROUGE results of the best systems on
+
+
+
+
+                                                                                                                                       Su
+                                                                                                                                      H
+                                                                                                               word
+
+
+
+
+                                                                                                                                  b
+                                                                                                                                  f
+                                                                                                                               Re
+                                                                                                                               Hy
+DUC2007 dataset (best results are bolded.)                    By the year 2001, organic
+                                                                                                              organic          6   6    6
+                                                              products are projected to
+                                                              command 5 percent of total food                 genetic          2   4    3
+                                                              sales in the United States. The
+                                                                                                               allow           2   2    1
+marization model performance, we build two dif-               sale of organics rose by about 30
+
+
+
+
+                                                                                                  specific
+                                                              percent last year, driven by                   agriculture       1   1    1
+ferent versions of our hybrid model: HybHSum1                 concerns over food safety, the
+                                                                                                              standard         5   7    0
+using standard hLDA (Blei et al., 2003a) and                  environment and a fear of
+                                                              genetically engineered food. U.S.                sludge          1   1    0
+HybHSum2 using our sumHLDA.                                   sales of organic foods have
+                                                                                                              federal          1   1    0
+                                                              grown by 20 percent annually for
+   The ROUGE results are shown in Table 3. The                the last seven years.                             bar            1   1    0
+HybHSum2 achieves the best performance on R-                                                                  certified        1   1    0
+
+1 and R-4 and comparable on R-2. When stop
+                                                            Figure 2: Example summary text generated by systems
+words are used the HybHSum2 outperforms state-              compared in Experiment 3. (Id:D0744 in DUC2007). Ref.
+of-the-art by 2.5-7% except R-2 (with statistical           is the human generated summary.
+significance). Note that R-2 is a measure of bi-
+gram recall and sumHLDA of HybHSum2 is built
+on unigrams rather than bigrams. Compared to                    Criteria                 HybFSum                 HybHSum2              Tie
+the HybFSum built on LDA, both HybHSum1&2                       Non-redundancy                26                          44           22
+yield better performance indicating the effective-              Coherence                     24                          56           12
+ness of using hierarchical topic model in summa-                Focus                         24                          56           12
+rization task. HybHSum2 appear to be less re-                   Responsiveness                30                          50           12
+dundant than HybFSum capturing not only com-                    Overall                       24                          66           2
+mon terms but also specific words in Fig. 2, due
+to the new hierarchical tree-based sentence scor-           Table 4: Frequency results of manual quality evaluations.
+ing which characterizes sentences on deeper level.          Results are statistically significant based on t-test. T ie indi-
+Similarly, HybHSum1&2 far exceeds baseline built            cates evaluations where two summaries are rated equal.
+on simple classifier. The results justify the per-
+formance gain by using our novel tree-based scor-
+ing method. Although the ROUGE scores for
+                                                            according to five criteria: non-redundancy (which
+HybHSum1 and HybHSum2 are not significantly
+                                                            summary is less redundant), coherence (which
+different, the sumHLDA is more suitable for sum-
+                                                            summary is more coherent), focus and readabil-
+marization tasks than hLDA.
+                                                            ity (content and not include unnecessary details),
+   HybHSum2 is comparable to (if not better than)           responsiveness and overall performance.
+fully generative HIERSUM. This indicates that
+with our regression model built on training data,              We asked 4 annotators to rate DUC2007 pre-
+summaries can be efficiently generated for test             dicted summaries (45 summary pairs per anno-
+documents (suitable for online systems).                    tator). A total of 92 pairs are judged and eval-
+   Experiment 4: Manual Evaluations                         uation results in frequencies are shown in Table
+Here, we manually evaluate quality of summaries,            4. The participants rated HybHSum2 generated
+a common DUC task. Human annotators are given               summaries more coherent and focused compared
+two sets of summary text for each document set,             to HybFSum. All results in Table 4 are statis-
+generated from two approaches: best hierarchi-              tically significant (based on t-test on 95% con-
+cal hybrid HybHSum2 and flat hybrid HybFSum                 fidence level.) indicating that HybHSum2 sum-
+models, and are asked to mark the better summary            maries are rated significantly better.
+
+
+                                                      822
+
+
+                     Document Cluster1                            Document Cluster2                                 Document Clustern
+                                             ...                                  ...                       ...                      ...
+                              sumHLDA                                      sumHLDA                                             sumHLDA
+                                     z
+                                    ...
+                                                                                  z
+                                                                                 ...                        ...                       z
+                                                                                                                                     ...
+                                          ..                                           ..                                                  ..
+                               z              zK                            z              zK                                   z             zK
+                         z          z
+                                             ...    z                 z          z
+                                                                                       ...      z                         z          z
+                                                                                                                                           ...     z
+
+                candidate sentence scores                        candidate sentence scores                    ... candidate sentence scores
+                                                   y-output                                     y-output                                           y-output
+                                                   0.02                                         0.35                                                   0.43
+                                                   0.01                                         0.09                                                   0.20
+                                                    0.0                                         0.01                                                   0.03
+                                                     .                                            .                                                      .
+                                                     .                                            .                                                      .
+                             f-input features                             f-input features                                    f-input features
+                    f1         f2       f3     ...         fq       f1      f2        f3    ...        fq     ...    f1         f2       f3    ...            fq
+
+
+
+
+                                                          h(f,y) : regression model for sentence ranking
+
+
+             Figure 3: Flow diagram for Hybrid Learning Algorithm for Multi-Document Summarization.
+
+
+7   Conclusion                                                                                      parametric inference of topic hierarchies. In
+                                                                                                    Journal of ACM, 2009.
+In this paper, we presented a hybrid model for
+multi-document summarization. We demonstrated                                                D. M. Blei, A. Ng, and M. Jordan. Latent dirichlet
+that implementation of a summary focused hierar-                                               allocation. In Jrnl. Machine Learning Research,
+chical topic model to discover sentence structures                                             3:993-1022, 2003b.
+as well as construction of a discriminative method                                           S.R.K. Branavan, H. Chen, J. Eisenstein, and
+for inference can benefit summarization quality on                                             R. Barzilay. Learning document-level seman-
+manual and automatic evaluation metrics.                                                       tic properties from free-text annotations. In
+                                                                                               Journal of Artificial Intelligence Research, vol-
+Acknowledgement                                                                                ume 34, 2009.
+Research supported in part by ONR N00014-02-1-                                               J.M. Conroy, J.D. Schlesinger, and D.P. O’Leary.
+0294, BT Grant CT1080028046, Azerbaijan Min-                                                   Topic focused multi-cument summarization us-
+istry of Communications and Information Tech-                                                  ing an approximate oracle score. In In Proc.
+nology Grant, Azerbaijan University of Azerbai-                                                ACL’06, 2006.
+jan Republic and the BISC Program of UC Berke-                                               H. DauméIII and D. Marcu. Bayesian query fo-
+ley.                                                                                           cused summarization. In Proc. ACL-06, 2006.
+                                                                                             H. Drucker, C.J.C. Burger, L. Kaufman, A. Smola,
+References
+                                                                                               and V. Vapnik. Support vector regression ma-
+R. Barzilay and L. Lee. Catching the drift: Proba-                                             chines. In NIPS 9, 1997.
+  bilistic content models with applications to gen-                                          A. Haghighi and L. Vanderwende. Exploring con-
+  eration and summarization. In In Proc. HLT-                                                  tent models for multi-document summarization.
+  NAACL’04, 2004.                                                                              In NAACL HLT-09, 2009.
+D. Blei, T. Griffiths, M. Jordan, and J. Tenenbaum.                                          T. Joachims. Making large-scale svm learning
+  Hierarchical topic models and the nested chi-                                                practical. In In Advances in Kernel Methods -
+  nese restaurant process. In In Neural Informa-                                               Support Vector Learning. MIT Press., 1999.
+  tion Processing Systems [NIPS], 2003a.                                                     C.-Y. Lin. Rouge: A package for automatic evalu-
+D. Blei, T. Griffiths, and M. Jordan. The nested                                               ation of summaries. In In Proc. ACL Workshop
+  chinese restaurant process and bayesian non-                                                 on Text Summarization Branches Out, 2004.
+
+
+                                                                                  823
+
+
+C.-Y. Lin and E.H. Hovy. Automatic evaluation
+  of summaries using n-gram co-occurance statis-
+  tics. In Proc. HLT-NAACL, Edmonton, Canada,
+  2003.
+C. Manning and H. Schuetze. Foundations of sta-
+  tistical natural language processing. In MIT
+  Press. Cambridge, MA, 1999.
+A. Nenkova and L. Vanderwende. The impact of
+  frequency on summarization. In Tech. Report
+  MSR-TR-2005-101, Microsoft Research, Red-
+  wood, Washington, 2005.
+D.R. Radev, H. Jing, M. Stys, and D. Tam.
+  Centroid-based summarization for multiple
+  documents. In In Int. Jrnl. Information Process-
+  ing and Management, 2004.
+D. Shen, J.T. Sun, H. Li, Q. Yang, and Z. Chen.
+  Document summarization using conditional
+  random fields. In Proc. IJCAI’07, 2007.
+J. Tang, L. Yao, and D. Chens. Multi-topic based
+   query-oriented summarization. In SIAM Inter-
+   national Conference Data Mining, 2009.
+I. Titov and R. McDonald. A joint model of text
+   and aspect ratings for sentiment summarization.
+   In ACL-08:HLT, 2008.
+K. Toutanova, C. Brockett, M. Gamon, J. Jagarla-
+  mudi, H. Suzuki, and L. Vanderwende. The ph-
+  thy summarization system: Microsoft research
+  at duc 2007. In Proc. DUC, 2007.
+J.Y. Yeh, H.-R. Ke, W.P. Yang, and I-H. Meng.
+   Text summarization using a trainable summa-
+   rizer and latent semantic analysis. In Informa-
+   tion Processing and Management, 2005.
+
+
+
+
+                                                     824
+

@@ -1,0 +1,587 @@
+                     Identifying Text Polarity Using Random Walks
+
+                   Ahmed Hassan                                         Dragomir Radev
+          University of Michigan Ann Arbor                      University of Michigan Ann Arbor
+             Ann Arbor, Michigan, USA                              Ann Arbor, Michigan, USA
+             hassanam@umich.edu                                      radev@umich.edu
+
+
+
+                      Abstract                                 time consuming process given the overwhelming
+                                                               amount of reviews on the Web. A list of words
+    Automatically identifying the polarity of                  with positive/negative polarity is a very valuable
+    words is a very important task in Natural                  resource for such an application.
+    Language Processing. It has applications                      Another interesting application is mining online
+    in text classification, text filtering, analysis           discussions. A threaded discussion is an electronic
+    of product review, analysis of responses                   discussion in which software tools are used to help
+    to surveys, and mining online discussions.                 individuals post messages and respond to other
+    We propose a method for identifying the                    messages. Threaded discussions include e-mails,
+    polarity of words. We apply a Markov ran-                  e-mail lists, bulletin boards, newsgroups, or Inter-
+    dom walk model to a large word related-                    net forums. Threaded discussions act as a very im-
+    ness graph, producing a polarity estimate                  portant tool for communication and collaboration
+    for any given word. A key advantage of                     in the Web. An enormous number of discussion
+    the model is its ability to accurately and                 groups exists on the Web. Millions of users post
+    quickly assign a polarity sign and mag-                    content to these groups covering pretty much ev-
+    nitude to any word. The method could                       ery possible topic. Tracking participant attitude
+    be used both in a semi-supervised setting                  towards different topics and towards other partici-
+    where a training set of labeled words is                   pants is a very interesting task. For example,Tong
+    used, and in an unsupervised setting where                 (2001) presented the concept of sentiment time-
+    a handful of seeds is used to define the                   lines. His system classifies discussion posts about
+    two polarity classes. The method is exper-                 movies as either positive or negative. This is used
+    imentally tested using a manually labeled                  to produce a plot of the number of positive and
+    set of positive and negative words. It out-                negative sentiment messages over time. All those
+    performs the state of the art methods in the               applications could benefit much from an automatic
+    semi-supervised setting. The results in the                way of identifying semantic orientation of words.
+    unsupervised setting is comparable to the
+                                                                  In this paper, we study the problem of automati-
+    best reported values. However, the pro-
+                                                               cally identifying semantic orientation of any word
+    posed method is faster and does not need a
+                                                               by analyzing its relations to other words. Auto-
+    large corpus.
+                                                               matically classifying words as either positive or
+                                                               negative enables us to automatically identify the
+1   Introduction
+                                                               polarity of larger pieces of text. This could be
+Identifying emotions and attitudes from unstruc-               a very useful building block for mining surveys,
+tured text is a very important task in Natural Lan-            product reviews and online discussions. We ap-
+guage Processing. This problem has a variety of                ply a Markov random walk model to a large se-
+possible applications. For example, there has been             mantic word graph, producing a polarity estimate
+a great body of work for mining product reputation             for any given word. Previous work on identifying
+on the Web (Morinaga et al., 2002; Turney, 2002).              the semantic orientation of words has addressed
+Knowing the reputation of a product is very impor-             the problem as both a semi-supervised (Takamura
+tant for marketing and customer relation manage-               et al., 2005) and an unsupervised (Turney and
+ment (Morinaga et al., 2002). Manually handling                Littman, 2003) learning problem. In the semi-
+reviews to identify reputation is a very costly, and           supervised setting, a training set of labeled words
+
+
+                                                         395
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 395–403,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+is used to train the model. In the unsupervised                 corpus of text to achieve good performance. They
+setting, only a handful of seeds is used to define              use several corpora, the size of the best performing
+the two polarity classes. The proposed method                   dataset is roughly one hundred billion words (Tur-
+could be used both in a semi-supervised and in                  ney and Littman, 2003).
+an unsupervised setting. Empirical experiments                     Takamura et al. (2005) proposed using spin
+on a labeled set of words show that the proposed                models for extracting semantic orientation of
+method outperforms the state of the art methods in              words. They construct a network of words us-
+the semi-supervised setting. The results in the un-             ing gloss definitions, thesaurus, and co-occurrence
+supervised setting are comparable to the best re-               statistics. They regard each word as an electron.
+ported values. The proposed method has the ad-                  Each electron has a spin and each spin has a direc-
+vantages that it is faster and it does not need a large         tion taking one of two values: up or down. Two
+training corpus.                                                neighboring spins tend to have the same orienta-
+   The rest of the paper is structured as follows.              tion from an energetic point of view. Their hy-
+In Section 2, we discuss related work. Section 3                pothesis is that as neighboring electrons tend to
+presents our method for identifying word polarity.              have the same spin direction, neighboring words
+Section 4 describes our experimental setup. We                  tend to have similar polarity. They pose the prob-
+conclude in Section 5.                                          lem as an optimization problem and use the mean
+                                                                field method to find the best solution. The anal-
+2   Related Work                                                ogy with electrons leads them to assume that each
+                                                                word should be either positive or negative. This
+Hatzivassiloglou and McKeown (1997) proposed
+                                                                assumption is not accurate because most of the
+a method for identifying word polarity of adjec-
+                                                                words in the language do not have any semantic
+tives. They extract all conjunctions of adjectives
+                                                                orientation. They report that their method could
+from a given corpus and then they classify each
+                                                                get misled by noise in the gloss definition and their
+conjunctive expression as either the same orien-
+                                                                computations sometimes get trapped in a local op-
+tation such as “simple and well-received” or dif-
+                                                                timum because of its greedy optimization flavor.
+ferent orientation such as “simplistic but well-
+received”. The result is a graph that they cluster                 Kamps et al.       (2004) construct a network
+into two subsets of adjectives. They classify the               based on WordNet synonyms and then use the
+cluster with the higher average frequency as posi-              shortest paths between any given word and the
+tive. They created and labeled their own dataset                words ’good’ and ’bad’ to determine word polar-
+for experiments. Their approach will probably                   ity. They report that using shortest paths could be
+works only with adjectives because there is noth-               very noisy. For example. ’good’ and ’bad’ them-
+ing wrong with conjunctions of nouns or verbs                   selves are closely related in WordNet with a 5-
+with opposite polarities (e.g., “war and peace”,                long sequence “good, sound, heavy, big, bad”. A
+“rise and fall”, ..etc).                                        given word w may be more connected to one set
+   Turney and Littman (2003) identify word po-                  of words (e.g., positive words), yet have a shorter
+larity by looking at its statistical association with           path connecting it to one word in the other set. Re-
+a set of positive/negative seed words. They use                 stricting seed words to only two words affects their
+two statistical measures for estimating association:            accuracy. Adding more seed words could help but
+Pointwise Mutual Information (PMI) and Latent                   it will make their method extremely costly from
+Semantic Analysis (LSA). To get co-occurrence                   the computation point of view. They evaluate their
+statistics, they submit several queries to a search             method only using adjectives.
+engine. Each query consists of the given word and                  Hu and Liu (2004) use WordNet synonyms and
+one of the seed words. They use the search engine               antonyms to predict the polarity of words. For
+near operator to look for instances where the given             any word, whose polarity is unknown, they search
+word is physically close to the seed word in the re-            WordNet and a list of seed labeled words to pre-
+turned document. They present their method as an                dict its polarity. They check if any of the syn-
+unsupervised method where a very small amount                   onyms of the given word has known polarity. If
+of seed words are used to define semantic orienta-              so, they label it with the label of its synonym. Oth-
+tion rather than train the model. One of the lim-               erwise, they check if any of the antonyms of the
+itations of their method is that it requires a large            given word has known polarity. If so, they label it
+
+
+                                                          396
+
+
+with the opposite label of the antonym. They con-              of words, some of which are labeled as either pos-
+tinue in a bootstrapping manner till they label all            itive or negative. In this network, two words are
+possible word. This method is quite similar to the             connecting if they are related. Different sources of
+shortest-path method proposed in (Kamps et al.,                information could be used to decide whether two
+2004).                                                         words are related or not. For example, the syn-
+   There are some other methods that try to build              onyms of any word are semantically related to it.
+lexicons of polarized words. Esuli and Sebas-                  The intuition behind that connecting semantically
+tiani (2005; 2006) use a textual representation of             related words is that those words tend to have simi-
+words by collating all the glosses of the word as              lar polarity. Now imagine a random surfer walking
+found in some dictionary. Then, a binary text clas-            along the network starting from an unlabeled word
+sifier is trained using the textual representation and         w. The random walk continues until the surfer
+applied to new words. Kim and Hovy (2004) start                hits a labeled word. If the word w is positive then
+with two lists of positive and negative seed words.            the probability that the random walk hits a positive
+WordNet is used to expand these lists. Synonyms                word is higher and if w is negative then the prob-
+of positive words and antonyms of negative words               ability that the random walk hits a negative word
+are considered positive, while synonyms of neg-                is higher. Similarly, if the word w is positive then
+ative words and antonyms of positive words are                 the average time it takes a random walk starting
+considered negative. A similar method is pre-                  at w to hit a positive node is less than the average
+sented in (Andreevskaia and Bergler, 2006) where               time it takes a random walk starting at w to hit a
+WordNet synonyms, antonyms, and glosses are                    negative node.
+used to iteratively expand a list of seeds. The senti-            In the rest of this section, we will describe how
+ment classes are treated as fuzzy categories where             we can construct a word relatedness graph in Sec-
+some words are very central to one category, while             tion 3.1. The random walk model is described in
+others may be interpreted differently. Kanayama                Section 3.2. Hitting time is defined in Section‘3.3.
+and Nasukawa (2006) use syntactic features and                 Finally, an algorithm for computing a sign and
+context coherency, the tendency for same polari-               magnitude for the polarity of any given word is
+ties to appear successively , to acquire polar atoms.          described in Section 3.4.
+   Other related work is concerned with subjec-
+tivity analysis. Subjectivity analysis is the task             3.1   Network Construction
+of identifying text that present opinions as op-
+posed to objective text that present factual in-               We construct a network where two nodes are
+formation (Wiebe, 2000). Text could be either                  linked if they are semantically related. Several
+words, phrases, sentences, or any other chunks.                sources of information could be used as indicators
+There are two main categories of work on sub-                  of the relatedness of words. One such important
+jectivity analysis. In the first category, subjective          source is WordNet (Miller, 1995). WordNet is a
+words and phrases are identified without consider-             large lexical database of English. Nouns, verbs,
+ing their context (Wiebe, 2000; Hatzivassiloglou               adjectives and adverbs are grouped into sets of
+and Wiebe, 2000; Banea et al., 2008). In the sec-              cognitive synonyms (synsets), each expressing a
+ond category, the context of subjective text is used           distinct concept (Miller, 1995). Synsets are inter-
+(Riloff and Wiebe, 2003; Yu and Hatzivassiloglou,              linked by means of conceptual-semantic and lexi-
+2003; Nasukawa and Yi, 2003; Popescu and Et-                   cal relations.
+zioni, 2005) Wiebe et al. (2001) lists a lot of appli-            The simplest approach is to connect words that
+cations of subjectivity analysis such as classifying           occur in the same WordNet synset. We can col-
+emails and mining reviews. Subjectivity analysis               lect all words in WordNet, and add links between
+is related to the proposed method because identi-              any two words that occurr in the same synset. The
+fying the polarity of text is the natural next step            resulting graph is a graph G(W, E) where W is a
+that should follow identifying subjective text.                set of word / part-of-speech pairs for all the words
+                                                               in WordNet. E is the set of edges connecting
+3   Word Polarity                                              each pair of synonymous words. Nodes represent
+                                                               word/pos pairs rather than words because the part
+We use a Markov random walk model to identify                  of speech tags are helpful in disambiguating the
+polarity of words. Assume that we have a network               different senses for a given word. For example,
+
+
+                                                         397
+
+
+the word “fine” has two different meanings when               the transition probabilities Pt+1|t (j|i) are not nec-
+used as an adjective and as a noun.                           essarily symmetric because of the node out degree
+   Several other methods could be used to link                normalization.
+words. For example, we can use other WordNet
+relations: hypernyms, similar to,...etc. Another              3.3   First-Passage Time
+source of links between words is co-occurrence                The mean first-passage (hitting) time h(i|k) is de-
+statistics from corpus. Following the method pre-             fined as the average number of steps a random
+sented in (Hatzivassiloglou and McKeown, 1997),               walker, starting in state i 6= k, will take to en-
+we can connect words if they appear in a conjunc-             ter state k for the first time (Norris, 1997). Let
+tive form in the corpus. This method is only appli-           G = (V, E) be a graph with a set of vertices V ,
+cable to adjectives. If two adjectives are connected          and a set of edges E. Consider a subset of vertices
+by “and” in conjunctive form, it is highly likely             S ⊂ V , Consider a random walk on G starting at
+that they have the same semantic orientation. In              node i 6∈ S. Let Nt denote the position of the ran-
+all our experiments, we restricted the network to             dom surfer at time t. Let h(i|S) be the the average
+only WordNet relations. We study the effect of us-            number of steps a random walker, starting in state
+ing co-occurrence statistics to connect words later           i 6∈ S, will take to enter a state k ∈ S for the first
+at the end of our experiments. If more than one re-           time. Let T S be the first-passage for any vertex in
+lation exists between any two words, the strength             S.
+of the corresponding edge is adjusted accordingly.
+                                                                      P (TS = t|N0 = i) =
+3.2   Random Walk Model                                               X
+                                                                          pij × P (TS = t − 1|N0 = j)               (2)
+Imagine a random surfer walking along the word                         j∈V
+relatedness graph G. Starting from a word with
+unknown polarity i , it moves to a node j with                  h(i|S) is the expectation of TS . Hence:
+probability Pij after the first step. The walk con-           h(i|S) = E(TS |N0 = i)
+tinues until the surfer hits a word with a known                       ∞
+                                                                       X
+polarity. Seed words with known polarity act as                      =    t × P (TS = t|N0 = i)
+an absorbing boundary for the random walk. If                            t=1
+we repeat the number of random walks N times,                          ∞ X
+                                                                       X
+the percentage of time at which the walk ends at                     =   t pij P (TS = t − 1|N0 = j)
+a positive/negative word could be used as an in-                         t=1    j∈V
+                                                                          ∞
+dicator of its positive/negative polarity. The aver-                     XX
+age time a random walk starting at w takes to hit                    =               (t − 1)pij P (TS = t − 1|N0 = j)
+                                                                         j∈V t=1
+the set of positive/negative nodes is also an indi-
+                                                                             ∞
+cator of its polarity. This view is closely related                      XX
+                                                                     +               pij P (TS = t − 1|N0 = j)
+to the partially labeled classification with random
+                                                                         j∈V t=1
+walks approach in (Szummer and Jaakkola, 2002)                                       ∞
+and the semi-supervised learning using harmonic
+                                                                         X           X
+                                                                     =         pij         tP (TS = t|N0 = j) + 1
+functions approach in (Zhu et al., 2003).                                j∈V         t=1
+   Let W be the set of words in our lexicon. We                          X
+construct a graph whose nodes V are all words                        =         pij × h(j|S) + 1                     (3)
+                                                                         j∈V
+in W The edges E correspond to relatedness be-
+tween words We define transition probabilities                Hence the first-passage (hitting) time can be for-
+Pt+1|t (j|i) from i to j by normalizing the weights           mally defined as:
+of the edges out of node i, so:                                         (
+                                                                          0                          i∈S
+                                                              h(i|S) = P
+                                  X
+            Pt+1|t (j|i) = W ij/      Wik        (1)
+                                                                             j∈V pij × h(j|S) + 1 otherwise
+                                  k
+                                                                                                             (4)
+where k represents all nodes in the neighborhood
+of i. Pt2|t1 (j|i) denotes the transition probability         3.4   Word Polarity Calculation
+from node i at step t1 to node j at time step t2 .            Based on the description of the random walk
+We note that the weights Wij are symmetric and                model and the first-passage (hitting) time above,
+
+
+                                                        398
+
+
+we now propose our word polarity identification                  We use WordNet (Miller, 1995) as a source
+algorithm. We begin by constructing a word relat-             of synonyms and hypernyms for the word relat-
+edness graph and defining a random walk on that               edness graph. We used 10-fold cross validation
+graph as described above. Let S + and S − be two              for all tests. We evaluate our results in terms of
+sets of vertices representing seed words that are             accuracy. Statistical significance was tested us-
+already labeled as either positive or negative re-            ing a 2-tailed paired t-test. All reported results
+spectively. For any given word w, we compute the              are statistically significant at the 0.05 level. We
+hitting time h(w|S + ), and h(w|S − ) for the two             perform experiments varying the parameters and
+sets iteratively as described earlier. if h(w|S + )           the network. We also look at the performance of
+is greater than h(w|S − ), the word is classified as          the proposed method for different parts of speech,
+negative, otherwise it is classified as positive. The         and for different confidence levels We compare
+ratio between the two hitting times could be used             our method to the Semantic Orientation from PMI
+as an indication of how positive/negative the given           (SO-PMI) method described in (Turney, 2002),
+word is. This is useful in case we need to pro-               the Spin model (Spin) described in (Takamura et
+vide a confidence measure for the prediction. This            al., 2005), the shortest path (short-path) described
+could be used to allow the model to abstain from              in (Kamps et al., 2004), and the bootstrapping
+classifying words with when the confidence level              (bootstrap) method described in (Hu and Liu,
+is low.                                                       2004).
+   Computing hitting time as described earlier may
+be time consuming especially if the graph is large.           4.1   Comparisons with other methods
+To overcome this problem, we propose a Monte
+Carlo based algorithm for estimating it. The algo-            This method could be used in a semi-supervised
+rithm is shown in Algorithm 1.                                setting where a set of labeled words are used and
+                                                              the system learns from these labeled nodes and
+Algorithm 1 Word Polarity using Random Walks                  from other unlabeled nodes. Under this setting, we
+Require: A word relatedness graph G                           compare our method to the spin model described
+ 1: Given a word w in V                                       in (Takamura et al., 2005). Table 2 compares the
+ 2: Define a random walk on the graph. the transi-            performance using 10-fold cross validation. The
+                                                              table shows that the proposed method outperforms
+                                         P i, and
+    tion probability between any two nodes
+    j is defined as: Pt+1|t (j|i) = W ij/ k Wik               the spin model. The spin model approach uses
+ 3: Start k independent random walks from w                   word glosses, WordNet synonym, hypernym, and
+    with a maximum number of steps m                          antonym relations, in addition to co-occurrence
+ 4: Stop when a positive word is reached                      statistics extracted from corpus. The proposed
+ 5: Let h∗ (w|S + ) be the estimated value for                method achieves better performance by only using
+    h(w|S + )                                                 WordNet synonym, hypernym and similar to rela-
+ 6: Repeat for negative words computing                       tions. Adding co-occurrence statistics slightly im-
+    h∗ (w|S − )                                               proved performance, while using glosses did not
+ 7: if h∗ (w|S + ) ≤ h∗ (w|S − ) then                         help at all.
+ 8:    Classify w as positive                                    We also compare our method to the SO-PMI
+ 9: else                                                      method presented in (Turney, 2002). They de-
+10:    Classify w as negative                                 scribe this setting as unsupervised (Turney, 2002)
+11: end if                                                    because they only use 14 seeds as paradigm words
+                                                              that define the semantic orientation rather than
+                                                              train the model. After (Turney, 2002), we use our
+4   Experiments
+                                                              method to predict semantic orientation of words in
+We performed experiments on the General In-                   the General Inquirer lexicon (Stone et al., 1966)
+quirer lexicon (Stone et al., 1966). We used it               using only 14 seed words. The network we used
+as a gold standard data set for positive/negative             contains only WordNet relations. No glosses or
+words. The dataset contains 4206 words, 1915 of               co-occurrence statistics are used. The results com-
+which are positive and 2291 are negative. Some of             paring the SO-PMI method with different dataset
+the ambiguous words were removed like (Turney,                sizes, the spin model, and the proposed method
+2002; Takamura et al., 2005).                                 using only 14 seeds is shown in Table 2. We no-
+
+
+                                                        399
+
+
+Table 1: Accuracy for adjectives only for the spin           Table 2: Accuracy for SO-PMI with different
+model, the bootstrap method, and the random                  dataset sizes, the spin model, and the random
+walk model.                                                  walks model for 10-fold cross validation and 14
+                                                             seeds.
+ spin-model    bootstrap    short-path   rand-walks
+    83.6         72.8          68.8         88.8                          -               CV     14 seeds
+                                                                  SO-PMI (1 × 107 )        -       61.3
+                                                                  SO-PMI (2 × 109 )        -       76.1
+tice that the random walk method outperforms SO-                  SO-PMI (1 × 1011 )       -       82.8
+PMI when SO-PMI uses datasets of sizes 1 × 107                       Spin Model           91.5     81.9
+and 2 × 109 words. The performance of SO-PMI                       Random Walks           93.1     82.1
+and the random walk methods are comparable
+when SO-PMI uses a very large dataset (1 × 1011
+words). The performance of the spin model ap-                of this parameter on our method’s performance.
+proach is also comparable to the other 2 meth-
+                                                                Figure 1 shows the accuracy of the random walk
+ods. The advantages of the random walk method
+                                                             method as a function of the maximum number of
+over SO-PMI is that it is faster and it does not
+                                                             steps m. m varies from 5 to 50. We use a net-
+need a very large corpus like the one used by SO-
+                                                             work built from WordNet synonyms and hyper-
+PMI. Another advantage is that the random walk
+                                                             nyms only. The number of samples k was set to
+method can be used along with the labeled data
+                                                             1000. We perform 10-fold cross validation using
+from the General Inquirer lexicon (Stone et al.,
+                                                             the General Inquirer lexicon. We notice that the
+1966) to get much better performance. This is
+                                                             maximum number of steps m has very little im-
+costly for the SO-PMI method because that will
+                                                             pact on performance until it rises above 30. When
+require the submission of almost 4000 queries to a
+                                                             it does, the performance drops by no more than
+commercial search engine.
+                                                             1%, and then it does not change anymore as m
+   We also compare our method to the bootstrap-
+                                                             increases. An interesting observation is that the
+ping method described in (Hu and Liu, 2004), and
+                                                             proposed method performs quite well with a very
+the shortest path method described in (Kamps et
+                                                             small number of steps (around 10). We looked at
+al., 2004). We build a network using only Word-
+                                                             the dataset to understand why increasing the num-
+Net synonyms and hypernyms. We restrict the test
+                                                             ber of steps beyond 30 negatively affects perfor-
+set to the set of adjectives in the General Inquirer
+                                                             mance. We found out that when the number of
+lexicon (Stone et al., 1966) because this method
+                                                             steps is very large, compared to the diameter of the
+is mainly interested in classifying adjectives. The
+                                                             graph, the random walk that starts at ambiguous
+performance of the spin model method, the boot-
+                                                             words, that are hard to classify, have the chance
+strapping method, the shortest path method, and
+                                                             of moving till it hits a node in the opposite class.
+the random walk method for only adjectives is
+                                                             That does not happen when the limit on the num-
+shown in Table 1. We notice from the table that the
+                                                             ber of steps is smaller because those walks are then
+random walk method outperforms both the spin
+                                                             terminated without hitting any labeled nodes and
+model, the bootstrapping method, and the short-
+                                                             hence ignored.
+est path method for adjectives. The reported ac-
+curacy for the shortest path method only considers              Next, we study the effect of the random of sam-
+the words it could assign a non-zero orientation             ples k on our method’s performance. As explained
+value. If we consider all words, the accuracy will           in Section 3.4, k is the number of samples used
+drop to around 61%.                                          by the Monte Carlo algorithm to find an estimate
+                                                             for the hitting time. Figure 2 shows the accuracy
+                                                             of the random walks method as a function of the
+                                                             number of samples k. We use the same settings as
+                                                             in the previous experiment. the only difference is
+4.1.1   Varying Parameters                                   that we fix m at 15 and vary k from 10 to 20000
+As we mentioned in Section 3.4, we use a param-              (note the logarithmic scale). We notice that the
+eter m to put an upper bound on the length of ran-           performance is badly affected, when the value of
+dom walks. In this section, we explore the impact            k is very small (less than 100). We also notice that
+
+
+                                                       400
+
+
+after 1000, varying k has very little, if any, effect         that the top 60% words are classified with an ac-
+on performance. This shows that the Monte Carlo               curacy greater than 99% for 10-fold cross valida-
+algorithm for computing the random walks hitting              tion and 92% with 14 seed words. This may be
+time performs quite well with values of the num-              compared to the work descibed in (Takamura et
+ber of samples as small as 1000.                              al., 2005) where they achieve the 92% level when
+   The preceding experiments suggest that the pa-             they only consider the top 1000 words (28%).
+rameter have very little impact on performance.                   Figure 3 shows a learning curve displaying how
+This suggests that the approach is fairly robust              the performance of the proposed method is af-
+(i.e., it is quite insensitive to different parameter         fected with varying the labeled set size (i.e., the
+settings).                                                    number of seeds). We notice that the accuracy ex-
+                                                              ceeds 90% when the training set size rises above
+                                                              20%. The accuracy steadily increases as the la-
+                                                              beled data increases.
+                                                                  We also looked at the classification accuracy for
+                                                              different parts of speech in Figure 5. we notice
+                                                              that, in the case of 10-fold cross validation, the
+                                                              performance is consistent across parts of speech.
+                                                              However, when we only use 14 seeds all of which
+                                                              are adjectives, similar to (Turney and Littman,
+                                                              2003), we notice that the performance on adjec-
+                                                              tives is much better than other parts of speech.
+Figure 1: The effect of varying the maximum                   When we use 14 seeds but replace some of the
+number of steps (m) on accuracy.                              adjectives with verbs and nouns like (love, harm,
+                                                              friend, enemy), the performance for nouns and
+                                                              verbs improves considerably at the cost of losing a
+                                                              little bit of the performance on adjectives. We had
+                                                              a closer look at the results to find out what are the
+                                                              reasons behind incorrect predictions. We found
+                                                              two main reasons. First, some words are ambigu-
+                                                              ous and has more than one sense, possible with
+                                                              different orientations. Disambiguating the sense
+                                                              of words given their context before trying to pre-
+                                                              dict their polarity should solve this problem. The
+                                                              second reason is that some words have very few
+                                                              connection in thesaurus. A possible solution to
+Figure 2: The effect of varying the number of sam-            this might be identifying those words and adding
+ples (k) on accuracy.                                         more links to them from glosses of co-occurrence
+                                                              statistics in corpus.
+4.1.2   Other Experiments
+We now measure the performance of the proposed
+method when the system is allowed to abstain
+from classifying the words for which it have low
+confidence. We regard the ratio between the hit-
+ting time to positive words and hitting time to neg-
+ative words as a confidence measure and evaluate
+the top words with the highest confidence level at
+different values of threshold. Figure 4 shows the
+accuracy for 10-fold cross validation and for us-
+ing only 14 seeds at different thresholds. We no-             Figure 3: The effect of varying the number of
+tice that the accuracy improves by abstaining from            seeds on accuracy.
+classifying the difficult words. The figure shows
+
+
+                                                        401
+
+
+                                                            tained herein are those of the authors and should
+                                                            not be construed as representing the official views
+                                                            or policies of IARPA, the ODNI or the U.S. Gov-
+                                                            ernment.
+
+
+                                                            References
+                                                            Alina Andreevskaia and Sabine Bergler. 2006. Min-
+                                                              ing wordnet for fuzzy sentiment: Sentiment tag ex-
+                                                              traction from wordnet glosses. In Proceedings of
+                                                              the 11th Conference of the European Chapter of the
+Figure 4: Accuracy for words with high confi-                 Association for Computational Linguistics (EACL
+dence measure.                                                2006).
+                                                            Carmen Banea, Rada Mihalcea, and Janyce Wiebe.
+                                                              2008. A bootstrapping method for building subjec-
+                                                              tivity lexicons for languages with scarce resources.
+                                                              In Proceedings of the Sixth International Language
+                                                              Resources and Evaluation (LREC’08).
+                                                            Andrea Esuli and Fabrizio Sebastiani. 2005. Deter-
+                                                              mining the semantic orientation of terms through
+                                                              gloss classification. In Proceedings of the 14th Con-
+                                                              ference on Information and Knowledge Manage-
+                                                              ment (CIKM 2005), pages 617–624.
+                                                            Andrea Esuli and Fabrizio Sebastiani. 2006. Senti-
+Figure 5: Accuracy for different parts of speech.             wordnet: A publicly available lexical resource for
+                                                              opinion mining. In Proceedings of the 5th Confer-
+                                                              ence on Language Resources and Evaluation (LREC
+5   Conclusions                                               2006), pages 417–422.
+Predicting the semantic orientation of words is             Vasileios Hatzivassiloglou and Kathleen R. McKeown.
+a very interesting task in Natural Language Pro-              1997. Predicting the semantic orientation of adjec-
+                                                              tives. In Proceedings of the eighth conference on
+cessing and it has a wide variety of applications.
+                                                              European chapter of the Association for Computa-
+We proposed a method for automatically predict-               tional Linguistics, pages 174–181.
+ing the semantic orientation of words using ran-
+dom walks and hitting time. The proposed method             Vasileios Hatzivassiloglou and Janyce Wiebe. 2000.
+                                                              Effects of adjective orientation and gradability on
+is based on the observation that a random walk                sentence subjectivity. In COLING, pages 299–305.
+starting at a given word is more likely to hit an-
+other word with the same semantic orientation be-           Minqing Hu and Bing Liu. 2004. Mining and sum-
+                                                              marizing customer reviews. In KDD ’04: Proceed-
+fore hitting a word with a different semantic ori-            ings of the tenth ACM SIGKDD international con-
+entation. The proposed method can be used in a                ference on Knowledge discovery and data mining,
+semi-supervised setting where a training set of la-           pages 168–177.
+beled words is used, and in an unsupervised setting
+                                                            Jaap Kamps, Maarten Marx, Robert J. Mokken, and
+where only a handful of seeds is used to define the            Maarten De Rijke. 2004. Using wordnet to mea-
+two polarity classes. We predict semantic orienta-             sure semantic orientations of adjectives. In National
+tion with high accuracy. The proposed method is                Institute for, pages 1115–1118.
+fast, simple to implement, and does not need any            Hiroshi Kanayama and Tetsuya Nasukawa. 2006.
+corpus.                                                       Fully automatic lexicon expansion for domain-
+                                                              oriented sentiment analysis. In Proceedings of the
+Acknowledgments                                               2006 Conference on Empirical Methods in Natural
+                                                              Language Processing (EMNLP 2006), pages 355–
+This research was funded by the Office of the                 363.
+Director of National Intelligence (ODNI), In-
+                                                            Soo-Min Kim and Eduard Hovy. 2004. Determin-
+telligence Advanced Research Projects Activity                ing the sentiment of opinions. In Proceedings of
+(IARPA), through the U.S. Army Research Lab.                  the 20th international conference on Computational
+All statements of fact, opinion or conclusions con-           Linguistics (COLING 2004), pages 1367–1373.
+
+
+                                                      402
+
+
+George A. Miller. 1995. Wordnet: a lexical database              Janyce Wiebe. 2000. Learning subjective adjectives
+  for english. Commun. ACM, 38(11):39–41.                           from corpora. In Proceedings of the Seventeenth
+                                                                    National Conference on Artificial Intelligence and
+Satoshi Morinaga, Kenji Yamanishi, Kenji Tateishi,                  Twelfth Conference on Innovative Applications of
+  and Toshikazu Fukushima. 2002. Mining prod-                       Artificial Intelligence, pages 735–740.
+  uct reputations on the web. In KDD ’02: Proceed-
+  ings of the eighth ACM SIGKDD international con-               Hong Yu and Vasileios Hatzivassiloglou. 2003. To-
+  ference on Knowledge discovery and data mining,                  wards answering opinion questions: separating facts
+  pages 341–349.                                                   from opinions and identifying the polarity of opinion
+                                                                   sentences. In Proceedings of the 2003 conference on
+Tetsuya Nasukawa and Jeonghee Yi. 2003. Senti-                     Empirical methods in natural language processing,
+  ment analysis: capturing favorability using natural              pages 129–136.
+  language processing. In K-CAP ’03: Proceedings
+  of the 2nd international conference on Knowledge               Xiaojin Zhu, Zoubin Ghahramani, and John Lafferty.
+  capture, pages 70–77.                                            2003. Semi-supervised learning using gaussian
+                                                                   fields and harmonic functions. In In ICML, pages
+J. Norris. 1997. Markov chains. Cambridge Univer-                  912–919.
+   sity Press.
+
+Ana-Maria Popescu and Oren Etzioni. 2005. Extract-
+  ing product features and opinions from reviews. In
+  HLT ’05: Proceedings of the conference on Hu-
+  man Language Technology and Empirical Methods
+  in Natural Language Processing, pages 339–346.
+
+Ellen Riloff and Janyce Wiebe. 2003. Learning extrac-
+   tion patterns for subjective expressions. In Proceed-
+   ings of the 2003 conference on Empirical methods in
+   natural language processing, pages 105–112.
+
+Philip Stone, Dexter Dunphy, Marchall Smith, and
+  Daniel Ogilvie. 1966. The general inquirer: A com-
+  puter approach to content analysis. The MIT Press.
+
+Martin Szummer and Tommi Jaakkola. 2002. Partially
+ labeled classification with markov random walks.
+ In Advances in Neural Information Processing Sys-
+ tems, pages 945–952.
+
+Hiroya Takamura, Takashi Inui, and Manabu Okumura.
+  2005. Extracting semantic orientations of words us-
+  ing spin model. In ACL ’05: Proceedings of the 43rd
+  Annual Meeting on Association for Computational
+  Linguistics, pages 133–140.
+
+Richard M. Tong. 2001. An operational system for de-
+  tecting and tracking opinions in on-line discussion.
+  Workshop note, SIGIR 2001 Workshop on Opera-
+  tional Text Classification.
+
+Peter Turney and Michael Littman. 2003. Measuring
+  praise and criticism: Inference of semantic orienta-
+  tion from association. ACM Transactions on Infor-
+  mation Systems, 21:315–346.
+
+Peter D. Turney. 2002. Thumbs up or thumbs down?:
+  semantic orientation applied to unsupervised classi-
+  fication of reviews. In ACL ’02: Proceedings of the
+  40th Annual Meeting on Association for Computa-
+  tional Linguistics, pages 417–424.
+
+Janyce Wiebe, Rebecca Bruce, Matthew Bell, Melanie
+   Martin, and Theresa Wilson. 2001. A corpus study
+   of evaluative and speculative language. In Proceed-
+   ings of the Second SIGdial Workshop on Discourse
+   and Dialogue, pages 1–10.
+
+
+                                                           403
+

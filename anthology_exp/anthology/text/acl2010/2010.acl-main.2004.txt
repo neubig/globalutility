@@ -1,0 +1,281 @@
+    Filtering Syntactic Constraints for Statistical Machine Translation
+
+
+                                 Hailong Cao and Eiichiro Sumita
+                         Language Translation Group, MASTAR Project
+                National Institute of Information and Communications Technology
+                 3-5 Hikari-dai, Seika-cho, Soraku-gun, Kyoto, Japan, 619-0289
+                      {hlcao, eiichiro.sumita }@nict.go.jp
+
+
+
+                                                              translation gets an extra credit if it respects the
+                      Abstract                                parse tree but may incur a cost if it violates a
+                                                              constituent boundary.
+    Source language parse trees offer very useful                In this paper, we address this challenge from a
+    but imperfect reordering constraints for statis-          less explored direction. Rather than use all con-
+    tical machine translation. A lot of effort has            straints offered by the parse trees, we propose
+    been made for soft applications of syntactic              using them selectively. Based on parallel training
+    constraints. We alternatively propose the se-
+                                                              data, a classifier is built automatically to decide
+    lective use of syntactic constraints. A classifier
+    is built automatically to decide whether a node           whether a node in the parse trees should be used
+    in the parse trees should be used as a reorder-           as a reordering constraint or not. As a result, we
+    ing constraint or not. Using this information             obtain a 0.8 BLEU point improvement over a full
+    yields a 0.8 BLEU point improvement over a                constraint-based system.
+    full constraint-based system.
+                                                              2      Reordering Constraints from Source
+1    Introduction                                                    Parse Trees
+In statistical machine translation (SMT), the                 In this section we briefly review a constraint-
+search problem is NP-hard if arbitrary reordering             based system named IST-ITG (Imposing Source
+is allowed (Knight, 1999). Therefore, we need to              Tree on Inversion Transduction Grammar, Ya-
+restrict the possible reordering in an appropriate            mamoto et al., 2008) upon which this work
+way for both efficiency and translation quality.              builds.
+The most widely used reordering constraints are                  When using ITG constraints during decoding,
+IBM constraints (Berger et al., 1996), ITG con-               the source-side parse tree structure is not consid-
+straints (Wu, 1995) and syntactic constraints                 ered. The reordering process can be more tightly
+(Yamada et al., 2000; Galley et al., 2004; Liu et             constrained if constraints from the source parse
+al., 2006; Marcu et al., 2006; Zollmann and                   tree are integrated with the ITG constraints. IST-
+Venugopal 2006; and numerous others). Syntac-                 ITG constraints directly apply source sentence
+tic constraints can be imposed from the source                tree structure to generate the target with the
+side or target side. This work will focus on syn-             following constraint: the target sentence is ob-
+tactic constraints from source parse trees.                   tained by rotating any node of the source sen-
+   Linguistic parse trees can provide very useful             tence tree structure.
+reordering constraints for SMT. However, they                    After parsing the source sentence, a bracketed
+are far from perfect because of both parsing er-              sentence is obtained by removing the node
+rors and the crossing of the constituents and for-            syntactic labels; this bracketed sentence can then
+mal phrases extracted from parallel training data.            be directly expressed as a tree structure. For
+The key challenge is how to take advantage of                 example1, the parse tree “(S1 (S (NP (DT This))
+the prior knowledge in the linguistic parse trees             (VP (AUX is) (NP (DT a) (NN pen)))))” is
+without affecting the strengths of formal phrases.            obtained from the source sentence “This is a
+Recent efforts attack this problem by using the               pen”, which consists of four words. By removing
+constraints softly (Cherry, 2008; Marton and
+Resnik, 2008). In their methods, a candidate                  1
+                                                                  We use English examples for the sake of readability.
+
+                                                         17
+                          Proceedings of the ACL 2010 Conference Short Papers, pages 17–21,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+the node syntactic labels, the bracketed sentence             •     All the words covered by the node remain
+“((This) ((is) ((a) (pen))))” is obtained. Such a                   contiguous after translation.
+bracketed sentence can be used to produce
+constraints.                                                     Otherwise the node is an interior node.
+   For example, for the source-side bracketed                    For example, in Figure 1, both node N1 and
+tree “((f1 f2) (f3 f4)) ”, eight target sequences [e1,        node N3 are frontier nodes. Node N2 is an inte-
+e2, e3, e4], [e2, e1, e3, e4], [e1, e2, e4, e3], [e2,         rior node because the source words f2, f3 and f4
+e1, e4, e3], [e3, e4, e1, e2], [e3, e4, e2, e1], [e4,         are translated into e2, e3 and e4, which are not
+e3, e1, e2], and [e4, e3, e2, e1] are possible. For           contiguous in the target side.
+the source-side bracketed tree “(((f1f2) f3) f4),”               Clearly, only frontier nodes should be used as
+eight sequences [e1, e2, e3, e4], [e2, e1, e3, e4],           reordering constraints while interior nodes are
+[e3, e1, e2, e4], [e3, e2, e1, e4], [e4, e1, e2, e3],         not suitable for this. However, little work has
+[e4, e2, e1, e3], [e4, e3, e1, e2], and [e4, e3, e2,          been done on how to explicitly distinguish these
+e1] are possible. When the source sentence tree               two kinds of nodes in the source parse trees. In
+structure is a binary tree, the number of word                this section, we will explore building a classifier
+orderings is reduced to 2N-1 where N is the length            which can label the nodes in the parse trees as
+of the source sentence.                                       frontier nodes or interior nodes.
+   The parsing results sometimes do not produce
+binary trees. In this case, some subtrees have                                   N1
+more than two child nodes. For a non-binary sub-
+                                                                                       N2
+tree, any reordering of child nodes is allowed.
+For example, if a subtree has three child nodes,                                            N3
+six reorderings of the nodes are possible.
+                                                                            f1    f2    f3 f4
+3    Learning to Classify Parse Tree
+                                                                            e2    e1    e4 e3
+     Nodes
+In IST-ITG and many other methods which use                         Figure 1: An example parse tree and align-
+syntactic constraints, all of the nodes in the parse                                ments
+trees are utilized. Though many nodes in the
+parse trees are useful, we would argue that some              3.1     Training
+nodes are not trustworthy. For example, if we                 Ideally, we would have a human-annotated cor-
+constrain the translation of “f1 f2 f3 f4” with               pus in which each sentence is parsed and each
+node N2 illustrated in Figure 1, then word “e1”               node in the parse trees is labeled as a frontier
+will never be put in the middle the other three               node or an interior node. But such a target lan-
+words. If we want to obtain the translation “e2 e1            guage specific corpus is hard to come by, and
+e4 e3”, node N3 can offer a good constraint                   never in the quantity we would like.
+while node N2 should be filtered out. In real cor-               Instead, we generate such a corpus automati-
+pora, cases such as node N2 are frequent enough               cally. We begin with a parallel corpus which will
+to be noticeable (see Fox (2002) or section 4.1 in            be used to train our SMT model. In our case, it is
+this paper).                                                  the FBIS Chinese-English corpus.
+   Therefore, we use the definitions in Galley et                Firstly, the Chinese sentences are segmented,
+al. (2004) to classify the nodes in parse trees into          POS tagged and parsed by the tools described in
+two types: frontier nodes and interior nodes.                 Kruengkrai et al. (2009) and Cao et al. (2007),
+Though the definitions were originally made for               both of which are trained on the Penn Chinese
+target language parse trees, they can be straight-            Treebank 6.0.
+forwardly applied to the source side. A node                     Secondly, we use GIZA++ to align the sen-
+which satisfies both of the following two condi-              tences in both the Chinese-English and English-
+tions is referred as a frontier node:                         Chinese directions. We combine the alignments
+                                                              using the “grow-diag-final-and” procedure pro-
+•   All the words covered by the node can be                  vided with MOSES (Koehn, 2007). Because
+    translated separately. That is to say, these              there are many errors in the alignment, we re-
+    words do not share a translation with any                 move the links if the alignment count is less than
+    word outside the coverage of the node.                    three for the source or the target word. Addition-
+                                                              ally, we also remove notoriously bad links in
+
+
+                                                         18
+
+
+{de, le} × {the, a, an} following Fossum and               MOSES decoder. Our decoder can operate on the
+Knight (2008).                                             same principles as the MOSES decoder. Mini-
+   Thirdly, given the parse trees and the align-           mum error rate training (MERT) with respect to
+ment information, we label each node as a fron-            BLEU score is used to tune the decoder’s pa-
+tier node or an interior node according to the             rameters, and it is performed using the standard
+definition introduced in this section. Using the           technique of Och (2003). A lexical reordering
+labeled nodes as training data, we can build a             model was used in our experiments.
+classifier. In theory, a broad class of machine               The translation model was created from the
+learning tools can be used; however, due to the            FBIS corpus. We used a 5-gram language model
+scale of the task (see section 4), we utilize the          trained with modified Knesser-Ney smoothing.
+Pegasos 2 which is a very fast SVM solver                  The language model was trained on the target
+(Shalev-Shwartz et al, 2007).                              side of FBIS corpus and the Xinhua news in GI-
+                                                           GAWORD corpus. The development and test
+3.2      Features                                          sets are from NIST MT08 evaluation campaign.
+For each node in the parse trees, we use the fol-          Table 1 shows the statistics of the corpora used
+lowing feature templates:                                  in our experiments.
+• A context-free grammar rule which rewrites
+    the current node (In this and all the following              Data        Sentences     Chinese      English
+                                                                                            words        words
+    grammar based features, a mark is used to                Training set     243,698     7,933,133   10,343,140
+    indicate which non terminal is the current             Development set      1664       38,779       46,387
+    node.)                                                     Test set         1357        32377       42,444
+• A context-free grammar rule which rewrites                GIGAWORD         19,049,757       -       306,221,306
+    the current node’s father
+• The combination of the above two rules                                Table 1: Corpora statistics
+• A lexicalized context-free grammar rule
+    which rewrites the current node                        4.1    Experiments on Nodes Classification
+• A lexicalized context-free grammar rule
+    which rewrites the current node’s father               We extracted about 3.9 million example nodes
+• Syntactic label, head word, and head POS                 from the training data, i.e. the FBIS corpus.
+    tag of the current node                                There were 2.37 million frontier nodes and 1.59
+• Syntactic label, head word, and head POS                 million interior nodes in these examples, give
+    tag of the current node’s left child                   rise to about 4.4 million features. To test the per-
+• Syntactic label, head word, and head POS                 formance of our classifier, we simply use the last
+    tag of the current node’s right child                  ten thousand examples as a test set, and the rest
+• Syntactic label, head word, and head POS                 being used as Pegasos training data. All the pa-
+    tag of the current node’s left brother                 rameters in Pegasos were set as default values. In
+                                                           this way, the accuracy of the classifier was
+• Syntactic label, head word, and head POS
+                                                           71.59%.
+    tag of the current node’s right brother
+                                                              Then we retrained our classifier by using all of
+• Syntactic label, head word, and head POS
+                                                           the examples. The nodes in the automatically
+    tag of the current node’s father
+                                                           parsed NIST MT08 test set were labeled by the
+• The leftmost word covered by the current                 classifier. As a result, 17,240 nodes were labeled
+    node and the word before it                            as frontier nodes and 5,736 nodes were labeled
+• The rightmost word covered by the current                as interior nodes.
+    node and the word after it
+                                                           4.2    Experiments on Chinese-English SMT
+
+4      Experiments                                         In order to confirm that it is advantageous to dis-
+                                                           tinguish between frontier nodes and interior
+Our SMT system is based on a fairly typical                nodes, we performed four translation experi-
+phrase-based model (Finch and Sumita, 2008).               ments.
+For the training of our SMT model, we use a                   The first one was a typical beam search decod-
+modified training toolkit adapted from the                 ing without any syntactic constraints.
+                                                              All the other three experiments were based on
+                                                           the IST-ITG method which makes use of syntac-
+2
+    http://www.cs.huji.ac.il/~shais/code/index.html
+
+                                                      19
+
+
+tic constraints. The difference between these               Acknowledgments
+three experiments lies in what constraints are
+used. In detail, the second one used all nodes              We would like to thank Taro Watanabe and
+recognized by the parser; the third one only used           Andrew Finch for insightful discussions. We also
+frontier nodes labeled by the classifier; the fourth        would like to thank the anonymous reviewers for
+one only used interior nodes labeled by the clas-           their constructive comments.
+sifier.
+   With the exception of the above differences,             Reference
+all the other settings were the same in the four            A.L. Berger, P.F. Brown, S.A.D. Pietra, V.J.D. Pietra,
+experiments. Table 2 summarizes the SMT per-                  J.R. Gillett, A.S. Kehler, and R.L. Mercer. 1996.
+formance.                                                     Language translation apparatus and method of us-
+                                                              ing context-based translation models. United States
+         Syntactic Constraints     BLEU                       patent, patent number 5510981, April.
+                 none              17.26                    Hailong Cao, Yujie Zhang and Hitoshi Isahara. Em-
+               all nodes           16.83                      pirical study on parsing Chinese based on Collins'
+                                                              model. 2007. In PACLING.
+            frontier nodes         17.63
+            interior nodes         16.59                    Colin Cherry. 2008. Cohesive phrase-Based decoding
+                                                              for statistical machine translation. In ACL- HLT.
+ Table 2: Comparison of different constraints by            Andrew Finch and Eiichiro Sumita. 2008. Dynamic
+                 SMT quality                                  model interpolation for statistical machine transla-
+                                                              tion. In SMT Workshop.
+   Clearly, we obtain the best performance if we            Victoria Fossum and Kevin Knight. 2008. Using bi-
+constrain the search with only frontier nodes.                lingual Chinese-English word alignments to re-
+Using just frontier yields a 0.8 BLEU point im-               solve PP attachment ambiguity in English. In
+provement over the baseline constraint-based                  AMTA Student Workshop.
+system which uses all the constraints.
+                                                            Heidi J. Fox. 2002. Phrasal cohesion and statistical
+   On the other hand, constraints from interior               machine translation. In EMNLP.
+nodes result in the worst performance. This com-
+parison shows it is necessary to explicitly distin-         Michel Galley, Mark Hopkins, Kevin Knight, and
+guish nodes in the source parse trees when they               Daniel Marcu. 2004. What's in a translation rule?
+                                                              In HLT-NAACL.
+are used as reordering constraints.
+   The improvement over the system without                  Kevin Knight. 1999. Decoding complexity in word
+constraints is only modest. It may be too coarse              replacement translation models. Computational
+to use pare trees as hard constraints. We believe             Linguistics, 25(4):607–615.
+a greater improvement can be expected if we ap-             Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris
+ply our idea to finer-grained approaches that use             Callison-Burch, Marcello Federico, Nicola Ber-
+constraints softly (Marton and Resnik (2008) and              toldi, Brooke Cowan, Wade Shen, Christine
+Cherry (2008)).                                               Moran, Richard Zens, Chris Dyer, Ondrej Bojar,
+                                                              Alexandra Constantin, Evan Herbst. 2007. Moses:
+5    Conclusion and Future Work                               Open Source Toolkit for Statistical Machine Trans-
+                                                              lation. In ACL demo and poster sessions.
+We propose a selectively approach to syntactic
+                                                            Canasai Kruengkrai, Kiyotaka Uchimoto, Jun'ichi
+constraints during decoding. A classifier is built            Kazama, Yiou Wang, Kentaro Torisawa and Hito-
+automatically to decide whether a node in the                 shi Isahara. 2009. An error-driven word-character
+parse trees should be used as a reordering con-               hybrid model for joint Chinese word segmentation
+straint or not. Preliminary results show that it is           and POS tagging. In ACL-IJCNLP.
+not only advantageous but necessary to explicitly
+                                                            Yang Liu, Qun Liu, Shouxun Lin. 2006. Tree-to-
+distinguish between frontier nodes and interior               string alignment template for statistical machine
+nodes.                                                        translation. In ACL-COLING.
+   The idea of selecting syntactic constraints is
+compatible with the idea of using constraints               Daniel Marcu, Wei Wang, Abdessamad Echihabi, and
+softly; we plan to combine the two ideas and ob-              Kevin Knight. 2006. SPMT: Statistical machine
+                                                              translation with syntactified target language
+tain further improvements in future work.
+                                                              phrases. In EMNLP.
+
+
+
+
+                                                       20
+
+
+Yuval Marton and Philip Resnik. 2008. Soft syntactic
+  constraints for hierarchical phrased-based transla-
+  tion. In ACL-HLT.
+Franz Och. 2003. Minimum error rate training in sta-
+   tistical machine translation. In ACL.
+Shai Shalev-Shwartz, Yoram Singer and Nathan Sre-
+  bro. 2007. Pegasos: Primal estimated sub-gradient
+  solver for SVM. In ICML.
+Dekai Wu. 1995. Stochastic inversion transduction
+  grammars with application to segmentation, brack-
+  eting, and alignment of parallel corpora. In IJCAI.
+Kenji Yamada and Kevin Knight. 2000. A syntax-
+  based statistical translation model. In ACL.
+Hirofumi Yamamoto, Hideo Okuma and Eiichiro
+  Sumita. 2008. Imposing constraints from the
+  source tree on ITG constraints for SMT. In Work-
+  shop on syntax and structure in statistical transla-
+  tion.
+Andreas Zollmann and Ashish Venugopal. 2006. Syn-
+  tax augmented machine translation via chart pars-
+  ing. In SMT Workshop, HLT-NAACL.
+
+
+
+
+                                                         21
+

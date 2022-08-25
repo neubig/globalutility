@@ -1,0 +1,758 @@
+                Learning to Translate with Source and Target Syntax
+
+                                             David Chiang
+                                    USC Information Sciences Institute
+                                     4676 Admiralty Way, Suite 1001
+                                     Marina del Rey, CA 90292 USA
+                                                chiang@isi.edu
+
+
+
+                      Abstract                                   In this paper, we explore the reasons why tree-
+                                                              to-tree translation has been challenging, and how
+    Statistical translation models that try to                source syntax and target syntax might be used to-
+    capture the recursive structure of language               gether. Drawing on previous successful attempts to
+    have been widely adopted over the last few                relax syntactic constraints during grammar extrac-
+    years. These models make use of vary-                     tion in various ways (Zhang et al., 2008; Liu et al.,
+    ing amounts of information from linguis-                  2009; Zollmann and Venugopal, 2006), we com-
+    tic theory: some use none at all, some use                pare several methods for extracting a synchronous
+    information about the grammar of the tar-                 grammar from tree-to-tree data. One confounding
+    get language, some use information about                  factor in such a comparison is that some methods
+    the grammar of the source language. But                   generate many new syntactic categories, making it
+    progress has been slower on translation                   more difﬁcult to satisfy syntactic constraints at de-
+    models that are able to learn the rela-                   coding time. We therefore propose to move these
+    tionship between the grammars of both                     constraints from the formalism into the model, im-
+    the source and target language. We dis-                   plemented as features in the hierarchical phrase-
+    cuss the reasons why this has been a chal-                based model Hiero (Chiang, 2005). This aug-
+    lenge, review existing attempts to meet this              mented model is able to learn from data whether
+    challenge, and show how some old and                      to rely on syntax or not, or to revert back to mono-
+    new ideas can be combined into a sim-                     tone phrase-based translation.
+    ple approach that uses both source and tar-                  In experiments on Chinese-English and Arabic-
+    get syntax for signiﬁcant improvements in                 English translation, we ﬁnd that when both source
+    translation accuracy.                                     and target syntax are made available to the model
+                                                              in an unobtrusive way, the model chooses to build
+1   Introduction                                              structures that are more syntactically well-formed
+Statistical translation models that use synchronous           and yield signiﬁcantly better translations than a
+context-free grammars (SCFGs) or related for-                 nonsyntactic hierarchical phrase-based model.
+malisms to try to capture the recursive structure of
+language have been widely adopted over the last               2    Grammar extraction
+few years. The simplest of these (Chiang, 2005)               A synchronous tree-substitution grammar (STSG)
+make no use of information from syntactic theo-               is a set of rules or elementary tree pairs (γ, α),
+ries or syntactic annotations, whereas others have            where:
+successfully incorporated syntactic information on
+the target side (Galley et al., 2004; Galley et al.,              • γ is a tree whose interior labels are source-
+2006) or the source side (Liu et al., 2006; Huang                   language nonterminal symbols and whose
+et al., 2006). The next obvious step is toward mod-                 frontier labels are source-language nontermi-
+els that make full use of syntactic information on                  nal symbols or terminal symbols (words). The
+both sides. But the natural generalization to this                  nonterminal-labeled frontier nodes are called
+setting has been found to underperform phrase-                      substitution nodes, conventionally marked
+based models (Liu et al., 2009; Ambati and Lavie,                   with an arrow (↓).
+2008), and researchers have begun to explore so-
+lutions (Zhang et al., 2008; Liu et al., 2009).                   • α is a tree of the same form except with
+
+
+                                                        1443
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1443–1452,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                                                                                                           .PP
+                                                                                                                                             .
+                                                                .N.P
+                                                                                                                     .P.                                           .LCP
+                                                                                                                                                                     .
+                                                     .N.P                     .N.P
+                                                                                                                     .在.                           .N.P                            .LC
+                                                                                                                                                                                     .
+                                                                                                                     zài
+                                              .Q.P          .N.P              .NN
+                                                                                .                                .
+               .PP
+                 .                                                                                                                        .N.P                   .N.P             . 中.
+                                                                                                                                                                                  zhōng
+                                              .CD
+                                                .             .
+                                                            .NN              .贸易
+                                                                               .                                                                                              .
+     .P.               .LCP
+                         .                                                                                                         .Q.P          .N.P            .NN
+                                                                                                                                                                   .
+                                                                             màoyì
+                                          . 两.               ..
+                                                             岸           .
+     .在.        ..N.P↓           .
+                               .LC                                                                                                   .
+                                                                                                                                   .CD             .
+                                                                                                                                                 .NN              .
+                                                                                                                                                                .贸易
+                                          liǎng              àn
+     zài                              .                 ..                                                                                                      màoyì
+ .                                                                                                                                 . 两.           ..        .
+                              . 中.                                                                                                                岸
+                              zhōng                                                                                                liǎng          àn
+ .              ..        .                                        .                                             .             .             ..
+
+
+       ..in.                                                                                                                                                                  .
+                                                                                                                                                                          ..the          ..two
+                                                                                                                                                                                             .         .
+                                                                                                                                                                                                  ..shores
+                                                                                         .
+                                                                                     ..the   ..two
+                                                                                                 .         .
+                                                                                                      ..shores
+      ..IN
+         .           ..N.P↓               ..trade
+                                               .                  .
+                                                            ..between                ..D.T   . .CD
+                                                                                                 .        .
+                                                                                                      . .NNS
+                                                                                                                                      ..trade
+                                                                                                                                           .                  .
+                                                                                                                                                        ..between         ..D.T              .
+                                                                                                                                                                                         . .CD        .
+                                                                                                                                                                                                  . .NNS
+
+      .          .
+               .PP                                                                                                                    . .NN
+                                                                                                                                          .             .         .
+                                                                                                                                                                .IN       .                .N.P
+                                          . .NN
+                                              .             .      .IN
+                                                                     .               .         .N.P
+                                                                                                                           ..in.      . .N.P            .                 .PP
+                                                                                                                                                                            .
+                                          . .N.P            .                        .PP
+                                                                                       .
+
+                                                                .N.P
+                                                                                                                              .
+                                                                                                                           ..IN       .                     .N.P
+                                          .
+                                                                                                                           .               .PP
+                                                                                                                                             .
+               (γ1 , α1 )                                                    (γ2 , α2 )                                                                     (γ3 , α3 )
+
+Figure 1: Synchronous tree substitution. Rule (γ2 , α2 ) is substituted into rule (γ1 , α1 ) to yield (γ3 , α3 ).
+
+
+           target-language instead of source-language                                                                                                 human      automatic
+           symbols.                                                                                          string-to-string                     198,445      142,820
+                                                                                                                max nested                         78,361       64,578
+     • The substitution nodes of γ are aligned bijec-                                                        tree-to-string                        60,939 (78%) 48,235 (75%)
+       tively with those of α.                                                                               string-to-tree                        59,274 (76%) 46,548 (72%)
+                                                                                                             tree-to-tree                          53,084 (68%) 39,049 (60%)
+     • The terminal-labeled frontier nodes of γ are
+       aligned (many-to-many) with those of α.                                                             Table 1: Analysis of phrases extracted from
+                                                                                                           Chinese-English newswire data with human and
+In the substitution operation, an aligned pair of                                                          automatic word alignments and parses. As tree
+substitution nodes is rewritten with an elementary                                                         constraints are added, the number of phrase pairs
+tree pair. The labels of the substitution nodes must                                                       drops. Errors in automatic annotations also de-
+match the root labels of the elementary trees with                                                         crease the number of phrase pairs. Percentages are
+which they are rewritten (but we will relax this                                                           relative to the maximum number of nested phrase
+constraint below). See Figure 1 for examples of el-                                                        pairs.
+ementary tree pairs and substitution.
+
+2.1        Exact tree-to-tree extraction                                                                   to sum over equivalent derivations during train-
+The use of STSGs for translation was proposed                                                              ing). If we take a more typical approach, which
+in the Data-Oriented Parsing literature (Poutsma,                                                          generalizes that of Galley et al. (2004; 2006) and
+2000; Hearne and Way, 2003) and by Eis-                                                                    is similar to Stat-XFER (Lavie et al., 2008), we
+ner (2003). Both of these proposals are more am-                                                           obtain the following grammar extraction method,
+bitious about handling spurious ambiguity than                                                             which we call exact tree-to-tree extraction.
+approaches derived from phrase-based translation                                                              Given a pair of source- and target-language
+usually have been (the former uses random sam-                                                             parse trees with a word alignment between their
+pling to sum over equivalent derivations during de-                                                        leaves, identify all the phrase pairs ( f̄ , ē), i.e.,
+coding, and the latter uses dynamic programming                                                            those substring pairs that respect the word align-
+
+
+                                                                                                      1444
+
+
+                                                                                                                     .IP..
+
+                                               .N.P                                     .PP
+                                                                                          .                                                      .N.P                        .V.P
+
+                                               .N.R               .P.                                          .LCP
+                                                                                                                 .                                .
+                                                                                                                                                .NN             .一百四十七亿      .  美元
+                                                                                                                                                                  yībǎisìshíqī měiyuán
+                                              . 台湾
+                                                 .                .在.                             .N.P                              .
+                                                                                                                                  .LC             .
+                                                                                                                                               . 顺差         .
+                                              Táiwān              zài                                                                          shùnchā
+                                          .                   .                        .N.P                   .N.P               . 中.      .
+                                                                                                                                 zhōng
+                                                                                .Q.P          .N.P            .NN
+                                                                                                                .            .
+
+                                                                                  .
+                                                                                .CD             .
+                                                                                              .NN              .
+                                                                                                             .贸易
+                                                                                                             màoyì
+                                                                                . 两.             ..
+                                                                                                 岸       .
+                                                                                liǎng            àn
+                                          .                   .             .               ..
+
+
+
+
+                                                                                                                   .
+                                                                                                               ..the         ..two
+                                                                                                                                 .            .
+                                                                                                                                         ..shores
+
+                                                                        ..trade
+                                                                             .          ..between
+                                                                                              .                ..D.T         . .CD
+                                                                                                                                 .       . .NNS
+                                                                                                                                             .
+
+                  .
+             ..Taiwan         ..’s.                                     . .NN
+                                                                            .           .        .IN
+                                                                                                   .           .                 .N.P
+
+             . .NNP
+                 .           ..POS
+                                 .            .
+                                         ..surplus           ..in.      . .N.P          .                      .PP
+                                                                                                                 .
+
+             .        .N.P               . .N.N             .
+                                                         ..IN           .                     .N.P
+
+             .                    .N.P                   .                      .PP
+                                                                                  .                                                                                     . US dollars
+                                                                                                                                                        ..is 14.7 billion
+
+             .                                        .N.P                                                                                              .             .V.P
+
+             .                                                                                                         .S.
+
+
+Figure 2: Example Chinese-English sentence pair with human-annotated parse trees and word alignments.
+
+
+ment in the sense that at least one word in f̄ is                                                                  and parsed data and automatically word-aligned
+aligned to a word in ē, and no word in f̄ is aligned                                                              and parsed data.1 The ﬁrst line shows the num-
+to a word outside of ē, or vice versa. Then the ex-                                                               ber of phrase-pair occurrences that are extracted
+tracted grammar is the smallest STSG G satisfying:                                                                 in the absence of syntactic constraints,2 and the
+  • If (γ, α) is a pair of subtrees of a training ex-                                                              second line shows the maximum number of nested
+    ample and the frontiers of γ and α form a                                                                      phrase-pair occurrences, which is the most that ex-
+    phrase pair, then (γ, α) is a rule in G.                                                                       act syntax-based extraction can achieve. Whereas
+                                                                                                                   tree-to-string extraction and string-to-tree extrac-
+  • If (γ2 , α2 ) ∈ G, (γ3 , α3 ) ∈ G, and (γ1 , α1 ) is                                                           tion permit 70–80% of the maximum possible
+    an elementary tree pair such that substituting                                                                 number of phrase pairs, tree-to-tree extraction only
+    (γ2 , α2 ) into (γ1 , α1 ) results in (γ3 , α3 ), then                                                         permits 60–70%.
+    (γ1 , α1 ) is a rule in G.                                                                                        Why does this happen? We can see that moving
+For example, consider the training example in Fig-                                                                 from human annotations to automatic annotations
+ure 2, from which the elementary tree pairs shown                                                                  decreases not only the absolute number of phrase
+in Figure 1 can be extracted. The elementary tree                                                                  pairs, but the percentage of phrases that pass the
+pairs (γ2 , α2 ) and (γ3 , α3 ) are rules in G because                                                             syntactic ﬁlters. Wellington et al. (2006), in a more
+their yields are phrase pairs, and (γ1 , α1 ) results                                                              systematic study, ﬁnd that, of sentences where the
+from subtracting (γ2 , α2 ) from (γ3 , α3 ).                                                                       tree-to-tree constraint blocks rule extraction, the
+                                                                                                                   majority are due to parser errors. To address this
+2.2   Fuzzy tree-to-tree extraction                                                                                problem, Liu et al. (2009) extract rules from pairs
+Exact tree-to-tree translation requires that transla-                                                                  1
+                                                                                                                         The ﬁrst 2000 sentences from the GALE Phase 4
+tion rules deal with syntactic constituents on both                                                                Chinese Parallel Word Alignment and Tagging Part 1
+the source and target side, which reduces the num-                                                                 (LDC2009E83) and the Chinese News Translation Text Part 1
+                                                                                                                   (LDC2005T06), respectively.
+ber of eligible phrases. Table 1 shows an analy-                                                                       2
+                                                                                                                         Only counting phrases that have no unaligned words at
+sis of phrases extracted from human word-aligned                                                                   their endpoints.
+
+
+                                                                                                       1445
+
+
+of packed forests instead of pairs of trees. Since a                                 .N.P
+packed forest is much more likely to include the
+                                                                   .
+                                                                 .NN           .NN
+                                                                                 .              . ↓
+                                                                                            ..NNP              . ↓
+                                                                                                            ..NNP
+correct tree, it is less likely that parser errors will
+cause good rules to be ﬁltered out.                            ..Prime
+                                                                    .       ..Minister
+                                                                                 .                               
+   However, even on human-annotated data, tree-                                                   . .NNP     . 
+                                                                                                       . . .NNP
+to-tree extraction misses many rules, and many                                                    .              .
+                                                                                                  .Ariel     . 
+such rules would seem to be useful. For ex-                                                         . . .S. haron
+ample, in Figure 2, the whole English phrase                                                (a)
+“Taiwan’s. . .shores” is an NP, but its Chinese
+counterpart is not a constituent. Furthermore, nei-
+ther “surplus. . .shores” nor its Chinese counterpart                                .N.P
+are constituents. But both rules are arguably use-
+ful for translation. Wellington et al. therefore ar-
+                                                                      .
+                                                                    .NN           .N.N            ..NNP ∗. NNP↓
+gue that in order to extract as many rules as possi-              ..Prime
+                                                                       .      ..Minister
+                                                                                   .
+ble, a more powerful formalism than synchronous
+CFG/TSG is required: for example, generalized                                               .       .NNP ∗. NNP
+multitext grammar (Melamed et al., 2004), which                                                     .
+                                                                                                  .NNP        .NNP
+                                                                                                                .
+is equivalent to synchronous set-local multicom-
+ponent CFG/TSG (Weir, 1988).                                                                      ..Ariel
+                                                                                                      .      ..Sharon
+                                                                                                                  .
+   But the problem illustrated in Figure 2 does                                             (b)
+not reﬂect a very deep fact about syntax or cross-
+lingual divergences, but rather choices in annota-        Figure 3: (a) Example tree-sequence substitution
+tion style that interact badly with the exact tree-       grammar and (b) its equivalent SAMT-style tree-
+to-tree extraction heuristic. On the Chinese side,        substitution grammar.
+the IP is too ﬂat (because 台湾/Táiwān has been
+analyzed as a topic), whereas the more articulated
+structure                                                 complex label X1 ∗ · · · ∗ Xn immediately dominat-
+                                                          ing the old roots, and replace every sequence of
+(1) [NP Táiwān [NP [PP zaì . . .] shùnchā]]               substitution sites X1 , . . . , Xn with a single substi-
+                                                          tution site X1 ∗ · · · ∗ Xn . This is essentially what
+would also be quite reasonable. On the English            syntax-augmented MT (SAMT) does, in the string-
+side, the high attachment of the PP disagrees with        to-tree setting (Zollmann and Venugopal, 2006). In
+the corresponding Chinese structure, but low at-          addition, SAMT drops the requirement that the Xi
+tachment also seems reasonable:                           are sisters, and uses categories X / Y (an X missing
+(2) [NP [NP Taiwan’s] [NP surplus in trade. . .]]         a Y on the right) and Y \ X (an X missing a Y on the
+                                                          left) in the style of categorial grammar (Bar-Hillel,
+Thus even in the gold-standard parse trees, phrase        1953). Under this ﬂexible notion of constituency,
+structure can be underspeciﬁed (like the ﬂat IP           both (1) and (2) become available, albeit with more
+above) or uncertain (like the PP attachment above).       complicated categories.
+   For this reason, some approaches work with a              Both STSSG and SAMT are examples of what
+more ﬂexible notion of constituency. Synchronous          we might call fuzzy tree-to-tree extraction. We fol-
+tree-sequence–substitution grammar (STSSG) al-            low this approach here as well: as in STSSG, we
+lows either side of a rule to comprise a sequence of      work on tree-to-tree data, and we use the com-
+trees instead of a single tree (Zhang et al., 2008). In   plex categories of SAMT. Moreover, we allow the
+the substitution operation, a sequence of sister sub-     product categories X1 ∗ · · · ∗ Xn to be of any length
+stitution nodes is rewritten with a tree sequence of      n, and we allow the slash categories to take any
+equal length (see Figure 3a). This extra ﬂexibility       number of arguments on either side. Thus every
+effectively makes the analysis (1) available to us.       phrase can be assigned a (possibly very complex)
+   Any STSSG can be converted into an equivalent          syntactic category, so that fuzzy tree-to-tree ex-
+STSG via the creation of virtual nodes (see Fig-          traction does not lose any rules relative to string-
+ure 3b): for every elementary tree sequence with          to-string extraction.
+roots X1 , . . . , Xn , create a new root node with a        On the other hand, if several rules are extracted
+
+
+                                                      1446
+
+
+that differ only in their nonterminal labels, only the          4. sort by the position of f̄ in the source-side
+most-frequent rule is kept, and its count is the to-               string (right to left).
+tal count of all the rules. This means that there is a
+                                                            For each phrase pair, accept it if it does not cross
+one-to-one correspondence between the rules ex-
+                                                            any previously accepted phrase pair; otherwise, re-
+tracted by fuzzy tree-to-tree extraction and hierar-
+                                                            ject it.
+chical string-to-string extraction.
+                                                               Because this heuristic produces a set of nesting
+2.3   Nesting phrases                                       phrases, we can represent them all in a single re-
+                                                            structured tree. In Figure 4, this heuristic chooses
+Fuzzy tree-to-tree extraction (like string-to-string
+                                                            structure (a) because the English-side counterpart
+extraction) generates many times more rules than
+                                                            of IP/VP has the simple category NP.
+exact tree-to-tree extraction does. In Figure 2, we
+observed that the ﬂat structure of the Chinese IP           3     Decoding
+prevented exact tree-to-tree extraction from ex-
+tracting a rule containing just part of the IP, for         In decoding, the rules extracted during training
+example:                                                    must be reassembled to form a derivation whose
+                                                            source side matches the input sentence. In the ex-
+(3) [PP zaì . . .] [NP shùnchā]                             act tree-to-tree approach, whenever substitution
+                                                            is performed, the root labels of the substituted
+(4) [NP Táiwān] [PP zaì . . .] [NP shùnchā]                 trees must match the labels of the substitution
+                                                            nodes—call this the matching constraint. Because
+(5) [PP zaì . . .] [NP shùnchā] [VP . . . měiyuán]          this constraint must be satisﬁed on both the source
+                                                            and target side, it can become difﬁcult to general-
+Fuzzy tree-to-tree extraction allows any of these
+                                                            ize well from training examples to new input sen-
+to be the source side of a rule. We might think of
+                                                            tences.
+it as effectively restructuring the trees by insert-
+                                                               Venugopal et al. (2009), in the string-to-tree set-
+ing nodes with complex labels. However, it is not
+                                                            ting, attempt to soften the data-fragmentation ef-
+possible to represent this restructuring with a sin-
+                                                            fect of the matching constraint: instead of trying
+gle tree (see Figure 4). More formally, let us say
+                                                            to ﬁnd the single derivation with the highest prob-
+that two phrases wi · · · wj−1 and wi′ · · · wj′ −1 nest
+                                                            ability, they sum over derivations that differ only
+if i ≤ i′ < j′ ≤ j or i′ ≤ i < j < j′ ; otherwise,
+                                                            in their nonterminal labels and try to ﬁnd the sin-
+they cross. The two Chinese phrases (4) and (5)
+                                                            gle derivation-class with the highest probability.
+cross, and therefore cannot both be constituents in
+                                                            Still, only derivations that satisfy the matching
+the same tree. In other words, exact tree-to-tree ex-
+                                                            constraint are included in the summation.
+traction commits to a single structural analysis but
+                                                               But in some cases we may want to soften the
+fuzzy tree-to-tree extraction pursues many restruc-
+                                                            matching constraint itself. Some syntactic cate-
+tured analyses at once.
+                                                            gories are similar enough to be considered com-
+   We can strike a compromise by continuing to al-
+                                                            patible: for example, if a rule rooted in VBD (past-
+low SAMT-style complex categories, but commit-
+                                                            tense verb) could substitute into a site labeled VBZ
+ting to a single analysis by requiring all phrases to
+                                                            (present-tense verb), it might still generate correct
+nest. To do this, we use a simple heuristic. Iterate
+                                                            output. This is all the more true with the addition
+through all the phrase pairs ( f̄ , ē) in the following
+                                                            of SAMT-style categories: for example, if a rule
+order:
+                                                            rooted in ADVP ∗ VP could substitute into a site
+  1. sort by whether f̄ and ē can be assigned a sim-       labeled VP, it would very likely generate correct
+     ple syntactic category (both, then one, then           output.
+     neither); if there is a tie,                              Since we want syntactic information to help the
+                                                            model make good translation choices, not to rule
+  2. sort by how many syntactic constituents f̄ and         out potentially correct choices, we can change the
+     ē cross (low to high); if there is a tie,             way the information is used during decoding: we
+                                                            allow any rule to substitute into any site, but let
+  3. give priority to ( f̄ , ē) if neither f̄ nor ē be-   the model learn which substitutions are better than
+     gins or ends with punctuation; if there is a tie,      others. To do this, we add the following features to
+     ﬁnally                                                 the model:
+
+
+                                                        1447
+
+
+                                                      .IP..                                                                 .IP..
+
+                      .IP/.VP                                                 .V.P                 .N.P                                                  .IP\.NP
+
+     .N.P                             .PP ∗. NP                      .一百四十七亿      .  美元            .N.R                             .PP ∗. NP                              .V.P
+                                                                       yībǎisìshíqī měiyuán
+                                                                 .
+     .N.R                       .PP
+                                  .                       .N.P                                       .
+                                                                                                  . 台湾                   .PP
+                                                                                                                           .                          .N.P        .一百四十七亿      .  美元
+                                                                                                  Táiwān                                                            yībǎisìshíqī měiyuán
+                                                                                              .                                                               .
+       .
+    . 台湾          .在 两 岸 .贸易 中                            .NN
+                                                            .                                                  .在 两 岸 .贸易 中                          .NN
+                                                                                                                                                       .
+    Táiwān        zài liǎng àn màoyì zhōng                                                                     zài liǎng àn màoyì zhōng
+.             .                                                                                            .
+                                                      . 顺差
+                                                         .                                                                                          . 顺差
+                                                                                                                                                       .
+                                                      shùnchā                                                                                       shùnchā
+.             .                                   .                                           .            .                                    .
+                                            (a)                                                                                           (b)
+
+Figure 4: Fuzzy tree-to-tree extraction effectively restructures the Chinese tree from Figure 2 in two ways
+but does not commit to either one.
+
+      • match f counts the number of substitutions                                                4       Experiments
+        where the label of the source side of the sub-
+        stitution site matches the root label of the                                              To compare the methods described above with hi-
+        source side of the rule, and ¬match f counts                                              erarchical string-to-string translation, we ran ex-
+        those where the labels do not match.                                                      periments on both Chinese-English and Arabic-
+                                                                                                  English translation.
+      • subst fX→Y counts the number of substitutions
+        where the label of the source side of the sub-                                            4.1      Setup
+        stitution site is X and the root label of the                                             The sizes of the parallel texts used are shown in Ta-
+        source side of the rule is Y.                                                             ble 2. We word-aligned the Chinese-English par-
+                                                                                                  allel text using GIZA++ followed by link dele-
+      • matche , ¬matche , and substeX→Y do the same                                              tion (Fossum et al., 2008), and the Arabic-English
+        for the target side.                                                                      parallel text using a combination of GIZA++ and
+                                                                                                  LEAF (Fraser and Marcu, 2007). We parsed the
+      • rootX,X′ counts the number of rules whose                                                 source sides of both parallel texts using the Berke-
+        root label on the source side is X and whose                                              ley parser (Petrov et al., 2006), trained on the Chi-
+        root label on the target side is X′ .3                                                    nese Treebank 6 and Arabic Treebank parts 1–3,
+                                                                                                  and the English sides using a reimplementation of
+For example, in the derivation of Figure 1, the fol-
+                                                                                                  the Collins parser (Collins, 1997).
+lowing features would ﬁre:
+                                                                                                     For string-to-string extraction, we used the same
+                                        match f = 1                                               constraints as in previous work (Chiang, 2007),
+                                                                                                  with differences shown in Table 2. Rules with non-
+                                  subst fNP→NP = 1                                                terminals were extracted from a subset of the data
+                                        match e = 1                                               (labeled “Core” in Table 2), and rules without non-
+                                  subst eNP→NP = 1                                                terminals were extracted from the full parallel text.
+                                                                                                  Fuzzy tree-to-tree extraction was performed using
+                                      rootNP,NP = 1
+                                                                                                  analogous constraints. For exact tree-to-tree ex-
+                                                                                                  traction, we used simpler settings: no limit on ini-
+   The decoding algorithm then operates as in hier-
+                                                                                                  tial phrase size or unaligned words, and a maxi-
+archical phrase-based translation. The decoder has
+                                                                                                  mum of 7 frontier nodes on the source side.
+to store in each hypothesis the source and target
+root labels of the partial derivation, but these la-                                                 All systems used the glue rule (Chiang, 2005),
+bels are used for calculating feature vectors only                                                which allows the decoder, working bottom-up, to
+and not for checking well-formedness of deriva-                                                   stop building hierarchical structure and instead
+tions. This additional state does increase the search                                             concatenate partial translations without any re-
+space of the decoder, but we did not change any                                                   ordering. The model attaches a weight to the glue
+pruning settings.                                                                                 rule so that it can learn from data whether to build
+                                                                                                  shallow or rich structures, but for efﬁciency’s sake
+      3
+          Thanks to Adam Pauls for suggesting this feature class.                                 the decoder has a hard limit, called the distortion
+
+
+                                                                                          1448
+
+
+                            Chi-Eng Ara-Eng             syntactic information leads to more complex struc-
+Core training words         32+38M 28+34M               tures. This change by itself led to an increase in
+     initial phrase size      10       15               the BLEU score. We then compared against two
+     ﬁnal rule size            6        6               systems using tree-to-tree grammars. Using ex-
+     nonterminals              2        2               act tree-to-tree extraction, we got a much smaller
+     loose source              0       ∞                grammar, but decreased accuracy on all but the
+     loose target              0        2               Chinese-English test set, where there was no sig-
+Full training words        240+260M 190+220M            niﬁcant change. But with fuzzy tree-to-tree extrac-
+     ﬁnal rule size            6        6               tion, we obtained an improvement of +0.6 on both
+     nonterminals              0        0               Chinese-English sets, and +0.7/+0.8 on the Arabic-
+     loose source             ∞        ∞                English sets.
+     loose target              1        2                  Applying the heuristic for nesting phrases re-
+                                                        duced the grammar sizes dramatically (by a factor
+Table 2: Rule extraction settings used for exper-       of 2.4 for Chinese and 4.2 for Arabic) but, interest-
+iments. “Loose source/target” is the maximum            ingly, had almost no effect on translation quality: a
+number of unaligned source/target words at the          slight decrease in BLEU on the Arabic-English de-
+endpoints of a phrase.                                  velopment set and no signiﬁcant difference on the
+                                                        other sets. This suggests that the strength of fuzzy
+                                                        tree-to-tree extraction lies in its ability to break up
+limit, above which the glue rule must be used.
+                                                        ﬂat structures and to reconcile the source and target
+   We trained two 5-gram language models: one
+                                                        trees with each other, rather than multiple restruc-
+on the combined English halves of the bitexts, and
+                                                        turings of the training trees.
+one on two billion words of English. These were
+smoothed using modiﬁed Kneser-Ney (Chen and             4.3   Rule usage
+Goodman, 1998) and stored using randomized data         We then took a closer look at the behavior of
+structures similar to those of Talbot and Brants        the string-to-string and fuzzy tree-to-tree gram-
+(2008).                                                 mars (without the nesting heuristic). Because the
+   The base feature set for all systems was similar     rules of these grammars are in one-to-one corre-
+to the expanded set recently used for Hiero (Chiang     spondence, we can analyze the string-to-string sys-
+et al., 2009), but with bigram features (source and     tem’s derivations as though they had syntactic cat-
+target word) instead of trigram features (source and    egories. First, Table 4 shows that the system using
+target word and neighboring source word). For all       the tree-to-tree grammar used the glue rule much
+systems but the baselines, the features described       less and performed more matching substitutions.
+in Section 3 were added. The systems were trained       That is, in order to minimize errors on the tuning
+using MIRA (Crammer and Singer, 2003; Chiang            set, the model learned to build syntactically richer
+et al., 2009) on a tuning set of about 3000 sentences   and more well-formed derivations.
+of newswire from NIST MT evaluation data and               Tables 5 and 6 show how the new syntax fea-
+GALE development data, disjoint from the train-         tures affected particular substitutions. In general
+ing data. We optimized feature weights on 90% of        we see a shift towards more matching substitu-
+this and held out the other 10% to determine when       tions; correct placement of punctuation is particu-
+to stop.                                                larly emphasized. Several changes appear to have
+                                                        to do with deﬁniteness of NPs: on the English
+4.2   Results
+                                                        side, adding the syntax features encourages match-
+Table 3 shows the scores on our development sets        ing substitutions of type DT \ NP-C (anarthrous
+and test sets, which are about 3000 and 2000            NP), but discourages DT \ NP-C and NN from
+sentences, respectively, of newswire drawn from         substituting into NP-C and vice versa. For ex-
+NIST MT evaluation data and GALE development            ample, a translation with the rewriting NP-C →
+data and disjoint from the tuning data.                 DT \ NP-C begins with “24th meeting of the
+   For Chinese, we ﬁrst tried increasing the distor-    Standing Committee. . .,” but the system using the
+tion limit from 10 words to 20. This limit controls     fuzzy tree-to-tree grammar changes this to “The
+how deeply nested the tree structures built by the      24th meeting of the Standing Committee. . . .”
+decoder are, and we want to see whether adding             The root features had a less noticeable effect on
+
+
+                                                    1449
+
+
+                                                                                      BLEU
+             task        extraction           dist. lim.    rules     features   dev     test
+             Chi-Eng     string-to-string        10         440M           1k    32.7    23.4
+                         string-to-string        20         440M           1k    33.3    23.7 ]
+                         tree-to-tree exact      20          50M           5k    32.8    23.9
+                         tree-to-tree fuzzy      20         440M         160k    33.9 ]  24.3 ]
+                         + nesting               20         180M          79k    33.9    24.3
+             Ara-Eng     string-to-string        10         790M           1k    48.7    48.9
+                         tree-to-tree exact      10          38M           5k    46.6    47.5
+                         tree-to-tree fuzzy      10         790M         130k    49.4    49.7 ]
+                         + nesting               10         190M          66k    49.2    49.8
+
+Table 3: On both the Chinese-English and Arabic-English translation tasks, fuzzy tree-to-tree extraction
+outperforms exact tree-to-tree extraction and string-to-string extraction. Brackets indicate statistically
+insigniﬁcant differences (p ≥ 0.05).
+
+
+rule choice; one interesting change was that the fre-
+quency of rules with Chinese root VP / IP and En-
+glish root VP / S-C increased from 0.2% to 0.7%:
+apparently the model learned that it is good to use
+rules that pair Chinese and English verbs that sub-
+categorize for sentential complements.
+
+5   Conclusion
+Though exact tree-to-tree translation tends to ham-                                             frequency (%)
+per translation quality by imposing too many con-           task        side      kind          s-to-s  t-to-t
+straints during both grammar extraction and de-             Chi-Eng     source    glue             25      18
+coding, we have shown that using both source and                                  match            17      30
+target syntax improves translation accuracy when                                  mismatch         58      52
+the model is given the opportunity to learn from                        target    glue             25      18
+data how strongly to apply syntactic constraints.                                 match              9     23
+Indeed, we have found that the model learns on its                                mismatch         66      58
+own to choose syntactically richer and more well-           Ara-Eng     source    glue             36      19
+formed structures, demonstrating that source- and                                 match            17      34
+target-side syntax can be used together proﬁtably                                 mismatch         48      47
+as long as they are not allowed to overconstrain the                    target    glue             36      19
+translation model.                                                                match             11     29
+                                                                                  mismatch         53      52
+Acknowledgements
+                                                           Table 4: Moving from string-to-string (s-to-s) ex-
+Thanks to Steve DeNeefe, Adam Lopez, Jonathan
+                                                           traction to fuzzy tree-to-tree (t-to-t) extraction de-
+May, Miles Osborne, Adam Pauls, Richard
+                                                           creases glue rule usage and increases the frequency
+Schwartz, and the anonymous reviewers for their
+                                                           of matching substitutions.
+valuable help. This research was supported in part
+by DARPA contract HR0011-06-C-0022 under
+subcontract to BBN Technologies and DARPA
+contract HR0011-09-1-0028. S. D. G.
+
+
+
+
+                                                    1450
+
+
+                                                          References
+                             frequency (%)                Vamshi Ambati and Alon Lavie. 2008. Improving
+             kind            s-to-s  t-to-t                 syntax driven translation models by re-structuring
+         NP → NP              16.0    20.7                  divergent and non-isomorphic parse tree structures.
+         VP → VP                3.3     5.9                 In Proc. AMTA-2008 Student Research Workshop,
+                                                            pages 235–244.
+         NN → NP                3.1     1.3
+         NP → VP                2.5     0.8               Yehoshua Bar-Hillel. 1953. A quasi-arithmetical
+         NP → NN                2.0     1.4                 notation for syntactic description. Language,
+         NP → entity            1.4     1.6                 29(1):47–58.
+         NN → NN                1.1     1.0
+                                                          Stanley F. Chen and Joshua Goodman. 1998. An
+         QP → entity            1.0     1.3                  empirical study of smoothing techniques for lan-
+         VV → VP                1.0     0.7                  guage modeling. Technical Report TR-10-98, Har-
+         PU → NP                0.8     1.1                  vard University Center for Research in Computing
+         VV → VP ∗ PU           0.2     1.2                  Technology.
+         PU → PU                0.1     3.8               David Chiang, Wei Wang, and Kevin Knight. 2009.
+                                                            11,001 new features for statistical machine transla-
+Table 5: Comparison of frequency of source-side             tion. In Proc. NAACL HLT 2009, pages 218–226.
+rewrites in Chinese-English translation between
+                                                          David Chiang.     2005.       A hierarchical phrase-
+string-to-string (s-to-s) and fuzzy tree-to-tree (t-to-     based model for statistical machine translation. In
+t) grammars. All rewrites occurring more than 1%            Proc. ACL 2005, pages 263–270.
+of the time in either system are shown. The label
+“entity” stands for handwritten rules for named en-       David Chiang. 2007. Hierarchical phrase-based trans-
+                                                            lation. Computational Linguistics, 33(2):201–228.
+tities and numbers.
+                                                          Michael Collins. 1997. Three generative lexicalised
+                                                            models for statistical parsing. In Proc. ACL-EACL,
+                                                            pages 16–23.
+                                   frequency (%)
+             kind                  s-to-s   t-to-t        Koby Crammer and Yoram Singer. 2003. Ultracon-
+        NP-C → NP-C                   5.3     8.7           servative online algorithms for multiclass problems.
+                                                            Journal of Machine Learning Research, 3:951–991.
+         NN → NN                      1.7     3.0
+        NP-C → entity                 1.1     1.4         Jason Eisner. 2003. Learning non-isomorphic tree
+   DT \ NP-C → DT \ NP-C              1.1     2.6            mappings for machine translation. In Proc. ACL
+         NN → NP-C                    0.8     0.4            2003 Companion Volume, pages 205–208.
+        NP-C → VP                     0.8     1.1         Victoria Fossum, Kevin Knight, and Steven Abney.
+   DT \ NP-C → NP-C                   0.8     0.5           2008. Using syntax to improve word alignment
+        NP-C → DT \ NP-C              0.6     0.4           for syntax-based statistical machine translation. In
+           JJ → JJ                    0.5     1.8           Proc. Third Workshop on Statistical Machine Trans-
+                                                            lation, pages 44–52.
+        NP-C → NN                     0.5     0.3
+          PP → PP                     0.4     1.7         Alexander Fraser and Daniel Marcu. 2007. Getting
+        VP-C → VP-C                   0.4     1.2           the structure right for word alignment: LEAF. In
+          VP → VP                     0.4     1.4           Proc. EMNLP 2007, pages 51–60.
+          IN → IN                     0.1     1.8
+                                                          Michel Galley, Mark Hopkins, Kevin Knight, and
+            ,→,                       0.1     1.7           Daniel Marcu. 2004. What’s in a translation rule?
+                                                            In Proc. HLT-NAACL 2004, pages 273–280.
+Table 6: Comparison of frequency of target-side
+rewrites in Chinese-English translation between           Michel Galley, Jonathan Graehl, Kevin Knight, Daniel
+                                                            Marcu, Steve DeNeefe, Wei Wang, and Ignacio
+string-to-string (s-to-s) and fuzzy tree-to-tree (t-        Thayer. 2006. Scalable inference and training
+to-t) grammars. All rewrites occurring more than            of context-rich syntactic translation models. In
+1% of the time in either system are shown, plus a           Proc. COLING-ACL 2006, pages 961–968.
+few more of interest. The label “entity” stands for
+                                                          Mary Hearne and Andy Way. 2003. Seeing the wood
+handwritten rules for named entities and numbers.          for the trees: Data-Oriented Translation. In Proc. MT
+                                                           Summit IX, pages 165–172.
+
+
+                                                      1451
+
+
+Liang Huang, Kevin Knight, and Aravind Joshi. 2006.
+  Statistical syntax-directed translation with extended
+  domain of locality. In Proc. AMTA 2006, pages
+  65–73.
+
+Alon Lavie, Alok Parlikar, and Vamshi Ambati. 2008.
+  Syntax-driven learning of sub-sentential translation
+  equivalents and translation rules from parsed parallel
+  corpora. In Proc. SSST-2, pages 87–95.
+
+Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-
+  to-string alignment template for statistical machine
+  translation. In Proc. COLING-ACL 2006, pages
+  609–616.
+
+Yang Liu, Yajuan Lü, and Qun Liu. 2009. Improv-
+  ing tree-to-tree translation with packed forests. In
+  Proc. ACL 2009, pages 558–566.
+
+I. Dan Melamed, Giorgio Satta, and Ben Welling-
+   ton. 2004. Generalized multitext grammars. In
+   Proc. ACL 2004, pages 661–668.
+
+Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+   Klein. 2006. Learning accurate, compact, and in-
+   terpretable tree annotation. In Proc. COLING-ACL
+   2006, pages 433–440.
+
+Arjen Poutsma. 2000. Data-Oriented Translation. In
+  Proc. COLING 2000, pages 635–641.
+
+David Talbot and Thorsten Brants. 2008. Random-
+  ized language models via perfect hash functions. In
+  Proc. ACL-08: HLT, pages 505–513.
+
+Ashish Venugopal, Andreas Zollmann, Noah A. Smith,
+  and Stephan Vogel. 2009. Preference grammars:
+  Softening syntactic constraints to improve statisti-
+  cal machine translation. In Proc. NAACL HLT 2009,
+  pages 236–244.
+
+David J. Weir. 1988. Characterizing Mildly Context-
+  Sensitive Grammar Formalisms. Ph.D. thesis, Uni-
+  versity of Pennsylvania.
+
+Benjamin Wellington, Sonjia Waxmonsky, and I. Dan
+  Melamed. 2006. Empirical lower bounds on
+  the complexity of translational equivalence. In
+  Proc. COLING-ACL 2006, pages 977–984.
+
+Min Zhang, Hongfei Jiang, Aiti Aw, Haizhou Li,
+  Chew Lim Tan, and Sheng Li. 2008. A tree sequence
+  alignment-based tree-to-tree translation model. In
+  Proc. ACL-08: HLT, pages 559–567.
+
+Andreas Zollmann and Ashish Venugopal. 2006. Syn-
+  tax augmented machine translation via chart parsing.
+  In Proc. Workshop on Statistical Machine Transla-
+  tion, pages 138–141.
+
+
+
+
+                                                       1452
+

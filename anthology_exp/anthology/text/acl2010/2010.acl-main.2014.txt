@@ -1,0 +1,418 @@
+                       Correcting Errors in a Treebank Based on
+                       Synchronous Tree Substitution Grammar
+                           Yoshihide Kato1 and Shigeki Matsubara2
+                       1Information Technology Center, Nagoya University
+                   2Graduate School of Information Science, Nagoya University
+                         Furo-cho, Chikusa-ku, Nagoya, 464-8601 Japan
+                           yosihide@el.itc.nagoya-u.ac.jp
+
+
+                    Abstract                                mation. By using an STSG, our method trans-
+                                                            forms parse trees containing errors into the ones
+    This paper proposes a method of correct-                whose errors are corrected. The grammar is au-
+    ing annotation errors in a treebank. By us-             tomatically induced from the treebank. To select
+    ing a synchronous grammar, the method                   STSG rules which are useful for error correction,
+    transforms parse trees containing annota-               we define a score function based on the occurrence
+    tion errors into the ones whose errors are              frequencies of the rules. An experimental result
+    corrected. The synchronous grammar is                   shows that the selected rules archive high preci-
+    automatically induced from the treebank.                sion.
+    We report an experimental result of apply-                 This paper is organized as follows: Section 2
+    ing our method to the Penn Treebank. The                gives an overview of previous work. Section 3 ex-
+    result demonstrates that our method cor-                plains our method of correcting errors in a tree-
+    rects syntactic annotation errors with high             bank. Section 4 reports an experimental result us-
+    precision.                                              ing the Penn Treebank.
+1   Introduction                                            2 Previous Work
+Annotated corpora play an important role in the
+                                                            This section summarizes previous methods for
+fields such as theoretical linguistic researches or
+                                                            correcting errors in corpus annotation and dis-
+the development of NLP systems. However, they
+                                                            cusses their problem.
+often contain annotation errors which are caused
+                                                               Some research addresses the detection of er-
+by a manual or semi-manual mark-up process.
+                                                            rors in pos-annotation (Nakagawa and Matsumoto,
+These errors are problematic for corpus-based re-
+                                                            2002; Dickinson and Meurers, 2003a), syntactic
+searches.
+                                                            annotation (Dickinson and Meurers, 2003b; Ule
+   To solve this problem, several error detection
+                                                            and Simov, 2004; Dickinson and Meurers, 2005),
+and correction methods have been proposed so far
+                                                            and dependency annotation (Boyd et al., 2008).
+(Eskin, 2000; Nakagawa and Matsumoto, 2002;
+                                                            These methods only detect corpus positions where
+Dickinson and Meurers, 2003a; Dickinson and
+                                                            errors occur. It is unclear how we can correct the
+Meurers, 2003b; Ule and Simov, 2004; Murata
+                                                            errors.
+et al., 2005; Dickinson and Meurers, 2005; Boyd
+                                                               Several methods can correct annotation errors
+et al., 2008). These methods detect corpus posi-
+                                                            (Eskin, 2000; Murata et al., 2005). These meth-
+tions which are marked up incorrectly, and find
+                                                            ods are to correct tag-annotation errors, that is,
+the correct labels (e.g. pos-tags) for those posi-
+                                                            they simply suggest a candidate tag for each po-
+tions. However, the methods cannot correct errors
+                                                            sition where an error is detected. The methods
+in structural annotation. This means that they are
+                                                            cannot correct syntactic annotation errors, because
+insufficient to correct annotation errors in a tree-
+                                                            syntactic annotation is structural. There is no ap-
+bank.
+                                                            proach to correct structural annotation errors.
+   This paper proposes a method of correcting er-
+                                                               To clarify the problem, let us consider an exam-
+rors in structural annotation. Our method is based
+                                                            ple. Figure 1 depicts two parse trees annotated ac-
+on a synchronous grammar formalism, called syn-
+                                                            cording to the Penn Treebank annotation 1 . The
+chronous tree substitution grammar (STSG) (Eis-
+                                                              1
+ner, 2003), which defines a tree-to-tree transfor-                0 and *T* are null elements.
+
+
+                                                       74
+                        Proceedings of the ACL 2010 Conference Short Papers, pages 74–79,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ (a) incorrect parse tree                                                                             source                        target
+                            S                                                                                    PRN                               PRN
+    NP               PRN                                  VP                                .                        S                       ,1         S         ,4
+    DT                S                            MD           VP                          .
+                                                                                                          ,1   NP2       VP3   ,4                 NP2       VP3
+ That ,       NP            VP                 ,   will    VB             ADJP
+          , PRP       VBP           SBAR       ,           be        JJ          PP
+              they    say -NONE-           S                    good IN               NP                  Figure 2: An example of an STSG rule
+                                0    -NONE-                                 for       NNS
+                                       *T*                                        bonds                • a one-to-one alignment between nodes in the
+ (b) correct parse tree                                                                                  elementary trees
+                            S
+
+    NP               PRN                                  VP                                .        For a tree pair ⟨t, t′ ⟩, the tree t and t′ are
+    DT    ,           S                            MD           VP                          .
+                                                                                                     called source and target, respectively. The non-
+                                               ,
+ That ,       NP            VP                     will    VB             ADJP
+                                                                                                     terminal leaves of elementary trees are called fron-
+                                               ,
+                                                                                                     tier nodes. There exists a one-to-one alignment
+              PRP     VBP           SBAR                   be        JJ          PP
+                                                                                                     between the frontier nodes in t and t′ . The rule
+              they    say -NONE-           S                    good IN               NP
+                                                                                                     means that the structure which matches the source
+                                0    -NONE-                                 for       NNS
+                                                                                                     elementary tree is transformed into the structure
+                                       *T*                                        bonds              which is represented by the target elementary tree.
+                                                                                                     Figure 2 shows an example of an STSG rule. The
+         Figure 1: An example of a treebank error                                                    subscripts indicate the alignment. This rule can
+                                                                                                     correct the errors in the parse tree (a) depicted in
+                                                                                                     Figure 1.
+parse tree (a) contains errors and the parse tree
+                                                                                                        An STSG derives tree pairs. Any derivation
+(b) is the corrected version. In the parse tree (a),
+                                                                                                     process starts with the pair of nodes labeled with
+the positions of the two subtrees (, ,) are erro-
+                                                                                                     special symbols called start symbols. A derivation
+neous. To correct the errors, we need to move the
+                                                                                                     proceeds in the following steps:
+subtrees to the positions which are directly dom-
+inated by the node PRN. This example demon-                                                            1. Choose a pair of frontier nodes ⟨η, η ′ ⟩ for
+strates that we need a framework of transforming                                                          which there exists an alignment.
+tree structures to correct structural annotation er-
+                                                                                                       2. Choose a rule ⟨t, t′ ⟩ s.t. label(η) = root(t)
+rors.
+                                                                                                          and label(η ′ ) = root(t′ ) where label(η) is
+3        Correcting Errors by Using                                                                       the label of η and root(t) is the root label of
+         Synchronous Grammar                                                                              t.
+
+To solve the problem described in Section 2, this                                                      3. Substitute t and t′ into η and η ′ , respectively.
+section proposes a method of correcting structural                                                   Figure 3 shows a derivation process in an STSG.
+annotation errors by using a synchronous tree sub-                                                      In the rest of the paper, we focus on the rules
+stitution grammar (STSG) (Eisner, 2003). An                                                          in which the source elementary tree is not identi-
+STSG defines a tree-to-tree transformation. Our                                                      cal to its target, since such identical rules cannot
+method induces an STSG which transforms parse                                                        contribute to error correction.
+trees containing errors into the ones whose errors
+are corrected.                                                                                       3.2 Inducing an STSG for Error Correction
+                                                                                                     This section describes a method of inducing an
+3.1 Synchronous Tree Substitution Grammar
+                                                                                                     STSG for error correction. The basic idea of
+First of all, we describe the STSG formalism. An                                                     our method is similar to the method presented by
+STSG defines a set of tree pairs. An STSG can be                                                     Dickinson and Meurers (2003b). Their method de-
+treated as a tree transducer which takes a tree as                                                   tects errors by seeking word sequences satisfying
+input and produces a tree as output. Each grammar                                                    the following conditions:
+rule consists of the following elements:
+                                                                                                       • The word sequence occurs more than once in
+    • a pair of trees called elementary trees                                                            the corpus.
+
+
+                                                                                                75
+
+
+ (a)             S                                  S                                    PRN                                                         PRN
+                                                                                           S                                        ,1                    S                    ,10
+ (b)             S                                  S                        ,1 NP2                  VP4             ,10            ,     NP2                    VP4             ,
+  NP        PRN           VP   .    NP         PRN            VP   .          , PRP3 VBP5              SBAR6          ,                  PRP3 VBP5                    SBAR6
+  DT                                DT                                            they     say -NONE-7 S8                                they             say -NONE-7 S8
+ That                               That                                                              0 -NONE-9                                                    0 -NONE-9
+                                                                                                                *T*                                                        *T*
+ (c)             S                                  S
+
+  NP        PRN           VP   .    NP         PRN            VP   .
+                                                                            Figure 4: An example of a partial parse tree pair
+  DT         S                      DT ,        S         ,
+                                                                            in a pseudo parallel corpus
+ That ,   NP     VP   ,             That     NP     VP
+
+                                                                                                           S
+ (d)             S                                  S
+                                                                             NP                 PRN                                             VP                               .
+  NP        PRN           VP   .    NP         PRN            VP   .         DT                  S                                       VBD              ADJP
+                                                                                    ,                                           ,                                                .
+  DT         S                      DT ,        S         ,                  That ,      NP                VP                   ,        will        JJ          PP
+ That ,   NP     VP   ,             That ,   NP     VP
+                                                                                         PRP     VBP               SBAR                         proud         IN        NP
+        , PRP                                PRP
+                                                                                         they    say -NONE-                S                                  of PRP$ NNS
+          they                               they
+                                                                                                               0    -NONE-                                            his abilities
+                                                                                                                      *T*
+
+
+
+Figure 3: A derivation process of tree pairs in an                          Figure 5: Another example of a parse tree contain-
+STSG                                                                        ing a word sequence “, they say ,”
+
+   • Different syntactic labels are assigned to the                         where yield(τ ) is the word sequence dominated
+     occurrences of the word sequence.                                      by τ .
+                                                                               Let us consider an example. If the parse trees
+Unlike their method, our method seeks word se-                              depicted in Figure 1 exist in the treebank T , the
+quences whose occurrences have different partial                            pair of partial parse trees depicted in Figure 4 is
+parse trees. We call a collection of these word                             an element of P ara(T ). We also obtain this pair
+sequences with partial parse trees pseudo paral-                            in the case where there exists not the parse tree
+lel corpus. Moreover, our method extracts STSG                              (b) depicted in Figure 1 but the parse tree depicted
+rules which transform the one partial tree into the                         in Figure 5, which contains the word sequence “,
+other.                                                                      they say ,”.
+3.2.1 Constructing a Pseudo Parallel Corpus                                 3.2.2 Inducing a Grammar from a Pseudo
+Our method firstly constructs a pseudo parallel                                   Parallel Corpus
+corpus which represents a correspondence be-                                Our method induces an STSG from the pseudo
+tween parse trees containing errors and the ones                            parallel corpus according to the method proposed
+whose errors are corrected. The procedure is as                             by Cohn and Lapata (2009). Cohn and Lapata’s
+follows: Let T be the set of the parse trees oc-                            method can induce an STSG which represents a
+curring in the corpus. We write Sub(σ) for the                              correspondence in a parallel corpus. Their method
+set which consists of the partial parse trees in-                           firstly determine an alignment of nodes between
+cluded in the parse tree σ. A pseudo parallel cor-                          pairs of trees in the parallel corpus and extracts
+pus P ara(T ) is constructed as follows:                                    STSG rules according to the alignments.
+                                              ∪                                For partial parse trees τ and τ ′ , we define a node
+P ara(T ) = {⟨τ, τ ′ ⟩ | τ, τ ′ ∈                       Sub(σ)              alignment C(τ, τ ′ ) as follows:
+                                              σ∈T
+                                               ′
+                                   ∧ τ ̸= τ                                 C(τ, τ ′ ) = {⟨η, η ′ ⟩ | η ∈ N ode(τ )
+                                   ∧ yield(τ ) = yield(τ ′ )                                                                   ∧ η ′ ∈ N ode(τ ′ )
+                                   ∧ root(τ ) = root(τ ′ )}                                                                    ∧ η is not the root of τ
+
+
+                                                                       76
+
+
+                          ∧ η ′ is not the root of τ ′         (1)    PRN                  PRN           (2)        S                    S
+                                                   ′
+                          ∧ label(η) = label(η )                 ,         S           ,    S        ,         NP         VP       NP         VP
+                          ∧ yield(η) = yield(η ′ )}                  NP   VP    ,      NP       VP             NP
+
+                                                               (3)        PP               PP            (4)    NP                      NP
+where N ode(τ ) is the set of the nodes in τ , and
+yield(η) is the word sequence dominated by η.                        IN DT NNS        IN        NP             NP        NP        NP        PP
+
+Figure 4 shows an example of a node alignment.                                             DT    NNS                IN        NP        IN        NP
+The subscripts indicate the alignment.
+                                                                                                                         source         target
+  An STSG rule is extracted by deleting nodes in
+a partial parse tree pair ⟨τ, τ ′ ⟩ ∈ P ara(T ). The
+procedure is as follows:                                      Figure 6: Examples of error correction rules in-
+                                                              duced from the Penn Treebank
+  • For each ⟨η, η ′ ⟩ ∈ C(τ, τ ′ ), delete the de-
+    scendants of η and η ′ .
+                                                              measured the precision of the rules. The precision
+                                                              is defined as follows:
+For example, the rule shown in Figure 2 is ex-
+tracted from the pair shown in Figure 4.                                        # of the positions where an error is corrected
+                                                              precision   =
+                                                                               # of the positions to which some rule is applied
+3.3 Rule Selection
+                                                                  We manually checked whether each rule appli-
+Some rules extracted by the procedure in Section              cation corrected an error, because the corrected
+3.2 are not useful for error correction, since the            treebank does not exist2 . Furthermore, we only
+pseudo parallel corpus contains tree pairs whose              evaluated the first 100 rules which are ordered by
+source tree is correct or whose target tree is incor-         the score function described in Section 3.3, since
+rect. The rules which are extracted from such pairs           it is time-consuming and expensive to evaluate all
+can be harmful. To select rules which are use-                of the rules. These 100 rules were applied at 331
+ful for error correction, we define a score function          positions. The precision of the rules is 71.9%. For
+which is based on the occurrence frequencies of               each rule, we measured the precision of it. 70 rules
+elementary trees in the treebank. The score func-             achieved 100% precision. These results demon-
+tion is defined as follows:                                   strate that our method can correct syntactic anno-
+                                  f (t′ )                     tation errors with high precision. Moreover, 30
+          Score(⟨t, t′ ⟩) =                                   rules of the 70 rules transformed bracketed struc-
+                              f (t) + f (t′ )
+                                                              tures. This fact shows that the treebank contains
+where f (·) is the occurrence frequency in the tree-          structural errors which cannot be dealt with by the
+bank. The score function ranges from 0 to 1. We               previous methods.
+assume that the occurrence frequency of an ele-                   Figure 6 depicts examples of error correction
+mentary tree matching incorrect parse trees is very           rules which achieved 100% precision. Rule (1),
+low. According to this assumption, the score func-            (2) and (3) are rules which transform bracketed
+tion Score(⟨t, t′ ⟩) is high when the source ele-             structures. Rule (4) simply replaces a node la-
+mentary tree t matches incorrect parse trees and              bel. Rule (1) corrects an erroneous position of a
+the target elementary tree t′ matches correct parse           comma (see Figure 7 (a)). Rule (2) deletes a use-
+trees. Therefore, STSG rules with high scores are             less node NP in a subject position (see Figure 7
+regarded to be useful for error correction.                   (b)). Rule (3) inserts a node NP (see Figure 7 (c)).
+                                                              Rule (4) replaces a node label NP with the cor-
+4 An Experiment                                               rect label PP (see Figure 7 (d)). These examples
+                                                              demonstrate that our method can correct syntactic
+To evaluate the effectiveness of our method, we               annotation errors.
+conducted an experiment using the Penn Treebank                   Figure 8 depicts an example where our method
+(Marcus et al., 1993).                                        detected an annotation error but could not correct
+  We used 49208 sentences in Wall Street Journal              it. To correct the error, we need to attach the node
+sections. We induced STSG rules by applying our                   2
+                                                                    This also means that we cannot measure the recall of the
+method to the corpus. We obtained 8776 rules. We              rules.
+
+
+                                                         77
+
+
+                  (a)                                                                    (b)                    S                                    S
+                                PRN                         PRN
+                    ,                 S             ,            S             ,                    NP                 VP                   NP                  VP
+
+                            NP    VP       ,            NP       VP                                 NP
+                                                                                                               is one good one         all you need is one good one
+                            I     think                 I    think
+                                                                                               all you need
+
+                  (c)
+                                 PP                                   PP
+
+                   IN            DT       NNS               IN                     NP
+
+                   of           the respondents             of        DT            NNS
+
+                                                                      the respondents
+
+                  (d)
+                                                            NP                                                                              NP
+
+                                               NP                                        NP                                       NP                            PP
+
+                                                                                    IN        NP                                                          IN         NP
+                    only two or three other major banks                                                          only two or three other major banks
+                                                                                    in                                                                     in
+                                                                                         the U.S.                                                               the U.S.
+
+
+
+                                           Figure 7: Examples of correcting syntactic annotation errors
+
+              S                                                       S                                                                            TOP
+         PP         ,            SBAR                        PP            ,          SBAR                                                         NP
+    IN     NP           ,                               IN        NP       ,
+                                                                                                                                NP                               VP            .
+    At     NP                                           At        CD
+                        when ...                                                   when ...
+           CD                                                    10:33
+                                                                                                               The average of interbank offered rates based on quotations at
+          10:33                                                                                                                                       five major banks
+
+
+Figure 8: An example where our method detected                                                                                                     TOP
+an annotation error but could not correct it
+                                                                                                                                                    S
+
+                                                                                                                                NP                               VP            .
+SBAR under the node NP. We found that 22 of the
+rule applications were of this type.
+   Figure 9 depicts a false positive example                                                                   The average of interbank offered rates based on quotations at
+                                                                                                                                                      five major banks
+where our method mistakenly transformed a cor-
+rect syntactic structure. The score of the rule
+is very high, since the source elementary tree                                                                Figure 9: A false positive example where a correct
+(TOP (NP NP VP .)) is less frequent. This                                                                     syntactic structure was mistakenly transformed
+example shows that our method has a risk of
+changing correct annotations of less frequent syn-                                                               In future work, we will explore a method of in-
+tactic structures.                                                                                            creasing the recall of error correction by construct-
+                                                                                                              ing a wide-coverage STSG.
+5        Conclusion
+                                                                                                              Acknowledgements
+This paper proposes a method of correcting er-
+rors in a treebank by using a synchronous tree                                                                This research is partially supported by the Grant-
+substitution grammar. Our method constructs a                                                                 in-Aid for Scientific Research (B) (No. 22300051)
+pseudo parallel corpus from the treebank and ex-                                                              of JSPS and by the Kayamori Foundation of Infor-
+tracts STSG rules from the parallel corpus. The                                                               mational Science Advancement.
+experimental result demonstrates that we can ob-
+tain error correction rules with high precision.
+
+
+                                                                                                         78
+
+
+References
+Adriane Boyd, Markus Dickinson, and Detmar Meur-
+  ers. 2008. On detecting errors in dependency tree-
+  banks. Research on Language and Computation,
+  6(2):113–137.
+Trevor Cohn and Mirella Lapata. 2009. Sentence com-
+  pression as tree transduction. Journal of Artificial
+  Intelligence Research, 34(1):637–674.
+
+Markus Dickinson and Detmar Meurers. 2003a. De-
+ tecting errors in part-of-speech annotation. In Pro-
+ ceedings of the 10th Conference of the European
+ Chapter of the Association for Computational Lin-
+ guistics, pages 107–114.
+
+Markus Dickinson and Detmar Meurers. 2003b. De-
+ tecting inconsistencies in treebanks. In Proceedings
+ of the Second Workshop on Treebanks and Linguistic
+ Theories.
+
+Markus Dickinson and W. Detmar Meurers. 2005.
+ Prune diseased branches to get healthy trees! how
+ to find erroneous local trees in a treebank and why
+ it matters. In Proceedings of the 4th Workshop on
+ Treebanks and Linguistic Theories.
+
+Jason Eisner. 2003. Learning non-isomorphic tree
+   mappings for machine translation. In Proceedings of
+   the 41st Annual Meeting of the Association for Com-
+   putational Linguistics, Companion Volume, pages
+   205–208.
+Eleazar Eskin. 2000. Detecting errors within a corpus
+  using anomaly detection. In Proceedings of the 1st
+  North American chapter of the Association for Com-
+  putational Linguistics Conference, pages 148–153.
+Mitchell P. Marcus, Beatrice Santorini, and Mary Ann
+  Marcinkiewicz. 1993. Building a large annotated
+  corpus of English: the Penn Treebank. Computa-
+  tional Linguistics, 19(2):310–330.
+Masaki Murata, Masao Utiyama, Kiyotaka Uchimoto,
+ Hitoshi Isahara, and Qing Ma. 2005. Correction of
+ errors in a verb modality corpus for machine transla-
+ tion with a machine-learning method. ACM Trans-
+ actions on Asian Language Information Processing,
+ 4(1):18–37.
+Tetsuji Nakagawa and Yuji Matsumoto. 2002. Detect-
+  ing errors in corpora using support vector machines.
+  In Proceedings of the 19th Internatinal Conference
+  on Computatinal Linguistics, pages 709–715.
+
+Tylman Ule and Kiril Simov. 2004. Unexpected pro-
+  ductions may well be errors. In Proceedings of 4th
+  International Conference on Language Resources
+  and Evaluation, pages 1795–1798.
+
+
+
+
+                                                         79
+

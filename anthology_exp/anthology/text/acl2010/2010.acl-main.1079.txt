@@ -1,0 +1,652 @@
+                  A hybrid rule/model-based finite-state framework
+                           for normalizing SMS messages
+ Richard Beaufort1 Sophie Roekhaut2 Louise-Amélie Cougnon1 Cédrick Fairon1
+    (1) CENTAL, Université catholique de Louvain – 1348 Louvain-la-Neuve, Belgium
+{richard.beaufort,louise-amelie.cougnon,cedrick.fairon}@uclouvain.be
+                     (2) TCTS Lab, Université de Mons – 7000 Mons, Belgium
+                                    sophie.roekhaut@umons.ac.be
+
+
+                      Abstract                                    Whatever their causes, these deviations
+                                                               considerably hamper any standard natural
+    In recent years, research in natural                       language processing (NLP) system, which
+    language processing has increasingly                       stumbles against so many Out-Of-Vocabulary
+    focused on normalizing SMS messages.                       words. For this reason, as noted by Sproat et al.
+    Different well-defined approaches have                     (2001), an SMS normalization must be performed
+    been proposed, but the problem remains                     before a more conventional NLP process can
+    far from being solved: best systems                        be applied. As defined by Yvon (2008), “SMS
+    achieve a 11% Word Error Rate. This                        normalization consists in rewriting an SMS text
+    paper presents a method that shares                        using a more conventional spelling, in order
+    similarities with both spell checking                      to make it more readable for a human or for a
+    and machine translation approaches. The                    machine.”
+    normalization part of the system is entirely                  The SMS normalization we present here was
+    based on models trained from a corpus.                     developed in the general framework of an SMS-
+    Evaluated in French by 10-fold-cross                       to-speech synthesis system1 . This paper, however,
+    validation, the system achieves a 9.3%                     only focuses on the normalization process.
+    Word Error Rate and a 0.83 BLEU score.                        Evaluated in French, our method shares
+                                                               similarities with both spell checking and machine
+1   Introduction                                               translation. The machine translation-like module
+Introduced a few years ago, Short Message                      of the system performs the true normalization
+Service (SMS) offers the possibility of exchanging             task. It is entirely based on models learned from
+written messages between mobile phones. SMS                    an SMS corpus and its transcription, aligned
+has quickly been adopted by users.           These             at the character-level in order to get parallel
+messages often greatly deviate from traditional                corpora.      Two spell checking-like modules
+spelling conventions. As shown by specialists                  surround the normalization module. The first
+(Thurlow and Brown, 2003; Fairon et al.,                       one detects unambiguous tokens, like URLs
+2006; Bieswanger, 2007), this variability is                   or phone numbers, to keep them out of the
+due to the simultaneous use of numerous coding                 normalization. The second one, applied on the
+strategies, like phonetic plays (2m1 read ‘demain’,            normalized parts only, identifies non-alphabetic
+“tomorrow”), phonetic transcriptions (kom instead              sequences, like punctuations, and labels them
+of ‘comme’, “like”), consonant skeletons (tjrs                 with the corresponding token. This greatly helps
+for ‘toujours’, “always”), misapplied, missing                 the system’s print module to follow the basic rules
+or incorrect separators (j esper for ‘j’espère’, “I            of typography.
+hope”; j’croibi1k, instead of ‘je crois bien que’,                This paper is organized as follows. Section 2
+“I am pretty sure that”), etc. These deviations                proposes an overview of the state of the art.
+are due to three main factors: the small number                Section 3 presents the general architecture of
+of characters allowed per text message by the                  our system, while Section 4 focuses on how we
+service (140 bytes), the constraints of the small              learn and combine our normalization models.
+phones’ keypads and, last but not least, the fact              Section 5 evaluates the system and compares it to
+that people mostly communicate between friends                    1
+                                                                    The Vocalise project.
+and relatives in an informal register.                         See cental.fltr.ucl.ac.be/team/projects/vocalise/.
+
+
+                                                         770
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 770–779,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+previous works. Section 6 draws conclusions and            checking approach is the excessive confidence it
+considers some future possible improvements of             places in word boundaries.
+the method.
+                                                              The machine translation metaphor, which is
+2   Related work                                           historically the first proposed (Bangalore et al.,
+                                                           2002; Aw et al., 2006), considers the process of
+As highlighted by Kobus et al. (2008b), SMS
+                                                           normalizing SMS as a translation task from a
+normalization, up to now, has been handled
+                                                           source language (the SMS) to a target language
+through three well-known NLP metaphors: spell
+                                                           (its standard written form). This standpoint is
+checking, machine translation and automatic
+                                                           based on the observation that, on the one side,
+speech recognition. In this section, we only
+                                                           SMS messages greatly differ from their standard
+present the pros and cons of these approaches.
+                                                           written forms, and that, on the other side, most
+Their results are given in Section 5, focused on
+                                                           of the errors cross word boundaries and require
+our evaluation.
+                                                           a wide context to be handled. On this basis,
+   The spell checking metaphor (Guimier de Neef
+                                                           Aw et al. (2006) proposed a statistical machine
+et al., 2007; Choudhury et al., 2007; Cook and
+                                                           translation model working at the phrase-level,
+Stevenson, 2009) performs the normalization task
+                                                           by splitting sentences into their k most probable
+on a word-per-word basis. On the assumption
+                                                           phrases. While this approach achieves really good
+that most words should be correct for the purpose
+                                                           results, Kobus et al. (2008b) make the assertion
+of communication, its principle is to keep In-
+                                                           that a phrase-based translation can hardly capture
+Vocabulary words out of the correction process.
+                                                           the lexical creativity observed in SMS messages.
+Guimier de Neef et al. (2007) proposed a rule-
+                                                           Moreover, the translation framework, which can
+based system that uses only a few linguistic
+                                                           handle many-to-many correspondences between
+resources dedicated to SMS, like specific lexicons
+                                                           sources and targets, exceeds the needs of SMS
+of abbreviations.     Choudhury et al. (2007)
+                                                           normalization, where the normalization task is
+and Cook and Stevenson (2009) preferred to
+                                                           almost deterministic.
+implement the noisy channel metaphor (Shannon,
+                                                              Based on this analysis, Kobus et al. (2008b)
+1948), which assumes a communication process
+                                                           proposed to handle SMS normalization through
+in which a sender emits the intended message
+                                                           an automatic speech recognition (ASR) metaphor.
+W through an imperfect (noisy) communication
+                                                           The starting point of this approach is the
+channel, such that the sequence O observed by
+                                                           observation that SMS messages present a lot
+the recipient is a noisy version of the original
+                                                           of phonetic plays that sometimes make the
+message. On this basis, the idea is to recover the
+                                                           SMS word (sré, mwa) closer to its phonetic
+intended message W hidden behind the sequences
+                                                           representation ([sKe], [mwa]) than to its standard
+of observations O, by maximizing:
+                                                           written form (serai, “will be”, moi, “me”).
+     Wmax = arg max P (W |O)                   (1)         Typically, an ASR system tries to discover the
+                    P (O|W ) P (W )                        best word sequence within a lattice of weighted
+          = arg max                                        phonetic sequences.         Applied to the SMS
+                         P (O)
+                                                           normalization task, the ASR metaphor consists
+where P (O) is ignored because constant,                   in first converting the SMS message into a phone
+P (O|W ) models the channel’s noise, and P (W )            lattice, before turning it into a word-based lattice
+models the language of the source. Choudhury et            using a phoneme-to-grapheme dictionary. A
+al. (2007) implemented the noisy channel through           language model is then applied on the word
+a Hidden-Markov Model (HMM) able to handle                 lattice, and the most probable word sequence is
+both graphemic variants and phonetic plays as              finally chosen by applying a best-path algorithm
+proposed by (Toutanova and Moore, 2002), while             on the lattice. One of the advantages of the
+Cook and Stevenson (2009) enhanced the model               grapheme-to-phoneme conversion is its intrinsic
+by adapting the channel’s noise P (O|W, wf)                ability to handle word boundaries. However,
+according to a list of predefined observed                 this step also presents an important drawback,
+word formations {wf}: stylistic variation, word            raised by the authors themselves: it prevents
+clipping, phonetic abbreviations, etc. Whatever            next normalization steps from knowing what
+the system, the main limitation of the spell               graphemes were in the initial sequence.
+
+
+                                                     771
+
+
+   Our approach, which is detailed in Sections 3              3.3   Architecture
+and 4, shares similarities with both the spell                The architecture depicted in Figure 1 directly
+checking approach and the machine translation                 relies on these considerations. In short, an
+principles, trying to combine the advantages                  SMS message first goes through three SMS
+of these methods, while leaving aside their                   modules, which normalize its noisy parts.
+drawbacks: like in spell checking systems, we                 Then, two standard NLP modules produce a
+detect unambiguous units of text as soon as                   morphosyntactic analysis of the normalized text.
+possible and try to rely on word boundaries when              A last module, finally, takes advantage of this
+they seem reliable enough; but like in the machine            linguistic analysis either to print a text that follows
+translation task, our method intrinsically handles            the basic rules of typography, or to synthesize the
+word boundaries in the normalization process if               corresponding speech signal.
+needed.                                                          Because this paper focuses on the normalization
+                                                              task, the rest of this section only presents the
+3     Overview of the system                                  SMS modules and the “smart print” output. The
+                                                              morphosyntactic analysis, made of state-of-the-art
+3.1    Tools in use                                           algorithms, is described in (Beaufort, 2008), and
+                                                              the text-to-speech synthesis system we use is
+In our system, all lexicons, language models                  presented in (Colotte and Beaufort, 2005).
+and sets of rules are compiled into finite-state
+machines (FSMs) and combined with the input                   3.3.1 SMS modules
+text by composition (◦). The reader who is                    SMS preprocessing. This module relies
+not familiar with FSMs and their fundamental                  on a set of manually-tuned rewrite rules. It
+theoretical properties, like composition, is urged            identifies paragraphs and sentences, but also some
+to consult the state-of-the-art literature (Roche
+and Schabes, 1997; Mohri and Riley, 1997; Mohri
+                                                                                  SMS message
+et al., 2000; Mohri et al., 2001).
+   We used our own finite-state tools: a finite-state
+machine library and its associated compiler                                       SMS Modules
+(Beaufort, 2008). In conformance with the format
+of the library, the compiler builds finite-state                               SMS Preprocessing
+machines from weighted rewrite rules, weighted
+regular expressions and n-gram models.                                         SMS Normalization
+
+3.2    Aims                                                                    SMS Postprocessing
+We formulated four constraints before fixing the
+system’s architecture. First, special tokens, like
+URLs, phones or currencies, should be identified                             Standard NLP Modules
+as soon as possible, to keep them out of the
+normalization process.                                                       Morphological analysis
+   Second, word boundaries should be taken into
+account, as far as they seem reliable enough. The                          Contextual disambiguation
+idea, here, is to base the decision on a learning
+able to catch frequent SMS sequences to include
+in a dedicated In-Vocabulary (IV) lexicon.
+   Third, any other SMS sequence should be                                Smart print       TTS engine
+considered as Out-Of-Vocabulary (OOV), on
+which in-depth rewritings may be applied.                                  Standard
+                                                                                               Speech
+                                                                        written message
+   Fourth, the basic rules of typography and
+typesettings should be applied on the normalized
+version of the SMS message.                                          Figure 1: Architecture of the system
+
+
+                                                        772
+
+
+unambiguous tokens: URLs, phone numbers,                    4     The normalization models
+dates, times, currencies, units of measurement
+                                                            4.1    Overview of the normalization algorithm
+and, last but not least in the context of SMS,
+smileys2 . These tokens are kept out of the                 Our approach is an approximation of the noisy
+normalization process, while any other sequence             channel metaphor (cf. Section 2). It differs
+of characters is considered – and labelled – as             from this general framework, because we adapt
+noisy.                                                      the model of the channel’s noise depending
+                                                            on whether the noisy token (our sequence
+                                                            of observations) is In-Vocabulary or Out-Of-
+SMS normalization. This module only uses
+                                                            Vocabulary:
+models learned from a training corpus (cf. Section                       
+4). It involves three steps. First, an SMS-                               PIV (O|W )      if O ∈ IV
+dedicated lexicon look-up, which differentiates               P (O|W ) =                              (2)
+                                                                             POOV (O|W ) else
+                                                                         
+between known and unknown parts of a noisy
+token. Second, a rewrite process, which creates a           Indeed, our algorithm is based on the assumption
+lattice of weighted solutions. The rewrite model            that applying different normalization models to IV
+differs depending on whether the part to rewrite            and OOV words should both improve the results
+is known or not. Third, a combination of the                and reduce the processing time.
+lattice of solutions with a language model, and the           For this purpose, the first step of the algorithm
+choice of the best sequence of lexical units. At            consists in composing a noisy token T with an
+this stage, the normalization as such is completed.         FST Sp whose task is to differentiate between
+                                                            sequences of IV words and sequences of OOV
+SMS postprocessing. Like the preprocessor,                  words, by labelling them with a special IV or OOV
+the postprocessor relies on a set of manually-              marker. The token is then split in n segments sgi
+tuned rewrite rules. The module is only applied             according to these markers:
+on the normalized version of the noisy tokens,                            {sg} = Split(T ◦ Sp)              (3)
+with the intention to identify any non-alphabetic
+sequence and to isolate it in a distinct token.               In a second step, each segment is composed
+At this stage, for instance, a point becomes a              with a rewrite model according to its kind: the IV
+‘strong punctuation’. Apart from the list of                rewrite model RIV for sequences of IV words, and
+tokens already managed by the preprocessor,                 the OOV rewrite model ROOV for sequences of
+the postprocessor handles as well numeric and               OOV words:
+                                                                         
+alphanumeric strings, fields of data (like bank                           sgi ◦ RIV     if sgi ∈ IV
+                                                                     0
+account numbers), punctuations and symbols.                       sgi =                                     (4)
+                                                                            sgi ◦ ROOV else
+                                                                         
+
+3.3.2     Smart print                                       All rewritten segments are then concatenated
+                                                            together in order to get back the complete token:
+The smart print module, based on manually-tuned
+                                                                                    n      0
+rules, checks either the kind of token (chosen                               T =    i=1 (sgi )              (5)
+by the SMS pre-/post-processing modules)                    where is the concatenation operator.
+or the grammatical category (chosen by the                     The third and last normalization step is applied
+morphosyntactic analysis) to make the right                 on a complete sentence S. All tokens Tj of S
+typography choices, such as the insertion of                are concatenated together and composed with the
+a space after certain tokens (URLs, phone                   lexical language model LM . The result of this
+numbers), the insertion of two spaces after                 composition is a word lattice, of which we take
+a strong punctuation (point, question mark,                 the most probable word sequence S 0 by applying
+exclamation mark), the insertion of two carriage            a best-path algorithm:
+returns at the end of a paragraph, or the upper
+case of the initial letter at the beginning of the                  S 0 = BestPath( (   m
+                                                                                        j=1 Tj )   ◦ LM )   (6)
+sentence.                                                   where m is the number of tokens of S. In S 0 ,
+                                                            each noisy token Tj of S is mapped onto its most
+  2
+      Our list contains about 680 smileys.                  probable normalization.
+
+
+                                                      773
+
+
+4.2   The corpus alignment                                  4.3    The split model Sp
+                                                            In natural language processing, a word is
+Our normalization models were trained on a                  commonly defined as “a sequence of alphabetic
+French SMS corpus of 30,000 messages, gathered              characters between separators”, and an IV word is
+in Belgium, semi-automatically anonymized and               simply a word that belongs to the lexicon in use.
+manually normalized by the Catholic University                 In SMS messages however, separators are
+of Louvain (Fairon and Paumier, 2006). Together,            surely indicative, but not reliable. For this reason,
+the SMS corpus and its transcription constitute             our definition of the word is far from the previous
+parallel corpora aligned at the message-level.              one, and originates from the string alignment.
+   However, in order to learn pieces of knowledge           After examining our parallel corpora aligned at
+from these corpora, we needed a string alignment            the character-level, we decided to consider as a
+at the character-level.                                     word “the longest sequence of characters parsed
+   One way of implementing this string alignment            without meeting the same separator on both sides
+is to compute the edit-distance of two strings,             of the alignment”. For instance, the following
+which measures the minimum number of                        alignment
+operations (substitutions, insertions, deletions)
+required to transform one string into the other                           J esper_ k___tu va_
+                                                                          J’espère que tu vas
+(Levenshtein, 1966).       Using this algorithm,
+                                                                            (I hope that you will)
+in which each operation gets a cost of 1, two
+strings may be aligned in different ways with
+the same global cost. This is the case, for                 is split as follows according to our definition:
+instance, for the SMS form kozer ([koze]) and
+its standard transcription causé (“talked”), as                      J esper_          k___tu         va_
+illustrated by Figure 2. However, from a linguistic                  J’espère          que tu         vas
+standpoint, alignment (1) is preferable, because
+corresponding graphemes are aligned on their first          since the separator in “J esper” is different
+character.                                                  from its transcription, and “ktu” does not
+   In order to automatically choose this preferred          contain any separator. Thus, this SMS sequence
+alignment, we had to distinguish the three edit-            corresponds to 3 SMS words: [J esper], [ktu] and
+operations, according to the characters to be               [va].
+aligned. For that purpose, probabilities were                  A first parsing of our parallel corpora provided
+required.      Computing probabilities for each             us with a list of SMS sequences corresponding to
+operation according to the characters to be aligned         our IV lexicon. The FST Sp is built on this basis:
+was performed through an iterative algorithm
+described in (Cougnon and Beaufort, 2009). In                  Sp = ( S ∗ (I|O) ( S + (I|O) )∗ S ∗ ) ◦ G        (7)
+short, this algorithm gradually learns the best way
+of aligning strings. On our parallel corpora, it            where:
+converged after 7 iterations and provided us with             • I is an FST corresponding to the lexicon,
+a result from which the learning could start.                   in which IV words are mapped onto the IV
+                                                                marker.
+
+                                                              • O is the complement of I 3 . In this OOV
+        (1)   ko_ser          (2)   k_oser
+              causé_                causé_                      lexicon, OOV sequences are mapped onto the
+                                                                OOV marker.
+        (3)   ko_ser          (4)   k_oser                    • S is an FST corresponding to the list of
+              caus_é                caus_é
+                                                                separators (any non-alphabetic and non-
+                                                                numeric character), mapped onto a SEP
+Figure 2: Different equidistant alignments, using
+                                                                marker.
+a standard edit-cost of 1. Underscores (‘_’) mean
+                                                               3
+insertion in the upper string, and deletion in the              Actually, the true complement of I accepts sequences
+                                                            with separators, while these sequences were removed from
+lower string.                                               O.
+
+
+                                                      774
+
+
+  • G is an FST able to detect consecutive                   4.5   The OOV rewrite model ROOV
+    sequences of IV (resp. OOV) words, and to                In contrast to the other models, this one is not a
+    group them under a unique IV (resp. OOV)                 regular expression made of weighted lexicons.
+    marker. By gathering sequences of IVs and                It corresponds to a set of weighted rewrite rules
+    OOVs, SEP markers disappear from Sp.                     (Chomsky and Halle, 1968; Johnson, 1972; Mohri
+  Figure 3 illustrates the composition of Sp with            and Sproat, 1996) learned from the alignment.
+the SMS sequence J esper kcv b1 (J’espère que ça             Developed in the framework of generative
+va bien, “I hope you are well”). For the example,            phonology, rules take the form
+we make the assumption that kcv was never seen
+                                                                            φ→ψ:λ_ρ/w                       (11)
+during the training.
+                                                             which means that the replacement φ → ψ is
+  J ' ' e s p e r ' ' k c v ' ' b 1                          only performed when φ is surrounded by λ on
+                                                             the left and ρ on the right, and gets the weight w.
+  IV                     OOV               IV                However, in our case, rules take the simpler form
+
+Figure 3: Application of the split model Sp. The                                φ→ψ /w                      (12)
+OOV sequence starts and ends with separators.
+                                                             which means that the replacement φ → ψ is
+                                                             always performed, whatever the context.
+4.4    The IV rewrite model RIV                                 Inputs of our rules (φ) are sequences of
+This model is built during a second parsing                  1 to 5 characters taken from the SMS side
+of our parallel corpora. In short, the parsing               of the alignment, while outputs (ψ) are their
+simply gathers all possible normalizations for               corresponding normalizations. Our rules are
+each SMS sequence put, by the first parsing, in              sorted in the reverse order of the length of their
+the IV lexicon. Contrary to the first parsing, this          inputs: rules with longer inputs come first in the
+second one processes the corpus without taking               list.
+separators into account, in order to make sure                  Long-to-short rule ordering reduces the number
+that all possible normalizations are collected.              of proposed normalizations for a given SMS
+  Each normalization w̄ for a given SMS                      sequence for two reasons:
+sequence w is weighted as follows:
+                                                               1. the firing of a rule with a longer input blocks
+                        Occ(w̄, w)                                the firing of any shorter sub-rule. This is due
+              p(w̄|w) =                          (8)
+                         Occ(w)                                   to a constraint expressed on lists of rewrite
+                                                                  rules: a given rule may be applied only if no
+where Occ(x) is the number of occurrences of x in
+                                                                  more specific and relevant rule has been met
+the corpus. The FST RIV is then built as follows:
+                                                                  higher in the list;
+   RIV = SIV ∗ IVR ( SIV + IVR )∗ SIV ∗          (9)
+                                                               2. a rule with a longer input usually has fewer
+where:                                                            alternative normalizations than a rule with a
+  • IVR is a weighted lexicon compiled into an                    shorter input does, because the longer SMS
+    FST, in which each IV sequence is mapped                      sequence likely occurred paired with fewer
+    onto the list of its possible normalizations.                 alternative normalizations in the training
+                                                                  corpus than did the shorter SMS sequence.
+  • SIV is a weighted lexicon of separators, in
+    which each separator is mapped onto the list               Among the wide set of possible sequences
+    of its possible normalizations. The deletion             of 2 to 5 characters gathered from the corpus,
+    is often one of the possible normalization of            we only kept in our list of rules the sequences
+    a separator. Otherwise, the deletion is added            that allowed at least one normalization solely
+    and is weighted by the following smoothed                made of IV words. It is important to notice that
+    probability:                                             here, we refer to the standard notion of IV word:
+                                                             while gathering the candidate sequences from the
+                               0.1                           corpus, we systematically checked each word of
+             p(DEL|w) =                         (10)
+                           Occ(w) + 0.1                      the normalizations against a lexicon of French
+
+
+                                                       775
+
+
+standard written forms. The lexicon we used                            "aussi" ?-> "au si" / 8.4113 (*)
+contains about 430,000 inflected forms and is                          "aussi" ?-> "ou si" / 6.6743 (*)
+derived from Morlex4 , a French lexical database.                      "aussi" ->     "aussi" / 0.0189 (*)
+   Figure 4 illustrates these principles by focusing                   ...
+on 3 input sequences: aussi, au and a. As                              ...
+shown by the Figure, all rules of a set dedicated                      "au" ?-> "ow" / 14.1787
+to the same input sequence (for instance, aussi)                       ...
+are optional (?→), except the last one, which is                       "au" ?-> "ôt" / 12.5938
+obligatory (→). In our finite-state compiler, this                     "au" ?-> "du" / 12.1787 (*)
+convention allows the application of all concurrent                    "au" ?-> "o" / 11.8568
+normalizations on the same input sequence, as                          ...
+depicted in Figure 5.                                                  "au" ?-> "on" / 10.8568 (*)
+   In our real list of OOV rules, the input sequence                   ...
+a corresponds to 231 normalizations, while au                          "au" ?-> "aud" / 9.9308
+accepts 43 normalizations and aussi, only 3. This                      "au" ?-> "aux" / 6.1731 (*)
+highlights the interest, in terms of efficiency, of the                "au" -> "au" / 0.0611 (*)
+long-to-short rule ordering.                                           ...
+                                                                       ...
+4.6      The language model                                            "a" ?-> "a d" / 17.8624
+Our language model is an n-gram of lexical                             "a" ?-> "ation" / 17.8624
+forms, smoothed by linear interpolation (Chen                          "a" ?-> "âts" / 17.8624
+and Goodman, 1998), estimated on the normalized                        ...
+part of our training corpus and compiled into a                        "a" ?-> "ablement" / 16.8624
+weighted FST LMw .                                                     "a" ?-> "anisation" / 16.8624
+   At this point, this FST cannot be combined with                     ...
+our other models, because it works on lexical units                    "a" ?-> "u" / 15.5404
+and not on characters. This problem is solved                          "a" ?-> "y a" / 15.5404
+by composing LMw with another FST L, which                             ...
+represents a lexicon mapping each input word,                          "a" ?-> "abilité" / 13.4029
+considered as a string of characters, onto the same                    "a" ?-> "à-" / 12.1899
+output words, but considered here as a lexical                         "a" ?-> "ar" / 11.5225
+unit. Lexical units are then permanently removed                       "a" ?-> \DEL / 9.1175
+from the language model by keeping only the first                      "a" ?-> "ça" / 6.2019
+projection (the input side) of the composition:                        "a" ?-> "à" / 3.5013
+                                                                       "a" ->    "a" / 0.3012
+        LM = FirstProjection( L ◦ LMw )              (13)
+                                                                  Figure 4: Samples from the list of OOV
+   In this model, special characters, like
+                                                                  rules. Rules’ weights are negative logarithms
+punctuations or symbols, are represented by
+                                                                  of probabilities: smaller weights are thus better.
+their categories (light, medium and strong
+                                                                  Asterisks indicate normalizations solely made of
+punctuations, question mark, symbol, etc.), while
+                                                                  French IV words.
+special tokens, like URLs or phone numbers,
+are handled as token values (URL, phone, etc.)                                                     s/0.02
+                                                                                                                s   i
+instead of as sequences of characters. This                                      u    !:" "/8.41            s
+                                                                        a
+reduces the complexity of the model.                                                     !:" "
+   As we explained earlier, tokens of a same                         a:o/6.67    u
+sentence S are concatenated together at the end
+of the second normalization step. During this                     Figure 5: Application of the OOV rules on
+concatenation process, sequences corresponding                    the input sequence aussi. All normalizations
+to special tokens are automatically replaced by                   corresponding to this sequence were allowed,
+their token values. Special characters, however,                  while rules corresponding to shorter input
+   4
+       See http://bach.arts.kuleuven.be/pmertens/.                sequences were ignored.
+
+
+                                                            776
+
+
+are still present in S. For this reason, S is first                                                 mean          dev.
+composed with an FST Reduce, which maps each                                          bps          1836.57       159.63
+special character onto its corresponding category:                          ms/SMS (140b)            76.23        22.34
+
+                     S ◦ Reduce ◦ LM                   (14)                   Table 1: Efficiency of the system.
+5       Evaluation
+                                                                     outperforms theirs. Our results also seem a bit
+The performance and the efficiency of our system                     better than those of Kobus et al. (2008a), although
+were evaluated on a MacBook Pro with a 2.4 GHz                       the comparison with this system, also evaluated in
+Intel Core 2 Duo CPU, 4 GB 667 MHz DDR2                              French, is less easy: they combined the French
+SDRAM, running Mac OS X version 10.5.8.                              corpus we used with another one and performed
+   The evaluation was performed on the corpus                        a single validation, using a bigger training corpus
+of 30,000 French SMS presented in Section 4.2,                       (36.704 messages) for a test corpus quite similar
+by ten-fold cross-validation (Kohavi, 1995). The                     to one of our subsets (2.998 SMS). Other systems
+principle of this method of evaluation is to split                   were evaluated in English, and results are more
+the initial corpus into 10 subsets of equal size. The                difficult to compare; at least, our results seem in
+system is then trained 10 times, each time leaving                   line with them.
+out one of the subsets from the training corpus, but
+                                                                        The analysis of the normalizations produced
+using only this omitted subset as test corpus.
+                                                                     by our system pointed out that, most often, errors
+   The language model of the evaluation is a                         are contextual and concern the gender (quel(le),
+3-gram. We did not try a 4-gram. This choice                         “what”), the number (bisou(s), “kiss”), the person
+was motivated by the experiments of Kobus et                         ([tu t’]inquiète(s), “you are worried”) or the
+al. (2008a), who showed on a French corpus                           tense (arrivé/arriver, “arrived”/“to arrive”). That
+comparable to ours that, if using a larger language                  contextual errors are frequent is not surprising. In
+model is always rewarded, the improvement                            French, as mentioned by Kobus et al. (2008b), n-
+quickly decreases with every higher level and is                     gram models are unable to catch this information,
+already quite small between 2-gram and 3-gram.                       as it is generally out of their scope.
+   Table 1 presents the results in terms of
+                                                                        On the other hand, this analysis confirmed
+efficiency. The system seems efficient, while we
+                                                                     our initial assumptions. First, special tokens
+cannot compare it with other methods, which did
+                                                                     (URLs, phones, etc.) are not modified. Second,
+not provide us with this information.
+                                                                     agglutinated words are generally split (Pensa ms
+   Table 2, part 1, presents the performance of                      → Pense à mes, “think to my”), while misapplied
+our approach (Hybrid) and compares it to a trivial                   separators tend to be deleted (G t → J’étais, “I
+copy-paste (Copy). The system was evaluated                          was”). Of course, we also found some errors at
+in terms of BLEU score (Papineni et al., 2001),                      word boundaries ([il] l’arrange → [il] la range,
+Word Error Rate (WER) and Sentence Error Rate                        “[he] arranges” → “[he] pits in order”), but they
+(SER). Concerning WER, the table presents the                        were fairly rare.
+distribution between substitutions (Sub), deletions
+(Del) and insertions (Ins). The copy-paste results
+just inform about the real deviation of our corpus
+from the traditional spelling conventions, and                       6   Conclusion and perspectives
+highlight the fact that our system is still at pains                 In this paper, we presented an SMS normalization
+to significantly reduce the SER, while results                       framework based on finite-state machines and
+in terms of WER and BLEU score are quite                             developed in the context of an SMS-to-speech
+encouraging.                                                         synthesis system. With the intention to avoid
+   Table 2, part 2, provides the results of the                      wrong modifications of special tokens and to
+state-of-the-art approaches. The only results truly                  handle word boundaries as easily as possible, we
+comparable to ours are those of Guimier de Neef                      designed a method that shares similarities with
+et al. (2007), who evaluated their approach on                       both spell checking and machine translation. Our
+the same corpus as ours5 ; clearly, our method
+                                                                     validation, because their rule-based system did not need any
+    5
+        They performed an evaluation without ten-fold cross-         training.
+
+
+                                                               777
+
+
+                    1. Our approach                               2. State of the art
+            Ten-fold cross-validation, French             French                               English
+                 Copy            Hybrid           Guimier    Kobus 2008        Aw             Choud. Cook
+              x̄      σ       x̄         σ         2007       1      2 ∗     2006             2006∗∗ 2009∗∗
+    Sub.    25.90 1.65       6.69 0.45                      11.94
+    Del.     8.24 0.74       1.89 0.31                       2.36
+    Ins.     0.46 0.08       0.72 0.10                       2.21
+   WER      34.59 2.37       9.31 0.78                      16.51 10.82                        41.00     44.60
+   SER      85.74 0.87 65.07 1.85                           76.05
+  BLEU       0.47 0.03       0.83 0.01             0.736             0.8      0.81
+             x̄=mean, σ=standard deviation
+
+Table 2: Performance of the system. (∗) Kobus 2008-1 corresponds to the ASR-like system, while
+Kobus 2008-2 is a combination of this system with a series of open-source machine translation toolkits.
+(∗∗) Scores obtained on noisy data only, out of the sentence’s context.
+
+
+
+normalization algorithm is original in two ways.                It would also be interesting to test the impact of
+First, it is entirely based on models learned from           another lexical language model, learned on non-
+a training corpus. Second, the rewrite model                 SMS sentences. Indeed, the lexical model must
+applied to a noisy sequence differs depending on             be learned from sequences of standard written
+whether this sequence is known or not.                       forms, an obvious prerequisite that involves a
+   Evaluated by ten-fold cross-validation, the               major drawback when the corpus is made of SMS
+system seems efficient, and the performance                  sentences: the corpus must first be transcribed,
+in terms of BLEU score and WER are quite                     an expensive process that reduces the amount
+encouraging. However, the SER remains too high,              of data on which the model will be trained. For
+which emphasizes the fact that the system needs              this reason, we propose to learn a lexical model
+several improvements.                                        from non-SMS sentences. However, the corpus of
+   First of all, the model should take phonetic              external sentences should still share two important
+similarities into account, because SMS messages              features with the SMS language: it should mimic
+contain a lot of phonetic plays. The phonetic                the oral language and be as spontaneous as
+model, for instance, should know that o, au,                 possible. With this in mind, our intention is
+eau, . . . , aux can all be pronounced [o], while            to gather sentences from Internet forums. But
+è, ais, ait, . . . , aient are often pronounced [E].         not just any forum, because often forums share
+However, unlike Kobus et al. (2008a), we feel                another feature with the SMS language: their
+that this model must avoid the normalization step            language is noisy. Thus, the idea is to choose
+in which the graphemic sequence is converted                 a forum asking its members to pay attention to
+into phonemes, because this conversion prevents              spelling mistakes and grammatical errors, and to
+the next steps from knowing which graphemes                  avoid the use of the SMS language.
+were in the initial sequence. Instead, we propose
+to learn phonetic similarities from a dictionary
+                                                             Acknowledgments
+of words with phonemic transcriptions, and to                This research was funded by grants no. 716619
+build graphemes-to-graphemes rules. These rules              and 616422 from the Walloon Region of Belgium,
+could then be automatically weighted, by learning            and supported by the Multitel research centre.
+their frequencies from our aligned corpora.                     We sincerely thank our anonymous reviewers
+Furthermore, this model should be able to allow              for their insightful and helpful comments on the
+for timbre variation, like [e]–[E], in order to              first version of this paper.
+allow similarities between graphemes frequently
+confused in French, like ai ([e]) and ais/ait/aient
+([E]). Last but not least, the graphemes-to-                 References
+graphemes rules should be contextualized, in                 AiTi Aw, Min Zhang, Juan Xiao, and Jian Su. 2006.
+order to reduce the complexity of the model.                   A phrase-based statistical model for SMS text
+
+
+                                                       778
+
+
+  normalization. In Proc. COLING/ACL 2006.                        Catherine Kobus, François Yvon, and Géraldine
+                                                                    Damnati. 2008a. Normalizing SMS: are two
+Srinivas Bangalore, Vanessa Murdock, and Giuseppe                   metaphors better than one? In Proc. COLING 2008,
+   Riccardi. 2002. Bootstrapping bilingual data                     pages 441–448, Manchester, UK.
+   using consensus translation for a multilingual instant
+   messaging system. In Proc. the 19th international              Catherine Kobus, François Yvon, and Géraldine
+   conference on Computational linguistics, pages 1–                Damnati. 2008b. Transcrire les SMS comme on
+   7, Morristown, NJ, USA.                                          reconnaît la parole. In Actes de la Conférence sur
+                                                                    le Traitement Automatique des Langues (TALN’08),
+Richard Beaufort.       2008.     Application des                   pages 128–138, Avignon, France.
+  machines à etats finis en synthèse de la parole.
+  Sélection d’unités non uniformes et correction                  Ron Kohavi. 1995. A study of cross-validation
+  orthographique. Ph.D. thesis, FUNDP, Namur,                       and bootstrap for accuracy estimation and model
+  Belgium, March. 605 pages.                                        selection. In Proc. IJCAI’95, pages 1137–1143.
+Markus Bieswanger. 2007. abbrevi8 or not 2 abbrevi8:              Vladimir Levenshtein. 1966. Binary codes capable of
+ A contrastive analysis of different space and time-                correcting deletions, insertions and reversals. Soviet
+ saving strategies in English and German text                       Physics, 10:707–710.
+ messages. In Texas Linguistics Forum, volume 50.
+                                                                  Mehryar Mohri and Michael Riley. 1997. Weighted
+Stanley F. Chen and Joshua Goodman.            1998.               determinization and minimization for large
+   An empirical study of smoothing techniques for                  vocabulary speech recognition.        In Proc.
+   language modeling.    Technical Report 10-98,                   Eurospeech’97, pages 131–134.
+   Computer Science Group, Harvard University.
+                                                                  Mehryar Mohri and Richard Sproat. 1996. An
+Noam Chomsky and Morris Halle. 1968. The sound                     efficient compiler for weighted rewrite rules. In
+  pattern of English. Harper and Row, New York, NY.                Proc. ACL’96, pages 231–238.
+Monojit Choudhury, Rahul Saraf, Vijit Jain, Animesh               Mehryar Mohri, Fernando Pereira, and Michael Riley.
+ Mukherjee, Sudeshna Sarkar1, and Anupam Basu.                     2000. The design principles of a weighted finite-
+ 2007. Investigation and modeling of the structure                 state transducer library.  Theoretical Computer
+ of texting language.    International Journal on                  Science, 231(1):17–32.
+ Document Analysis and Recognition, 10(3):157–
+ 174.                                                             Mehryar Mohri, Fernando Pereira, and Michael Riley.
+                                                                   2001. Generic -removal algorithm for weighted
+Vincent Colotte and Richard Beaufort.          2005.               automata. Lecture Notes in Computer Science,
+  Linguistic features weighting for a text-to-speech               2088:230–242.
+  system without prosody model.            In Proc.
+  Interspeech’05, pages 2549–2552.                                Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+                                                                    Jing Zhu. 2001. BLEU: a method for automatic
+Paul Cook and Suzanne Stevenson. 2009. An                           evaluation of machine translation. In Proc. ACL
+  unsupervised model for text message normalization.                2001, pages 311–318.
+  In Proc. Workshop on Computational Approaches to
+  Linguistic Creativity, pages 71–78.                             Emmanuel Roche and Yves Schabes, editors. 1997.
+                                                                    Finite-state language processing. MIT Press,
+Louise-Amélie Cougnon and Richard Beaufort. 2009.                   Cambridge.
+  SSLD: a French SMS to standard language
+  dictionary. In Sylviane Granger and Magali Paquot,              Claude E. Shannon. 1948. A mathematical theory of
+  editors, Proc. eLexicography in the 21st century:                 communication. The Bell System Technical Journal,
+  New applications, new challenges (eLEX 2009).                     27:379–423.
+  Presses Universitaires de Louvain. To appear.
+                                                                  Richard Sproat, A.W. Black, S. Chen, S. Kumar,
+Cédrick Fairon and Sébastien Paumier. 2006. A                       M. Ostendorf, and C. Richards.          2001.
+  translated corpus of 30,000 French SMS. In Proc.                  Normalization of non-standard words. Computer
+  LREC 2006, May.                                                   Speech & Language, 15(3):287–333.
+Cécrick. Fairon, Jean R. Klein, and Sébastien Paumier.            Crispin Thurlow and Alex Brown. 2003. Generation
+  2006.      Le langage SMS: étude d’un corpus                      txt? The sociolinguistics of young people’s text-
+  informatisé à partir de l’enquête Faites don de                   messaging. Discourse Analysis Online, 1(1).
+  vos SMS à la science. Presses Universitaires de
+  Louvain. 136 pages.                                             Kristina Toutanova and Robert C. Moore. 2002.
+                                                                    Pronunciation modeling for improved spelling
+Emilie Guimier de Neef, Arnaud Debeurme, and                        correction. In Proc. ACL’02, pages 144–151.
+  Jungyeul Park. 2007. TILT correcteur de SMS:
+  évaluation et bilan quantitatif. In Actes de TALN               François Yvon.   2008.   Reorthography of SMS
+  2007, pages 123–132, Toulouse, France.                            messages. Technical Report 2008, LIMSI/CNRS,
+                                                                    Orsay, France.
+C. Douglas Johnson. 1972. Formal aspects of
+  phonological description. Mouton, The Hague.
+                                                            779
+

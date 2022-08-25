@@ -1,0 +1,362 @@
+                                Coreference Resolution with Reconcile
+  Veselin Stoyanov                   Claire Cardie                     Nathan Gilbert              David Buttler
+ Center for Language                 Department of                       Ellen Riloff              David Hysom
+and Speech Processing               Computer Science                 School of Computing         Lawrence Livermore
+ Johns Hopkins Univ.                Cornell University                University of Utah         National Laboratory
+   Baltimore, MD                       Ithaca, NY                     Salt Lake City, UT           Livermore, CA
+     ves@cs.jhu.edu              cardie@cs.cornell.edu           ngilbert@cs.utah.edu             buttler1@llnl.gov
+                                                                     riloff@cs.utah.edu             hysom1@llnl.gov
+
+                          Abstract                                      We believe that one root cause of these dispar-
+      Despite the existence of several noun phrase coref-            ities is the high cost of implementing an end-to-
+      erence resolution data sets as well as several for-            end coreference resolution system. Coreference
+      mal evaluations on the task, it remains frustratingly          resolution is a complex problem, and successful
+      difficult to compare results across different corefer-
+      ence resolution systems. This is due to the high cost          systems must tackle a variety of non-trivial sub-
+      of implementing a complete end-to-end coreference              problems that are central to the coreference task —
+      resolution system, which often forces researchers
+      to substitute available gold-standard information in
+                                                                     e.g., mention/markable detection, anaphor identi-
+      lieu of implementing a module that would compute               fication — and that require substantial implemen-
+      that information. Unfortunately, this leads to incon-          tation efforts. As a result, many researchers ex-
+      sistent and often unrealistic evaluation scenarios.
+                                                                     ploit gold-standard annotations, when available, as
+      With the aim to facilitate consistent and realis-
+      tic experimental evaluations in coreference resolu-            a substitute for component technologies to solve
+      tion, we present Reconcile, an infrastructure for the          these subproblems. For example, many published
+      development of learning-based noun phrase (NP)                 research results use gold standard annotations to
+      coreference resolution systems. Reconcile is de-
+      signed to facilitate the rapid creation of corefer-            identify NPs (substituting for mention/markable
+      ence resolution systems, easy implementation of                detection), to distinguish anaphoric NPs from non-
+      new feature sets and approaches to coreference res-            anaphoric NPs (substituting for anaphoricity de-
+      olution, and empirical evaluation of coreference re-
+      solvers across a variety of benchmark data sets and            termination), to identify named entities (substitut-
+      standard scoring metrics. We describe Reconcile                ing for named entity recognition), and to identify
+      and present experimental results showing that Rec-
+      oncile can be used to create a coreference resolver
+                                                                     the semantic types of NPs (substituting for seman-
+      that achieves performance comparable to state-of-              tic class identification). Unfortunately, the use of
+      the-art systems on six benchmark data sets.                    gold standard annotations for key/critical compo-
+ 1    Introduction                                                   nent technologies leads to an unrealistic evalua-
+                                                                     tion setting, and makes it impossible to directly
+ Noun phrase coreference resolution (or simply
+                                                                     compare results against coreference resolvers that
+ coreference resolution) is the problem of identi-
+                                                                     solve all of these subproblems from scratch.
+ fying all noun phrases (NPs) that refer to the same
+                                                                        Comparison of coreference resolvers is further
+ entity in a text. The problem of coreference res-
+                                                                     hindered by the use of several competing (and
+ olution is fundamental in the field of natural lan-
+                                                                     non-trivial) evaluation measures, and data sets that
+ guage processing (NLP) because of its usefulness
+                                                                     have substantially different task definitions and
+ for other NLP tasks, as well as the theoretical in-
+                                                                     annotation formats. Additionally, coreference res-
+ terest in understanding the computational mech-
+                                                                     olution is a pervasive problem in NLP and many
+ anisms involved in government, binding and lin-
+                                                                     NLP applications could benefit from an effective
+ guistic reference.
+                                                                     coreference resolver that can be easily configured
+    Several formal evaluations have been conducted
+                                                                     and customized.
+ for the coreference resolution task (e.g., MUC-6
+                                                                        To address these issues, we have created a plat-
+ (1995), ACE NIST (2004)), and the data sets cre-
+                                                                     form for coreference resolution, called Reconcile,
+ ated for these evaluations have become standard
+                                                                     that can serve as a software infrastructure to sup-
+ benchmarks in the field (e.g., MUC and ACE data
+                                                                     port the creation of, experimentation with, and
+ sets). However, it is still frustratingly difficult to
+                                                                     evaluation of coreference resolvers. Reconcile
+ compare results across different coreference res-
+                                                                     was designed with the following seven desiderata
+ olution systems. Reported coreference resolu-
+                                                                     in mind:
+ tion scores vary wildly across data sets, evaluation
+ metrics, and system configurations.                                   • implement the basic underlying software ar-
+
+
+                                                               156
+                           Proceedings of the ACL 2010 Conference Short Papers, pages 156–161,
+                     Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+      chitecture of contemporary state-of-the-art             (Poesio and Kabadjov, 2004) and BART (Versley
+      learning-based coreference resolution sys-              et al., 2008) (which can be considered a succes-
+      tems;                                                   sor of GuiTaR) are both modular systems that tar-
+                                                              get the full coreference resolution task. As such,
+    • support experimentation on most of the stan-            both systems come close to meeting the majority
+      dard coreference resolution data sets;                  of the desiderata set forth in Section 1. BART,
+    • implement most popular coreference resolu-              in particular, can be considered an alternative to
+      tion scoring metrics;                                   Reconcile, although we believe that Reconcile’s
+                                                              approach is more flexible than BART’s. In addi-
+    • exhibit state-of-the-art coreference resolution         tion, the architecture and system components of
+      performance (i.e., it can be configured to cre-         Reconcile (including a comprehensive set of fea-
+      ate a resolver that achieves performance close          tures that draw on the expertise of state-of-the-art
+      to the best reported results);                          supervised learning approaches, such as Bengtson
+                                                              and Roth (2008)) result in performance closer to
+    • can be easily extended with new methods and             the state-of-the-art.
+      features;                                                  Coreference resolution has received much re-
+                                                              search attention, resulting in an array of ap-
+    • is relatively fast and easy to configure and
+                                                              proaches, algorithms and features. Reconcile
+      run;
+                                                              is modeled after typical supervised learning ap-
+    • has a set of pre-built resolvers that can be            proaches to coreference resolution (e.g. the archi-
+      used as black-box coreference resolution sys-           tecture introduced by Soon et al. (2001)) because
+      tems.                                                   of the popularity and relatively good performance
+                                                              of these systems.
+   While several other coreference resolution sys-               However, there have been other approaches
+tems are publicly available (e.g., Poesio and                 to coreference resolution, including unsupervised
+Kabadjov (2004), Qiu et al. (2004) and Versley et             and semi-supervised approaches (e.g. Haghighi
+al. (2008)), none meets all seven of these desider-           and Klein (2007)), structured approaches (e.g.
+ata (see Related Work). Reconcile is a modular                McCallum and Wellner (2004) and Finley and
+software platform that abstracts the basic archi-             Joachims (2005)), competition approaches (e.g.
+tecture of most contemporary supervised learning-             Yang et al. (2003)) and a bell-tree search approach
+based coreference resolution systems (e.g., Soon              (Luo et al. (2004)). Most of these approaches rely
+et al. (2001), Ng and Cardie (2002), Bengtson and             on some notion of pairwise feature-based similar-
+Roth (2008)) and achieves performance compara-                ity and can be directly implemented in Reconcile.
+ble to the state-of-the-art on several benchmark
+data sets. Additionally, Reconcile can be eas-                3       System Description
+ily reconfigured to use different algorithms, fea-            Reconcile was designed to be a research testbed
+tures, preprocessing elements, evaluation settings            capable of implementing most current approaches
+and metrics.                                                  to coreference resolution. Reconcile is written in
+   In the rest of this paper, we review related work          Java, to be portable across platforms, and was de-
+(Section 2), describe Reconcile’s organization and            signed to be easily reconfigurable with respect to
+components (Section 3) and show experimental re-              subcomponents, feature sets, parameter settings,
+sults for Reconcile on six data sets and two evalu-           etc.
+ation metrics (Section 4).                                       Reconcile’s architecture is illustrated in Figure
+                                                              1. For simplicity, Figure 1 shows Reconcile’s op-
+2    Related Work
+                                                              eration during the classification phase (i.e., assum-
+                                                              ing that a trained classifier is present).
+    Several coreference resolution systems are cur-
+                                                                 The basic architecture of the system includes
+rently publicly available. JavaRap (Qiu et al.,
+                                                              five major steps. Starting with a corpus of docu-
+2004) is an implementation of the Lappin and
+                                                              ments together with a manually annotated corefer-
+Leass’ (1994) Resolution of Anaphora Procedure
+                                                              ence resolution answer key1 , Reconcile performs
+(RAP). JavaRap resolves only pronouns and, thus,
+                                                                  1
+it is not directly comparable to Reconcile. GuiTaR                    Only required during training.
+
+
+                                                        157
+
+
+                           Figure 1: The Reconcile classification architecture.
+
+
+the following steps, in order:                                   Task            Systems
+                                                                 Sentence        UIUC (CC Group, 2009)
+                                                                 splitter        OpenNLP (Baldridge, J., 2005)
+  1. Preprocessing. All documents are passed                     Tokenizer       OpenNLP (Baldridge, J., 2005)
+     through a series of (external) linguistic pro-              POS             OpenNLP (Baldridge, J., 2005)
+                                                                 Tagger          + the two parsers below
+     cessors such as tokenizers, part-of-speech                  Parser          Stanford (Klein and Manning, 2003)
+     taggers, syntactic parsers, etc. These com-                                 Berkeley (Petrov and Klein, 2007)
+     ponents produce annotations of the text. Ta-                Dep. parser     Stanford (Klein and Manning, 2003)
+                                                                 NE              OpenNLP (Baldridge, J., 2005)
+     ble 1 lists the preprocessors currently inter-              Recognizer      Stanford (Finkel et al., 2005)
+     faced in Reconcile. Note that Reconcile in-                 NP Detector     In-house
+     cludes several in-house NP detectors, that
+     conform to the different data sets’ defini-             Table 1: Preprocessing components available in
+     tions of what constitutes a NP (e.g., MUC               Reconcile.
+     vs. ACE). All of the extractors utilize a syn-
+     tactic parse of the text and the output of a
+                                                                   pairs of NPs and it is trained to assign a score
+     Named Entity (NE) extractor, but extract dif-
+                                                                   indicating the likelihood that the NPs in the
+     ferent constructs as specialized in the corre-
+                                                                   pair are coreferent.
+     sponding definition. The NP extractors suc-
+     cessfully recognize about 95% of the NPs in               4. Clustering. A clustering algorithm consoli-
+     the MUC and ACE gold standards.                              dates the predictions output by the classifier
+                                                                  and forms the final set of coreference clusters
+  2. Feature generation. Using annotations pro-
+                                                                  (chains).2
+     duced during preprocessing, Reconcile pro-
+     duces feature vectors for pairs of NPs. For               5. Scoring. Finally, during testing Reconcile
+     example, a feature might denote whether the                  runs scoring algorithms that compare the
+     two NPs agree in number, or whether they                     chains produced by the system to the gold-
+     have any words in common. Reconcile in-                      standard chains in the answer key.
+     cludes over 80 features, inspired by other suc-
+     cessful coreference resolution systems such               Each of the five steps above can invoke differ-
+     as Soon et al. (2001) and Ng and Cardie                 ent components. Reconcile’s modularity makes it
+     (2002).                                                    2
+                                                                  Some structured coreference resolution algorithms (e.g.,
+                                                             McCallum and Wellner (2004) and Finley and Joachims
+  3. Classification. Reconcile learns a classifier           (2005)) combine the classification and clustering steps above.
+     that operates on feature vectors representing           Reconcile can easily accommodate this modification.
+
+
+                                                       158
+
+
+    Step             Available modules                                     (b) Tokenizer: OpenNLP
+    Classification   various learners in the Weka toolkit                  (c) POS Tagger: OpenNLP
+                     libSVM (Chang and Lin, 2001)
+                                                                           (d) Parser: Berkeley
+                     SVMlight (Joachims, 2002)
+    Clustering       Single-link                                           (e) Named Entity Recognizer: Stanford
+                     Best-First                                       2. Feature Set - A hand-selected subset of 60 out of the
+                     Most Recent First                                   more than 80 features available. The features were se-
+    Scoring          MUC score (Vilain et al., 1995)                     lected to include most of the features from Soon et al.
+                     B 3 score (Bagga and Baldwin, 1998)                 Soon et al. (2001), Ng and Cardie (2002) and Bengtson
+                     CEAF score (Luo, 2005)                              and Roth (2008).
+                                                                      3. Classifier - Averaged Perceptron
+                                                                      4. Clustering - Single-link - Positive decision threshold
+Table 2: Available implementations for different                         was tuned by cross validation of the training set.
+modules available in Reconcile.                                   4.3     Experimental Results
+                                                                  The first two rows of Table 3 show the perfor-
+easy for new components to be implemented and                     mance of Reconcile2010 . For all data sets, B 3
+existing ones to be removed or replaced. Recon-                   scores are higher than MUC scores. The MUC
+cile’s standard distribution comes with a compre-                 score is highest for the MUC6 data set, while B 3
+hensive set of implemented components – those                     scores are higher for the ACE data sets as com-
+available for steps 2–5 are shown in Table 2. Rec-                pared to the MUC data sets.
+oncile contains over 38,000 lines of original Java                   Due to the difficulties outlined in Section 1,
+code. Only about 15% of the code is concerned                     results for Reconcile presented here are directly
+with running existing components in the prepro-                   comparable only to a limited number of scores
+cessing step, while the rest deals with NP extrac-                reported in the literature. The bottom three
+tion, implementations of features, clustering algo-               rows of Table 3 list these comparable scores,
+rithms and scorers. More details about Recon-                     which show that Reconcile2010 exhibits state-of-
+cile’s architecture and available components and                  the-art performance for supervised learning-based
+features can be found in Stoyanov et al. (2010).                  coreference resolvers. A more detailed study of
+                                                                  Reconcile-based coreference resolution systems
+4     Evaluation
+                                                                  in different evaluation scenarios can be found in
+4.1    Data Sets                                                  Stoyanov et al. (2009).
+Reconcile incorporates the six most commonly                      5     Conclusions
+used coreference resolution data sets, two from the               Reconcile is a general architecture for coreference
+MUC conferences (MUC-6, 1995; MUC-7, 1997)                        resolution that can be used to easily create various
+and four from the ACE Program (NIST, 2004).                       coreference resolvers. Reconcile provides broad
+For ACE, we incorporate only the newswire por-                    support for experimentation in coreference reso-
+tion. When available, Reconcile employs the stan-                 lution, including implementation of the basic ar-
+dard test/train split. Otherwise, we randomly split               chitecture of contemporary state-of-the-art coref-
+the data into a training and test set following a                 erence systems and a variety of individual mod-
+70/30 ratio. Performance is evaluated according                   ules employed in these systems. Additionally,
+to the B 3 and MUC scoring metrics.                               Reconcile handles all of the formatting and scor-
+4.2    The Reconcile2010 Configuration                            ing peculiarities of the most widely used coref-
+                                                                  erence resolution data sets (those created as part
+Reconcile can be easily configured with differ-                   of the MUC and ACE conferences) and, thus,
+ent algorithms for markable detection, anaphoric-                 allows for easy implementation and evaluation
+ity determination, feature extraction, etc., and run              across these data sets. We hope that Reconcile
+against several scoring metrics. For the purpose of               will support experimental research in coreference
+this sample evaluation, we create only one partic-                resolution and provide a state-of-the-art corefer-
+ular instantiation of Reconcile, which we will call               ence resolver for both researchers and application
+Reconcile2010 to differentiate it from the general                developers. We believe that in this way Recon-
+platform. Reconcile2010 is configured using the                   cile will facilitate meaningful and consistent com-
+following components:                                             parisons of coreference resolution systems. The
+    1. Preprocessing                                              full Reconcile release is available for download at
+        (a) Sentence Splitter: OpenNLP                            http://www.cs.utah.edu/nlp/reconcile/.
+
+
+                                                            159
+
+
+               System                    Score                                 Data sets
+                                                   MUC6         MUC7       ACE-2 ACE03          ACE04      ACE05
+                                        MUC        68.50        62.80      65.99     67.87       62.03      67.41
+                 Reconcile2010
+                                         B3        70.88        65.86      78.29     79.39       76.50      73.71
+               Soon et al. (2001)       MUC         62.6         60.4        –          –          –          –
+               Ng and Cardie (2002)     MUC         70.4         63.4        –          –          –          –
+               Yang et al. (2003)       MUC         71.3         60.2        –          –          –          –
+
+      Table 3: Scores for Reconcile on six data sets and scores for comparable coreference systems.
+
+
+Acknowledgments                                                       S. Lappin and H. Leass. 1994. An algorithm for pronom-
+                                                                         inal anaphora resolution. Computational Linguistics,
+This research was supported in part by the Na-                           20(4):535–561.
+tional Science Foundation under Grant # 0937060
+                                                                      X. Luo, A. Ittycheriah, H. Jing, N. Kambhatla, and
+to the Computing Research Association for the                           S. Roukos. 2004. A mention-synchronous coreference
+CIFellows Project, Lawrence Livermore National                          resolution algorithm based on the bell tree. In Proceed-
+                                                                        ings of the 42nd Annual Meeting of the ACL.
+Laboratory subcontract B573245, Department of
+Homeland Security Grant N0014-07-1-0152, and                          X. Luo. 2005. On Coreference Resolution Performance
+Air Force Contract FA8750-09-C-0172 under the                            Metrics. In Proceedings of Human Language Technology
+                                                                         Conference and Conference on Empirical Methods in Nat-
+DARPA Machine Reading Program.                                           ural Language Processing (HLT/EMNLP).
+   The authors would like to thank the anonymous
+reviewers for their useful comments.                                  A. McCallum and B. Wellner. 2004. Conditional Models
+                                                                         of Identity Uncertainty with Application to Noun Coref-
+                                                                         erence. In Advances in Neural Information Processing
+References                                                               (NIPS 2004).
+A. Bagga and B. Baldwin. 1998. Algorithms for scoring
+                                                                      MUC-6. 1995. Coreference Task Definition. In Proceedings
+   coreference chains. In Linguistic Coreference Workshop
+                                                                       of the Sixth Message Understanding Conference (MUC-
+   at the Language Resources and Evaluation Conference.
+                                                                       6).
+Baldridge, J.        2005.        The OpenNLP project.
+  http://opennlp.sourceforge.net/.                                    MUC-7. 1997. Coreference Task Definition. In Proceed-
+                                                                       ings of the Seventh Message Understanding Conference
+                                                                       (MUC-7).
+E. Bengtson and D. Roth. 2008. Understanding the value of
+   features for coreference resolution. In Proceedings of the
+   2008 Conference on Empirical Methods in Natural Lan-               V. Ng and C. Cardie. 2002. Improving Machine Learning
+   guage Processing (EMNLP).                                             Approaches to Coreference Resolution. In Proceedings of
+                                                                         the 40th Annual Meeting of the ACL.
+CC Group.          2009.     Sentence Segmentation Tool.
+  http://l2r.cs.uiuc.edu/ cogcomp/atool.php?tkey=SS.                  NIST. 2004. The ACE Evaluation Plan. NIST.
+
+C. Chang and C. Lin.      2001.    LIBSVM: a Li-                      S. Petrov and D. Klein. 2007. Improved Inference for Un-
+  brary for Support Vector Machines.   Available at                      lexicalized Parsing. In Proceedings of the Joint Meeting
+  http://www.csie.ntu.edu.tw/cjlin/libsvm.                               of the Human Language Technology Conference and the
+                                                                         North American Chapter of the Association for Computa-
+J. Finkel, T. Grenager, and C. Manning. 2005. Incorporating              tional Linguistics (HLT-NAACL 2007).
+    Non-local Information into Information Extraction Sys-
+    tems by Gibbs Sampling. In Proceedings of the 21st In-            M. Poesio and M. Kabadjov. 2004. A general-purpose,
+    ternational Conference on Computational Linguistics and             off-the-shelf anaphora resolution module: implementation
+    44th Annual Meeting of the ACL.                                     and preliminary evaluation. In Proceedings of the Lan-
+                                                                        guage Resources and Evaluation Conference.
+T. Finley and T. Joachims. 2005. Supervised clustering with
+   support vector machines. In Proceedings of the Twenty-             L. Qiu, M.-Y. Kan, and T.-S. Chua. 2004. A public reference
+   second International Conference on Machine Learning                   implementation of the rap anaphora resolution algorithm.
+   (ICML 2005).                                                          In Proceedings of the Language Resources and Evaluation
+                                                                         Conference.
+A. Haghighi and D. Klein. 2007. Unsupervised Coreference
+   Resolution in a Nonparametric Bayesian Model. In Pro-              W. Soon, H. Ng, and D. Lim. 2001. A Machine Learning Ap-
+   ceedings of the 45th Annual Meeting of the ACL.                       proach to Coreference of Noun Phrases. Computational
+                                                                         Linguistics, 27(4):521–541.
+T. Joachims. 2002. SVMLight , http://svmlight.joachims.org.
+                                                                      V. Stoyanov, N. Gilbert, C. Cardie, and E. Riloff. 2009. Co-
+D. Klein and C. Manning. 2003. Fast Exact Inference with                 nundrums in noun phrase coreference resolution: Mak-
+   a Factored Model for Natural Language Parsing. In Ad-                 ing sense of the state-of-the-art. In Proceedings of
+   vances in Neural Information Processing (NIPS 2003).                  ACL/IJCNLP.
+
+
+                                                                160
+
+
+V. Stoyanov, C. Cardie, N. Gilbert, E. Riloff, D. Buttler, and
+   D. Hysom. 2010. Reconcile: A coreference resolution
+   research platform. Technical report, Cornell University.
+
+Y. Versley, S. Ponzetto, M. Poesio, V. Eidelman, A. Jern,
+   J. Smith, X. Yang, and A. Moschitti. 2008. BART: A
+   modular toolkit for coreference resolution. In Proceed-
+   ings of the Language Resources and Evaluation Confer-
+   ence.
+
+M. Vilain, J. Burger, J. Aberdeen, D. Connolly, and
+  L. Hirschman. 1995. A Model-Theoretic Coreference
+  Scoring Theme. In Proceedings of the Sixth Message Un-
+  derstanding Conference (MUC-6).
+
+X. Yang, G. Zhou, J. Su, and C. Tan. 2003. Coreference
+   resolution using competition learning approach. In Pro-
+   ceedings of the 41st Annual Meeting of the ACL.
+
+
+
+
+                                                                 161
+

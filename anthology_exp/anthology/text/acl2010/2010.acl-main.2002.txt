@@ -1,0 +1,330 @@
+    A Joint Rule Selection Model for Hierarchical Phrase-based Translation∗
+               Lei Cui† , Dongdong Zhang‡ , Mu Li‡ , Ming Zhou‡ , and Tiejun Zhao†
+                                †
+                              School of Computer Science and Technology
+                              Harbin Institute of Technology, Harbin, China
+                             {cuilei,tjzhao}@mtlab.hit.edu.cn
+                               ‡
+                                 Microsoft Research Asia, Beijing, China
+                          {dozhang,muli,mingzhou}@microsoft.com
+
+                        Abstract                                    proper rule selection for hypothesis generation, in-
+                                                                    cluding both source-side rule selection and target-
+     In hierarchical phrase-based SMT sys-                          side rule selection where the source-side rule de-
+     tems, statistical models are integrated to                     termines what part of source words to be translated
+     guide the hierarchical rule selection for                      and the target-side rule provides one of the candi-
+     better translation performance. Previous                       date translations of the source-side rule. Improper
+     work mainly focused on the selection of                        rule selections may result in poor translations.
+     either the source side of a hierarchical rule                     There is some related work about the hierarchi-
+     or the target side of a hierarchical rule                      cal rule selection. In the original work (Chiang,
+     rather than considering both of them si-                       2005), the target-side rule selection is analogous to
+     multaneously. This paper presents a joint                      the model in traditional phrase-based SMT system
+     model to predict the selection of hierar-                      such as Pharaoh (Koehn et al., 2003). Extending
+     chical rules. The proposed model is esti-                      this work, (He et al., 2008; Liu et al., 2008) in-
+     mated based on four sub-models where the                       tegrate rich context information of non-terminals
+     rich context knowledge from both source                        to predict the target-side rule selection. Different
+     and target sides is leveraged. Our method                      from the above work where the probability dis-
+     can be easily incorporated into the prac-                      tribution of source-side rule selection is uniform,
+     tical SMT systems with the log-linear                          (Setiawan et al., 2009) proposes to select source-
+     model framework. The experimental re-                          side rules based on the captured function words
+     sults show that our method can yield sig-                      which often play an important role in word re-
+     nificant improvements in performance.                          ordering. There is also some work considering to
+                                                                    involve more rich contexts to guide the source-side
+1    Introduction
+                                                                    rule selection. (Marton and Resnik, 2008; Xiong
+Hierarchical phrase-based model has strong ex-                      et al., 2009) explore the source syntactic informa-
+pression capabilities of translation knowledge. It                  tion to reward exact matching structure rules or
+can not only maintain the strength of phrase trans-                 punish crossing structure rules.
+lation in traditional phrase-based models (Koehn                       All the previous work mainly focused on either
+et al., 2003; Xiong et al., 2006), but also char-                   source-side rule selection task or target-side rule
+acterize the complicated long distance reordering                   selection task rather than both of them together.
+similar to syntactic based statistical machine trans-               The separation of these two tasks, however, weak-
+lation (SMT) models (Yamada and Knight, 2001;                       ens the high interrelation between them. In this pa-
+Quirk et al., 2005; Galley et al., 2006; Liu et al.,                per, we propose to integrate both source-side and
+2006; Marcu et al., 2006; Mi et al., 2008; Shen et                  target-side rule selection in a unified model. The
+al., 2008).                                                         intuition is that the joint selection of source-side
+   In hierarchical phrase-based SMT systems, due                    and target-side rules is more reliable as it conducts
+to the flexibility of rule matching, a huge number                  the search in a larger space than the single selec-
+of hierarchical rules could be automatically learnt                 tion task does. It is expected that these two kinds
+from bilingual training corpus (Chiang, 2005).                      of selection can help and affect each other, which
+SMT decoders are forced to face the challenge of                    may potentially lead to better hierarchical rule se-
+    ∗
+    This work was finished while the first author visited Mi-       lections with a relative global optimum instead of
+crosoft Research Asia as an intern.                                 a local optimum that might be reached in the pre-
+
+
+                                                                6
+                            Proceedings of the ACL 2010 Conference Short Papers, pages 6–11,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+vious methods. Our proposed joint probability              the monolingual source side of the training corpus.
+model is factored into four sub-models that can            CFSM is used to capture how likely the source-
+be further classified into source-side and target-         side rule is linguistically motivated or has the cor-
+side rule selection models or context-based and            responding target-side counterpart.
+context-free selection models. The context-based              For CBSM, it can be naturally viewed as a clas-
+models explore rich context features from both             sification problem where each distinct source-side
+source and target sides, including function words,         rule is a single class. However, considering the
+part-of-speech (POS) tags, syntactic structure in-         huge number of classes may cause serious data
+formation and so on. Our model can be easily in-           sparseness problem and thereby degrade the clas-
+corporated as an independent feature into the prac-        sification accuracy, we approximate CBSM by a
+tical hierarchical phrase-based systems with the           binary classification problem which can be solved
+log-linear model framework. The experimental re-           by the maximum entropy (ME) approach (Berger
+sults indicate our method can improve the system           et al., 1996) as follows:
+performance significantly.
+
+2   Hierarchical Rule Selection Model                          Ps (α|C) ≈ Ps (υ|α, C)
+                                                                                   P
+                                                                              exp[ i λi hi (υ, α, C)]       (4)
+Following (Chiang, 2005), hα, γi is used to repre-                      =P           P          0
+sent a synchronous context free grammar (SCFG)                               υ 0 exp[ i λi hi (υ , α, C)]
+
+rule extracted from the training corpus, where α           where υ ∈ {0, 1} is the indicator whether the
+and γ are the source-side and target-side rule re-         source-side rule is applied during decoding, υ = 1
+spectively. Let C be the context of hα, γi. For-           when the source-side rule is applied, otherwise
+mally, our joint probability model of hierarchical         υ = 0; hi is a feature function, λi is the weight
+rule selection is described as follows:                    of hi . CBSM estimates the probability of the
+                                                           source-side rule being selected according to the
+        P (α, γ|C) = P (α|C)P (γ|α, C)          (1)        rich context information coming from the surface
+   We decompose the joint probability model into           strings and sub-phrases that will be reduced to
+two sub-models based on the Bayes formulation,             non-terminals during decoding.
+where the first sub-model is source-side rule se-             Analogously, we decompose the target-side rule
+lection model and the second one is the target-side        selection model by the interpolation approach as
+rule selection model.                                      well:
+   For the source-side rule selection model, we fur-
+ther compute it by the interpolation of two sub-                      ϕPt (γ) + (1 − ϕ)Pt (γ|α, C)          (5)
+models:                                                    where Pt (γ) is the context-free target model
+                                                           (CFTM) and Pt (γ|α, C) is the context-based tar-
+            θPs (α) + (1 − θ)Ps (α|C)           (2)        get model (CBTM), ϕ is the interpolation weight
+where Ps (α) is the context-free source model              that can be optimized over the development data.
+(CFSM) and Ps (α|C) is the context-based source               In the similar way, we compute CFTM by the
+model (CBSM), θ is the interpolation weight that           MLE approach and estimate CBTM by the ME
+can be optimized over the development data.                approach. CFTM computes how likely the target-
+   CFSM is the probability of source-side rule se-         side rule is linguistically motivated, while CBTM
+lection that can be estimated based on maximum             predicts how likely the target-side rule is applied
+likelihood estimation (MLE) method:                        according to the clues from the rich context infor-
+                                                           mation.
+                    P
+                       γ Count(hα, γi)
+           Ps (α) =                            (3)         3     Model Training of CBSM and CBTM
+                         Count(α)
+where the numerator is the total count of bilin-           3.1    The acquisition of training instances
+gual rule pairs with the same source-side rule that        CBSM and CBTM are trained by ME approach for
+are extracted based on the extraction algorithm in         the binary classification, where a training instance
+(Chiang, 2005), and the denominator is the total           consists of a label and the context related to SCFG
+amount of source-side rule patterns contained in           rules. The context is divided into source context
+
+
+                                                       7
+
+
+                        Figure 1: Example of training instances in CBSM and CBTM.
+
+
+and target context. CBSM is trained only based                     as a positive instance, while the elements in {hυ =
+on the source context while CBTM is trained over                   0, C(rs ), C(rtj )i|j 6= i ∧ 1 ≤ j ≤ n} are viewed
+both the source and the target context. All the                    as negative instances since they fail to be applied
+training instances are automatically constructed                   to the translation from s to t. For example in Fig-
+from the bilingual training corpus, which have la-                 ure 1(c), Rule (1) and Rule (2) are two different
+bels of either positive (i.e., υ = 1) or negative (i.e.,           SCFG rules extracted from Figure 1(a) and Figure
+υ = 0). This section explains how the training in-                 1(b) respectively, where their source-side rules are
+stances are constructed for the training of CBSM                   the same. As Rule (1) cannot be applied to Fig-
+and CBTM.                                                          ure 1(b) for the translation and Rule (2) cannot
+   Let s and t be the source sentence and target                   be applied to Figure 1(a) for the translation either,
+sentence, W be the word alignment between them,                    hυ = 1, C(rsa ), C(rta )i and hυ = 1, C(rsb ), C(rtb )i
+rs be a source-side rule that pattern-matches a                    are constructed as positive instances while hυ =
+sub-phrase of s, rt be the target-side rule pattern-               0, C(rsa ), C(rtb )i and hυ = 0, C(rsb ), C(rta )i are
+matching a sub-phrase of t and being aligned to rs                 viewed as negative instances. It is noticed that
+based on W , and C(r) be the context features re-                  this instance construction method may lead to a
+lated to the rule r which will be explained in the                 large quantity of negative instances and choke the
+following section.                                                 training procedure. In practice, to limit the size
+   For the training of CBSM, if the SCFG rule                      of the training set, the negative instances con-
+hrs , rt i can be extracted based on the rule extrac-              structed based on low-frequency target-side rules
+tion algorithm in (Chiang, 2005), hυ = 1, C(rs )i                  are pruned.
+is constructed as a positive instance, otherwise
+                                                                   3.2   Context-based features for ME training
+hυ = 0, C(rs )i is constructed as a negative in-
+stance. For example in Figure 1(a), the context of                 ME approach has the merit of easily combining
+source-side rule ”X1 hezuo” that pattern-matches                   different features to predict the probability of each
+the phrase ”youhao hezuo” produces a positive                      class. We incorporate into the ME based model
+instance, while the context of ”X1 youhao” that                    the following informative context-based features
+pattern-matches the source phrase ”de youhao” or                   to train CBSM and CBTM. These features are
+”shuangfang de youhao” will produce a negative                     carefully designed to reduce the data sparseness
+instance as there are no corresponding plausible                   problem and some of them are inspired by pre-
+target-side rules that can be extracted legally1 .                 vious work (He et al., 2008; Gimpel and Smith,
+   For the training of CBTM, given rs , suppose                    2008; Marton and Resnik, 2008; Chiang et al.,
+there is a SCFG rule set {hrs , rtk i|1 ≤ k ≤ n}                   2009; Setiawan et al., 2009; Shen et al., 2009;
+extracted from multiple distinct sentence pairs in                 Xiong et al., 2009):
+the bilingual training corpus, among which we as-                    1. Function word features, which indicate
+sume hrs , rti i is extracted from the sentence pair                    whether the hierarchical source-side/target-
+hs, ti. Then, we construct hυ = 1, C(rs ), C(rti )i                     side rule strings and sub-phrases covered by
+   1
+                                                                        non-terminals contain function words that are
+     Because the aligned target words are not contiguous and
+”cooperation” is aligned to the word outside the source-side            often important clues of predicting syntactic
+rule.                                                                   structures.
+
+
+                                                               8
+
+
+    2. POS features, which are POS tags of the              We compare our method with the baseline and
+       boundary source words covered by non-                some typical approaches listed in Table 1 where
+       terminals.                                           XP+ denotes the approach in (Marton and Resnik,
+                                                            2008) and TOFW (topological ordering of func-
+    3. Syntactic features, which are the constituent        tion words) stands for the method in (Setiawan et
+       constraints of hierarchical source-side rules        al., 2009). As (Xiong et al., 2009)’s work is based
+       exactly matching or crossing syntactic sub-          on phrasal SMT system with bracketing transduc-
+       trees.                                               tion grammar rules (Wu, 1997) and (Shen et al.,
+                                                            2009)’s work is based on the string-to-dependency
+    4. Rule format features, which are non-
+                                                            SMT model, we do not implement these two re-
+       terminal positions and orders in source-
+                                                            lated work due to their different models from ours.
+       side/target-side rules. This feature interacts
+                                                            We also do not compare with (He et al., 2008)’s
+       between source and target components since
+                                                            work due to its less practicability of integrating
+       it shows whether the translation ordering is
+                                                            numerous sub-models.
+       affected.
+                                                                    Methods       NIST 2006    NIST 2008
+    5. Length features, which are the length                        Baseline      0.3025       0.2200
+       of sub-phrases covered by source non-                        XP+           0.3061       0.2254
+       terminals.                                                   TOFW          0.3089       0.2253
+                                                                    Our method    0.3141       0.2318
+
+4     Experiments
+                                                            Table 1: Comparison results, our method is signif-
+4.1    Experiment setting                                   icantly better than the baseline, as well as the other
+We implement a hierarchical phrase-based system             two approaches (p < 0.01)
+similar to the Hiero (Chiang, 2005) and evaluate
+our method on the Chinese-to-English translation               As shown in Table 1, all the methods outper-
+task. Our bilingual training data comes from FBIS           form the baseline because they have extra mod-
+corpus, which consists of around 160K sentence              els to guide the hierarchical rule selection in some
+pairs where the source data is parsed by the Berke-         ways which might lead to better translation. Ap-
+ley parser (Petrov and Klein, 2007). The ME train-          parently, our method also performs better than the
+ing toolkit, developed by (Zhang, 2006), is used to         other two approaches, indicating that our method
+train our CBSM and CBTM. The training size of               is more effective in the hierarchical rule selection
+constructed positive instances for both CBSM and            as both source-side and target-side rules are se-
+CBTM is 4.68M, while the training size of con-              lected together.
+structed negative instances is 3.74M and 3.03M re-          4.3   Effect of sub-models
+spectively. Following (Setiawan et al., 2009), we
+identify function words as the 128 most frequent            Due to the space limitation, we analyze the ef-
+words in the corpus. The interpolation weights are          fect of sub-models upon the system performance,
+set to θ = 0.75 and ϕ = 0.70. The 5-gram lan-               rather than that of ME features, part of which have
+guage model is trained over the English portion             been investigated in previous related work.
+of FBIS corpus plus Xinhua portion of the Giga-               Settings                  NIST 2006    NIST 2008
+word corpus. The development data is from NIST                Baseline                  0.3025       0.2200
+2005 evaluation data and the test data is from                Baseline+CFSM             0.3092∗      0.2266∗
+                                                              Baseline+CBSM             0.3077∗      0.2247∗
+NIST 2006 and NIST 2008 evaluation data. The                  Baseline+CFTM             0.3076∗      0.2286∗
+evaluation metric is the case-insensitive BLEU4               Baseline+CBTM             0.3060       0.2255∗
+(Papineni et al., 2002). Statistical significance in          Baseline+CFSM+CFTM        0.3109∗      0.2289∗
+BLEU score differences is tested by paired boot-              Baseline+CFSM+CBSM        0.3104∗      0.2282∗
+                                                              Baseline+CFTM+CBTM        0.3099∗      0.2299∗
+strap re-sampling (Koehn, 2004).                              Baseline+all sub-models   0.3141∗      0.2318∗
+
+4.2    Comparison with related work
+                                                            Table 2: Sub-model effect upon the performance,
+Our baseline is the implemented Hiero-like SMT              *: significantly better than baseline (p < 0.01)
+system where only the standard features are em-
+ployed and the performance is state-of-the-art.               As shown in Table 2, when sub-models are inte-
+
+
+                                                        9
+
+
+grated as independent features, the performance is             Zhongjun He, Qun Liu, and Shouxun Lin. 2008. Im-
+improved compared to the baseline, which shows                   proving Statistical Machine Translation using Lexi-
+                                                                 calized Rule Selection. In Proc. Coling, pages 321-
+that each of the sub-models can improve the hier-
+                                                                 328.
+archical rule selection. It is noticeable that the per-
+formance of the source-side rule selection model               Philipp Koehn. 2004. Statistical Significance Tests for
+is comparable with that of the target-side rule se-              Machine Translation Evaluation. In Proc. EMNLP.
+lection model. Although CFSM and CFTM per-                     Philipp Koehn, Franz J. Och, and Daniel Marcu. 2003.
+form only slightly better than the others among                  Statistical Phrase-Based Translation. In Proc. HLT-
+the individual sub-models, the best performance is               NAACL, pages 127-133.
+achieved when all the sub-models are integrated.
+                                                               Qun Liu, Zhongjun He, Yang Liu, and Shouxun Lin.
+                                                                 2008. Maximum Entropy based Rule Selection
+5   Conclusion                                                   Model for Syntax-based Statistical Machine Trans-
+                                                                 lation. In Proc. EMNLP, pages 89-97.
+Hierarchical rule selection is an important and
+complicated task for hierarchical phrase-based                 Yang Liu, Yun Huang, Qun Liu, and Shouxun Lin.
+SMT system. We propose a joint probability                       2007. Forest-to-String Statistical Translation Rules.
+model for the hierarchical rule selection and the                In Proc. ACL, pages 704-711.
+experimental results prove the effectiveness of our            Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-to-
+approach.                                                        String Alignment Template for Statistical Machine
+   In the future work, we will explore more useful               Translation. In Proc. ACL-Coling, pages 609-616.
+features and test our method over the large scale
+                                                               Daniel Marcu, Wei Wang, Abdessamad Echihabi, and
+training corpus. A challenge might exist when                    Kevin Knight. 2006. SPMT: Statistical Ma-
+running the ME training toolkit over a big size                  chine Translation with Syntactified Target Language
+of training instances from the large scale training              Phrases. In Proc. EMNLP, pages 44-52.
+data.
+                                                               Yuval Marton and Philip Resnik. 2008. Soft Syntactic
+                                                                 Constraints for Hierarchical Phrased-Based Trans-
+Acknowledgments                                                  lation. In Proc. ACL, pages 1003-1011.
+We are especially grateful to the anonymous re-                Haitao Mi, Liang Huang, and Qun Liu. 2008. Forest-
+viewers for their insightful comments. We also                   Based Translation. In Proc. ACL, pages 192-199.
+thank Hendra Setiawan, Yuval Marton, Chi-Ho Li,
+Shujie Liu and Nan Duan for helpful discussions.               Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+                                                                 Jing Zhu. 2002. Bleu: a Method for Automatic
+                                                                 Evaluation of Machine Translation. In Proc. ACL,
+                                                                 pages 311-318.
+References
+Adam L. Berger, Vincent J. Della Pietra, and Stephen           Slav Petrov and Dan Klein. 2007. Improved Inference
+  A. Della Pietra. 1996. A Maximum Entropy Ap-                    for Unlexicalized Parsing. In Proc. HLT-NAACL,
+  proach to Natural Language Processing. Computa-                 pages 404-411.
+  tional Linguistics, 22(1): pages 39-72.
+                                                               Chris Quirk, Arul Menezes, and Colin Cherry. 2005.
+David Chiang. 2005. A Hierarchical Phrase-Based                  Dependency Treelet Translation: Syntactically In-
+  Model for Statistical Machine Translation. In Proc.            formed Phrasal SMT. In Proc. ACL, pages 271-279.
+  ACL, pages 263-270.
+                                                               Libin Shen, Jinxi Xu, and Ralph Weischedel. 2008. A
+David Chiang, Kevin Knight, and Wei Wang. 2009.                  New String-to-Dependency Machine Translation Al-
+  11,001 New Features for Statistical Machine Trans-             gorithm with a Target Dependency Language Model.
+  lation. In Proc. HLT-NAACL, pages 218-226.                     In Proc. ACL, pages 577-585.
+
+Michel Galley, Jonathan Graehl, Kevin Knight, Daniel           Libin Shen, Jinxi Xu, Bing Zhang, Spyros Matsoukas,
+  Marcu, Steve DeNeefe, Wei Wang, and Ignacio                    and Ralph Weischedel. 2009. Effective Use of Lin-
+  Thayer. 2006. Scalable Inference and Training of               guistic and Contextual Information for Statistical
+  Context-Rich Syntactic Translation Models. In Proc.            Machine Translation. In Proc. EMNLP, pages 72-
+  ACL-Coling, pages 961-968.                                     80.
+
+Kevin Gimpel and Noah A. Smith. 2008. Rich Source-             Hendra Setiawan, Min Yen Kan, Haizhou Li, and Philip
+  Side Context for Statistical Machine Translation. In           Resnik. 2009. Topological Ordering of Function
+  Proc. the Third Workshop on Statistical Machine                Words in Hierarchical Phrase-based Translation. In
+  Translation, pages 9-17.                                       Proc. ACL, pages 324-332.
+
+
+                                                          10
+
+
+Dekai Wu. 1997. Stochastic Inversion Transduction
+  Grammars and Bilingual Parsing of Parallel Cor-
+  pora. Computational Linguistics, 23(3): pages 377-
+  403.
+Deyi Xiong, Qun Liu, and Shouxun Lin. 2006. Maxi-
+  mum Entropy Based Phrase Reordering Model for
+  Statistical Machine Translation. In Proc. ACL-
+  Coling, pages 521-528.
+Deyi Xiong, Min Zhang, Aiti Aw, and Haizhou Li.
+  2009.    A Syntax-Driven Bracketing Model for
+  Phrase-Based Translation. In Proc. ACL, pages
+  315-323.
+Kenji Yamada and Kevin Knight. 2001. A Syntax-
+  based Statistical Translation Model. In Proc. ACL,
+  pages 523-530.
+Le Zhang.      2006.    Maximum entropy mod-
+  eling toolkit for python and c++.     avail-
+  able at http://homepages.inf.ed.ac.uk/
+  lzhang10/maxent_toolkit.html.
+
+
+
+
+                                                       11
+

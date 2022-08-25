@@ -1,0 +1,637 @@
+       Detecting Errors in Automatically-Parsed Dependency Relations
+
+                                              Markus Dickinson
+                                              Indiana University
+                                             md7@indiana.edu
+
+
+
+
+                      Abstract                                 from automatic processing must be minimized, as
+    We outline different methods to detect er-                 errors have a negative impact on training and eval-
+    rors in automatically-parsed dependency                    uation of NLP technology (see discussion and ref-
+    corpora, by comparing so-called depen-                     erences in Boyd et al., 2008, sec. 1). There is work
+    dency rules to their representation in the                 on detecting errors in dependency corpus annota-
+    training data and flagging anomalous ones.                 tion (Boyd et al., 2008), but this is based on finding
+    By comparing each new rule to every rel-                   inconsistencies in annotation for identical recur-
+    evant rule from training, we can identify                  ring strings. This emphasis on identical strings can
+    parts of parse trees which are likely erro-                result in high precision, but many strings do not re-
+    neous. Even the relatively simple methods                  cur, negatively impacting the recall of error detec-
+    of comparison we propose show promise                      tion. Furthermore, since the same strings often re-
+    for speeding up the annotation process.                    ceive the same automatic parse, the types of incon-
+                                                               sistencies detected are likely to have resulted from
+1   Introduction and Motivation                                manual annotation. While we can build from the
+Given the need for high-quality dependency parses              insight that simple methods can provide reliable
+in applications such as statistical machine transla-           annotation checks, we need an approach which re-
+tion (Xu et al., 2009), natural language generation            lies on more general properties of the dependency
+(Wan et al., 2009), and text summarization evalu-              structures, in order to develop techniques which
+ation (Owczarzak, 2009), there is a corresponding              work for automatically-parsed corpora.
+need for high-quality dependency annotation, for                  Developing techniques to detect errors in parses
+the training and evaluation of dependency parsers              in a way which is independent of corpus and
+(Buchholz and Marsi, 2006). Furthermore, pars-                 parser has fairly broad implications. By using
+ing accuracy degrades unless sufficient amounts                only the information available in a training corpus,
+of labeled training data from the same domain                  the methods we explore are applicable to annota-
+are available (e.g., Gildea, 2001; Sekine, 1997),              tion error detection for either hand-annotated or
+and thus we need larger and more varied anno-                  automatically-parsed corpora and can also provide
+tated treebanks, covering a wide range of domains.             insights for parse reranking (e.g., Hall and Novák,
+However, there is a bottleneck in obtaining an-                2005) or parse revision (Attardi and Ciaramita,
+notation, due to the need for manual interven-                 2007). Although we focus only on detecting errors
+tion in annotating a treebank. One approach is                 in automatically-parsed data, similar techniques
+to develop automatically-parsed corpora (van No-               have been applied for hand-annotated data (Dick-
+ord and Bouma, 2009), but a natural disadvantage               inson, 2008; Dickinson and Foster, 2009).
+with such data is that it contains parsing errors.                Our general approach is based on extracting
+Identifying the most problematic parses for human              a grammar from an annotated corpus and com-
+post-processing could combine the benefits of au-              paring dependency rules in a new (automatically-
+tomatic and manual annotation, by allowing a hu-               annotated) corpus to the grammar. Roughly speak-
+man annotator to efficiently correct automatic er-             ing, if a dependency rule—which represents all the
+rors. We thus set out in this paper to detect errors           dependents of a head together (see section 3.1)—
+in automatically-parsed data.                                  does not fit well with the grammar, it is flagged as
+   If annotated corpora are to grow in scale and re-           potentially erroneous. The methods do not have
+tain a high quality, annotation errors which arise             to be retrained for a given parser’s output (e.g.,
+
+
+                                                         729
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 729–738,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+Campbell and Johnson, 2002), but work by com-                          of arguments and adjuncts (cf. Przepiórkowski,
+paring any tree to what is in the training grammar                     2006)—that is, a head and all its dependents. The
+(cf. also approaches stacking hand-written rules                       methods work because we expect there to be reg-
+on top of other parsers (Bick, 2007)).                                 ularities in valency structure in a treebank gram-
+   We propose to flag erroneous parse rules, using                     mar; non-conformity to such regularities indicates
+information which reflects different grammatical                       a potential problem.
+properties: POS lookup, bigram information, and
+full rule comparisons. We build on a method to                         3       Ad hoc rule detection
+detect so-called ad hoc rules, as described in sec-                    3.1      An appropriate representation
+tion 2, and then turn to the main approaches in sec-
+                                                                       To capture valency, consider the dependency tree
+tion 3. After a discussion of a simple way to flag
+                                                                       from the Talbanken05 corpus (Nilsson and Hall,
+POS anomalies in section 4, we evaluate the dif-
+                                                                       2005) in figure 1, for the Swedish sentence in (1),
+ferent methods in section 5, using the outputs from
+                                                                       which has four dependency pairs.2
+two different parsers. The methodology proposed
+in this paper is easy to implement and independent                      (1) Det går bara inte ihop   .
+of corpus, language, or parser.                                             it goes just not together
+                                                                               ‘It just doesn’t add up.’
+2       Approach
+We take as a starting point two methods for detect-
+ing ad hoc rules in constituency annotation (Dick-
+                                                                                         SS           MA   NA      PL
+inson, 2008). Ad hoc rules are CFG productions
+extracted from a treebank which are “used for spe-                                     Det går bara inte ihop
+cific constructions and unlikely to be used again,”                                    PO VV AB AB AB
+indicating annotation errors and rules for ungram-
+maticalities (see also Dickinson and Foster, 2009).                             Figure 1: Dependency graph example
+   Each method compares a given CFG rule to all
+the rules in a treebank grammar. Based on the                             On a par with constituency rules, we define a
+number of similar rules, a score is assigned, and                      grammar rule as a dependency relation rewriting
+rules with the lowest scores are flagged as poten-                     as a head with its sequence of POS/dependent
+tially ad hoc. This procedure is applicable whether                    pairs (cf. Kuhlmann and Satta, 2009), as in fig-
+the rules in question are from a new data set—as in                    ure 2. This representation supports the detection
+this paper, where parses are compared to a training                    of idiosyncracies in valency.3
+data grammar—or drawn from the treebank gram-
+mar itself (i.e., an internal consistency check).                       1.     TOP → root ROOT:VV
+   The two methods differ in how the comparisons                        2.     ROOT → SS:PO VV MA:AB NA:AB PL:AB
+are done. First, the bigram method abstracts a                          3.     SS → PO            5. NA → AB
+rule to its bigrams. Thus, a rule such as NP →                          4.     MA → AB            6. PL → AB
+JJ NN provides support for NP → DT JJ JJ NN,                                     Figure 2: Rule representation for (1)
+in that it shares the JJ NN sequence. By con-
+trast, in the other method, which we call the whole
+                                                                          For example, for the ROOT category, the head
+rule method,1 a rule is compared in its totality
+                                                                       is a verb (VV), and it has 4 dependents. The
+to the grammar rules, using Levenshtein distance.
+                                                                       extent to which this rule is odd depends upon
+There is no abstraction, meaning all elements are
+                                                                       whether comparable rules—i.e., other ROOT rules
+present—e.g., NP → DT JJ JJ NN is very similar
+                                                                       or other VV rules (see section 3.2)—have a simi-
+to NP → DT JJ NN because the sequences differ
+                                                                       lar set of dependents. While many of the other
+by only one category.
+                                                                       rules seem rather spare, they provide useful infor-
+   While previously used for constituencies, what                      mation, showing categories which have no depen-
+is at issue is simply the valency of a rule, where                     dents. With a TOP rule, we have a rule for every
+by valency we refer to a head and its entire set
+                                                                           2
+                                                                            Category definitions are in appendix A.
+    1                                                                      3
+     This is referred to whole daughters in Dickinson (2008),               Valency is difficult to define for coordination and is spe-
+but the meaning of “daughters” is less clear for dependencies.         cific to an annotation scheme. We leave this for the future.
+
+
+                                                                 730
+
+
+head, including the virtual root. Thus, we can find            (3) S(ei ) = max{s(ei , h), s(ei , lhs)}
+anomalous rules such as TOP → root ROOT:AV
+ROOT:NN, where multiple categories have been                  3.3     Whole rule anomalies
+parsed as ROOT.                                               3.3.1     Motivation
+3.2   Making appropriate comparisons                          The whole rule method compares a list of a rule’s
+                                                              dependents to rules in a database, and then flags
+In comparing rules, we are trying to find evidence            rule elements without much support. By using all
+that a particular (parsed) rule is valid by examining         dependents as a basis for comparison, this method
+the evidence from the (training) grammar.                     detects improper dependencies (e.g., an adverb
+Units of comparison To determine similarity,                  modifying a noun), dependencies in the wrong
+one can compare dependency relations, POS tags,               overall location of a rule (e.g., an adverb before
+or both. Valency refers to both properties, e.g.,             an object), and rules with unnecessarily long ar-
+verbs which allow verbal (POS) subjects (depen-               gument structures. For example, in (4), we have
+dency). Thus, we use the pairs of dependency re-              an improper relation between skall (‘shall’) and
+lations and POS tags as the units of comparison.              sambeskattas (‘be taxed together’), as in figure 3.
+                                                              It is parsed as an adverb (AA), whereas it should
+Flagging individual elements Previous work                    be a verb group (VG). The rule for this part of the
+scored only entire rules, but some dependencies               tree is +F → ++:++ SV AA:VV, and the AA:VV
+are problematic and others are not. Thus, our                 position will be low-scoring because the ++:++ SV
+methods score individual elements of a rule.                  context does not support it.
+Comparable rules We do not want to com-
+                                                               (4) Makars övriga inkomster är B-inkomster
+pare a rule to all grammar rules, only to those
+                                                                   spouses’ other incomes are B-incomes
+which should have the same valents. Compara-
+                                                                   och skall som tidigare sambeskattas      .
+bility could be defined in terms of a rule’s depen-
+                                                                   and shall as previously be taxed togeher .
+dency relation (LHS) or in terms of its head. Con-
+sider the four different object (OO) rules in (2).                    ‘The other incomes of spouses are B-incomes and
+These vary a great deal, and much of the variabil-                    shall, as previously, be taxed together.’
+ity comes from the fact that they are headed by
+different POS categories, which tend to have dif-
+ferent selectional properties. The head POS thus
+seems to be predictive of a rule’s valency.
+                                                                      ++      +F     UK        KA                 VG
+ (2) a. OO → PO
+                                                                      och skall som tidigare sambeskattas
+      b. OO → DT:EN AT:AJ NN ET:VV
+                                                                      ++ SV UK         AJ        VV
+      c. OO → SS:PO QV VG:VV
+      d. OO → DT:PO AT:AJ VN
+   But we might lose information by ignoring rules
+with the same left-hand side (LHS). Our approach                      ++      +F     UK         SS                AA
+
+is thus to take the greater value of scores when                      och skall som tidigare sambeskattas
+comparing to rules either with the same depen-                        ++ SV UK         AJ        VV
+dency relation or with the same head. A rule has
+multiple chances to prove its value, and low scores           Figure 3: Wrong label (top=gold, bottom=parsed)
+will only be for rules without any type of support.
+   Taking these points together, for a given rule of
+interest r, we assign a score (S) to each element ei          3.3.2     Implementation
+in r, where r = e1 ...em by taking the maximum                The method we use to determine similarity arises
+of scores for rules with the same head (h) or same            from considering what a rule is like without a
+LHS (lhs), as in (3). For the first element in (2b),          problematic element. Consider +F → ++:++ SV
+for example, S(DT:EN) = max{s(DT:EN, NN),                     AA:VV from figure 3, where AA should be a dif-
+s(DT:EN, OO)}. The question is now how we de-                 ferent category (VG). The rule without this er-
+fine s(ei , c) for the comparable element c.                  ror, +F → ++:++ SV, starts several rules in the
+
+
+                                                        731
+
+
+training data, including some with VG:VV as the              (6) När det gäller   inkomståret     1971 (
+next item. The subrule ++:++ SV seems to be                      when it concerns the income year 1971 (
+reliable, whereas the subrules containing AA:VV                  taxeringsåret   1972 ) skall barnet . . .
+(++:++ AA:VV and SV AA:VV) are less reliable.                    assessment year 1972 ) shall the child . . .
+We thus determine reliability by seeing how often                   ‘Concerning the income year of 1971 (assessment year
+each subsequence occurs in the training rule set.                   1972), the child . . . ’
+   Throughout this paper, we use the term subrule
+to refer to a rule subsequence which is exactly one         3.4.2      Implementation
+element shorter than the rule it is a component             To obtain a bigram score for an element, we sim-
+of. We examine subrules, counting their frequency           ply add together the bigrams which contain the el-
+as subrules, not as complete rules. For example,            ement in question, as in (7).
+TOP rules with more than one dependent are prob-
+lematic, e.g., TOP → root ROOT:AV ROOT:NN.                   (7) s(ei , c) = C(ei−1 ei , c) + C(ei ei+1 , c)
+Correspondingly, there are no rules with three ele-
+ments containing the subrule root ROOT:AV.                     Consider the rule from figure 4. With c =
+   We formalize this by setting the score s(ei , c)         T A, the bigram HD:ID IR:IR never occurs, so
+equal to the summation of the frequencies of all            both HD:ID and IR:IR get 0 added to their score.
+comparable subrules containing ei from the train-           HD:ID HD:ID, however, is a frequent bigram, so
+ing data, as in (5), where B is the set of subrules         it adds weight to HD:ID, i.e., positive evidence
+of r with length one less.                                  comes from the bigram on the left. If we look at
+                                                            IR:IR, on the other hand, IR:IR AN:RO occurs 0
+                   P
+ (5) s(ei , c) =   sub∈B:ei ∈sub C(sub, c)                  times, and so IR:IR gets a total score of 0.
+                                                               Both scoring methods treat each element inde-
+   For example, with c = +F, the frequency of +F            pendently. Every single element could be given a
+→ ++:++ SV as a subrule is added to the scores              low score, even though once one is corrected, an-
+for ++:++ and SV. In this case, +F → ++:++                  other would have a higher score. Future work can
+SV VG:BV, +F → ++:++ SV VG:AV, and +F                       examine factoring in all elements at once.
+→ ++:++ SV VG:VV all add support for +F →
+++:++ SV being a legitimate subrule. Thus, ++:++            4     Additional information
+and SV are less likely to be the sources of any
+problems. Since +F → SV AA:VV and +F →                      The methods presented so far have limited defini-
+++:++ AA:VV have very little support in the train-          tions of comparability. As using complementary
+ing data, AA:VV receives a low score.                       information has been useful in, e.g., POS error de-
+   Note that the subrule count C(sub, c) is differ-         tection (Loftsson, 2009), we explore other simple
+ent than counting the number of rules containing            comparable properties of a dependency grammar.
+a subrule, as can be seen with identical elements.          Namely, we include: a) frequency information of
+For example, for SS → VN ET:PR ET:PR, C(VN                  an overall dependency rule and b) information on
+ET:PR, SS) = 2, in keeping with the fact that there         how likely each dependent is to be in a relation
+are 2 pieces of evidence for its legitimacy.                with its head, described next.
+
+3.4     Bigram anomalies                                    4.1     Including POS information
+3.4.1    Motivation                                         Consider PA → SS:NN XX:XX HV OO:VN, as
+The bigram method examines relationships be-                illustrated in figure 5 for the sentence in (8). This
+tween adjacent sisters, complementing the whole             rule is entirely correct, yet the XX:XX position has
+rule method by focusing on local properties. For            low whole rule and bigram scores.
+(6), for example, we find the gold and parsed trees
+in figure 4. For the long parsed rule TA → PR                (8) Uppgift      om vilka orter             som
+HD:ID HD:ID IR:IR AN:RO JR:IR, all elements                      information of which neighborhood who
+get low whole rule scores, i.e., are flagged as po-              har utkörning finner Ni också i . . .
+tentially erroneous. But only the final elements                 has delivery find you also in . . .
+have anomalous bigrams: HD:ID IR:IR, IR:IR                          ‘You can also find information about which neighbor-
+AN:RO, and AN:RO JR:IR all never occur.                             hoods have delivery services in . . . ’
+
+
+
+                                                      732
+
+
+                          AA   HD    HD        DT        PA    IR      DT       AN   JR   ...
+                         När det gäller inkomståret 1971 ( taxeringsåret 1972 ) ...
+                         PR ID ID             NN        RO IR      NN         RO IR ...
+
+
+
+
+                          TA   HD    HD        PA        ET    IR      DT       AN   JR   ...
+                         När det gäller inkomståret 1971 ( taxeringsåret 1972 ) ...
+                         PR ID ID             NN        RO IR      NN         RO IR ...
+
+                    Figure 4: A rule with extra dependents (top=gold, bottom=parsed)
+
+
+                                                               as dependents in a rule. In figure 5, for example,
+                                                               for har (‘has’), we look at its score within ET →
+                                                               PR PA:HV and not when it functions as a head, as
+            ET     DT     SS    XX        PA    OO
+                                                               in PA → SS:NN XX:XX HV OO:VN.
+    Uppgift om vilka orter som har utkörning
+                                                                  Relatedly, for each method, we are interested
+     NN     PR PO NN XX HV            VN
+                                                               in whether elements with scores below a thresh-
+                                                               old have worse attachment accuracy than scores
+       Figure 5: Overflagging (gold=parsed)
+                                                               above, as we predict they do. We can measure
+                                                               this by scoring each testing data position below
+                                                               the threshold as a 1 if it has the correct head and
+   One method which does not have this problem
+                                                               dependency relation and a 0 otherwise. These are
+of overflagging uses a “lexicon” of POS tag pairs,
+                                                               simply labeled attachment scores (LAS). Scoring
+examining relations between POS, irrespective of
+                                                               separately for positions above and below a thresh-
+position. We extract POS pairs, note their depen-
+                                                               old views the task as one of sorting parser output
+dency relation, and add a L/R to the label to in-
+                                                               into two bins, those more or less likely to be cor-
+dicate which is the head (Boyd et al., 2008). Ad-
+                                                               rectly parsed. For development, we also report un-
+ditionally, we note how often two POS categories
+                                                               labeled attachement scores (UAS).
+occur as a non-depenency, using the label NIL, to
+help determine whether there should be any at-                    Since the goal is to speed up the post-editing of
+tachment. We generate NILs by enumerating all                  corpus data by flagging erroneous rules, we also
+POS pairs in a sentence. For example, from fig-                report the precision and recall for error detection.
+ure 5, the parsed POS pairs include NN PR 7→ ET-               We count either attachment or labeling errors as
+L, NN PO 7→ NIL, etc.                                          an error, and precision and recall are measured
+                                                               with respect to how many errors are found below
+   We convert the frequencies to probabilities. For
+                                                               the threshold. For development, we use two F-
+example, of 4 total occurrences of XX HV in the
+                                                               scores to provide a measure of the settings to ex-
+training data, 2 are XX-R (cf. figure 5). A proba-
+                                                               amine across language, corpus, and parser condi-
+bility of 0.5 is quite high, given that NILs are often
+                                                               tions: the balanced F1 measure and the F0.5 mea-
+the most frequent label for POS pairs.
+                                                               sure, weighing precision twice as much. Precision
+5     Evaluation                                               is likely more important in this context, so as to
+                                                               prevent annotators from sorting through too many
+In evaluating the methods, our main question is:               false positives. In practice, one way to use these
+how accurate are the dependencies, in terms of                 methods is to start with the lowest thresholds and
+both attachment and labeling? We therefore cur-                work upwards until there are too many non-errors.
+rently examine the scores for elements functioning                To establish a basis for comparison, we compare
+
+
+                                                         733
+
+
+method performance to a parser on its own.4 By                        cision and F-scores. The bigram method is more
+examining the parser output without any automatic                     fine-grained, identifying small numbers of rule el-
+assistance, how often does a correction need to be                    ements at each threshold, resulting in high error
+made?                                                                 detection precision. With a threshold of 39, for ex-
+                                                                      ample, we find over a quarter of the parser errors
+5.1    The data                                                       with 62% precision, from this one piece of infor-
+All our data comes from the CoNLL-X Shared                            mation. For POS information, we flag 23.6% of
+Task (Buchholz and Marsi, 2006), specifically the                     the cases with over 60% precision (at 81.6).
+4 data sets freely available online. We use the                          Taking all these results together, we can begin
+Swedish Talbanken data (Nilsson and Hall, 2005)                       to sort more reliable from less reliable dependency
+and the transition-based dependency parser Malt-                      tree elements, using very simple information. Ad-
+Parser (Nivre et al., 2007), with the default set-                    ditionally, these methods naturally group cases
+tings, for developing the method. To test across                      together by linguistic properties (e.g., adverbial-
+languages and corpora, we use MaltParser on the                       verb dependencies within a particualr context), al-
+other 3 corpora: the Danish DDT (Kromann,                             lowing a human to uncover the principle behind
+2003), Dutch Alpino (van der Beek et al., 2002),                      parse failure and ajudicate similar cases at the
+and Portuguese Bosque data (Afonso et al., 2002).                     same time (cf. Wallis, 2003).
+Then, we present results using the graph-based
+parser MSTParser (McDonald and Pereira, 2006),                        5.3   Discussion
+again with default settings, to test the methods
+                                                                      Examining some of the output from the Tal-
+across parsers. We use the gold standard POS tags
+                                                                      banken test data by hand, we find that a promi-
+for all experiments.
+                                                                      nent cause of false positives, i.e., correctly-parsed
+5.2    Development data                                               cases with low scores, stems from low-frequency
+                                                                      dependency-POS label pairs. If the dependency
+In the first line of table 1, we report the baseline                  rarely occurs in the training data with the partic-
+MaltParser accuracies on the Swedish test data,                       ular POS, then it receives a low score, regardless
+including baseline error detection precision (=1-                     of its context. For example, the parsed rule TA
+LASb ), recall, and (the best) F-scores. In the rest                  → IG:IG RO has a correct dependency relation
+of table 1, we report the best-performing results                     (IG) between the POS tags IG and its head RO, yet
+for each of the methods,5 providing the number                        is assigned a whole rule score of 2 and a bigram
+of rules below and above a particular threshold,                      score of 20. It turns out that IG:IG only occurs
+along with corresponding UAS and LAS values.                          144 times in the training data, and in 11 of those
+To get the raw number of identified rules, multiply                   cases (7.6%) it appears immediately before RO.
+the number of corpus position below a threshold                       One might consider normalizing the scores based
+(b) times the error detection precision (P ). For ex-                 on overall frequency or adjusting the scores to ac-
+ample, the bigram method with a threshold of 39                       count for other dependency rules in the sentence:
+leads to finding 283 errors (455 × .622).                             in this case, there may be no better attachment.
+   Dependency elements with frequency below the
+                                                                         Other false positives are correctly-parsed ele-
+lowest threshold have lower attachment scores
+                                                                      ments that are a part of erroneous rules. For in-
+(66.6% vs. 90.1% LAS), showing that simply us-
+                                                                      stance, in AA → UK:UK SS:PO TA:AJ AV SP:AJ
+ing a complete rule helps sort dependencies. How-
+                                                                      OA:PR +F:HV +F:HV, the first +F:HV is correct,
+ever, frequency thresholds have fairly low preci-
+                                                                      yet given a low score (0 whole rule, 1 bigram).
+sion, i.e., 33.4% at their best. The whole rule and
+                                                                      The following and erroneous +F:HV is similarly
+bigram methods reveal greater precision in iden-
+                                                                      given a low score. As above, such cases might
+tifying problematic dependencies, isolating ele-
+                                                                      be handled by looking for attachments in other
+ments with lower UAS and LAS scores than with
+                                                                      rules (cf. Attardi and Ciaramita, 2007), but these
+frequency, along with corresponding greater pre-
+                                                                      cases should be relatively unproblematic for hand-
+   4
+     One may also use parser confidence or parser revision            correction, given the neighboring error.
+methods as a basis of comparison, but we are aware of no sys-            We also examined false negatives, i.e., errors
+tematic evaluation of these approaches for detecting errors.
+   5
+     Freq=rule frequency, WR=whole rule, Bi=bigram,                   with high scores. There are many examples of PR
+POS=POS-based (POS scores multiplied by 10,000)                       PA:NN rules, for instance, with the NN improp-
+
+
+                                                                734
+
+
+ Score      Thr.        b        a    UASb         LASb    UASa           LASa          P          R          F1       F0.5
+ None        n/a     5656        0    87.4%       82.0%       0%             0%     18.0%      100%       30.5%     21.5%
+ Freq         0      1951     3705    76.6%       66.6%    93.1%          90.1%     33.4%     64.1%       43.9%     36.9%
+ WR           0       894     4762    64.7%       54.0%    91.7%          87.3%     46.0%     40.5%       43.0%     44.8%
+              6      1478     4178    71.1%       60.9%    93.2%          89.5%     39.1%     56.9%       46.4%     41.7%
+ Bi           0        56     5600    10.7%        7.1%    88.2%          82.8%     92.9%       5.1%       9.7%     21.0%
+             39       455     5201    51.6%       37.8%    90.6%          85.9%     62.2%     27.9%       38.5%     49.9%
+            431      1685     3971    74.1%       63.7%    93.1%          89.8%     36.3%     60.1%       45.2%     39.4%
+ POS          0        54     5602    27.8%       22.2%    87.4%          82.6%     77.8%       4.1%       7.9%     17.0%
+            81.6      388     5268    48.5%       38.4%    90.3%          85.3%     61.6%     23.5%       34.0%     46.5%
+            763      1863     3793    75.4%       65.8%    93.3%          90.0%     34.2%     62.8%       44.3%     37.7%
+
+   Table 1: MaltParser results for Talbanken, for select values (b = below, a = above threshold (Thr.))
+
+
+erly attached, but there are also many correct in-                Score    Thr.       b    LASb   LASa         P        R
+                                                                  None      n/a    5867   82.2%      0%    17.8%     100%
+stances of PR PA:NN. To sort out the errors, one                  Freq       0     1561   61.2%   89.9%    38.8%    58.1%
+needs to look at lexical knowledge and/or other de-               WR         0      693   48.1%   86.8%    51.9%    34.5%
+pendencies in the tree. With so little context, fre-                         6     1074   54.4%   88.5%    45.6%    47.0%
+                                                                  Bi        39      227   15.4%   84.9%    84.6%    18.4%
+quent rules with only one dependent are not prime                          431      776   51.0%   87.0%    49.0%    36.5%
+candidates for our methods of error detection.                    POS      81.6     369   33.3%   85.5%    66.7%    23.6%
+                                                                           763     1681   60.1%   91.1%    39.9%    64.3%
+5.4    Other corpora
+                                                                        Table 3: MaltParser results for Bosque
+We now turn to the parsed data from three other
+corpora. The Alpino and Bosque corpora are ap-
+                                                                  Score     Thr.      b    LASb   LASa          P       R
+proximately the same size as Talbanken, so we use                 None      n/a    5852   81.0%      0%     19.0%    100%
+the same thresholds for them. The DDT data is                     Freq       0     1835   65.9%   88.0%     34.1%   56.4%
+approximately half the size; to adjust, we simply                 WR         0      739   53.9%   85.0%     46.1%   30.7%
+                                                                             3     1109   60.1%   85.9%     39.9%   39.9%
+halve the scores. In tables 2, 3, and 4, we present
+                                                                  Bi       19.5     185   25.4%   82.9%     74.6%   12.4%
+the results, using the best F0.5 and F1 settings from                      215.5    884   56.8%   85.4%     43.2%   34.4%
+development. At a glance, we observe that the best                POS      40.8     179   30.2%   82.7%     69.8%   11.3%
+                                                                           381.5   1214   62.5%   85.9%     37.5%   41.0%
+method differs for each corpus and depending on
+an emphasis of precision or recall, with the bigram                       Table 4: MaltParser results for DDT
+method generally having high precision.
+ Score     Thr.       b    LASb   LASa        P        R
+ None       n/a    5585   73.8%      0%   26.2%     100%
+                                                                 whole rule. Likewise, with fewer possible POS
+ Freq        0     1174   43.2%   81.9%   56.8%    45.6%         tag pairs, Alpino has lower precision for the low-
+ WR          0      483   32.5%   77.7%   67.5%    22.3%         threshold POS scores than the other corpora.
+             6      787   39.4%   79.4%   60.6%    32.6%
+ Bi         39      253   33.6%   75.7%   66.4%    11.5%            For the whole rule scores, the DDT data is
+           431      845   45.6%   78.8%   54.4%    31.4%         worse (compare its 46.1% precision with Bosque’s
+ POS       81.6     317   51.7%   75.1%   48.3%    10.5%         45.6%, with vastly different recall values), which
+           763     1767   53.5%   83.2%   46.5%    56.1%
+                                                                 could be due to the smaller training data. One
+         Table 2: MaltParser results for Alpino                  might also consider the qualitative differences in
+                                                                 the dependency inventory of DDT compared to the
+   For Alpino, error detection is better with fre-               others—e.g., appositions, distinctions in names,
+quency than, for example, bigram scores. This is                 and more types of modifiers.
+likely due to the fact that Alpino has the small-
+                                                                 5.5    MSTParser
+est label set of any of the corpora, with only 24
+dependency labels and 12 POS tags (cf. 64 and                    Turning to the results of running the methods
+41 in Talbanken, respectively). With a smaller la-               on the output of MSTParser, we find similar but
+bel set, there are less possible bigrams that could              slightly worse values for the whole rule and bi-
+be anomalous, but more reliable statistics about a               gram methods, as shown in tables 5-8. What is
+
+
+                                                           735
+
+
+most striking are the differences in the POS-based             6    Summary and Outlook
+method for Bosque and DDT (tables 7 and 8),
+                                                               We have proposed different methods for flag-
+where a large percentage of the test corpus is un-
+                                                               ging the errors in automatically-parsed corpora, by
+derneath the threshold. MSTParser is apparently
+                                                               treating the problem as one of looking for anoma-
+positing fewer distinct head-dependent pairs, as
+                                                               lous rules with respect to a treebank grammar.
+most of them fall under the given thresholds. With
+                                                               The different methods incorporate differing types
+the exception of the POS-based method for DDT
+                                                               and amounts of information, notably comparisons
+(where LASb is actually higher than LASa ) the
+                                                               among dependency rules and bigrams within such
+different methods seem to be accurate enough to
+                                                               rules. Using these methods, we demonstrated suc-
+be used as part of corpus post-editing.
+                                                               cess in sorting well-formed output from erroneous
+ Score    Thr.       b    LASb   LASa        P       R         output across language, corpora, and parsers.
+ None      n/a    5656   81.1%      0%   18.9%   100%             Given that the rule representations and compar-
+ Freq       0     3659   65.2%   89.7%   34.8%   64.9%         ison methods use both POS and dependency in-
+ WR         0     4740   55.7%   86.0%   44.3%   37.9%
+            6     4217   59.9%   88.3%   40.1%   53.9%         formation, a next step in evaluating and improv-
+ Bi        39     5183   38.9%   84.9%   61.1%   27.0%         ing the methods is to examine automatically POS-
+          431     3997   63.2%   88.5%   36.8%   57.1%         tagged data. Our methods should be able to find
+ POS      81.6     327   42.8%   83.4%   57.2%   17.5%
+          763     1764   68.0%   87.0%   32.0%   52.7%         POS errors in addition to dependency errors. Fur-
+                                                               thermore, although we have indicated that differ-
+      Table 5: MSTParser results for Talbanken                 ences in accuracy can be linked to differences in
+                                                               the granularity and particular distinctions of the
+                                                               annotation scheme, it is still an open question as
+ Score    Thr.       b    LASb   LASa        P       R
+ None      n/a    5585   75.4%      0%   24.6%   100%          to which methods work best for which schemes
+ Freq       0     1371   49.5%   83.9%   50.5%   50.5%         and for which constructions (e.g., coordination).
+ WR         0      453   40.0%   78.5%   60.0%   19.8%
+            6      685   45.4%   79.6%   54.6%   27.2%         Acknowledgments
+ Bi        39      226   39.8%   76.9%   60.2%    9.9%
+          431      745   48.2%   79.6%   51.8%   28.1%         Thanks to Sandra Kübler and Amber Smith for
+ POS      81.6     570   60.4%   77.1%   39.6%   16.5%
+          763     1860   61.9%   82.1%   38.1%   51.6%
+                                                               comments on an earlier draft; Yvonne Samuels-
+                                                               son for help with the Swedish translations; the IU
+       Table 6: MSTParser results for Alpino                   Computational Linguistics discussion group for
+                                                               feedback; and Julia Hockenmaier, Chris Brew, and
+                                                               Rebecca Hwa for discussion on the general topic.
+ Score    Thr.       b    LASb   LASa        P       R
+ None      n/a    5867   82.5%      0%   17.5%   100%          A    Some Talbanken05 categories
+ Freq       0     1562   63.9%   89.3%   36.1%   55.0%
+ WR         0      540   50.6%   85.8%   49.4%   26.0%
+            6      985   58.0%   87.5%   42.0%   40.4%                                          Dependencies
+ Bi        39      117   34.2%   83.5%   65.8%    7.5%                                   ++   coord. conj.
+                                                                        POS tags
+          431      736   56.4%   86.3%   43.6%   31.3%                                   +F   main clause coord.
+                                                                   ++   coord. conj.
+                                                                                         AA   adverbial
+ POS      81.6    2978   75.8%   89.4%   24.2%   70.3%             AB   adverb
+                                                                                         AN   apposition
+          763     3618   74.3%   95.8%   25.7%   90.7%             AJ   adjective
+                                                                                         AT   nomainl pre-modifier
+                                                                   AV   vara (be)
+                                                                                         DT   determiner
+       Table 7: MSTParser results for Bosque                       EN   indef. article
+                                                                                         ET   nominal post-modifier
+                                                                   HV   ha(va) (have)
+                                                                                         HD   head
+                                                                   ID   part of idiom
+                                                                                         IG   punctuation
+                                                                   IG   punctuation
+                                                                                         IR   parenthesis
+ Score     Thr.      b    LASb   LASa        P       R             IR   parenthesis
+                                                                                         JR   second parenthesis
+ None      n/a    5852   82.9%      0%   17.1%    100%             NN   noun
+                                                                                         KA   comparative adverbial
+ Freq       0     1864   70.3%   88.8%   29.7%   55.3%             PO   pronoun
+                                                                                         MA   attitude adverbial
+ WR         0      624   60.6%   85.6%   39.4%   24.6%             PR   preposition
+                                                                                         NA   negation adverbial
+            3     1019   65.4%   86.6%   34.6%   35.3%             RO   numeral
+                                                                                         OO   object
+ Bi       19.5     168   28.6%   84.5%   71.4%   12.0%             QV   kunna (can)
+                                                                                         PA   preposition comp.
+          215.5    839   61.6%   86.5%   38.4%   32.2%             SV   skola (will)
+                                                                                         PL   verb particle
+ POS      40.8    5714   83.0%   79.0%   17.0%   97.1%             UK   sub. conj.
+                                                                                         SS   subject
+          381.5   5757   82.9%   80.0%   17.1%   98.1%             VN   verbal noun
+                                                                                         TA   time adverbial
+                                                                   VV   verb
+                                                                                         UK   sub. conj.
+         Table 8: MSTParser results for DDT                        XX   unclassifiable
+                                                                                         VG   verb group
+                                                                                         XX   unclassifiable
+
+
+
+                                                         736
+
+
+References                                                  Dependency Parsing. In Proceedings of EACL-
+                                                            09. Athens, Greece, pp. 478–486.
+Afonso, Susana, Eckhard Bick, Renato Haber and
+  Diana Santos (2002). Floresta Sintá(c)tica: a          Loftsson, Hrafn (2009). Correcting a POS-Tagged
+  treebank for Portuguese. In Proceedings of                Corpus Using Three Complementary Methods.
+  LREC 2002. Las Palmas, pp. 1698–1703.                     In Proceedings of EACL-09. Athens, Greece,
+                                                            pp. 523–531.
+Attardi, Giuseppe and Massimiliano Ciaramita
+                                                          McDonald, Ryan and Fernando Pereira (2006).
+  (2007). Tree Revision Learning for Dependency
+                                                           Online learning of approximate dependency
+  Parsing. In Proceedings of NAACL-HLT-07.
+                                                           parsing algorithms. In Proceedings of EACL-
+  Rochester, NY, pp. 388–395.
+                                                           06. Trento.
+Bick, Eckhard (2007). Hybrid Ways to Improve              Nilsson, Jens and Johan Hall (2005). Recon-
+  Domain Independence in an ML Dependency                   struction of the Swedish Treebank Talbanken.
+  Parser. In Proceedings of the CoNLL Shared                MSI report 05067, Växjö University: School of
+  Task Session of EMNLP-CoNLL 2007. Prague,                 Mathematics and Systems Engineering.
+  Czech Republic, pp. 1119–1123.
+                                                          Nivre, Joakim, Johan Hall, Jens Nilsson, Atanas
+Boyd, Adriane, Markus Dickinson and Detmar                  Chanev, Gulsen Eryigit, Sandra Kübler, Sve-
+  Meurers (2008). On Detecting Errors in Depen-             toslav Marinov and Erwin Marsi (2007). Malt-
+  dency Treebanks. Research on Language and                 Parser: A language-independent system for
+  Computation 6(2), 113–137.                                data-driven dependency parsing. Natural Lan-
+Buchholz, Sabine and Erwin Marsi (2006).                    guage Engineering 13(2), 95–135.
+  CoNLL-X Shared Task on Multilingual Depen-              Owczarzak, Karolina (2009). DEPEVAL(summ):
+  dency Parsing. In Proceedings of CoNLL-X.                Dependency-based Evaluation for Automatic
+  New York City, pp. 149–164.                              Summaries. In Proceedings of ACL-AFNLP-09.
+Campbell, David and Stephen Johnson (2002). A              Suntec, Singapore, pp. 190–198.
+  transformational-based learner for dependency           Przepiórkowski, Adam (2006). What to ac-
+  grammars in discharge summaries. In Proceed-              quire from corpora in automatic valence ac-
+  ings of the ACL-02 Workshop on Natural Lan-               quisition. In Violetta Koseska-Toszewa and
+  guage Processing in the Biomedical Domain.                Roman Roszko (eds.), Semantyka a kon-
+  Phildadelphia, pp. 37–44.                                 frontacja jezykowa, tom 3, Warsaw: Slawisty-
+Dickinson, Markus (2008). Ad Hoc Treebank                   czny Ośrodek Wydawniczy PAN, pp. 25–41.
+  Structures. In Proceedings of ACL-08. Colum-            Sekine, Satoshi (1997). The Domain Dependence
+  bus, OH.                                                  of Parsing. In Proceedings of ANLP-96. Wash-
+                                                            ington, DC.
+Dickinson, Markus and Jennifer Foster (2009).
+  Similarity Rules! Exploring Methods for Ad-             van der Beek, Leonoor, Gosse Bouma, Robert
+  Hoc Rule Detection. In Proceedings of TLT-7.              Malouf and Gertjan van Noord (2002). The
+  Groningen, The Netherlands.                               Alpino Dependency Treebank. In Proceedings
+                                                            of CLIN 2001. Rodopi.
+Gildea, Daniel (2001). Corpus Variation and
+  Parser Performance.     In Proceedings of               van Noord, Gertjan and Gosse Bouma (2009).
+  EMNLP-01. Pittsburgh, PA.                                 Parsed Corpora for Linguistics. In Proceed-
+                                                            ings of the EACL 2009 Workshop on the In-
+Hall, Keith and Václav Novák (2005). Corrective           teraction between Linguistics and Computa-
+  Modeling for Non-Projective Dependency Pars-              tional Linguistics: Virtuous, Vicious or Vacu-
+  ing. In Proceedings of IWPT-05. Vancouver, pp.            ous?. Athens, pp. 33–39.
+  42–52.
+                                                          Wallis, Sean (2003). Completing Parsed Corpora.
+Kromann, Matthias Trautner (2003). The Danish              In Anne Abeillé (ed.), Treebanks: Building and
+  Dependency Treebank and the underlying lin-              using syntactically annoted corpora, Dordrecht:
+  guistic theory. In Proceedings of TLT-03.                Kluwer Academic Publishers, pp. 61–71.
+Kuhlmann, Marco and Giorgio Satta (2009). Tree-           Wan, Stephen, Mark Dras, Robert Dale and Cécile
+  bank Grammar Techniques for Non-Projective               Paris (2009). Improving Grammaticality in Sta-
+
+
+                                                    737
+
+
+  tistical Sentence Generation: Introducing a De-
+  pendency Spanning Tree Algorithm with an Ar-
+  gument Satisfaction Model. In Proceedings of
+  EACL-09. Athens, Greece, pp. 852–860.
+Xu, Peng, Jaeho Kang, Michael Ringgaard and
+  Franz Och (2009). Using a Dependency Parser
+  to Improve SMT for Subject-Object-Verb Lan-
+  guages. In Proceedings of NAACL-HLT-09.
+  Boulder, Colorado, pp. 245–253.
+
+
+
+
+                                                    738
+

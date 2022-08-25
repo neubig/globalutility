@@ -1,0 +1,642 @@
+    Extraction and Approximation of Numerical Attributes from the Web
+
+                Dmitry Davidov                                             Ari Rappoport
+                    ICNC                                           Institute of Computer Science
+             The Hebrew University                                    The Hebrew University
+               Jerusalem, Israel                                          Jerusalem, Israel
+        dmitry@alice.nc.huji.ac.il                                   arir@cs.huji.ac.il
+
+
+                      Abstract                                   In addition to answering direct questions, the
+                                                              ability to make a crude comparison or estimation
+    We present a novel framework for auto-
+                                                              of object attributes is important as well. For ex-
+    mated extraction and approximation of nu-
+                                                              ample, it allows to disambiguate relationships be-
+    merical object attributes such as height
+                                                              tween objects such as X part-of Y or X inside Y.
+    and weight from the Web. Given an
+                                                              Thus, a coarse approximation of the height of a
+    object-attribute pair, we discover and ana-
+                                                              house and a window is sufficient to decide that
+    lyze attribute information for a set of com-
+                                                              in the ‘house window’ nominal compound, ‘win-
+    parable objects in order to infer the desired
+                                                              dow’ is very likely to be a part of house and not
+    value. This allows us to approximate the
+                                                              vice versa. Such relationship information can, in
+    desired numerical values even when no ex-
+                                                              turn, help summarization, machine translation or
+    act values can be found in the text.
+                                                              textual entailment tasks.
+    Our framework makes use of relation                          Due to the importance of relationship and at-
+    defining patterns and WordNet similarity                  tribute acquisition in NLP, numerous methods
+    information. First, we obtain from the                    were proposed for extraction of various lexical re-
+    Web and WordNet a list of terms similar to                lationships and attributes from text. Some of these
+    the given object. Then we retrieve attribute              methods can be successfully used for extracting
+    values for each term in this list, and infor-             numerical attributes. However, numerical attribute
+    mation that allows us to compare different                extraction is substantially different in two aspects,
+    objects in the list and to infer the attribute            verification and approximation.
+    value range. Finally, we combine the re-                     First, unlike most general lexical attributes, nu-
+    trieved data for all terms from the list to               merical attribute values are comparable. It usually
+    select or approximate the requested value.                makes no sense to compare the names of two ac-
+    We evaluate our method using automated                    tors, but it is meaningful to compare their ages.
+    question answering, WordNet enrichment,                   The ability to compare values of different objects
+    and comparison with answers given in                      allows to improve attribute extraction precision by
+    Wikipedia and by leading search engines.                  verifying consistency with attributes of other sim-
+    In all of these, our framework provides a                 ilar objects. For example, suppose that for Toy-
+    significant improvement.                                  ota Corolla width we found two different values,
+                                                              1.695m and 27cm. The second value can be either
+1   Introduction                                              an extraction error or a length of a toy car. Ex-
+Information on various numerical properties of                tracting and looking at width values for different
+physical objects, such as length, width and weight            car brands and for ‘cars’ in general we find:
+is fundamental in question answering frameworks                  • Boundaries: Maximal car width is 2.195m,
+and for answering search engine queries. While                     minimal is 88cm.
+in some cases manual annotation of objects with
+                                                                 • Average: Estimated avg. car width is 1.7m.
+numerical properties is possible, it is a hard and
+labor intensive task, and is impractical for dealing             • Direct/indirect comparisons: Toyota Corolla
+with the vast amount of objects of interest. Hence,                is wider than Toyota Corona.
+there is a need for automated semantic acquisition               • Distribution: Car width is distributed nor-
+algorithms targeting such properties.                              mally around the average.
+
+
+                                                        1308
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1308–1317,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+Usage of all this knowledge allows us to select the                Utilization of information about comparable ob-
+correct value of 1.695m and reject other values.                   jects provided a significant boost to numerical at-
+Thus we can increase the precision of value ex-                    tribute extraction quality, and allowed a meaning-
+traction by finding and analyzing an entire group                  ful approximation of missing attribute values.
+of comparable objects.                                                Section 2 discusses related work, Section 3 de-
+   Second, while it is usually meaningless and im-                 tails the algorithmic framework, Section 4 de-
+possible to approximate general lexical attribute                  scribes the experimental setup, and Section 5
+values like an actor’s name, numerical attributes                  presents our results.
+can be estimated even if they are not explicitly
+mentioned in the text.                                             2 Related work
+   In general, attribute extraction frameworks usu-
+                                                                   Numerous methods have been developed for ex-
+ally attempt to discover a single correct value (e.g.,
+                                                                   traction of diverse semantic relationships from
+capital city of a country) or a set of distinct correct
+                                                                   text. While several studies propose relationship
+values (e.g., actors of a movie). So there is es-
+                                                                   identification methods using distributional analy-
+sentially nothing to do when there is no explicit
+                                                                   sis of feature vectors (Turney, 2005), the major-
+information present in the text for a given object
+                                                                   ity of the proposed open-domain relations extrac-
+and an attribute. In contrast, in numerical attribute
+                                                                   tion frameworks utilize lexical patterns connect-
+extraction it is possible to provide an approxima-
+                                                                   ing a pair of related terms. (Hearst, 1992) man-
+tion even when no explicit information is present
+                                                                   ually designed lexico-syntactic patterns for ex-
+in the text, by using values of comparable objects
+                                                                   tracting hypernymy relations. (Berland and Char-
+for which information is provided.
+                                                                   niak, 1999; Girju et al, 2006) proposed a set of
+   In this paper we present a pattern-based frame-
+                                                                   patterns for meronymy relations. Davidov and
+work that takes advantage of the properties of sim-
+                                                                   Rappoport (2008a) used pattern clusters to disam-
+ilar objects to improve extraction precision and
+                                                                   biguate nominal compound relations. Extensive
+allow approximation of requested numerical ob-
+                                                                   frameworks were proposed for iterative discov-
+ject properties. Our framework comprises three
+                                                                   ery of any pre-specified (e.g., (Riloff and Jones,
+main stages. First, given an object name we uti-
+                                                                   1999; Chklovski and Pantel, 2004)) and unspec-
+lize WordNet and pattern-based extraction to find
+                                                                   ified (e.g., (Banko et al., 2007; Rosenfeld and
+a list of similar objects and their category labels.
+                                                                   Feldman, 2007; Davidov and Rappoport, 2008b))
+Second, we utilize a predefined set of lexical pat-
+                                                                   relation types.
+terns in order to extract attribute values of these
+                                                                      The majority of the above methods utilize the
+objects and available comparison/boundary infor-
+                                                                   following basic strategy. Given (or discovering
+mation. Finally, we analyze the obtained informa-
+                                                                   automatically) a set of patterns or relationship-
+tion and select or approximate the attribute value
+                                                                   representing term pairs, these methods mine the
+for the given (object, attribute) pair.
+                                                                   web for these patterns and pairs, iteratively obtain-
+   We performed a thorough evaluation using three
+                                                                   ing more instances. The proposed strategies gen-
+different applications: Question Answering (QA),
+                                                                   erally include some weighting/frequency/context-
+WordNet (WN) enrichment, and comparison with
+                                                                   based algorithms (e.g. (Pantel and Pennacchiotti,
+Wikipedia and answers provided by leading search
+                                                                   2006)) to reduce noise. Some of the methods are
+engines. QA evaluation was based on a designed
+                                                                   suitable for retrieval of numerical attributes. How-
+dataset of 1250 questions on size, height, width,
+                                                                   ever, most of them do not exploit the numerical
+weight, and depth, for which we created a gold
+                                                                   nature of the attribute data.
+standard and compared against it automatically1 .
+                                                                      Our research is related to a sub-domain of ques-
+   For WN enrichment evaluation, our framework
+                                                                   tion answering (Prager, 2006), since one of the
+discovered size and weight values for 300 WN
+                                                                   applications of our framework is answering ques-
+physical objects, and the quality of results was
+                                                                   tions on numerical values. The majority of the
+evaluated by human judges. For interactive search,
+                                                                   proposed QA frameworks rely on pattern-based
+we compared our results to information obtained
+                                                                   relationship acquisition (Ravichandran and Hovy,
+through Wikipedia, Google and Wolfram Alpha.
+                                                                   2009). However, most QA studies focus on dif-
+    1
+      This dataset is available in the authors’ websites for the   ferent types of problems than our paper, including
+research community.                                                question classification, paraphrasing, etc.
+
+
+                                                               1309
+
+
+   Several recent studies directly target the acqui-   3.1 Similar objects and class label
+sition of numerical attributes from the Web and        To verify and estimate attribute values for the
+attempt to deal with ambiguity and noise of the        given object we utilize similar objects (co-
+retrieved attribute values. (Aramaki et al., 2007)     hyponyms) and the object’s class label (hyper-
+utilize a small set of patterns to extract physical    nym). In the WN enrichment scenario we can eas-
+object sizes and use the averages of the obtained      ily obtain these, since we get the object’s synset as
+values for a noun compound classification task.        input. However, in Question Answering (QA) sce-
+(Banerjee et al, 2009) developed a method for          narios we do not have such information. To obtain
+dealing with quantity consensus queries (QCQs)         it we employ a strategy which uses WordNet along
+where there is uncertainty about the answer quan-      with pattern-based web mining.
+tity (e.g. “driving time from Paris to Nice”). They
+                                                          Our web mining part follows common pattern-
+utilize a textual snippet feature and snippet quan-
+                                                       based retrieval practice (Davidov et al., 2007). We
+tity in order to select and rank intervals of the
+                                                       utilize Yahoo! Boss API to perform search engine
+requested values. This approach is particularly
+                                                       queries. For an object name Obj we query the
+useful when it is possible to obtain a substantial
+                                                       Web using a small set of pre-defined co-hyponymy
+amount of a desired attribute values for the re-
+                                                       patterns like “as * and/or [Obj]”2 . In the WN en-
+quested query. (Moriceau, 2006) proposed a rule-
+                                                       richment scenario, we can add the WN class la-
+based system which analyzes the variation of the
+                                                       bel to each query in order to restrict results to the
+extracted numerical attribute values using infor-
+                                                       desired word sense. In the QA scenario, if we
+mation in the textual context of these values.
+                                                       are given the full question and not just the (ob-
+   A significant body of recent research deals with    ject, attribute) pair we can add terms appearing in
+extraction of various data from web tables and         the question and having a strong PMI with the ob-
+lists (e.g., (Cafarella et al., 2008; Crestan and      ject (this can be estimated using any fixed corpus).
+Pantel, 2010)). While in the current research we       However, this is not essential.
+do not utilize this type of information, incorpo-         We then extract new terms from the retrieved
+ration of the numerical data extracted from semi-      web snippets and use these terms iteratively to re-
+structured web pages can be extremely beneficial       trieve more terms from the Web. For example,
+for our framework.                                     when searching for an object ‘Toyota’, we execute
+   All of the above numerical attribute extraction     a search engine query [ “as * and Toyota”] and
+systems utilize only direct information available      we might retrieve a text snippet containing “. . . as
+in the discovered object-attribute co-occurrences      Honda and Toyota . . . ”. We then extract from this
+and their contexts. However, as we show, indirect      snippet the additional word ‘Honda’ and use it for
+information available for comparable objects can       iterative retrieval of additional similar terms. We
+contribute significantly to the selection of the ob-   attempt to avoid runaway feedback loop by requir-
+tained values. Using such indirect information is      ing each newly detected term to co-appear with the
+particularly important when only a modest amount       original term in at least a single co-hyponymy pat-
+of values can be obtained for the desired object.      tern.
+Also, since the above studies utilize only explic-        WN class labels are used later for the retrieval
+itly available information they were unable to ap-     of boundary values, and here for expansion of the
+proximate object values in cases where no explicit     similar object set. In the WN enrichment scenario,
+information was found.                                 we already have the class label of the object. In the
+                                                       QA scenario, we automatically find class labels as
+3   The Attribute Mining Framework                     follows. We compute for each WN subtree a cov-
+                                                       erage value, the number of retrieved terms found
+Our algorithm is given an object and an attribute.     in the subtree divided by the number of subtree
+In the WN enrichment scenario, it is also given        terms, and select the subtree having the highest
+the object’s synset. The algorithm comprises three     coverage. In all scenarios, we add all terms found
+main stages: (1) mining for similar objects and        in this subtree to the retrieved term list. If no WN
+determination of a class label; (2) mining for at-     subtree with significant (> 0.1) coverage is found,
+tribute values and comparison statements; (3) pro-        2
+                                                            “*” means a search engine wildcard. Square brackets
+cessing the results.                                   indicate filled slots and are not part of the query.
+
+
+                                                   1310
+
+
+we retrieve a set of category labels from the Web       like ‘the widest [label] is * [width unit]’. These
+using hypernymy detection patterns like “* such         patterns incorporate the class labels discovered in
+as [Obj]” (Hearst, 1992). If several label candi-       the previous stage. They allow us to find maximal
+dates were found, we select the most frequent.          and minimal values for the object category defined
+  Note that we perform this stage only once for         by labels. If we get several lower bounds and
+each object and do not need to repeat it for differ-    several upper bounds, we select the highest upper
+ent attribute types.                                    bound and the lowest lower bound.
+
+3.2 Querying for values, bounds and                     Extraction of comparison information. The
+    comparison data                                     third group, Pcompare , consists of comparison pat-
+                                                        terns. They allow to compare objects directly
+Now we would like to extract the attribute values       even when no attribute values are mentioned. This
+for the given object and its similar objects. We        group includes attribute equality patterns such as
+will also extract bounds and comparison informa-        ‘[Object1] has the same width as [Object2]’, and
+tion in order to verify the extracted values and to     attribute inequality ones such as ‘[Object1] is
+approximate the missing ones.                           wider than [Object2]’. We execute search queries
+   To allow us to extract attribute-specific informa-   for each of these patterns, and extract a set of or-
+tion, we provided the system with a seed set of ex-     dered term pairs, keeping track of the relationships
+traction patterns for each attribute type. There are    encoded by the pairs.
+three kinds of patterns: value extraction, bounds          We use these pairs to build a directed graph
+and comparison patterns. We used up to 10 pat-          (Widdows and Dorow, 2002; Davidov and Rap-
+terns of each kind. These patterns are the only         poport, 2006) in which nodes are objects (not nec-
+attribute-specific resource in our framework.           essarily with assigned values) and edges corre-
+                                                        spond to extracted co-appearances of objects in-
+Value extraction. The first pattern group,
+                                                        side the comparison patterns. The directions of
+Pvalues , allows extraction of the attribute values
+                                                        edges are determined by the comparison sign. If
+from the Web. All seed patterns of this group
+                                                        two objects co-appear inside an equality pattern
+contain a measurement unit name, attribute name,
+                                                        we put a bidirectional edge between them.
+and some additional anchoring words, e.g., ‘Obj
+is * [height unit] tall’ or ‘Obj width is * [width      3.3 Processing the collected data
+unit]’. As in Section 3.1, we execute search en-        As a result of the information collection stage, for
+gine queries and collect a set of numerical val-        each object and attribute type we get:
+ues for each pattern. We extend this group it-             • A set of attribute values for the requested ob-
+eratively from the given seed as commonly done                ject.
+in pattern-based acquisition methods. To do this           • A set of objects similar or comparable to
+we re-query the Web with the obtained (object, at-            the requested object, some of them annotated
+tribute value, attribute name) triplets (e.g., ‘[Toy-         with one or many attribute values.
+ota width 1.695m]’). We then extract new pat-              • Upper and lowed bounds on attribute values
+terns from the retrieved search engine snippets and           for the given object category.
+re-query the Web with the new patterns to obtain           • A comparison graph connecting some of the
+more attribute values.                                        retrieved objects by comparison edges.
+   We provided the framework with unit names            Obviously, some of these components may be
+and with an appropriate conversion table which          missing or noisy. Now we combine these informa-
+allows to convert between different measurement         tion sources to select a single attribute value for
+systems and scales. The provided names include          the requested object or to approximate this value.
+common abbreviations like cm/centimeter. All            First we apply bounds, removing out-of-range val-
+value acquisition patterns include unit names, so       ues, then we use comparisons to remove inconsis-
+we know the units of each extracted value. At the       tent comparisons. Finally we examine the remain-
+end of the value extraction stage, we convert all       ing values and the comparison graph.
+values to a single unit format for comparison.
+                                                        Processing bounds. First we verify that indeed
+Boundary extraction. The second group,                  most (≥ 50%) of the retrieved values fit the re-
+Pboundary , consists of boundary-detection patterns     trieved bounds. If the lower and/or upper bound
+
+
+                                                    1311
+
+
+contradicts more than half of the data, we reject                    us to set the values of all unassigned nodes, includ-
+the bound. Otherwise we remove all values which                      ing the node of the requested object.
+do not satisfy one or both of the accepted bounds.                      In the algorithm below we treat all node groups
+If no bounds are found or if we disable the bound                    connected by bidirectional (equality) edges as a
+retrieval (see Section 4.1), we assign the maximal                   same-value group, i.e., if a value is assigned to one
+and minimal observed values as bounds.                               node in the group, the same value is immediately
+   Since our goal is to obtain a value for the single                assigned to the rest of the nodes in the same group.
+requested object, if at the end of this stage we re-                    We start with some preprocessing. We create
+main with a single value, no further processing is                   dummy lower and upper bound nodes L and U
+needed. However, if we obtain a set of values or                     with corresponding upper/lower bound values ob-
+no values at all, we have to utilize comparison data                 tained during the previous stage. These dummy
+to select one of the retrieved values or to approx-                  nodes will be used when we encounter a graph
+imate the value in case we do not have an exact                      which ends with one or more nodes with no avail-
+answer.                                                              able numerical information. We then connect
+                                                                     them to the graph as follows: (1) if A has no in-
+Processing comparisons. First we simplify the
+                                                                     coming edges, we add an edge L → A; (2) if A
+comparison graph. We drop all graph components
+                                                                     has no outgoing edges, we add an edge A → U .
+that are not connected (when viewing the graph as
+undirected) to the desired object.                                      We define a legal unassigned path as a di-
+   Now we refine the graph. Note that each graph                     rected path A0 → A1 → . . . → An → An+1
+node may have a single value, many assigned val-                     where A0 and An+1 are assigned satisfying
+ues, or no assigned values. We define assigned                       Avg(A0 ) ≤ Avg(An+1 ) and A1 . . . An are
+nodes as nodes that have at least one value. For                     unassigned. We would like to use dummy bound
+each directed edge E(A → B), if both A and                           nodes only in cases when no other information is
+B are assigned nodes, we check if Avg(A) ≤                           available. Hence we consider paths L → . . . → U
+Avg(B)3 . If the average values violate the equa-                    connecting both bounds are illegal. First we
+tion, we gradually remove up to half of the highest                  assign values for all unassigned nodes that belong
+values for A and up to half of the lowest values                     to a single legal unassigned path, using a simple
+for B till the equation is satisfied. If this cannot                 linear combination:
+be done, we drop the edge. We repeat this process                    V al(Ai )i∈(1...n) =
+until every edge that connects two assigned nodes                         n+1−i             i
+satisfies the inequality.                                                       Avg(A0 ) +     Avg(An+1 )
+                                                                           n+1             n+1
+Selecting an exact attribute value. The goal                            Then, for all unassigned nodes that belong to
+now is to select an attribute value for the given                    multiple legal unassigned paths, we compute node
+object. During the first stage it is possible that                   value as above for each path separately and assign
+we directly extract from the text a set of values                    to the node the average of the computed values.
+for the requested object. The bounds processing                         Finally we assign the average of all extracted
+step rejects some of these values, and the com-                      values within bounds to all the remaining unas-
+parisons step may reject some more. If we still                      signed nodes. Note that if we have no compari-
+have several values remaining, we choose the most                    son information and no value information for the
+frequent value based on the number of web snip-                      requested object, the requested object will receive
+pets retrieved during the value acquisition stage.                   the average of the extracted values of the whole set
+If there are several values with the same frequency                  of the retrieved comparable objects and the com-
+we select the median of these values.                                parison step will be essentially empty.
+Approximating the attribute value. In the case
+when we do not have any values remaining after                       4 Experimental Setup
+the bounds processing step, the object node will                     We performed automated question answering
+remain unassigned after construction of the com-                     (QA) evaluation, human-based WN enrichment
+parison graph, and we would like to estimate its                     evaluation, and human-based comparison of our
+value. Here we present an algorithm which allows                     results to data available through Wikipedia and to
+   3
+       Avg. is of values of an object, without similar objects.      the top results of leading search engines.
+
+
+                                                                  1312
+
+
+4.1 Experimental conditions                            TREC-based QA dataset. As a small comple-
+                                                       mentary dataset we used relevant questions from
+In order to test the main system components, we
+                                                       the TREC Question Answering Track 1999-2007.
+ran our framework under five different conditions:
+                                                       From 4355 questions found in this set we collected
+  • FULL: All system components were used.             55 (17 size, 2 weight, 3 width, 3 depth and 30
+                                                       height) questions.
+  • DIRECT: Only direct pattern-based acqui-
+    sition of attribute values (Section 3.2, value     Examples. Some example questions from our
+    extraction) for the given object was used, as      datasets are (correct answers are in parentheses):
+    done in most general-purpose attribute acqui-      How tall is Michelle Obama? (180cm); How tall
+    sition systems. If several values were ex-         is the tallest penguin? (122cm); What is the height
+    tracted, the most common value was used as         of a tennis net? (92cm); What is the depth of the
+    an answer.                                         Nile river? (1000cm = 10 meters); How heavy
+                                                       is a cup of coffee? (360gr); How heavy is a gi-
+  • NOCB: No boundary and no comparison                raffe? (1360000gr = 1360kg); What is the width
+    data were collected and processed (Pcompare        of a DNA molecule? (2e-7cm); What is the width
+    and Pbounds were empty). We only collected         of a cow? (65cm).
+    and processed a set of values for the similar
+    objects.                                           Evaluation protocol. Evaluation against the
+                                                       datasets was done automatically. For each ques-
+  • NOB: As in FULL but no boundary data was           tion and each condition our framework returned
+    collected and processed (Pbounds was empty).       a numerical value marked as either an exact an-
+                                                       swer or as an approximation. In cases where no
+  • NOC: As in FULL but no comparison data             data was found for an approximation (no similar
+    was collected and processed (Pcompare was          objects with values were found), our framework
+    empty).                                            returned no answer.
+                                                          We computed precision4 , comparing results to
+4.2 Automated QA Evaluation                            the gold standard. Approximate answers are con-
+We created two QA datasets, Web and TREC               sidered to be correct if the approximation is within
+based.                                                 10% of the gold standard value. While a choice of
+                                                       10% may be too strict for some applications and
+Web-based QA dataset. We created QA                    too generous for others, it still allows to estimate
+datasets for size, height, width, weight, and depth    the quality of our framework.
+attributes. For each attribute we extracted from
+the Web 250 questions in the following way.            4.3 WN enrichment evaluation
+First, we collected several thousand questions,        We manually selected 300 WN entities from about
+querying for the following patterns: “How              1000 randomly selected objects below the object
+long/tall/wide/heavy/deep/high is”,“What is the        tree in WN, by filtering out entities that clearly
+size/width/height/depth/weight of”.       Then we      do not possess any of the addressed numerical at-
+manually filtered out non-questions and heavily        tributes.
+context-specific questions, e.g., “what is the width      Evaluation was done using human subjects. It
+of the triangle”. Next, we retained only a single      is difficult to do an automated evaluation, since
+question for each entity by removing duplicates.       the nature of the data is different from that of the
+   For each of the extracted questions we manu-        QA dataset. Most of the questions asked over the
+ally assigned a gold standard answer using trusted     Web target named entities like specific car brands,
+resources including books and reliable Web data.       places and actors. There is usually little or no vari-
+For some questions, the exact answer is the only       ability in attribute values of such objects, and the
+possible one (e.g., the height of a person), while     major source of extraction errors is name ambigu-
+for others it is only the center of a distribution     ity of the requested objects.
+(e.g., the weight of a coffee cup). Questions             WordNet physical objects, in contrast, are much
+with no trusted and exact answers were eliminated.     less specific and their attributes such as size and
+From the remaining questions we randomly se-              4
+                                                            Due to the nature of the task recall/f-score measures are
+lected 250 questions for each attribute.               redundant here
+
+
+                                                   1313
+
+
+weight rarely have a single correct value, but usu-          Hence it is important to test how well our frame-
+ally possess an acceptable numerical range. For           work can complement the manual extraction of at-
+example, the majority of the selected objects like        tributes from resources such as Wikipedia and top
+‘apple’ are too general to assign an exact size.          Google snippets. In order to test this, we randomly
+Also, it is unclear how to define acceptable val-         selected 100 object-attribute pairs from our Web
+ues and an approximation range. Crudeness of              QA and WordNet datasets and used human sub-
+desired approximation depends both on potential           jects to test the following:
+applications and on object type. Some objects
+                                                              1. Go1: Querying Google for [object-name
+show much greater variability in size (and hence a
+                                                                 attribute-name] gives in some of the first
+greater range of acceptable approximations) than
+                                                                 three snippets a correct value or a good ap-
+others. This property of the dataset makes it diffi-
+                                                                 proximation value6 for this pair.
+cult to provide a meaningful gold standard for the
+evaluation. Hence in order to estimate the quality            2. Go2: Querying Google for [object-name
+of our results we turn to an evaluation based on                 attribute-name] and following the first three
+human judges.                                                    links gives a correct value or a good approxi-
+   In this evaluation we use only approximate re-                mation value.
+trieved values, keeping out the small amount of
+returned exact values5 .                                      3. Wi: There is a Wikipedia page for the given
+   We have mixed (Object, Attribute name, At-                    object and it contains an appropriate attribute
+tribute value) triplets obtained through each of the             value or an approximation in an infobox.
+conditions, and asked human subjects to assign                4. Wf: A Wolfram Alpha query for [object-
+these to one of the following categories:                        name attribute-name] retrieves a correct
+                                                                 value or a good approximation value
+  • The attribute value is reasonable for the given
+    object.
+  • The value is a very crude approximation of            5 Results
+    the given object attribute.
+  • The value is incorrect or clearly misleading.         5.1 QA results
+  • The object is not familiar enough to me so I          We applied our framework to the above QA
+    cannot answer the question.                           datasets. Table 1 shows the precision and the per-
+                                                          centage of approximations and exact answers.
+Each evaluator was provided with a random sam-               Looking at %Exact+%Approx, we can see that
+ple of 40 triplets. In addition we mixed in 5 manu-       for all datasets only 1-9% of the questions re-
+ally created clearly correct triplets and 5 clearly in-   main unanswered, while correct exact answers
+correct ones. We used five subjects, and the agree-       are found for 65%/87% of the questions for
+ment (inter-annotator Kappa) on shared evaluated          Web/TREC (% Exact and Prec(Exact) in the ta-
+triplets was 0.72.                                        ble). Thus approximation allows us to answer 13-
+                                                          24% of the requested values which are either sim-
+4.4 Comparisons to search engine output                   ply missing from the retrieved text or cannot be de-
+Recently there has been a significant improvement         tected using the current pattern-based framework.
+both in the quality of search engine results and in       Comparing performance of FULL to DIRECT, we
+the creation of manual well-organized and anno-           see that our framework not only allows an approx-
+tated databases such as Wikipedia.                        imation when no exact answer can be found, but
+   Google and Yahoo! queries frequently provide           also significantly increases the precision of exact
+attribute values in the top snippets or in search         answers using the comparison and the boundary
+result web pages. Many Wikipedia articles in-             information. It is also apparent that both bound-
+clude infoboxes with well-organized attribute val-        ary and comparison features are needed to achieve
+ues. Recently, the Wolfram Alpha computational            good performance and that using both of them
+knowledge engine presented the computation of             achieves substantially better results than each of
+attribute values from a given query text.                 them separately.
+   5                                                          6
+       So our results are in fact higher than shown.              As defined in the human subject questionnaire.
+
+
+                                                       1314
+
+
+                  FULL   DIRECT   NOCB   NOB   NOC                         FULL    DIRECT     NOCB        NOB         NOC
+
+                       Web QA                                                        Size
+                         Size                                 %Exact       15.3    18.0       18.0        18.0        15.3
+    %Exact        80     82       82     82    80             %Approx      80.3    -          38.2        20.0        23.6
+    Prec(Exact)   76     40       40     54    65                                  Weight
+    %Approx       16     -        14     14    16             %Exact       11.8    12.5       12.5        12.5        11.8
+    Prec(Appr)    64     -        34     53    46             %Approx      71.7    -          38.2        20.0        23.6
+                        Height
+    %Exact        79     84       84     84    79
+                                                         Table 2: Percentage of exact and approximate values for the
+    Prec(Exact)   86     56       56     69    70        WordNet enrichment dataset.
+    %Approx       16     -        11     11    16
+    Prec(Appr)    72     -        25     65    53                                 FULL      NOCB     NOB        NOC
+                        Width                                                        Size
+    %Exact        74     76       76     76    74                  %Correct       73     21          49         28
+    Prec(Exact)   86     45       45     60    72                  %Crude         15     54          31         49
+    %Approx       17     -        15     15    17                  %Incorrect     8      21          16         19
+    Prec(Appr)    75     -        26     63    55
+                                                                                    Weight
+                        Weight                                     %Correct       64     24          46         38
+    %Exact        71     73       73     73    71                  %Crude         24     45          30         41
+    Prec(Exact)   82     57       57     64    70                  %Incorrect     6      25          18         15
+    Prec(Appr)    24     -        22     22    24
+    %Approx       61     -        39     51    46
+                        Depth                            Table 3: Human evaluation of approximations for the WN
+    %Exact        82     82       82     82    82        enrichment dataset (the percentages are averaged over the hu-
+    Prec(Exact)   89     60       60     71    78        man subjects).
+    %Approx       19     -        19     19    19
+    Prec(Appr)    92     -        58     76    63
+                     Total average                       may only extract values from the text where they
+    %Exact        77     79       79     79    77        explicitly appear.
+    Prec(Exact)   84     52       52     64    71           Table 3 shows human evaluation results. We
+    %Approx       18     -        16     16    19
+    Prec(Appr)    72     -        36     62    53        see that the majority of approximate values were
+                      TREC QA                            clearly accepted by human subjects, and only 6-
+    %Exact        87     90       90     90    87        8% were found to be incorrect. We also observe
+    Prec(Exact)   100    62       62     84    76
+    %Approx       13     -        9      9     13
+                                                         that both boundary and comparison data signifi-
+    Prec(Appr)    57     -        20     40    57        cantly improve the approximation results. Note
+                                                         that DIRECT is missing from this table since no
+Table 1: Precision and amount of exact and approximate   approximations are possible in this condition.
+answers for QA datasets.                                    Some examples for WN objects and approx-
+                                                         imate values discovered by the algorithm are:
+   Comparing results for different question types        Sandfish, 15gr; skull, 1100gr; pilot, 80.25kg. The
+we can see substantial performance differences be-       latter value is amusing due to the high variabil-
+tween the attribute types. Thus depth shows much         ity of the value. However, even this value is valu-
+better overall results than width. This is likely due    able, as a sanity check measure for automated in-
+to a lesser difficulty of depth questions or to a more   ference systems and for various NLP tasks (e.g.,
+exact nature of available depth information com-         ‘pilot jacket’ likely refers to a jacket used by pi-
+pared to width or size.                                  lots and not vice versa).
+
+                                                         5.3 Comparison with search engines and
+5.2 WN enrichment                                            Wikipedia
+As shown in Table 2, for the majority of examined        Table 4 shows results for the above datasets in
+WN objects, the algorithm returned an approxi-           comparison to the proportion of correct results and
+mate value, and only for 13-15% of the objects (vs.      the approximations returned by our framework un-
+70-80% in QA data) the algorithm could retrieve          der the FULL condition (correct exact values and
+exact answers.                                           approximations are taken together).
+   Note that the common pattern-based acquisition           We can see that our framework, due to its ap-
+framework, presented as the DIRECT condition,            proximation capability, currently shows signifi-
+could only extract attribute values for 15% of the       cantly greater coverage than manual extraction of
+objects since it does not allow approximations and       data from Wikipedia infoboxes or from the first
+
+
+                                                     1315
+
+
+                       FULL    Go1   Go2   Wi     Wf
+                                                                  References
+          Web QA       83      32    40    15    21
+          WordNet      87      24    27    18    5                Eiji Aramaki, Takeshi Imai, Kengo Miyo and Kazuhiko
+                                                                     Ohe. 2007 UTH: SVM-based Semantic Relation
+Table 4: Comparison of our attribute extraction framework            Classification using Physical Sizes. Proceedings
+to manual extraction using Wikipedia and search engines.             of the Fourth International Workshop on Semantic
+                                                                     Evaluations (SemEval-2007).
+
+search engine results.                                            Somnath Banerjee, Soumen Chakrabarti and Ganesh
+                                                                    Ramakrishnan. 2009. Learning to Rank for Quan-
+                                                                    tity Consensus Queries. SIGIR ’09.
+6    Conclusion
+                                                                  Michele Banko, Michael J Cafarella , Stephen Soder-
+We presented a novel framework which allows                         land, Matt Broadhead and Oren Etzioni. 2007.
+an automated extraction and approximation of nu-                    Open information extraction from the Web. IJCAI
+merical attributes from the Web, even when no ex-                   ’07.
+plicit attribute values can be found in the text for
+                                                                  Matthew Berland, Eugene Charniak, 1999. Finding
+the given object. Our framework retrieves simi-                    parts in very large corpora. ACL ’99.
+larity, boundary and comparison information for
+objects similar to the desired object, and com-                   Michael Cafarella, Alon Halevy, Yang Zhang, Daisy
+bines this information to approximate the desired                   Zhe Wang and Eugene Wu. 2008. WebTables: Ex-
+                                                                    ploring the Power of Tables on the Web. VLDB ’08.
+attribute.
+   While in this study we explored only several                   Timothy Chklovski and Patrick Pantel. 2004. VerbO-
+specific numerical attributes like size and weight,                 cean: mining the Web for fine-grained semantic verb
+our framework can be easily augmented to work                       relations. EMNLP ’04.
+with any other consistent and comparable attribute
+                                                                  Eric Crestan and Patrick Pantel. 2010. Web-Scale
+type. The only change required for incorpora-                        Knowledge Extraction from Semi-Structured Ta-
+tion of a new attribute type is the development of                   bles. WWW ’10.
+attribute-specific Pboundary , Pvalues , and Pcompare
+pattern groups; the rest of the system remains un-                Dmitry Davidov and Ari Rappoport. 2006. Efficient
+                                                                   Unsupervised Discovery of Word Categories Us-
+changed.                                                           ing Symmetric Patterns and High Frequency Words.
+   In our evaluation we showed that our frame-                     ACL-Coling ’06.
+work achieves good results and significantly out-
+performs the baseline commonly used for general                   Dmitry Davidov, Ari Rappoport and Moshe Koppel.
+                                                                   2007. Fully unsupervised discovery of concept-
+lexical attribute retrieval7 .                                     specific relationships by web mining. ACL ’07.
+   While there is a growing justification to rely
+on extensive manually created resources such as                   Dmitry Davidov and Ari Rappoport. 2008a. Classifi-
+Wikipedia, we have shown that in our case auto-                    cation of Semantic Relationships between Nominals
+                                                                   Using Pattern Clusters. ACL ’08.
+mated numerical attribute acquisition could be a
+preferable option and provides excellent coverage                 Dmitry Davidov and Ari Rappoport. 2008b. Unsu-
+in comparison to handcrafted resources or man-                     pervised Discovery of Generic Relationships Using
+ual examination of the leading search engine re-                   Pattern Clusters and its Evaluation by Automatically
+                                                                   Generated SAT Analogy Questions. ACL ’08.
+sults. Hence a promising direction would be to
+use our approach in combination with Wikipedia                    Roxana Girju, Adriana Badulescu, and Dan Moldovan.
+data and with additional manually created attribute                 2006. Automatic discovery of part-whole relations.
+rich sources such as Web tables, to achieve the best                Computational Linguistics, 32(1).
+possible performance and coverage.
+                                                                  Marty Hearst, 1992. Automatic acquisition of hy-
+   We would also like to explore the incorpora-                    ponyms from large text corpora. COLING ’92.
+tion of approximate discovered numerical attribute
+data into existing NLP tasks such as noun com-                    Veronique Moriceau, 2006. Numerical Data Integra-
+pound classification and textual entailment.                        tion for Cooperative Question-Answering. EACL -
+                                                                    KRAQ06 ’06.
+    7
+      It should be noted, however, that in our DIRECT base-
+line we used a basic pattern-based retrieval strategy; more       John Prager, 2006. Open-domain question-answering.
+sophisticated strategies for value selection might bring better     In Foundations and Trends in Information Re-
+results.                                                            trieval,vol. 1, pp 91-231.
+
+
+                                                              1316
+
+
+Patrick Pantel and Marco Pennacchiotti.        2006.
+  Espresso: leveraging generic patterns for automat-
+  ically harvesting semantic relations. COLING-ACL
+  ’06.
+
+Deepak Ravichandran and Eduard Hovy. 2002 Learn-
+  ing Surface Text Patterns for a Question Answering
+  System. ACL ’02.
+Ellen Riloff and Rosie Jones. 1999. Learning Dic-
+   tionaries for Information Extraction by Multi-Level
+   Bootstrapping. AAAI ’99.
+
+Benjamin Rosenfeld and Ronen Feldman. 2007.
+  Clustering for unsupervised relation identification.
+  CIKM ’07.
+
+Peter Turney, 2005. Measuring semantic similarity by
+  latent relational analysis, IJCAI ’05.
+Dominic Widdows and Beate Dorow. 2002. A graph
+  model for unsupervised Lexical acquisition. COL-
+  ING ’02.
+
+
+
+
+                                                     1317
+

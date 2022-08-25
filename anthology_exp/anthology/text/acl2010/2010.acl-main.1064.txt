@@ -1,0 +1,588 @@
+           Bridging SMT and TM with Translation Recommendation
+
+
+                 Yifan He     Yanjun Ma       Josef van Genabith     Andy Way
+                             Centre for Next Generation Localisation
+                                      School of Computing
+                                     Dublin City University
+                        {yhe,yma,josef,away}@computing.dcu.ie
+
+
+
+
+                      Abstract                                 them up. There are several simple reasons for
+                                                               this: 1) TMs are useful; 2) TMs represent con-
+    We propose a translation recommendation                    siderable effort and investment by a company or
+    framework to integrate Statistical Machine                 (even more so) an individual translator; 3) the
+    Translation (SMT) output with Transla-                     fuzzy match score used in TMs offers a good ap-
+    tion Memory (TM) systems. The frame-                       proximation of post-editing effort, which is useful
+    work recommends SMT outputs to a TM                        both for translators and translation cost estimation
+    user when it predicts that SMT outputs are                 and, 4) current SMT translation confidence esti-
+    more suitable for post-editing than the hits               mation measures are not as robust as TM fuzzy
+    provided by the TM. We describe an im-                     match scores and professional translators are thus
+    plementation of this framework using an                    not ready to replace fuzzy match scores with SMT
+    SVM binary classifier. We exploit meth-                    internal quality measures.
+    ods to fine-tune the classifier and inves-                    There has been some research to address this is-
+    tigate a variety of features of different                  sue, see e.g. (Specia et al., 2009a) and (Specia et
+    types. We rely on automatic MT evalua-                     al., 2009b). However, to date most of the research
+    tion metrics to approximate human judge-                   has focused on better confidence measures for MT,
+    ments in our experiments. Experimental                     e.g. based on training regression models to per-
+    results show that our system can achieve                   form confidence estimation on scores assigned by
+    0.85 precision at 0.89 recall, excluding ex-               post-editors (cf. Section 2).
+    act matches. Furthermore, it is possible for                  In this paper, we try to address the problem
+    the end-user to achieve a desired balance                  from a different perspective. Given that most post-
+    between precision and recall by adjusting                  editing work is (still) based on TM output, we pro-
+    confidence levels.                                         pose to recommend MT outputs which are better
+                                                               than TM hits to post-editors. In this framework,
+1   Introduction
+                                                               post-editors still work with the TM while benefit-
+Recent years have witnessed rapid developments                 ing from (better) SMT outputs; the assets in TMs
+in statistical machine translation (SMT), with con-            are not wasted and TM fuzzy match scores can
+siderable improvements in translation quality. For             still be used to estimate (the upper bound of) post-
+certain language pairs and applications, automated             editing labor.
+translations are now beginning to be considered                   There are three specific goals we need to
+acceptable, especially in domains where abundant               achieve within this framework. Firstly, the rec-
+parallel corpora exist.                                        ommendation should have high precision, other-
+   However, these advances are being adopted                   wise it would be confusing for post-editors and
+only slowly and somewhat reluctantly in profes-                may negatively affect the lower bound of the post-
+sional localization and post-editing environments.             editing effort. Secondly, although we have full
+Post-editors have long relied on translation memo-             access to the SMT system used in this paper,
+ries (TMs) as the main technology assisting trans-             our method should be able to generalize to cases
+lation, and are understandably reluctant to give               where SMT is treated as a black-box, which is of-
+
+
+                                                         622
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 622–630,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ten the case in the translation industry. Finally,             ment. To the best of our knowledge, the first paper
+post-editors should be able to easily adjust the rec-          in this area is (Specia et al., 2009a). Instead of
+ommendation threshold to particular requirements               modeling on translation quality (often measured
+without having to retrain the model.                           by automatic evaluation scores), this research uses
+   In our framework, we recast translation recom-              regression on both the automatic scores and scores
+mendation as a binary classification (rather than              assigned by post-editors. The method is improved
+regression) problem using SVMs, perform RBF                    in (Specia et al., 2009b), which applies Inductive
+kernel parameter optimization, employ posterior                Confidence Machines and a larger set of features
+probability-based confidence estimation to sup-                to model post-editors’ judgement of the translation
+port user-based tuning for precision and recall, ex-           quality between ‘good’ and ‘bad’, or among three
+periment with feature sets involving MT-, TM- and              levels of post-editing effort.
+system-independent features, and use automatic                    Our research is more similar in spirit to the third
+MT evaluation metrics to simulate post-editing ef-             strand. However, we use outputs and features from
+fort.                                                          the TM explicitly; therefore instead of having to
+   The rest of the paper is organized as follows: we           solve a regression problem, we only have to solve
+first briefly introduce related research in Section 2,         a much easier binary prediction problem which
+and review the classification SVMs in Section 3.               can be integrated into TMs in a straightforward
+We formulate the classification model in Section 4             manner. Because of this, the precision and recall
+and present experiments in Section 5. In Section               scores reported in this paper are not directly com-
+6, we analyze the post-editing effort approximated             parable to those in (Specia et al., 2009b) as the lat-
+by the TER metric (Snover et al., 2006). Section               ter are computed on a pure SMT system without a
+7 concludes the paper and points out avenues for               TM in the background.
+future research.
+                                                               3 Support Vector Machines for
+2   Related Work                                                 Translation Quality Estimation
+
+Previous research relating to this work mainly fo-             SVMs (Cortes and Vapnik, 1995) are binary clas-
+cuses on predicting the MT quality.                            sifiers that classify an input instance based on de-
+                                                               cision rules which minimize the regularized error
+   The first strand is confidence estimation for MT,
+                                                               function in (1):
+initiated by (Ueffing et al., 2003), in which pos-
+terior probabilities on the word graph or N-best                                   1 T     ∑     l
+                                                                          min        w w+C     ξi
+list are used to estimate the quality of MT out-                          w,b,ξ    2       i=1                      (1)
+puts. The idea is explored more comprehensively                            s. t.   yi (wT ϕ(xi ) + b) > 1 − ξi
+in (Blatz et al., 2004). These estimations are often                               ξi > 0
+used to rerank the MT output and to optimize it                 where (xi , yi ) ∈ Rn × {+1, −1} are l training
+directly. Extensions of this strand are presented              instances that are mapped by the function ϕ to a
+in (Quirk, 2004) and (Ueffing and Ney, 2005).                  higher dimensional space. w is the weight vec-
+The former experimented with confidence esti-                  tor, ξ is the relaxation variable and C > 0 is the
+mation with several different learning algorithms;             penalty parameter.
+the latter uses word-level confidence measures to                 Solving SVMs is viable using the ‘kernel
+determine whether a particular translation choice              trick’: finding a kernel function K in (1) with
+should be accepted or rejected in an interactive               K(xi , xj ) = Φ(xi )T Φ(xj ). We perform our ex-
+translation system.                                            periments with the Radial Basis Function (RBF)
+   The second strand of research focuses on com-               kernel, as in (2):
+bining TM information with an SMT system, so
+                                                                       K(xi , xj ) = exp(−γ||xi − xj ||2 ), γ > 0   (2)
+that the SMT system can produce better target lan-
+guage output when there is an exact or close match
+in the TM (Simard and Isabelle, 2009). This line                  When using SVMs with the RBF kernel, we
+of research is shown to help the performance of                have two free parameters to tune on: the cost pa-
+MT, but is less relevant to our task in this paper.            rameter C in (1) and the radius parameter γ in (2).
+   A third strand of research tries to incorporate                In each of our experimental settings, the param-
+confidence measures into a post-editing environ-               eters C and γ are optimized by a brute-force grid
+
+
+                                                         623
+
+
+search. The classification result of each set of pa-
+rameters is evaluated by cross validation on the                                                          1
+                                                                   P r(y = 1|x) ≈ PA,B (f ) ≡                            (4)
+training set.                                                                                     1 + exp(Af + B)
+
+                                                               where f = f (x) is the decision function of the
+4   Translation Recommendation as                             estimated SVM. A and B are parameters that min-
+    Binary Classification                                     imize the cross-entropy error function F on the
+We use an SVM binary classifier to predict the rel-           training data, as in Eq. (5):
+ative quality of the SMT output to make a recom-
+mendation. The SVM classifier uses features from                                ∑ l
+                                                                min F (z) = −        (ti log(pi ) + (1 − ti )log(1 − pi )),
+                                                               z=(A,B)
+the SMT system, the TM and additional linguis-                                  i=1               { N +1
+                                                                                                     +
+tic features to estimate whether the SMT output is                                                        if yi = +1
+                                                                where pi = PA,B (fi ), and ti = N+1+2
+better than the hit from the TM.                                                                    N− +2
+                                                                                                          if yi = −1
+                                                                                                                         (5)
+4.1 Problem Formulation                                        where z = (A, B) is a parameter setting, and
+                                                              N+ and N− are the numbers of observed positive
+As we treat translation recommendation as a bi-
+                                                              and negative examples, respectively, for the label
+nary classification problem, we have a pair of out-
+                                                              yi . These numbers are obtained using an internal
+puts from TM and MT for each sentence. Ideally
+                                                              cross-validation on the training set.
+the classifier will recommend the output that needs
+less post-editing effort. As large-scale annotated            4.3 The Feature Set
+data is not yet available for this task, we use auto-
+                                                              We use three types of features in classification: the
+matic TER scores (Snover et al., 2006) as the mea-
+                                                              MT system features, the TM feature and system-
+sure for the required post-editing effort. In the fu-
+                                                              independent features.
+ture, we hope to train our system on HTER (TER
+with human targeted references) scores (Snover et             4.3.1 The MT System Features
+al., 2006) once the necessary human annotations               These features include those typically used in
+are in place. In the meantime we use TER, as TER              SMT, namely the phrase-translation model scores,
+is shown to have high correlation with HTER.                  the language model probability, the distance-based
+   We label the training examples as in (3):                  reordering score, the lexicalized reordering model
+             {                                                scores, and the word penalty.
+                 +1   if T ER(MT) < T ER(TM)
+        y=                                        (3)
+                 −1   if T ER(MT) ≥ T ER(TM)                  4.3.2 The TM Feature
+                                                              The TM feature is the fuzzy match (Sikes, 2007)
+   Each instance is associated with a set of features         cost of the TM hit. The calculation of fuzzy match
+from both the MT and TM outputs, which are dis-               score itself is one of the core technologies in TM
+cussed in more detail in Section 4.3.                         systems and varies among different vendors. We
+                                                              compute fuzzy match cost as the minimum Edit
+4.2 Recommendation Confidence Estimation                      Distance (Levenshtein, 1966) between the source
+In classical settings involving SVMs, confidence              and TM entry, normalized by the length of the
+levels are represented as margins of binary predic-           source as in (6), as most of the current implemen-
+tions. However, these margins provide little in-              tations are based on edit distance while allowing
+sight for our application because the numbers are             some additional flexible matching.
+only meaningful when compared to each other.                                              EditDistance(s, e)
+                                                                         hf m (t) = min                                  (6)
+What is more preferable is a probabilistic confi-                                     e        Len(s)
+dence score (e.g. 90% confidence) which is better              where s is the source side of t, the sentence to
+understood by post-editors and translators.                   translate, and e is the source side of an entry in the
+   We use the techniques proposed by (Platt, 1999)            TM. For fuzzy match scores F , this fuzzy match
+and improved by (Lin et al., 2007) to obtain the              cost hf m roughly corresponds to 1−F . The differ-
+posterior probability of a classification, which is           ence in calculation does not influence classifica-
+used as the confidence score in our system.                   tion, and allows direct comparison between a pure
+   Platt’s method estimates the posterior probabil-           TM system and a translation recommendation sys-
+ity with a sigmod function, as in (4):                        tem in Section 5.4.2.
+
+
+                                                        624
+
+
+4.3.3 System-Independent Features                             5 Experiments
+We use several features that are independent of               5.1 Experimental Settings
+the translation system, which are useful when a
+third-party translation service is used or the MT             Our raw data set is an English–French translation
+system is simply treated as a black-box. These                memory with technical translation from Syman-
+features are source and target side LM scores,                tec, consisting of 51K sentence pairs. We ran-
+pseudo source fuzzy match scores and IBM model                domly selected 43K to train an SMT system and
+1 scores.                                                     translated the English side of the remaining 8K
+                                                              sentence pairs. The average sentence length of
+Source-Side Language Model Score and Per-                     the training set is 13.5 words and the size of the
+plexity. We compute the language model (LM)                   training set is comparable to the (larger) TMs used
+score and perplexity of the input source sentence             in the industry. Note that we remove the exact
+on a LM trained on the source-side training data of           matches in the TM from our dataset, because ex-
+the SMT system. The inputs that have lower per-               act matches will be reused and not presented to the
+plexity or higher LM score are more similar to the            post-editor in a typical TM setting.
+dataset on which the SMT system is built.                        As for the SMT system, we use a stan-
+                                                              dard log-linear PB-SMT model (Och and Ney,
+Target-Side Language Model Perplexity. We                     2002): G IZA ++ implementation of IBM word
+compute the LM probability and perplexity of the              alignment model 4,1 the refinement and phrase-
+target side as a measure of fluency. Language                 extraction heuristics described in (Koehn et
+model perplexity of the MT outputs are calculated,            al., 2003), minimum-error-rate training (Och,
+and LM probability is already part of the MT sys-             2003), a 5-gram language model with Kneser-Ney
+tems scores. LM scores on TM outputs are also                 smoothing (Kneser and Ney, 1995) trained with
+computed, though they are not as informative as               SRILM (Stolcke, 2002) on the English side of the
+scores on the MT side, since TM outputs should                training data, and Moses (Koehn et al., 2007) to
+be grammatically perfect.                                     decode. We train a system in the opposite direc-
+                                                              tion using the same data to produce the pseudo-
+The Pseudo-Source Fuzzy Match Score. We                       source sentences.
+translate the output back to obtain a pseudo source              We train the SVM classifier using the lib-
+sentence. We compute the fuzzy match score                    SVM (Chang and Lin, 2001) toolkit. The SVM-
+between the original source sentence and this                 training and testing is performed on the remaining
+pseudo-source. If the MT/TM system performs                   8K sentences with 4-fold cross validation. We also
+well enough, these two sentences should be the                report 95% confidence intervals.
+same or very similar. Therefore, the fuzzy match                 The SVM hyper-parameters are tuned using the
+score here gives an estimation of the confidence              training data of the first fold in the 4-fold cross val-
+level of the output. We compute this score for both           idation via a brute force grid search. More specifi-
+the MT output and the TM hit.                                 cally, for parameter C in (1) we search in the range
+                                                              [2−5 , 215 ], and for parameter γ (2) we search in the
+The IBM Model 1 Score. The fuzzy match
+                                                              range [2−15 , 23 ]. The step size is 2 on the expo-
+score does not measure whether the hit could be
+                                                              nent.
+a correct translation, i.e. it does not take into ac-
+count the correspondence between the source and
+                                                              5.2 The Evaluation Metrics
+target, but rather only the source-side information.
+For the TM hit, the IBM Model 1 score (Brown                  We measure the quality of the classification by
+et al., 1993) serves as a rough estimation of how             precision and recall. Let A be the set of recom-
+good a translation it is on the word level; for the           mended MT outputs, and B be the set of MT out-
+MT output, on the other hand, it is a black-box               puts that have lower TER than TM hits. We stan-
+feature to estimate translation quality when the in-          dardly define precision P , recall R and F-value as
+formation from the translation model is not avail-            in (7):
+able. We compute bidirectional (source-to-target                 1
+                                                                   More specifically, we performed 5 iterations of Model 1,
+and target-to-source) model 1 scores on both TM               5 iterations of HMM, 3 iterations of Model 3, and 3 iterations
+and MT outputs.                                               of Model 4.
+
+
+                                                        625
+
+
+                                                              by post-editors, a recommendation to replace the
+             ∩            ∩
+           |A B|     |A B|          2P R                      hit from the TM would require more confidence,
+     P =         ,R=       and F =                (7)
+             |A|       |B|         P +R                       i.e. higher precision. Ideally our aim is to obtain
+                                                              a level of 0.9 precision at the cost of some recall,
+                                                              if necessary. We propose two methods to achieve
+5.3 Recommendation Results                                    this goal.
+In Table 1, we report recommendation perfor-
+mance using MT and TM system features (S YS),                 5.4.1 Classifier Margins
+system features plus system-independent features              We experiment with different margins on the train-
+(A LL:S YS+S I), and system-independent features              ing data to tune precision and recall in order to
+only (S I).                                                   obtain a desired balance. In the basic case, the
+                                                              training example would be marked as in (3). If we
+        Table 1: Recommendation Results                       label both the training and test sets with this rule,
+          Precision    Recall       F-Score                   the accuracy of the prediction will be maximized.
+ S YS    82.53±1.17 96.44±0.68 88.95±.56                         We try to achieve higher precision by enforc-
+ SI      82.56±1.46 95.83±0.52 88.70±.65                      ing a larger bias towards negative examples in the
+ A LL    83.45±1.33 95.56±1.33 89.09±.24                      training set so that some borderline positive in-
+                                                              stances would actually be labeled as negative, and
+   From Table 1, we observe that MT and TM                    the classifier would have higher precision in the
+system-internal features are very useful for pro-             prediction stage as in (8).
+ducing a stable (as indicated by the smaller con-
+fidence interval) recommendation system (S YS).                       {
+                                                                       +1 if T ER(SMT) + b < T ER(TM)
+Interestingly, only using some simple system-                      y=                                           (8)
+                                                                       −1 if T ER(SMT) + b > T ER(TM)
+external features as described in Section 4.3.3 can
+also yield a system with reasonably good per-
+                                                                 We experiment with b in [0, 0.25] using MT sys-
+formance (S I). We expect that the performance
+                                                              tem features and TM features. Results are reported
+can be further boosted by adding more syntactic
+                                                              in Table 2.
+and semantic features. Combining all the system-
+internal and -external features leads to limited
+gains in Precision and F-score compared to using                       Table 2: Classifier margins
+only system-internal features (S YS) only. This in-                            Precision       Recall
+dicates that at the default confidence level, current              TER+0      83.45±1.33 95.56±1.33
+system-external (resp. system-internal) features                   TER+0.05 82.41±1.23 94.41±1.01
+can only play a limited role in informing the sys-                 TER+0.10 84.53±0.98 88.81±0.89
+tem when current system-internal (resp. system-                    TER+0.15 85.24±0.91 87.08±2.38
+external) features are available. We show in Sec-                  TER+0.20 87.59±0.57 75.86±2.70
+tion 5.4.2 that combing both system-internal and -                 TER+0.25 89.29±0.93 66.67±2.53
+external features can yield higher, more stable pre-
+cision when adjusting the confidence levels of the               The highest accuracy and F-value is achieved
+classifier. Additionally, the performance of system           by T ER + 0, as all other settings are trained
+S I is promising given the fact that we are using             on biased margins. Except for a small drop in
+only a limited number of simple features, which               T ER+0.05, other configurations all obtain higher
+demonstrates a good prospect of applying our rec-             precision than T ER + 0. We note that we can ob-
+ommendation system to MT systems where we do                  tain 0.85 precision without a big sacrifice in recall
+not have access to their internal features.                   with b=0.15, but for larger improvements on pre-
+                                                              cision, recall will drop more rapidly.
+5.4 Further Improving Recommendation                             When we use b beyond 0.25, the margin be-
+    Precision                                                 comes less reliable, as the number of positive
+Table 1 shows that classification recall is very              examples becomes too small. In particular, this
+high, which suggests that precision can still be im-          causes the SVM parameters we tune on in the first
+proved, even though the F-score is not low. Con-              fold to become less applicable to the other folds.
+sidering that TM is the dominant technology used              This is one limitation of using biased margins to
+
+
+                                                        626
+
+
+obtain high precision. The method presented in                                           0.3), indicating that SMT output should be recom-
+Section 5.4.2 is less influenced by this limitation.                                     mended when the TM hit has a high fuzzy match
+                                                                                         cost (low fuzzy match score). With this boost, the
+5.4.2 Adjusting Confidence Levels
+                                                                                         precision of the baseline system can reach 0.85,
+An alternative to using a biased margin is to output                                     demonstrating that a proper thresholding of fuzzy
+a confidence score during prediction and to thresh-                                      match scores can be used effectively to discrimi-
+old on the confidence score. It is also possible to                                      nate the recommendation of the TM hit from the
+add this method to the SVM model trained with a                                          recommendation of the SMT output.
+biased margin.                                                                              However, using the TM information only does
+   We use the SVM confidence estimation tech-                                            not always find the easiest-to-edit translation. For
+niques in Section 4.2 to obtain the confidence                                           example, an excellent SMT output should be rec-
+level of the recommendation, and change the con-                                         ommended even if there exists a good TM hit (e.g.
+fidence threshold for recommendation when nec-                                           fuzzy match score is 0.7 or more). On the other
+essary. This also allows us to compare directly                                          hand, a misleading SMT output should not be rec-
+against a simple baseline inspired by TM users. In                                       ommended if there exists a poor but useful TM
+a TM environment, some users simply ignore TM                                            match (e.g. fuzzy match score is 0.2).
+hits below a certain fuzzy match score F (usually                                           Our system is able to tackle these complica-
+from 0.7 to 0.8). This fuzzy match score reflects                                        tions as it incorporates features from the MT and
+the confidence of recommending the TM hits. To                                           the TM systems simultaneously. Figure 1 shows
+obtain the confidence of recommending an SMT                                             that both the S YS and the A LL setting consistently
+output, our baseline (F M) uses fuzzy match costs                                        outperform F M, indicating that our classification
+hF M ≈ 1−F (cf. Section 4.3.2) for the TM hits as                                        scheme can better integrate the MT output into the
+the level of confidence. In other words, the higher                                      TM system than this naive baseline.
+the fuzzy match cost of the TM hit is (lower fuzzy                                          The S I feature set does not perform well when
+match score), the higher the confidence of recom-                                        the confidence level is set above 0.85 (cf. the de-
+mending the SMT output. We compare this base-                                            scending tail of the S I curve in Figure 1). This
+line with the three settings in Section 5.                                               might indicate that this feature set is not reliable
+               1
+                                                                                         enough to extract the best translations. How-
+                     SI
+                    Sys
+                     All
+                                                                                         ever, when the requirement on precision is not that
+                    FM
+             0.95                                                                        high, and the MT-internal features are not avail-
+                                                                                         able, it would still be desirable to obtain transla-
+              0.9
+                                                                                         tion recommendations with these black-box fea-
+                                                                                         tures. The difference between S YS and A LL is
+ Precision
+
+
+
+
+             0.85
+                                                                                         generally small, but A LL performs steadily better
+              0.8                                                                        in [0.5, 0,8].
+
+             0.75
+                                                                                                 Table 3: Recall at Fixed Precision
+                                                                                                                        Recall
+              0.7
+                      0.1   0.2   0.3   0.4        0.5
+                                              Confidence
+                                                           0.6   0.7   0.8   0.9
+                                                                                                  S YS @85P REC 88.12±1.32
+                                                                                                  S YS @90P REC 52.73±2.31
+Figure 1: Precision Changes with Confidence                                                       S I @85P REC        87.33±1.53
+Level                                                                                             A LL @85P REC 88.57±1.95
+                                                                                                  A LL @90P REC 51.92±4.28
+   Figure 1 shows that the precision curve of F M
+is low and flat when the fuzzy match costs are
+low (from 0 to 0.6), indicating that it is unwise to                                     5.5 Precision Constraints
+recommend an SMT output when the TM hit has                                              In Table 3 we also present the recall scores at 0.85
+a low fuzzy match cost (corresponding to higher                                          and 0.9 precision for S YS, S I and A LL models to
+fuzzy match score, from 0.4 to 1). We also observe                                       demonstrate our system’s performance when there
+that the precision of the recommendation receives                                        is a hard constraint on precision. Note that our
+a boost when the fuzzy match costs for the TM                                            system will return the TM entry when there is an
+hits are above 0.7 (fuzzy match score lower than                                         exact match, so the overall precision of the system
+
+
+                                                                                   627
+
+
+is above the precision score we set here in a ma-             they would otherwise have to? Ideally this ques-
+ture TM environment, as a significant portion of              tion would be answered by human post-editors in
+the material to be translated will have a complete            a large-scale experimental setting. As we have
+match in the TM system.                                       not yet conducted a manual post-editing experi-
+   In Table 3 for M ODEL @K, the recall scores are            ment, we conduct two sets of analyses, trying to
+achieved when the prediction precision is better              show which type of edits will be required for dif-
+than K with 0.95 confidence. For each model, pre-             ferent recommendation confidence levels. We also
+cision at 0.85 can be obtained without a very big             present possible methods for human evaluation at
+loss on recall. However, if we want to demand                 the end of this section.
+further recommendation precision (more conser-
+vative in recommending SMT output), the recall                6.1 Edit Statistics
+level will begin to drop more quickly. If we use              We provide the statistics of the number of edits
+only system-independent features (S I), we cannot             for each sentence with 0.95 confidence intervals,
+achieve as high precision as with other models                sorted by TER edit types. Statistics of positive in-
+even if we sacrifice more recall.                             stances in classification (i.e. the instances in which
+   Based on these results, the users of the TM sys-           MT output is recommended over the TM hit) are
+tem can choose between precision and recall ac-               given in Table 5.
+cording to their own needs. As the threshold does                When an MT output is recommended, its TM
+not involve training of the SMT system or the                 counterpart will require a larger average number
+SVM classifier, the user is able to determine this            of total edits than the MT output, as we expect. If
+trade-off at runtime.                                         we drill down, however, we also observe that many
+                                                              of the saved edits come from the Substitution cat-
+         Table 4: Contribution of Features                    egory, which is the most costly operation from the
+           Precision        Recall       F Score              post-editing perspective. In this case, the recom-
+    S YS  82.53±1.17 96.44±0.68 88.95±.56                     mended MT output actually saves more effort for
+    +M1 82.87±1.26 96.23±0.53 89.05±.52                       the editors than what is shown by the TER score.
+    +LM 82.82±1.16 96.20±1.14 89.01±.23                       It reflects the fact that TM outputs are not actual
+    +PS   83.21±1.33 96.61±0.44 89.41±.84                     translations, and might need heavier editing.
+                                                                 Table 6 shows the statistics of negative instances
+                                                              in classification (i.e. the instances in which MT
+5.6 Contribution of Features
+                                                              output is not recommended over the TM hit). In
+In Section 4.3.3 we suggested three sets of                   this case, the MT output requires considerably
+system-independent features: features based on                more edits than the TM hits in terms of all four
+the source- and target-side language model (LM),              TER edit types, i.e. insertion, substitution, dele-
+the IBM Model 1 (M1) and the fuzzy match scores               tion and shift. This reflects the fact that some high
+on pseudo-source (PS). We compare the contribu-               quality TM matches can be very useful as a trans-
+tion of these features in Table 4.                            lation.
+   In sum, all the three sets of system-independent
+features improve the precision and F-scores of the            6.2 Edit Statistics on Recommendations of
+MT and TM system features. The improvement                        Higher Confidence
+is not significant, but improvement on every set of           We present the edit statistics of recommendations
+system-independent features gives some credit to              with higher confidence in Table 7. Comparing Ta-
+the capability of S I features, as does the fact that         bles 5 and 7, we see that if recommended with
+S I features perform close to S YS features in Table          higher confidence, the MT output will need sub-
+1.                                                            stantially less edits than the TM output: e.g. 3.28
+                                                              fewer substitutions on average.
+6     Analysis of Post-Editing Effort
+                                                                 From the characteristics of the high confidence
+A natural question on the integration models is               recommendations, we suspect that these mainly
+whether the classification reduces the effort of the          comprise harder to translate (i.e. different from
+translators and post-editors: after reading these             the SMT training set/TM database) sentences, as
+recommendations, will they translate/edit less than           indicated by the slightly increased edit operations
+
+
+                                                        628
+
+
+       Table 5: Edit Statistics when Recommending MT Outputs in Classification, confidence=0.5
+                      Insertion         Substitution    Deletion                Shift
+           MT 0.9849 ± 0.0408 2.2881 ± 0.0672 0.8686 ± 0.0370 1.2500 ± 0.0598
+           TM 0.7762 ± 0.0408 4.5841 ± 0.1036 3.1567 ± 0.1120 1.2096 ± 0.0554
+
+
+    Table 6: Edit Statistics when NOT Recommending MT Outputs in Classification, confidence=0.5
+                      Insertion        Substitution    Deletion               Shift
+           MT 1.0830 ± 0.1167 2.2885 ± 0.1376 1.0964 ± 0.1137 1.5381 ± 0.1962
+           TM 0.7554 ± 0.0376 1.5527 ± 0.1584 1.0090 ± 0.1850 0.4731 ± 0.1083
+
+
+      Table 7: Edit Statistics when Recommending MT Outputs in Classification, confidence=0.85
+                      Insertion        Substitution     Deletion                Shift
+           MT 1.1665 ± 0.0615 2.7334 ± 0.0969 1.0277 ± 0.0544 1.5549 ± 0.0899
+           TM 0.8894 ± 0.0594 6.0085 ± 0.1501 4.1770 ± 0.1719 1.6727 ± 0.0846
+
+
+on the MT side. TM produces much worse edit-                 their familiar TM environment, use the same cost-
+candidates for such sentences, as indicated by               estimation methods, and at the same time bene-
+the numbers in Table 7, since TM does not have               fit from the power of state-of-the-art MT. We use
+the ability to automatically reconstruct an output           SVMs to make these predictions, and use grid
+through the combination of several segments.                 search to find better RBF kernel parameters.
+6.3 Plan for Human Evaluation                                   We explore features from inside the MT sys-
+                                                             tem, from the TM, as well as features that make
+Evaluation with human post-editors is crucial to
+                                                             no assumption on the translation model for the bi-
+validate and improve translation recommendation.
+                                                             nary classification. With these features we make
+There are two possible avenues to pursue:
+                                                             glass-box and black-box predictions. Experiments
+    • Test our system on professional post-editors.          show that the models can achieve 0.85 precision at
+      By providing them with the TM output, the              a level of 0.89 recall, and even higher precision if
+      MT output and the one recommended to edit,             we sacrifice more recall. With this guarantee on
+      we can measure the true accuracy of our                precision, our method can be used in a TM envi-
+      recommendation, as well as the post-editing            ronment without changing the upper-bound of the
+      time we save for the post-editors;                     related cost estimation.
+
+    • Apply the presented method on open do-                    Finally, we analyze the characteristics of the in-
+      main data and evaluate it using crowd-                 tegrated outputs. We present results to show that,
+      sourcing. It has been shown that crowd-                if measured by number, type and content of ed-
+      sourcing tools, such as the Amazon Me-                 its in TER, the recommended sentences produced
+      chanical Turk (Callison-Burch, 2009), can              by the classification model would bring about less
+      help developers to obtain good human judge-            post-editing effort than the TM outputs.
+      ments on MT output quality both cheaply and               This work can be extended in the following
+      quickly. Given that our problem is related to          ways. Most importantly, it is useful to test the
+      MT quality estimation in nature, it can poten-         model in user studies, as proposed in Section 6.3.
+      tially benefit from such tools as well.                A user study can serve two purposes: 1) it can
+                                                             validate the effectiveness of the method by mea-
+7    Conclusions and Future Work
+                                                             suring the amount of edit effort it saves; and 2)
+In this paper we present a classification model to           the byproduct of the user study – post-edited sen-
+integrate SMT into a TM system, in order to facili-          tences – can be used to generate HTER scores
+tate the work of post-editors. Insodoing we handle           to train a better recommendation model. Further-
+the problem of MT quality estimation as binary               more, we want to experiment and improve on the
+prediction instead of regression. From the post-             adaptability of this method, as the current experi-
+editors’ perspective, they can continue to work in           ment is on a specific domain and language pair.
+
+
+                                                       629
+
+
+Acknowledgements                                                      Franz Josef Och. 2003. Minimum error rate training in sta-
+                                                                         tistical machine translation. In The 41st Annual Meet-
+This research is supported by the Science Foundation Ireland             ing on Association for Computational Linguistics (ACL-
+(Grant 07/CE/I1142) as part of the Centre for Next Gener-                2003), pages 160 – 167.
+ation Localisation (www.cngl.ie) at Dublin City University.
+We thank Symantec for providing the TM database and the               John C. Platt. 1999. Probabilistic outputs for support vector
+anonymous reviewers for their insightful comments.                       machines and comparisons to regularized likelihood meth-
+                                                                         ods. Advances in Large Margin Classifiers, pages 61 – 74.
+
+References                                                            Christopher B. Quirk. 2004. Training a sentence-level ma-
+                                                                        chine translation confidence measure. In The Fourth In-
+John Blatz, Erin Fitzgerald, George Foster, Simona Gan-                 ternational Conference on Language Resources and Eval-
+   drabur, Cyril Goutte, Alex Kulesza, Alberto Sanchis, and             uation (LREC-2004), pages 825 – 828, Lisbon, Portugal.
+   Nicola Ueffing. 2004. Confidence estimation for ma-
+   chine translation. In The 20th International Conference            Richard Sikes. 2007. Fuzzy matching in theory and practice.
+   on Computational Linguistics (Coling-2004), pages 315 –               Multilingual, 18(6):39 – 43.
+   321, Geneva, Switzerland.
+                                                                      Michel Simard and Pierre Isabelle. 2009. Phrase-based
+Peter F. Brown, Vincent J. Della Pietra, Stephen A. Della               machine translation in a computer-assisted translation en-
+   Pietra, and Robert L. Mercer. 1993. The mathematics                  vironment. In The Twelfth Machine Translation Sum-
+   of statistical machine translation: parameter estimation.            mit (MT Summit XII), pages 120 – 127, Ottawa, Ontario,
+   Computational Linguistics, 19(2):263 – 311.                          Canada.
+Chris Callison-Burch. 2009. Fast, cheap, and creative:
+                                                                      Matthew Snover, Bonnie Dorr, Richard Schwartz, Linnea
+  Evaluating translation quality using Amazon’s Mechani-
+                                                                        Micciulla, and John Makhoul. 2006. A study of transla-
+  cal Turk. In The 2009 Conference on Empirical Methods
+                                                                        tion edit rate with targeted human annotation. In The 2006
+  in Natural Language Processing (EMNLP-2009), pages
+                                                                        conference of the Association for Machine Translation in
+  286 – 295, Singapore.
+                                                                        the Americas (AMTA-2006), pages 223 – 231, Cambridge,
+Chih-Chung Chang and Chih-Jen Lin, 2001.      LIB-                      MA.
+  SVM: a library for support vector machines. Soft-
+  ware available at http://www.csie.ntu.edu.tw/                       Lucia Specia, Nicola Cancedda, Marc Dymetman, Marco
+                                                                        Turchi, and Nello Cristianini. 2009a. Estimating the
+  ˜cjlin/libsvm.
+                                                                        sentence-level quality of machine translation systems. In
+Corinna Cortes and Vladimir Vapnik. 1995. Support-vector                The 13th Annual Conference of the European Association
+  networks. Machine learning, 20(3):273 – 297.                          for Machine Translation (EAMT-2009), pages 28 – 35,
+                                                                        Barcelona, Spain.
+R. Kneser and H. Ney. 1995. Improved backing-off for
+   m-gram language modeling. In The 1995 International                Lucia Specia, Craig Saunders, Marco Turchi, Zhuoran Wang,
+   Conference on Acoustics, Speech, and Signal Processing               and John Shawe-Taylor. 2009b. Improving the confidence
+   (ICASSP-95), pages 181 – 184, Detroit, MI.                           of machine translation quality estimates. In The Twelfth
+                                                                        Machine Translation Summit (MT Summit XII), pages 136
+Philipp. Koehn, Franz Josef Och, and Daniel Marcu. 2003.                – 143, Ottawa, Ontario, Canada.
+   Statistical phrase-based translation. In The 2003 Confer-
+   ence of the North American Chapter of the Association for          Andreas Stolcke. 2002. SRILM-an extensible language
+   Computational Linguistics on Human Language Technol-                 modeling toolkit. In The Seventh International Confer-
+   ogy (NAACL/HLT-2003), pages 48 – 54, Edmonton, Al-                   ence on Spoken Language Processing, volume 2, pages
+   berta, Canada.                                                       901 – 904, Denver, CO.
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris                     Nicola Ueffing and Hermann Ney. 2005. Application
+   Callison-Burch, Marcello Federico, Nicola Bertoldi,                  of word-level confidence measures in interactive statisti-
+   Brooke Cowan, Wade Shen, Christine Moran, Richard                    cal machine translation. In The Ninth Annual Confer-
+   Zens, Chris Dyer, Ondrej Bojar, Alexandra Constantin,                ence of the European Association for Machine Translation
+   and Evan Herbst. 2007. Moses: Open source toolkit for                (EAMT-2005), pages 262 – 270, Budapest, Hungary.
+   statistical machine translation. In The 45th Annual Meet-
+   ing of the Association for Computational Linguistics Com-          Nicola Ueffing, Klaus Macherey, and Hermann Ney. 2003.
+   panion Volume Proceedings of the Demo and Poster Ses-                Confidence measures for statistical machine translation.
+   sions (ACL-2007), pages 177 – 180, Prague, Czech Re-                 In The Ninth Machine Translation Summit (MT Summit
+   public.                                                              IX), pages 394 – 401, New Orleans, LA.
+Vladimir Iosifovich Levenshtein. 1966. Binary codes capa-
+  ble of correcting deletions, insertions, and reversals. So-
+  viet Physics Doklady, 10(8):707 – 710.
+Hsuan-Tien Lin, Chih-Jen Lin, and Ruby C. Weng. 2007.
+  A note on platt’s probabilistic outputs for support vector
+  machines. Machine Learning, 68(3):267 – 276.
+Franz Josef Och and Hermann Ney. 2002. Discriminative
+   training and maximum entropy models for statistical ma-
+   chine translation. In Proceedings of 40th Annual Meeting
+   of the Association for Computational Linguistics (ACL-
+   2002), pages 295 – 302, Philadelphia, PA.
+
+
+                                                                630
+

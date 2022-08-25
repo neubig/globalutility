@@ -1,0 +1,660 @@
+    A Taxonomy, Dataset, and Classifier for Automatic Noun Compound
+                             Interpretation
+                                     Stephen Tratz and Eduard Hovy
+                                       Information Sciences Institute
+                                     University of Southern California
+                                         Marina del Rey, CA 90292
+                                      {stratz,hovy}@isi.edu
+
+
+                      Abstract                                 lations to noun compounds, and, in the case of su-
+                                                               pervised classification, a sufficiently large dataset
+    The automatic interpretation of noun-noun                  for training.
+    compounds is an important subproblem                          Earlier work has often suffered from using tax-
+    within many natural language processing                    onomies with coarse-grained, highly ambiguous
+    applications and is an area of increasing                  predicates, such as prepositions, as various labels
+    interest. The problem is difficult, with dis-              (Lauer, 1995) and/or unimpressive inter-annotator
+    agreement regarding the number and na-                     agreement among human judges (Kim and Bald-
+    ture of the relations, low inter-annotator                 win, 2005). In addition, the datasets annotated ac-
+    agreement, and limited annotated data. In                  cording to these various schemes have often been
+    this paper, we present a novel taxonomy                    too small to provide wide coverage of the noun
+    of relations that integrates previous rela-                compounds likely to occur in general text.
+    tions, the largest publicly-available anno-                   In this paper, we present a large, fine-grained
+    tated dataset, and a supervised classifica-                taxonomy of 43 noun compound relations, a
+    tion method for automatic noun compound                    dataset annotated according to this taxonomy, and
+    interpretation.                                            a supervised, automatic classification method for
+                                                               determining the relation between the head and
+1   Introduction
+                                                               modifier words in a noun compound. We com-
+Noun compounds (e.g., ‘maple leaf’) occur very                 pare and map our relations to those in other tax-
+frequently in text, and their interpretation—                  onomies and report the promising results of an
+determining the relationships between adjacent                 inter-annotator agreement study as well as an au-
+nouns as well as the hierarchical dependency                   tomatic classification experiment. We examine the
+structure of the NP in which they occur—is an                  various features used for classification and iden-
+important problem within a wide variety of nat-                tify one very useful, novel family of features. Our
+ural language processing (NLP) applications, in-               dataset is, to the best of our knowledge, the largest
+cluding machine translation (Baldwin and Tanaka,               noun compound dataset yet produced. We will
+2004) and question answering (Ahn et al., 2005).               make it available via http://www.isi.edu.
+The interpretation of noun compounds is a difficult
+problem for various reasons (Spärck Jones, 1983).              2     Related Work
+Among them is the fact that no set of relations pro-
+                                                               2.1    Taxonomies
+posed to date has been accepted as complete and
+appropriate for general-purpose text. Regardless,              The relations between the component nouns in
+automatic noun compound interpretation is the fo-              noun compounds have been the subject of various
+cus of an upcoming S EM E VAL task (Butnariu et                linguistic studies performed throughout the years,
+al., 2009).                                                    including early work by Jespersen (1949). The
+   Leaving aside the problem of determining the                taxonomies they created are varied. Lees created
+dependency structure among strings of three or                 an early taxonomy based primarily upon grammar
+more nouns—a problem we do not address in this                 (Lees, 1960). Levi’s influential work postulated
+paper—automatic noun compound interpretation                   that complex nominals (Levi’s name for noun com-
+requires a taxonomy of noun-noun relations, an                 pounds that also permits certain adjectival modi-
+automatic method for accurately assigning the re-              fiers) are all derived either via nominalization or
+
+
+                                                         678
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 678–687,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+by deleting one of nine predicates (i.e., CAUSE ,             a novel algorithm (i.e., semantic scattering). Nas-
+HAVE , MAKE , USE , BE , IN , FOR , FROM , ABOUT )            tase et al. (2006) experiment with a variety of clas-
+from an underlying sentence construction (Levi,               sification methods including memory-based meth-
+1978). Of the taxonomies presented by purely                  ods, SVMs, and decision trees. Ó Séaghdha and
+linguistic studies, our categories are most similar           Copestake (2009) use SVMs and experiment with
+to those proposed by Warren (1978), whose cat-                kernel methods on a dataset labeled using a rela-
+egories (e.g., MATERIAL + ARTEFACT, OBJ + PART)               tively small taxonomy. Girju (2009) uses cross-
+are generally less ambiguous than Levi’s.                     linguistic information from parallel corpora to aid
+   In contrast to studies that claim the existence of         classification.
+a relatively small number of semantic relations,
+Downing (1977) presents a strong case for the                 3     Taxonomy
+existence of an unbounded number of relations.                3.1   Creation
+While we agree with Downing’s belief that the
+number of relations is unbounded, we contend that             Given the heterogeneity of past work, we decided
+the vast majority of noun compounds fits within a             to start fresh and build a new taxonomy of re-
+relatively small set of categories.                           lations using naturally occurring noun pairs, and
+                                                              then compare the result to earlier relation sets.
+   The relations used in computational linguistics
+                                                              We collected 17509 noun pairs and over a period
+vary much along the same lines as those proposed
+                                                              of 10 months assigned one or more relations to
+earlier by linguists. Several lines of work (Finin,
+                                                              each, gradually building and refining our taxon-
+1980; Butnariu and Veale, 2008; Nakov, 2008) as-
+                                                              omy. More details regarding the dataset are pro-
+sume the existence of an unbounded number of re-
+                                                              vided in Section 4.
+lations. Others use categories similar to Levi’s,
+                                                                 The relations we produced were then compared
+such as Lauer’s (1995) set of prepositional para-
+                                                              to those present in other taxonomies (e.g., Levi,
+phrases (i.e., OF, FOR , IN , ON , AT, FROM , WITH ,
+                                                              1978; Warren, 1978; Barker and Szpakowicz,
+ABOUT ) to analyze noun compounds. Some work
+                                                              1998; Girju et al., 2005), and they were found to
+(e.g., Barker and Szpakowicz, 1998; Nastase and
+                                                              be fairly similar. We present a detailed comparison
+Szpakowicz, 2003; Girju et al., 2005; Kim and
+                                                              in Section 3.4.
+Baldwin, 2005) use sets of categories that are
+                                                                 We tested the relation set with an initial
+somewhat more similar to those proposed by War-
+                                                              inter-annotator agreement study (our latest inter-
+ren (1978). While most of the noun compound re-
+                                                              annotator agreement study results are presented in
+search to date is not domain specific, Rosario and
+                                                              Section 6). However, the mediocre results indi-
+Hearst (2001) create and experiment with a taxon-
+                                                              cated that the categories and/or their definitions
+omy tailored to biomedical text.
+                                                              needed refinement. We then embarked on a se-
+                                                              ries of changes, testing each generation by anno-
+2.2   Classification
+                                                              tation using Amazon’s Mechanical Turk service, a
+The approaches used for automatic classification              relatively quick and inexpensive online platform
+are also varied. Vanderwende (1994) presents one              where requesters may publish tasks for anony-
+of the first systems for automatic classification,            mous online workers (Turkers) to perform. Me-
+which extracted information from online sources               chanical Turk has been previously used in a va-
+and used a series of rules to rank a set of most              riety of NLP research, including recent work on
+likely interpretations. Lauer (1995) uses corpus              noun compounds by Nakov (2008) to collect short
+statistics to select a prepositional paraphrase. Sev-         phrases for linking the nouns within noun com-
+eral lines of work, including that of Barker and              pounds.
+Szpakowicz (1998), use memory-based methods.                     For the Mechanical Turk annotation tests, we
+Kim and Baldwin (2005) and Turney (2006) use                  created five sets of 100 noun compounds from
+nearest neighbor approaches based upon WordNet                noun compounds automatically extracted from a
+(Fellbaum, 1998) and Turney’s Latent Relational               random subset of New York Times articles written
+Analysis, respectively. Rosario and Hearst (2001)             between 1987 and 2007 (Sandhaus, 2008). Each
+utilize neural networks to classify compounds ac-             of these sets was used in a separate annotation
+cording to their domain-specific relation taxon-              round. For each round, a set of 100 noun com-
+omy. Moldovan et al. (2004) use SVMs as well as               pounds was uploaded along with category defini-
+
+
+                                                        679
+
+
+Category Name                                       % Example          Approximate Mappings
+Causal Group
+ C OMMUNICATOR OF C OMMUNICATION                  0.77 court order ⊃BGN:Agent, ⊃L:Acta +Producta , ⊃V:Subj
+ P ERFORMER OF ACT /ACTIVITY                      2.07 police abuse ⊃BGN:Agent, ⊃L:Acta +Producta , ⊃V:Subj
+ C REATOR /P ROVIDER /C AUSE O F                  2.55 ad revenue   ⊂BGV:Cause(d-by), ⊂L:Cause2 , ⊂N:Effect
+Purpose/Activity Group
+ P ERFORM /E NGAGE _I N                          13.24 cooking pot ⊃BGV:Purpose, ⊃L:For, ≈N:Purpose, ⊃W:Activity∪Purpose
+ C REATE /P ROVIDE /S ELL                         8.94 nicotine patch ∞BV:Purpose, ⊂BG:Result, ∞G:Make-Produce, ⊂GNV:Cause(s),
+                                                                      ∞L:Cause1 ∪Make1 ∪For, ⊂N:Product, ⊃W:Activity∪Purpose
+ O BTAIN /ACCESS /S EEK                           1.50 shrimp boat ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+ M ODIFY /P ROCESS /C HANGE                       1.50 eye surgery ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+ M ITIGATE /O PPOSE /D ESTROY                     2.34 flak jacket    ⊃BGV:Purpose, ⊃L:For, ≈N:Detraction, ⊃W:Activity∪Purpose
+ O RGANIZE /S UPERVISE /AUTHORITY                 4.82 ethics board ⊃BGNV:Purpose/Topic, ⊃L:For/Abouta , ⊃W:Activity
+ P ROPEL                                          0.16 water gun      ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+ P ROTECT /C ONSERVE                              0.25 screen saver ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+ T RANSPORT /T RANSFER /T RADE                    1.92 freight train ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+ T RAVERSE /V ISIT                                0.11 tree traversal ⊃BGNV:Purpose, ⊃L:For, ⊃W:Activity∪Purpose
+Ownership, Experience, Employment, and Use
+ P OSSESSOR + OWNED /P OSSESSED                   2.11 family estate   ⊃BGNVW:Possess*, ⊃L:Have2
+ E XPERIENCER + C OGINITION /M ENTAL              0.45 voter concern   ⊃BNVW:Possess*, ≈G:Experiencer, ⊃L:Have2
+ E MPLOYER + E MPLOYEE /VOLUNTEER                 2.72 team doctor     ⊃BGNVW:Possess*, ⊃L:For/Have2 , ⊃BGN:Beneficiary
+ C ONSUMER + C ONSUMED                            0.09 cat food        ⊃BGNVW:Purpose, ⊃L:For, ⊃BGN:Beneficiary
+ U SER /R ECIPIENT + U SED /R ECEIVED             1.02 voter guide     ⊃BNVW:Purpose, ⊃G:Recipient, ⊃L:For, ⊃BGN:Beneficiary
+ OWNED /P OSSESSED + P OSSESSION                  1.20 store owner     ≈G:Possession, ⊃L:Have1 , ≈W:Belonging-Possessor
+ E XPERIENCE + E XPERIENCER                       0.27 fire victim     ≈G:Experiencer, ∞L:Have1
+ T HING C ONSUMED + C ONSUMER                     0.41 fruit fly       ⊃W:Obj-SingleBeing
+ T HING /M EANS U SED + U SER                     1.96 faith healer    ≈BNV:Instrument, ≈G:Means∪Instrument, ≈L:Use,
+                                                                       ⊂W:MotivePower-Obj
+Temporal Group
+ T IME [S PAN ] + X                               2.35 night work      ≈BNV:Time(At), ⊃G:Temporal, ≈L:Inc , ≈W:Time-Obj
+ X + T IME [S PAN ]                               0.50 birth date      ⊃G:Temporal, ≈W:Obj-Time
+Location and Whole+Part/Member of
+ L OCATION /G EOGRAPHIC S COPE OF X               4.99 hillside home ≈BGV:Locat(ion/ive), ≈L:Ina ∪Fromb , B:Source,
+                                                                     ≈N:Location(At/From), ≈W:Place-Obj∪PlaceOfOrigin
+ WHOLE   +   PART / MEMBER OF                     1.75 robot arm     ⊃B:Possess*, ≈G:Part-Whole, ⊃L:Have2 , ≈N:Part,
+                                                                     ≈V:Whole-Part, ≈W:Obj-Part∪Group-Member
+Composition and Containment Group
+ S UBSTANCE /M ATERIAL /I NGREDIENT + W HOLE 2.42 plastic bag       ⊂BNVW:Material*, ∞GN:Source, ∞L:Froma , ≈L:Have1 ,
+                                                                    ∞L:Make2b , ∞N:Content
+ PART /M EMBER + C OLLECTION /C ONFIG /S ERIES    1.78 truck convoy ≈L:Make2ac , ≈N:Whole, ≈V:Part-Whole, ≈W:Parts-Whole
+ X + S PATIAL C ONTAINER /L OCATION /B OUNDS      1.39 shoe box     ⊃B:Content∪Located, ⊃L:For, ⊃L:Have1 , ≈N:Location,
+                                                                    ≈W:Obj-Place
+Topic Group
+ T OPIC OF C OMMUNICATION /I MAGERY /I NFO        8.37 travel story    ⊃BGNV:Topic, ⊃L:Aboutab , ⊃W:SubjectMatter, ⊂G:Depiction
+ T OPIC OF P LAN /D EAL /A RRANGEMENT /RULES      4.11 loan terms      ⊃BGNV:Topic, ⊃L:Abouta , ⊃W:SubjectMatter
+ T OPIC OF O BSERVATION /S TUDY /E VALUATION      1.71 job survey      ⊃BGNV:Topic, ⊃L:Abouta , ⊃W:SubjectMatter
+ T OPIC OF C OGNITION /E MOTION                   0.58 jazz fan        ⊃BGNV:Topic, ⊃L:Abouta , ⊃W:SubjectMatter
+ T OPIC OF E XPERT                                0.57 policy wonk     ⊃BGNV:Topic, ⊃L:Abouta , ⊃W:SubjectMatter
+ T OPIC OF S ITUATION                             1.64 oil glut        ⊃BGNV:Topic, ≈L:Aboutc
+ T OPIC OF E VENT /P ROCESS                       1.09 lava flow       ⊃G:Theme, ⊃V:Subj
+Attribute Group
+ T OPIC /T HING + ATTRIB                          4.13 street name     ⊃BNV:Possess*, ≈G:Property, ⊃L:Have2 , ≈W:Obj-Quality
+ T OPIC /T HING + ATTRIB VALUE C HARAC O F        0.31 earth tone
+Attributive and Coreferential
+ C OREFERENTIAL                                   4.51 fighter plane ≈BV:Equative, ⊃G:Type∪IS-A, ≈L:BEbcd , ≈N:Type∪Equality,
+                                                                     ≈W:Copula
+ PARTIAL ATTRIBUTE T RANSFER                      0.69 skeleton crew ≈W:Resemblance, ⊃G:Type
+ M EASURE + W HOLE                                4.37 hour meeting ≈G:Measure, ⊂N:TimeThrough∪Measure, ≈W:Size-Whole
+Other
+ H IGHLY L EXICALIZED / F IXED PAIR               0.65 pig iron
+ OTHER                                            1.67 contact lens
+
+
+      Table 1: The semantic relations, their frequency in the dataset, examples, and approximate relation
+      mappings to previous relation sets. ≈-approximately equivalent; ⊃/⊂-super/sub set; ∞-some overlap;
+      ∪-union; initials BGLNVW refer respectively to the works of (Barker and Szpakowicz, 1998; Girju et
+      al., 2005; Girju, 2007; Levi, 1978; Nastase and Szpakowicz, 2003; Vanderwende, 1994; Warren, 1978).
+
+
+
+
+                                                                 680
+
+
+tions and examples. Turkers were asked to select              vious work including those of Barker and Sz-
+one or, if they deemed it appropriate, two cate-              pakowicz (1998) and Girju et al. (2005). The
+gories for each noun pair. After all annotations for          results, shown in Table 1, demonstrate that our
+the round were completed, they were examined,                 taxonomy is similar to several taxonomies used
+and any taxonomic changes deemed appropriate                  in other work. However, there are three main
+(e.g., the creation, deletion, and/or modification of         differences and several less important ones. The
+categories) were incorporated into the taxonomy               first major difference is the absence of a signif-
+before the next set of 100 was uploaded. The cate-            icant THEME or OBJECT category. The second
+gories were substantially modified during this pro-           main difference is that our taxonomy does not in-
+cess. They are shown in Table 1 along with exam-              clude a PURPOSE category and, instead, has sev-
+ples and an approximate mapping to several other              eral smaller categories. Finally, instead of pos-
+taxonomies.                                                   sessing a single TOPIC category, our taxonomy has
+                                                              several, finer-grained TOPIC categories. These dif-
+3.2   Category Descriptions                                   ferences are significant because THEME / OBJECT,
+Our categories are defined with sentences. For                PURPOSE, and TOPIC are typically among the
+example, the SUBSTANCE category has the                       most frequent categories.
+definition n1 is one of the primary physi-                      THEME / OBJECT      is typically the category to
+cal substances/materials/ingredients that n2 is               which other researchers assign noun compounds
+made/composed out of/from. Our LOCATION cat-                  whose head noun is a nominalized verb and whose
+egory’s definition reads n1 is the location / geo-            modifier noun is the THEME / OBJECT of the verb.
+graphic scope where n2 is at, near, from, gener-              This is typically done with the justification that the
+ally found, or occurs. Defining the categories with           relation/predicate (the root verb of the nominaliza-
+sentences is advantageous because it is possible to           tion) is overtly expressed.
+create straightforward, explicit defintions that hu-
+mans can easily test examples against.                            While including a THEME / OBJECT category has
+                                                              the advantage of simplicity, its disadvantages are
+3.3   Taxonomy Groupings                                      significant. This category leads to a significant
+In addition to influencing the category defini-               ambiguity in examples because many compounds
+tions, some taxonomy groupings were altered with              fitting the THEME / OBJECT category also match
+the hope that this would improve inter-annotator              some other category as well. Warren (1978) gives
+agreement for cases where Turker disagreement                 the examples of soup pot and soup container
+was systematic. For example, LOCATION and                     to illustrate this issue, and Girju (2009) notes a
+WHOLE + PART / MEMBER OF were commonly dis-
+                                                              substantial overlap between THEME and MAKE -
+                                                              PRODUCE . Our results from Mechanical Turk
+agreed upon by Turkers so they were placed within
+their own taxonomic subgroup. The ambiguity                   showed significant overlap between PURPOSE and
+                                                              OBJECT categories (present in an earlier version of
+between these categories has previously been ob-
+served by Girju (2009).                                       the taxonomy). For this reason, we do not include
+   Turkers also tended to disagree between the                a separate THEME / OBJECT category. If it is im-
+categories related to composition and contain-                portant to know whether the modifier also holds a
+                                                              THEME / OBJECT relationship, we suggest treating
+ment. Due this apparent similarity they were also
+grouped together in the taxonomy.                             this as a separate classification task.
+   The ATTRIBUTE categories are positioned near                  The absence of a single PURPOSE category
+the TOPIC group because some Turkers chose a                  is another distinguishing characteristic of our
+TOPIC category when an ATTRIBUTE category was                 taxonomy. Instead, the taxonomy includes a
+deemed more appropriate. This may be because                  number of finer-grained categories (e.g., PER -
+attributes are relatively abstract concepts that are          FORM / ENGAGE _ IN ), which can be conflated to
+often somewhat descriptive of whatever possesses              create a PURPOSE category if necessary. During
+them. A prime example of this is street name.                 our Mechanical Turk-based refinement process,
+                                                              our now-defunct PURPOSE category was found
+3.4   Contrast with other Taxonomies                          to be ambiguous with many other categories as
+In order to ensure completeness, we mapped into               well as difficult to define. This problem has been
+our taxonomy the relations proposed in most pre-              noted by others. For example, Warren (1978)
+
+
+                                                        681
+
+
+points out that tea in tea cup qualifies as both the         the annotations had an usually lopsided distribu-
+content and the purpose of the cup. Similarly,               tion; 42% of the data has TOPIC labels. Most
+while WHOLE + PART / MEMBER was selected by                  (73.23%) of Girju’s (2007) dataset consists of
+most Turkers for bike tire, one individual chose             noun-preposition-noun constructions. Rosario and
+PURPOSE. Our investigation identified five main              Heart’s (2001) dataset is specific to the biomed-
+purpose-like relations that most of our PURPOSE              ical domain, while Ó Séaghdha and Copestake’s
+examples can be divided into, including activity             (2009) data is labeled with only 5 extremely
+performance (PERFORM / ENGAGE _ IN),            cre-         coarse-grained categories. The remaining datasets
+ation/provision (CREATE / PROVIDE / CAUSE OF),               are too small to provide wide coverage. See Table
+obtainment/access         (OBTAIN / ACCESS / SEEK),          2 below for size comparison with other publicly
+supervision/management                      (ORGA -          available, semantically annotated datasets.
+NIZE / SUPERVISE / AUTHORITY ), and opposition
+(MITIGATE / OPPOSE / DESTROY).                                      Size                Work
+   The third major distinguishing different be-                    17509        Tratz and Hovy, 2010
+tween our taxonomy and others is the absence of a                  2169        Kim and Baldwin, 2005
+single TOPIC / ABOUT relation. Instead, our taxon-                 2031              Girju, 2007
+omy has several finer-grained categories that can                  1660       Rosario and Hearst, 2001
+be conflated into a TOPIC category. Unlike the                     1443    Ó Séaghdha and Copestake, 2007
+previous two distinguishing characteristics, which                  505     Barker and Szpakowicz, 1998
+were motivated primarily by Turker annotations,                     600     Nastase and Szpakowicz, 2003
+this separation was largely motivated by author                     395          Vanderwende, 1994
+dissatisfaction with a single TOPIC category.                       385              Lauer, 1995
+   Two differentiating characteristics of less im-
+portance are the absence of BENEFICIARY or                   Table 2: Size of various available noun compound
+SOURCE categories (Barker and Szpakowicz,                    datasets labeled with relation annotations. Ital-
+1998; Nastase and Szpakowicz, 2003; Girju et                 ics indicate that the dataset contains n-prep-n con-
+al., 2005). Our EMPLOYER, CONSUMER, and                      structions and/or non-nouns.
+USER / RECIPIENT categories combined more or
+less cover BENEFICIARY. Since SOURCE is am-
+biguous in multiple ways including causation                 5     Automated Classification
+(tsunami injury), provision (government grant),
+                                                             We use a Maximum Entropy (Berger et al., 1996)
+ingredients (rice wine), and locations (north
+                                                             classifier with a large number of boolean features,
+wind), we chose to exclude it.
+                                                             some of which are novel (e.g., the inclusion of
+                                                             words from WordNet definitions). Maximum En-
+4   Dataset
+                                                             tropy classifiers have been effective on a variety of
+Our noun compound dataset was created from                   NLP problems including preposition sense disam-
+two principal sources: an in-house collection of             biguation (Ye and Baldwin, 2007), which is some-
+terms extracted from a large corpus using part-              what similar to noun compound interpretation. We
+of-speech tagging and mutual information and the             use the implementation provided in the MALLET
+Wall Street Journal section of the Penn Treebank.            machine learning toolkit (McCallum, 2002).
+Compounds including one or more proper nouns
+                                                             5.1    Features Used
+were ignored. In total, the dataset contains 17509
+unique, out-of-context examples, making it by far            WordNet-based Features
+the largest hand-annotated compound noun dataset
+in existence that we are aware of. Proper nouns                  • {Synonyms, Hypernyms} for all NN and VB
+were not included.                                                 entries for each word
+   The next largest available datasets have a vari-              • Intersection of the words’ hypernyms
+ety of drawbacks for noun compound interpreta-                   • All terms from the ‘gloss’ for each word
+tion in general text. Kim and Baldwin’s (2005)                   • Intersection of the words’ ‘gloss’ terms
+dataset is the second largest available dataset, but             • Lexicographer file names for each word’s NN
+inter-annotator agreement was only 52.3%, and                      and VB entries (e.g., n1 :substance)
+
+
+                                                       682
+
+
+  • Logical AND of lexicographer file names                   5.2   Cross Validation Experiments
+    for the two words (e.g., n1 :substance ∧                  We performed 10-fold cross validation on our
+    n2 :artifact)                                             dataset, and, for the purpose of comparison,
+  • Lists of all link types (e.g., meronym links)             we also performed 5-fold cross validation on Ó
+    associated with each word                                 Séaghdha’s (2007) dataset using his folds. Our
+  • Logical AND of the link types (e.g.,                      classification accuracy results are 79.3% on our
+    n1 :hasMeronym(s) ∧ n2 :hasHolonym(s))                    data and 63.6% on the Ó Séaghdha data. We
+  • Part-of-speech (POS) indicators for the exis-             used the χ2 measure to limit our experiments
+    tence of VB, ADJ, and ADV entries for each                to the most useful 35000 features, which is the
+    of the nouns                                              point where we obtain the highest results on Ó
+  • Logical AND of the POS indicators for the                 Séaghdha’s data. The 63.6% figure is similar to the
+    two words                                                 best previously reported accuracy for this dataset
+  • ‘Lexicalized’ indicator for the existence of an           of 63.1%, which was obtained by Ó Séaghdha and
+    entry for the compound as a single term                   Copestake (2009) using kernel methods.
+  • Indicators if either word is a part of the other             For comparison with SVMs, we used Thorsten
+    word according to Part-Of links                           Joachims’ SVMmulticlass , which implements an
+  • Indicators if either word is a hypernym of the            optimization solution to Cramer and Singer’s
+    other                                                     (2001) multiclass SVM formulation. The best re-
+  • Indicators if either word is in the definition of         sults were similar, with 79.4% on our dataset and
+    the other                                                 63.1% on Ó Séaghdha’s. SVMmulticlass was, how-
+                                                              ever, observed to be very sensitive to the tuning
+  Roget’s Thesaurus-based Features                            of the C parameter, which determines the tradeoff
+                                                              between training error and margin width. The best
+  • Roget’s divisions for all noun (and verb) en-             results for the datasets were produced with C set
+    tries for each word                                       to 5000 and 375 respectively.
+  • Roget’s divisions shared by the two words
+                                                                        Trigram Feature Extraction Patterns
+  Surface-level Features                                                 text    <n1 > <n2 >
+                                                                        <*>      <n1 > <n2 >
+                                                                        <n1 > <n2 >         text
+  • Indicators for the suffix types (e.g., de-                          <n1 > <n2 >        <*>
+    adjectival, de-nominal [non]agentive, de-                           <n1 >     text    <n2 >
+                                                                        <n2 >     text    <n1 >
+    verbal [non]agentive)
+                                                                        <n1 >    <*>      <n2 >
+  • Indicators for degree, number, order, or loca-                      <n2 >    <*>      <n1 >
+    tive prefixes (e.g., ultra-, poly-, post-, and                      4-Gram Feature Extraction Patterns
+    inter-, respectively)                                               <n1 > <n2 >         text      text
+                                                                        <n1 > <n2 >        <*>        text
+  • Indicators for whether or not a preposition                          text    <n1 > <n2 >          text
+    occurs within either term (e.g., ‘down’ in                           text     text    <n1 > <n2 >
+    ‘breakdown’)                                                         text    <*>      <n1 > <n2 >
+                                                                        <n1 >     text      text    <n2 >
+  • The last {two, three} letters of each word                          <n1 >     text     <*>      <n2 >
+                                                                        <n1 >    <*>        text    <n2 >
+   Web 1T N-gram Features                                               <n1 >    <*>       <*>      <n2 >
+                                                                        <n2 >     text      text    <n1 >
+   To provide information related to term usage to                      <n2 >     text     <*>      <n1 >
+the classifier, we extracted trigram and 4-gram fea-                    <n2 >    <*>        text    <n1 >
+tures from the Web 1T Corpus (Brants and Franz,                         <n2 >    <*>       <*>      <n1 >
+2006), a large collection of n-grams and their
+counts created from approximately one trillion                Table 3: Patterns for extracting trigram and 4-
+words of Web text. Only n-grams containing low-               Gram features from the Web 1T Corpus for a given
+ercase words were used. 5-grams were not used                 noun compound (n1 n2 ).
+due to memory limitations. Only n-grams con-
+taining both terms (including plural forms) were                 To assess the impact of the various features, we
+extracted. Table 3 describes the extracted n-gram             ran the cross validation experiments for each fea-
+features.                                                     ture type, alternating between including only one
+
+
+                                                        683
+
+
+feature type and including all feature types except          6     Evaluation
+that one. The results for these runs using the Max-
+imum Entropy classifier are presented in Table 4.            6.1    Evaluation Data
+   There are several points of interest in these re-         To assess the quality of our taxonomy and classi-
+sults. The WordNet gloss terms had a surpris-                fication method, we performed an inter-annotator
+ingly strong influence. In fact, by themselves they          agreement study using 150 noun compounds ex-
+proved roughly as useful as the hypernym features,           tracted from a random subset of articles taken
+and their removal had the single strongest negative          from New York Times articles dating back to 1987
+impact on accuracy for our dataset. As far as we             (Sandhaus, 2008). The terms were selected based
+know, this is the first time that WordNet definition         upon their frequency (i.e., a compound occurring
+words have been used as features for noun com-               twice as often as another is twice as likely to be
+pound interpretation. In the future, it may be valu-         selected) to label for testing purposes. Using a
+able to add definition words from other machine-             heuristic similar to that used by Lauer (1995), we
+readable dictionaries. The influence of the Web 1T           only extracted binary noun compounds not part of
+n-gram features was somewhat mixed. They had a               a larger sequence. Before reaching the 150 mark,
+positive impact on the Ó Séaghdha data, but their            we discarded 94 of the drawn examples because
+affect upon our dataset was limited and mixed,               they were included in the training set. Thus, our
+with the removal of the 4-gram features actually             training set covers roughly 38.5% of the binary
+improving performance slightly.                              noun compound instances in recent New York
+                                                             Times articles.
+                      Our Data      Ó Séaghdha Data
+                      1     M-1       1      M-1             6.2    Annotators
+ WordNet-based
+ synonyms           0.674   0.793   0.469   0.626            Due to the relatively high speed and low cost of
+ hypernyms          0.753   0.787   0.539   0.626            Amazon’s Mechanical Turk service, we chose to
+ hypernyms∩         0.250   0.791   0.357   0.624
+ gloss terms        0.741   0.785   0.510   0.613            use Mechanical Turkers as our annotators.
+ gloss terms∩       0.226   0.793   0.275   0.632               Using Mechanical Turk to obtain inter-
+ lexfnames          0.583   0.792   0.505   0.629            annotator agreement figures has several draw-
+ lexfnames∧         0.480   0.790   0.440   0.629
+ linktypes          0.328   0.793   0.365   0.631            backs. The first and most significant drawback is
+ linktypes∧         0.277   0.792   0.346   0.626            that it is impossible to force each Turker to label
+ pos                0.146   0.793   0.239   0.633            every data point without putting all the terms onto
+ pos∧               0.146   0.793   0.235   0.632
+ part-of terms      0.372   0.793   0.368   0.635
+                                                             a single web page, which is highly impractical
+ lexicalized        0.132   0.793   0.213   0.637            for a large taxonomy. Some Turkers may label
+ part of other      0.132   0.793   0.216   0.636            every compound, but most do not. Second,
+ gloss of other     0.133   0.793   0.214   0.635
+                                                             while we requested that Turkers only work on
+ hypernym of other 0.132    0.793   0.227   0.627
+ Roget’s Thesaurus-based                                     our task if English was their first language, we
+ div info           0.679   0.789   0.471   0.629            had no method of enforcing this. Third, Turker
+ div info∩          0.173   0.793   0.283   0.633            annotation quality varies considerably.
+ Surface level
+ affixes            0.200   0.793   0.274   0.637
+ affixes∧           0.201   0.792   0.272   0.635            6.3    Combining Annotators
+ last letters       0.481   0.792   0.396   0.634
+ prepositions       0.136   0.793   0.222   0.635            To overcome the shortfalls of using Turkers for an
+ Web 1T-based                                                inter-annotator agreement study, we chose to re-
+ trigrams           0.571   0.790   0.437   0.615            quest ten annotations per noun compound and then
+ 4-grams            0.558   0.797   0.442   0.604
+                                                             combine the annotations into a single set of selec-
+                                                             tions using a weighted voting scheme. To com-
+Table 4: Impact of features; cross validation ac-            bine the results, we calculated a “quality” score for
+curacy for only one feature type and all but one             each Turker based upon how often he/she agreed
+feature type experiments, denoted by 1 and M-1               with the others. This score was computed as the
+respectively. ∩–features shared by both n1 and n2 ;          average percentage of other Turkers who agreed
+∧–n1 and n2 features conjoined by logical AND                with his/her annotations. The score for each label
+(e.g., n1 is a ‘substance’ ∧ n2 is a ‘artifact’)             for a particular compound was then computed as
+                                                             the sum of the Turker quality scores of the Turkers
+
+
+                                                       684
+
+
+who annotated the compound. Finally, the label                      Id       N   Weight   Agree    κ      κ*    κ**
+                                                                     1      23    0.45    0.70    0.67   0.67   0.74
+with the highest rating was selected.                                2      34    0.46    0.68    0.65   0.65   0.72
+                                                                     3      35    0.34    0.63    0.60   0.61   0.61
+6.4   Inter-annotator Agreement Results                              4      24    0.46    0.63    0.59   0.68   0.76
+                                                                     5      16    0.58    0.63    0.59   0.59   0.54
+The raw agreement scores along with Cohen’s κ                      Voted   150    NA      0.59    0.57   0.61   0.67
+(Cohen, 1960), a measure of inter-annotator agree-                   6      52    0.45    0.58    0.54   0.60   0.60
+                                                                     7      38    0.35    0.55    0.52   0.54   0.56
+ment that discounts random chance, were calcu-                       8     149    0.36    0.52    0.49   0.53   0.58
+lated against the authors’ labeling of the data for                Auto    150    NA      0.51    0.47   0.47   0.45
+each Turker, the weighted-voting annotation set,                     9      88    0.38    0.48    0.45   0.49   0.59
+                                                                    10      36    0.42    0.47    0.43   0.48   0.52
+and the automatic classification output. These                      11     104    0.29    0.46    0.43   0.48   0.52
+statistics are reported in Table 5 along with the                   12      38    0.33    0.45    0.40   0.46   0.47
+individual Turker “quality” scores. The 54 Turk-                    13      66    0.31    0.42    0.39   0.39   0.49
+                                                                    14      15    0.27    0.40    0.34   0.31   0.29
+ers who made fewer than 3 annotations were ex-                      15      62    0.23    0.34    0.29   0.35   0.38
+cluded from the calculations under the assumption                   16     150    0.23    0.30    0.26   0.26   0.30
+that they were not dedicated to the task, leaving a                 17      19    0.24    0.26    0.21   0.17   0.14
+                                                                    18     144    0.21    0.25    0.20   0.22   0.22
+total of 49 Turkers. Due to space limitations, only                 19      29    0.18    0.21    0.14   0.17   0.31
+results for Turkers who annotated 15 or more in-                    20      22    0.18    0.18    0.12   0.10   0.16
+stances are included in Table 5.                                    21      51    0.19    0.18    0.13   0.20   0.26
+                                                                    22      41    0.02    0.02    0.00   0.00   0.01
+   We recomputed the κ statistics after conflating
+the category groups in two different ways. The
+first variation involved conflating all the TOPIC              Table 5: Annotation results. Id – annotator id; N
+categories into a single topic category, resulting in          – number of annotations; Weight – voting weight;
+a total of 37 categories (denoted by κ* in Table               Agree – raw agreement versus the author’s annota-
+5). For the second variation, in addition to con-              tions; κ – Cohen’s κ agreement; κ* and κ** – Co-
+flating the TOPIC categories, we conflated the AT-             hen’s κ results after conflating certain categories.
+TRIBUTE categories into a single category and the              Voted – combined annotation set using weighted
+PURPOSE / ACTIVITY categories into a single cate-              voting; Auto – automatic classification output.
+gory, for a total of 27 categories (denoted by κ**
+in Table 5).
+                                                               least three annotations and their simple agreement
+                                                               with our annotations was very strong at 0.88.
+6.5   Results Discussion
+                                                                  The .51 automatic classification figure is re-
+The .57-.67 κ figures achieved by the Voted an-                spectable given the larger number of categories in
+notations compare well with previously reported                the taxonomy. It is also important to remember
+inter-annotator agreement figures for noun com-                that the training set covers a large portion of the
+pounds using fine-grained taxonomies. Kim and                  two-word noun compound instances in recent New
+Baldwin (2005) report an agreement of 52.31%                   York Times articles, so substantially higher accu-
+(not κ) for their dataset using Barker and Sz-                 racy can be expected on many texts. Interestingly,
+pakowicz’s (1998) 20 semantic relations. Girju                 conflating categories only improved the κ statis-
+et al. (2005) report .58 κ using a set of 35 se-               tics for the Turkers, not the automatic classifier.
+mantic relations, only 21 of which were used, and
+a .80 κ score using Lauer’s 8 prepositional para-              7     Conclusion
+phrases. Girju (2007) reports .61 κ agreement
+using a similar set of 22 semantic relations for               In this paper, we present a novel, fine-grained tax-
+noun compound annotation in which the annota-                  onomy of 43 noun-noun semantic relations, the
+tors are shown translations of the compound in for-            largest annotated noun compound dataset yet cre-
+eign languages. Ó Séaghdha (2007) reports a .68                ated, and a supervised classification method for
+κ for a relatively small set of relations (BE , HAVE ,         automatic noun compound interpretation.
+IN , INST, ACTOR , ABOUT ) after removing com-                    We describe our taxonomy and provide map-
+pounds with non-specific associations or high lex-             pings to taxonomies used by others. Our inter-
+icalization. The correlation between our automatic             annotator agreement study, which utilized non-
+“quality” scores for the Turkers who performed at              experts, shows good inter-annotator agreement
+
+
+                                                         685
+
+
+given the difficulty of the task, indicating that our         Berger, A., S. A. Della Pietra, and V. J. Della Pietra.
+category definitions are relatively straightforward.            1996. A Maximum Entropy Approach to Natural
+                                                                Language Processing. Computational Linguistics
+Our taxonomy provides wide coverage, with only
+                                                                22:39-71.
+2.32% of our dataset marked as other/lexicalized
+and 2.67% of our 150 inter-annotator agreement                Brants, T. and A. Franz. 2006. Web 1T 5-gram Corpus
+data marked as such by the combined Turker                      Version 1.1. Linguistic Data Consortium.
+(Voted) annotation set.                                       Butnariu, C. and T. Veale. 2008. A concept-centered
+   We demonstrated the effectiveness of a straight-             approach to noun-compound interpretation. In Proc.
+forward, supervised classification approach to                  of 22nd International Conference on Computational
+                                                                Linguistics (COLING 2008).
+noun compound interpretation that uses a large va-
+riety of boolean features. We also examined the               Butnariu, C., S.N. Kim, P. Nakov, D. Ó Séaghdha, S.
+importance of the different features, noting a novel            Szpakowicz, and T. Veale. 2009. SemEval Task 9:
+and very useful set of features—the words com-                  The Interpretation of Noun Compounds Using Para-
+                                                                phrasing Verbs and Prepositions. In Proc. of the
+prising the definitions of the individual words.
+                                                                NAACL HLT Workshop on Semantic Evaluations:
+                                                                Recent Achievements and Future Directions.
+8   Future Work
+                                                              Cohen, J. 1960. A coefficient of agreement for nomi-
+In the future, we plan to focus on the interpretation           nal scales. Educational and Psychological Measure-
+of noun compounds with 3 or more nouns, a prob-                 ment. 20:1.
+lem that includes bracketing noun compounds into              Crammer, K. and Y. Singer. On the Algorithmic Imple-
+their dependency structures in addition to noun-                mentation of Multi-class SVMs In Journal of Ma-
+noun semantic relation interpretation. Further-                 chine Learning Research.
+more, we would like to build a system that can
+                                                              Downing, P. 1977. On the Creation and Use of English
+handle longer noun phrases, including preposi-                  Compound Nouns. Language. 53:4.
+tions and possessives.
+   We would like to experiment with including fea-            Fellbaum, C., editor. 1998. WordNet: An Electronic
+                                                                Lexical Database. MIT Press, Cambridge, MA.
+tures from various other lexical resources to deter-
+mine their usefulness for this problem.                       Finin, T. 1980. The Semantic Interpretation of Com-
+   Eventually, we would like to expand our data                  pound Nominals. Ph.D dissertation University of
+                                                                 Illinois, Urbana, Illinois.
+set and relations to cover proper nouns as well.
+We are hopeful that our current dataset and re-               Girju, R., D. Moldovan, M. Tatu and D. Antohe. 2005.
+lation definitions, which will be made available                On the semantics of noun compounds. Computer
+via http://www.isi.edu will be helpful to other re-             Speech and Language, 19.
+searchers doing work regarding text semantics.                Girju, R. 2007. Improving the interpretation of noun
+                                                                phrases with cross-linguistic information. In Proc.
+Acknowledgements                                                of the 45th Annual Meeting of the Association of
+                                                                Computational Linguistics (ACL 2007).
+Stephen Tratz is supported by a National Defense
+Science and Engineering Graduate Fellowship.                  Girju, R. 2009. The Syntax and Semantics of
+                                                                Prepositions in the Task of Automatic Interpreta-
+                                                                tion of Nominal Phrases and Compounds: a Cross-
+                                                                linguistic Study. In Computational Linguistics 35(2)
+References                                                      - Special Issue on Prepositions in Application.
+Ahn, K., J. Bos, J. R. Curran, D. Kor, M. Nissim, and         Jespersen, O. 1949. A Modern English Grammar on
+  B. Webber. 2005. Question Answering with QED                   Historical Principles. Ejnar Munksgaard. Copen-
+  at TREC-2005. In Proc. of TREC-2005.                           hagen.
+Baldwin, T. & T. Tanaka 2004. Translation by machine          Kim, S.N. and T. Baldwin. 2007. Interpreting Noun
+  of compound nominals: Getting it right. In Proc. of           Compounds using Bootstrapping and Sense Collo-
+  the ACL 2004 Workshop on Multiword Expressions:               cation. In Proc. of the 10th Conf. of the Pacific As-
+  Integrating Processing.                                       sociation for Computational Linguistics.
+
+Barker, K. and S. Szpakowicz. 1998. Semi-Automatic            Kim, S.N. and T. Baldwin.         2005.    Automatic
+  Recognition of Noun Modifier Relationships. In                Interpretation of Compound Nouns using Word-
+  Proc. of the 17th International Conference on Com-            Net::Similarity. In Proc. of 2nd International Joint
+  putational Linguistics.                                       Conf. on Natural Language Processing.
+
+
+                                                        686
+
+
+Lauer, M. 1995. Corpus statistics meet the compound              Vanderwende, L. 1994. Algorithm for Automatic
+  noun. In Proc. of the 33rd Meeting of the Associa-               Interpretation of Noun Sequences. In Proc. of
+  tion for Computational Linguistics.                              COLING-94.
+
+Lees, R.B. 1960. The Grammar of English Nominal-                 Warren, B. 1978. Semantic Patterns of Noun-Noun
+  izations. Indiana University. Bloomington, IN.                   Compounds. Acta Universitatis Gothobugensis.
+
+Levi, J.N. 1978. The Syntax and Semantics of Com-                Ye, P. and T. Baldwin. 2007. MELB-YB: Prepo-
+  plex Nominals. Academic Press. New York.                         sition Sense Disambiguation Using Rich Semantic
+                                                                   Features. In Proc. of the 4th International Workshop
+McCallum, A. K. MALLET: A Machine Learning for                     on Semantic Evaluations (SemEval-2007).
+ Language Toolkit. http://mallet.cs.umass.edu. 2002.
+
+Moldovan, D., A. Badulescu, M. Tatu, D. Antohe, and
+ R. Girju. 2004. Models for the semantic classifi-
+ cation of noun phrases. In Proc. of Computational
+ Lexical Semantics Workshop at HLT-NAACL 2004.
+
+Nakov, P. and M. Hearst. 2005. Search Engine Statis-
+  tics Beyond the n-gram: Application to Noun Com-
+  pound Bracketing. In Proc. the Ninth Conference on
+  Computational Natural Language Learning.
+
+Nakov, P. 2008. Noun Compound Interpretation
+  Using Paraphrasing Verbs: Feasibility Study. In
+  Proc. the 13th International Conference on Artifi-
+  cial Intelligence: Methodology, Systems, Applica-
+  tions (AIMSA’08).
+
+Nastase V. and S. Szpakowicz. 2003. Exploring noun-
+  modifier semantic relations. In Proc. the 5th Inter-
+  national Workshop on Computational Semantics.
+
+Nastase, V., J. S. Shirabad, M. Sokolova, and S. Sz-
+  pakowicz 2006. Learning noun-modifier semantic
+  relations with corpus-based and Wordnet-based fea-
+  tures. In Proc. of the 21st National Conference on
+  Artificial Intelligence (AAAI-06).
+
+Ó Séaghdha, D. and A. Copestake. 2009. Using lexi-
+  cal and relational similarity to classify semantic re-
+  lations. In Proc. of the 12th Conference of the Euro-
+  pean Chapter of the Association for Computational
+  Linguistics (EACL 2009).
+
+Ó Séaghdha, D. 2007. Annotating and Learning Com-
+  pound Noun Semantics. In Proc. of the ACL 2007
+  Student Research Workshop.
+
+Rosario, B. and M. Hearst. 2001. Classifying the Se-
+  mantic Relations in Noun Compounds via Domain-
+  Specific Lexical Hierarchy. In Proc. of 2001 Con-
+  ference on Empirical Methods in Natural Language
+  Processing (EMNLP-01).
+
+Sandhaus, E. 2008. The New York Times Annotated
+  Corpus. Linguistic Data Consortium, Philadelphia.
+
+Spärck Jones, K. 1983. Compound Noun Interpreta-
+  tion Problems. Computer Speech Processing, eds.
+  F. Fallside and W A. Woods, Prentice-Hall, NJ.
+
+Turney, P. D. 2006. Similarity of semantic relations.
+  Computation Linguistics, 32(3):379-416
+
+
+                                                           687
+

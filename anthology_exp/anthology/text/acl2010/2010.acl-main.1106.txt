@@ -1,0 +1,504 @@
+      An Exact A* Method for Deciphering Letter-Substitution Ciphers
+
+                                   Eric Corlett and Gerald Penn
+                                  Department of Computer Science
+                                        University of Toronto
+                              {ecorlett,gpenn}@cs.toronto.edu
+
+
+
+                      Abstract                                without resorting to a human annotator. The holy
+    Letter-substitution ciphers encode a docu-                grail in this area would be an application to ar-
+    ment from a known or hypothesized lan-                    chaeological decipherment, in which the underly-
+    guage into an unknown writing system or                   ing language’s identity is only hypothesized, and
+    an unknown encoding of a known writing                    must be tested. The purpose of this paper, then,
+    system. It is a problem that can occur in                 is to simplify the problem of reading documents
+    a number of practical applications, such as               in unknown encodings by presenting a new algo-
+    in the problem of determining the encod-                  rithm to be used in their decipherment. Our algo-
+    ings of electronic documents in which the                 rithm operates by running a search over the n-gram
+    language is known, but the encoding stan-                 probabilities of possible solutions to the cipher, us-
+    dard is not. It has also been used in rela-               ing a generalization of the Viterbi algorithm that
+    tion to OCR applications. In this paper, we               is wrapped in an A* search, which determines at
+    introduce an exact method for decipher-                   each step which partial solutions to expand. It
+    ing messages using a generalization of the                is guaranteed to converge on the language-model-
+    Viterbi algorithm. We test this model on a                optimal solution, and does not require restarts or
+    set of ciphers developed from various web                 risk falling into local optima. We specifically con-
+    sites, and find that our algorithm has the                sider the problem of finding decodings of elec-
+    potential to be a viable, practical method                tronic documents drawn from the internet, and
+    for efficiently solving decipherment prob-                we test our algorithm on ciphers drawn from ran-
+    lems.                                                     domly selected pages of Wikipedia. Our testing
+                                                              indicates that our algorithm will be effective in this
+1   Introduction                                              domain.
+Letter-substitution ciphers encode a document                    It may seem at first that automatically decoding
+from a known language into an unknown writ-                   (as opposed to deciphering) a document is a sim-
+ing system or an unknown encoding of a known                  ple matter, but studies have shown that simple al-
+writing system. This problem has practical sig-               gorithms such as letter frequency counting do not
+nificance in a number of areas, such as in reading            always produce optimal solutions (Bauer, 2007).
+electronic documents that may use one of many                 If the text from which a language model is trained
+different standards to encode text. While this is not         is of a different genre than the plaintext of a cipher,
+a problem in languages like English and Chinese,              the unigraph letter frequencies may differ substan-
+which have a small set of well known standard en-             tially from those of the language model, and so
+codings such as ASCII, Big5 and Unicode, there                frequency counting will be misleading. Because
+are other languages such as Hindi in which there              of the perceived simplicity of the problem, how-
+is no dominant encoding standard for the writing              ever, little work was performed to understand its
+system. In these languages, we would like to be               computational properties until Peleg and Rosen-
+able to automatically retrieve and display the in-            feld (1979), who developed a method that repeat-
+formation in electronic documents which use un-               edly swaps letters in a cipher to find a maximum
+known encodings when we find them. We also                    probability solution. Since then, several different
+want to use these documents for information re-               approaches to this problem have been suggested,
+trieval and data mining, in which case it is impor-           some of which use word counts in the language
+tant to be able to read through them automatically,           to arrive at a solution (Hart, 1994), and some of
+
+
+                                                        1040
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1040–1047,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+which treat the problem as an expectation max-           on a single, well-trained model.
+imization problem (Knight et al., 2006; Knight,             Applications of decipherment are also explored
+1999). These later algorithms are, however, highly       by (Nagy et al., 1987), who uses it in the con-
+dependent on their initial states, and require a         text of optical character recognition (OCR). The
+number of restarts in order to find the globally op-     problem we consider here is cosmetically related
+timal solution. A further contribution was made by       to the “L2P” (letter-to-phoneme) mapping prob-
+(Ravi and Knight, 2008), which, though published         lem of text-to-speech synthesis, which also fea-
+earlier, was inspired in part by the method pre-         tures a prominent constraint-based approach (van
+sented here, first discovered in 2007. Unlike the        den Bosch and Canisius, 2006), but the constraints
+present method, however, Ravi and Knight (2008)          in L2P are very different: two different instances
+treat the decipherment of letter-substitution ci-        of the same written letter may legitimately map to
+phers as an integer programming problem. Clever          two different phonemes. This is not the case in
+though this constraint-based encoding is, their pa-      letter-substitution maps.
+per does not quantify the massive running times
+required to decode even very short documents             2   Terminology
+with this sort of approach. Such inefficiency indi-
+cates that integer programming may simply be the         Substitution ciphers are ciphers that are defined
+wrong tool for the job, possibly because language        by some permutation of a plaintext alphabet. Ev-
+model probabilities computed from empirical data         ery character of a plaintext string is consistently
+are not smoothly distributed enough over the space       mapped to a single character of an output string
+in which a cutting-plane method would attempt to         using this permutation. For example, if we took
+compute a linear relaxation of this problem. In          the string ”hello world” to be the plaintext, then
+any case, an exact method is available with a much       the string ”if mmp xpsme” would be a cipher
+more efficient A* search that is linear-time in the      that maps e to f , l to m, and so on. It is easy
+length of the cipher (though still horribly exponen-     to extend this kind of cipher so that the plaintext
+tial in the size of the cipher and plain text alpha-     alphabet is different from the ciphertext alphabet,
+bets), and has the additional advantage of being         but still stands in a one to one correspondence to
+massively parallelizable. (Ravi and Knight, 2008)        it. Given a ciphertext C, we say that the set of
+also seem to believe that short cipher texts are         characters used in C is the ciphertext alphabet ΣC ,
+somehow inherently more difficult to solve than          and that its size is nC . Similarly, the entire possi-
+long cipher texts. This difference in difficulty,        ble plaintext alphabet is ΣP , and its size is is nP .
+while real, is not inherent, but rather an artefact of   Since nC is the number of letters actually used
+the character-level n-gram language models that          in the cipher, rather than the entire alphabet it is
+they (and we) use, in which preponderant evidence        sampled from, we may find that nC < nP even
+of differences in short character sequences is nec-      when the two alphabets are the same. We refer to
+essary for the model to clearly favour one letter-       the length of the cipher string C as clen . In the
+substitution mapping over another. Uniform char-         above example, ΣP is { , a, . . . z} and nP = 27,
+acter models equivocate regardless of the length of      while ΣC = { , e, f, i, m, p, s, x}, clen = 11 and
+the cipher, and sharp character models with many         nC = 8.
+zeroes can quickly converge even on short ciphers             Given the ciphertext C, we say that a partial
+of only a few characters. In the present method,         solution of size k is a map σ = {p1 : c1 , . . . pk :
+the role of the language model can be acutely per-       ck }, where c1 , . . . , ck ∈ ΣC and are distinct, and
+ceived; both the time complexity of the algorithm        p1 , . . . , pk ∈ ΣP and are distinct, and where k ≤
+and the accuracy of the results depend crucially on      nC . If for a partial solution σ 0 , we have that σ ⊂
+this characteristic of the language model. In fact,      σ 0 , then we say that σ 0 extends σ. If the size of σ 0 is
+we must use add-one smoothing to decipher texts          k+1 and σ is size k, we say that σ 0 is an immediate
+of even modest lengths because even one unseen           extension of σ. A full solution is a partial solution
+plain-text letter sequence is enough to knock out        of size nC . In the above example, σ1 = { : , d :
+the correct solution. It is likely that the method       e} would be a partial solution of size 2, and σ2 =
+of (Ravi and Knight, 2008) is sensitive to this as       { : , d : e, g : m} would be a partial solution
+well, but their experiments were apparently fixed        of size 3 that immediately extends σ1 . A partial
+                                                         solution σT { : , d : e, e : f, h : i, l : m, o :
+
+
+                                                     1041
+
+
+p, r : s, w : x} would be both a full solution and        not qualify as an extension. These two observa-
+the correct one. The full solution σT extends σ1          tions taken together mean that one minus the score
+but not σ2 .                                              assigned by our method constitutes a cost function
+   Every possible full solution to a cipher C will        over which this score is an admissible heuristic in
+produce a plaintext string with some associated           the A* sense. Thus the first solution of size nC
+language model probability, and we will consider          will be the best solution of size nC .
+the best possible solution to be the one that gives          The order by which we add the letters c to par-
+the highest probability. For the sake of concrete-        tial solutions is the order of the distinct cipher-
+ness, we will assume here that the language model         text letters in right-to-left order of their final oc-
+is a character-level trigram model. This plain-           currence in C. Other orderings for the c, such as
+text can be found by treating all of the length clen      most frequent first, are also possible though less
+strings S as being the output of different charac-        elegant.1
+ter mappings from C. A string S that results from
+such a mapping is consistent with a partial solu-         Algorithm 1 Search Algorithm
+tion σ iff, for every pi : ci ∈ σ, the character posi-      Order the letters c1 . . . cnC by rightmost occur-
+tions of C that map to pi are exactly the character         rence in C, rnC < . . . < r1 .
+positions with ci in C.                                     Create a priority queue Q for partial solutions,
+   In our above example, we had C =                         ordered by highest probability.
+”if mmp xpsme”, in which case we had                        Push the empty solution σ0 = {} onto the
+clen = 11.             So mappings from C to                queue.
+”hhhhh hhhhh” or ” hhhhhhhhhh”                 would        while Q is not empty do
+be consistent with a partial solution of size 0,              Pop the best partial solution σ from Q.
+while ”hhhhh hhhhn” would be consistent with                  s = |σ|.
+the size 2 partial solution σ = { : , n : e}.                 if s = nC then
+                                                                 return σ
+3   The Algorithm                                             else
+                                                                 For all p not in the range of σ, push the
+In order to efficiently search for the most likely so-           immediate extension σp onto Q with the
+lution for a ciphertext C, we conduct a search of                score assigned to table cell G(rs+1 , p, p)
+the partial solutions using their trigram probabil-              by GVit(σ, cs+1 , rs+1 ) if it is non-zero.
+ities as a heuristic, where the trigram probability           end if
+of a partial solution σ of length k is the maximum          end while
+trigram probability over all strings consistent with        Return ”Solution Infeasible”.
+it, meaning, in particular, that ciphertext letters not
+in its range can be mapped to any plaintext letter,          Our generalization of the Viterbi algorithm, de-
+and do not even need to be consistently mapped to         picted in Figure 1, uses dynamic programming to
+the same plaintext letter in every instance. Given        score every immediate extension of a given partial
+a partial solution σ of length n, we can extend σ         solution in tandem, by finding, in a manner con-
+by choosing a ciphertext letter c not in the range        sistent with the real Viterbi algorithm, the most
+of σ, and then use our generalization of the Viterbi      probable input string given a set of output sym-
+algorithm to find, for each p not in the domain of        bols, which in this case is the cipher C. Unlike the
+σ, a score to rank the choice of p for c, namely the      real Viterbi algorithm, we must also observe the
+trigram probability of the extension σp of σ. If we       constraints of the input partial solution’s mapping.
+start with an empty solution and iteratively choose          1
+                                                               We have experimented with the most frequent first regi-
+the most likely remaining partial solution in this        men as well, and it performs worse than the one reported here.
+way, storing the extensions obtained in a priority        Our hypothesis is that this is due to the fact that the most fre-
+heap as we go, we will eventually reach a solution        quent character tends to appear in many high-frequency tri-
+                                                          grams, and so our priority queue becomes very long because
+of size nC . Every extension of σ has a probabil-         of a lack of low-probability trigrams to knock the scores of
+ity that is, at best, equal to that of σ, and every       partial solutions below the scores of the extensions of their
+partial solution receives, at worst, a score equal        better scoring but same-length peers. A least frequent first
+                                                          regimen has the opposite problem, in which their rare oc-
+to its best extension, because the score is poten-        currence in the ciphertext provides too few opportunities to
+tially based on an inconsistent mapping that does         potentially reduce the score of a candidate.
+
+
+                                                      1042
+
+
+A typical decipherment involves multiple runs of         of cipher alphabet letters, every partial solution is
+this algorithm, each of which scores all of the im-      only considered / extended once.
+mediate extensions, both tightening and lowering            GVit is highly parallelizable. The nP ×nP cells
+their scores relative to the score of the input par-     of every column i do not depend on each other —
+tial solution. A call GVit(σ, c, r) manages this by      only on the cells of the previous two columns i − 1
+filling in a table G such that for all 1 ≤ i ≤ r, and    and i−2, as well as the language model. In our im-
+l, k ∈ ΣP , G(i, l, k) is the maximum probability        plementation of the algorithm, we have written the
+over every plaintext string S for which:                 underlying program in C/C++, and we have used
+                                                         the CUDA library developed for NVIDIA graphics
+  • len(S) = i,
+                                                         cards to in order to implement the parallel sections
+  • S[i] = l,                                            of the code.
+
+  • for every p in the domain of σ, every 1 ≤ j ≤
+    i, if C[j] = σ(p) then S[j] = p, and
+                                                         4   Experiment
+  • for every position 1 ≤ j ≤ i, if C[j] = c,
+                                                         The above algorithm is designed for application to
+    then S[j] = k.
+                                                         the transliteration of electronic documents, specif-
+The real Viterbi algorithm lacks these final two         ically, the transliteration of websites, and it has
+constraints, and would only store a single cell at       been tested with this in mind. In order to gain re-
+G(i, l). There, G is called a trellis. Ours is larger,   alistic test data, we have operated on the assump-
+so so we will refer to G as a greenhouse.                tion that Wikipedia is a good approximation of the
+   The table is completed by filling in the columns      type of language that will be found in most inter-
+from i = 1 to clen in order. In every column i,          net articles. We sampled a sequence of English-
+we will iterate over the values of l and over the        language articles from Wikipedia using their ran-
+values of k such that k : c and l : are consistent       dom page selector, and these were used to create
+with σ. Because we are using a trigram character         a set of reference pages. In order to minimize the
+model, the cells in the first and second columns         common material used in each page, only the text
+must be primed with unigram and bigram proba-            enclosed by the paragraph tags of the main body of
+bilities. The remaining probabilities are calculated     the pages were used. A rough search over internet
+by searching through the cells from the previous         articles has shown that a length of 1000 to 11000
+two columns, using the entry at the earlier column       characters is a realistic length for many articles, al-
+to indicate the probability of the best string up to     though this can vary according to the genre of the
+that point, and searching through the trigram prob-      page. Wikipedia, for example, does have entries
+abilities over two additional letters. Backpointers      that are one sentence in length. We have run two
+are necessary to reference one of the two language       groups of tests for our algorithm. In the first set
+model probabilities. Cells that would produce in-        of tests, we chose the mean of the above lengths
+consistencies are left at zero, and these as well as     to be our sample size, and we created and decoded
+cells that the language model assigns zero to can        10 ciphers of this size (i.e., different texts, same
+only produce zero entries in later columns.              size). We made these cipher texts by appending
+   In order to decrease the search space, we add the     the contents of randomly chosen Wikipedia pages
+further restriction that the solutions of every three    until they contained at least 6000 characters, and
+character sequence must be consistent: if the ci-        then using the first 6000 characters of the result-
+phertext indicates that two adjacent letters are the     ing files as the plaintexts of the cipher. The text
+same, then only the plaintext strings that map the       length was rounded up to the nearest word where
+same letter to each will be considered. The num-         needed. In the second set of tests, we used a single
+ber of letters that are forced to be consistent is       long ciphertext, and measured the time required
+three because consistency is enforced by remov-          for the algorithm to finish a number of prefixes of
+ing inconsistent strings from consideration during       it (i.e., same text, different sizes). The plaintext for
+trigram model evaluation.                                this set of tests was developed in the same way as
+   Because every partial solution is only obtained       the first set, and the input ciphertext lengths con-
+by extending a solution of size one less, and ex-        sidered were 1000, 3500, 6000, 8500, 11000, and
+tensions are only made in a predetermined order          13500 characters.
+
+
+                                                     1043
+
+
+                             Greenhouse                                        Array
+         l   w   ···         y   t   g     ···   g   u
+
+                                                                        ···    e    f   g   ···   z
+    ..
+     .
+   l
+   m
+   n
+    ..
+     .
+   z
+
+
+
+                       (a)           (b)                          (c)         (d)
+
+
+Figure 1: Filling the Greenhouse Table. Each cell in the greenhouse is indexed by a plaintext letter and
+a character from the cipher. Each cell consists of a smaller array. The cells in the array give the best
+probabilities of any path passing through the greenhouse cell, given that the index character of the array
+maps to the character in column c, where c is the next ciphertext character to be fixed in the solution. The
+probability is set to zero if no path can pass through the cell. This is the case, for example, in (b) and (c),
+where the knowledge that ” ” maps to ” ” would tell us that the cells indicated in gray are unreachable.
+The cell at (d) is filled using the trigram probabilities and the probability of the path at starting at (a).
+
+
+   In all of the data considered, the frequency of          When testing our algorithm, we judged the time
+spaces was far higher than that of any other char-       complexity of our algorithm by measuring the ac-
+acter, and so in any real application the character      tual time taken by the algorithm to complete its
+corresponding to the space can likely be guessed         runs, as well as the number of partial solutions
+without difficulty. The ciphers we have consid-          placed onto the queue (“enqueued”), the number
+ered have therefore been simplified by allowing          popped off the queue (“expanded”), and the num-
+the knowledge of which character corresponds to          ber of zero-probability partial solutions not en-
+the space. It appears that Ravi and Knight (2008)        queued (“zeros”) during these runs. These latter
+did this as well. Our algorithm will still work with-    numbers give us insight into the quality of trigram
+out this assumption, but would take longer. In the       probabilities as a heuristic for the A* search.
+event that a trigram or bigram would be found in            We judged the quality of the decoding by mea-
+the plaintext that was not counted in the language       suring the percentage of characters in the cipher
+model, add one smoothing was used.                       alphabet that were correctly guessed, and also the
+   Our character-level language model used was           word error rate of the plaintext generated by our
+developed from the first 1.5 million characters of       solution. The second metric is useful because a
+the Wall Street Journal section of the Penn Tree-        low probability character in the ciphertext may be
+bank corpus. The characters used in the lan-             guessed wrong without changing as much of the
+guage model were the upper and lower case let-           actual plaintext. Counting the actual number of
+ters, spaces, and full stops; other characters were      word errors is meant as an estimate of how useful
+skipped when counting the frequencies. Further-          or readable the plaintext will be. We did not count
+more, the number of sequential spaces allowed            the accuracy or word error rate for unfinished ci-
+was limited to one in order to maximize context          phers.
+and to eliminate any long stretches of white space.         We would have liked to compare our results
+As discussed in the previous paragraph, the space        with those of Ravi and Knight (2008), but the
+character is assumed to be known.                        method presented there was simply not feasible
+
+
+                                                     1044
+
+
+                                                          on texts and (case-sensitive) alphabets of this size
+                                                          with the computing hardware at our disposal.
+
+                                                          5   Results
+                                                          In our first set of tests, we measured the time con-
+Algorithm 2 Generalized Viterbi Algorithm
+                                                          sumption and accuracy of our algorithm over 10
+  GVit(σ, c, r)
+                                                          ciphers taken from random texts that were 6000
+  Input: partial solution σ, ciphertext character c,
+                                                          characters long. The time values in these tables are
+          and index r into C.
+                                                          given in the format of (H)H:MM:SS. For this set
+  Output: greenhouse G.
+                                                          of tests, in the event that a test took more than 12
+  Initialize G to 0.
+                                                          hours, we terminated it and listed it as unfinished.
+  i=1
+                                                          This cutoff was set in advance of the runs based
+  for All (l, k) such that σ ∪ {k : c, l : Ci } is
+                                                          upon our armchair speculation about how long one
+  consistent do
+                                                          might at most be reasonably expected to wait for
+     G(i, l, k) = P (l).
+                                                          a web-page to be transliterated (an overnight run).
+  end for
+                                                          The results from this run appear in Table 1. All
+  i=2
+                                                          running times reported in this section were ob-
+  for All (l, k) such that σ ∪ {k : c, l : Ci } is
+                                                          tained on a computer running Ubuntu Linux 8.04
+  consistent do
+                                                          with 4 GB of RAM and 8 × 2.5 GHz CPU cores.
+     for j such that σ ∪ {k : c, l : Ci , j : Ci−1 } is
+                                                          Column-level subcomputations in the greenhouse
+     consistent do
+                                                          were dispatched to an NVIDIA Quadro FX 1700
+        G(i, l, k) = max(G(i, l, k), G(0, j, k) ×
+                                                          GPU card that is attached through a 16-lane PCI
+                       P (l|j))
+                                                          Express adapter. The card has 512 MB of cache
+     end for
+                                                          memory, a 460 MHz core processor and 32 shader
+  end for
+                                                          processors operating in parallel at 920 MHz each.
+  i=3
+                                                             In our second set of tests, we measured the time
+  for (l, k) such that σ ∪ {k : c, l : Ci } is consis-
+                                                          consumption and accuracy of our algorithm over
+  tent do
+                                                          several prefixes of different lengths of a single
+     for j1 , j2 such that σ∪{k : c, j2 : C[i−2], j1 :
+                                                          13500-character ciphertext. The results of this run
+     C[i − 1], l : Ci } is consistent do
+                                                          are given in Table 2.
+        G(i, l, k) = max(G(i, l, k), G(i−2, j2 , k)
+                                                             The first thing to note in this data is that the ac-
+                        × P (j1 |j2 ) × P (l|j2 j1 )).
+                                                          curacy of this algorithm is above 90 % for all of
+     end for
+                                                          the test data, and 100% on all but the smallest 2
+  end for
+                                                          ciphers. We can also observe that even when there
+  for i = 4 to r do
+                                                          are errors (e.g., in the size 1000 cipher), the word
+     for (l, k) such that σ ∪ {k : c, l : Ci } is con-
+                                                          error rate is very small. This is a Zipf’s Law effect
+     sistent do
+                                                          — misclassified characters come from poorly at-
+        for j1 , j2 such that σ ∪ {k : c, j2 :
+                                                          tested character trigrams, which are in turn found
+        C[i−2], j1 : C[i−1], l : Ci } is consistent
+                                                          only in longer, rarer words. The overall high ac-
+        do
+                                                          curacy is probably due to the large size of the
+           G(i, l, k) = max(G(i, l, k),
+                                                          texts relative to the uniticity distance of an En-
+                    G(i−2, j2 , k)×P (j1 |j2 j2(back) )
+                                                          glish letter-substitution cipher (Bauer, 2007). The
+                     × P (l|j2 j1 )).
+                                                          results do show, however, that character trigram
+        end for
+                                                          probabilities are an effective indicator of the most
+     end for
+                                                          likely solution, even when the language model and
+  end for
+                                                          test data are from very different genres (here, the
+                                                          Wall Street Journal and Wikipedia, respectively).
+                                                          These results also show that our algorithm is ef-
+                                                          fective as a way of decoding simple ciphers. 80%
+                                                          of our runs finished before the 12 hour cutoff in
+                                                          the first experiment.
+
+
+                                                      1045
+
+
+        Cipher        Time          Enqueued       Expanded       Zeros    Accuracy    Word Error Rate
+          1          2:03:06          964            964         44157      100%            0%
+          2          0:13:00          132            132          5197      100%            0%
+          3          0:05:42           91             91          3080      100%            0%
+          4         Unfinished        N/A            N/A          N/A        N/A            N/A
+          5         Unfinished        N/A            N/A          N/A        N/A            N/A
+          6          5:33:50          2521           2521        114283     100%            0%
+          7          6:02:41          2626           2626        116392     100%            0%
+          8          3:19:17          1483           1483        66070      100%            0%
+          9          9:22:54          4814           4814        215086     100%            0%
+          10         1:23:21          950            950         42107      100%            0%
+
+             Table 1: Time consumption and accuracy on a sample of 10 6000-character texts.
+
+          Size       Time         Enqueued      Expanded         Zeros    Accuracy     Word Error Rate
+         1000       40:06:05       119759        119755         5172631    92.59%          1.89%
+         3500       0:38:02         615            614           26865     96.30%          0.17%
+         6000       0:12:34         147            147            5709      100%            0%
+         8500       8:52:25         1302          1302           60978      100%            0%
+         11000      1:03:58         210            210            8868      100%            0%
+         13500      0:54:30         219            219            9277      100%            0%
+
+      Table 2: Time consumption and accuracy on prefixes of a single 13500-character ciphertext.
+
+
+   As far as the running time of the algorithm goes,         tial solutions. The running time of our algorithm
+we see a substantial variance: from a few minutes            depends very crucially on these initial conditions.
+to several hours for most of the longer ciphers, and
+that there are some that take longer than the thresh-
+old we gave in the experiment. Specifically, there
+is substantial variability in the the running times
+seen.                                                           Perhaps most interestingly, we note that the
+   Desiring to reduce the variance of the running            number of enqueued partial solutions is in ev-
+time, we look at the second set of tests for possible        ery case identical or nearly identical to the num-
+causes. In the second test set, there is a general           ber of partial solutions expanded. From a the-
+decrease in both the running time and the number             oretical perspective, we must also remember the
+of solutions expanded as the length of the ciphers           zero-probability solutions, which should in a sense
+increases. Running time correlates very well with            count when judging the effectiveness of our A*
+A* queue size.                                               heuristic. Naturally, these are ignored by our im-
+   Asymptotically, the time required for each                plementation because they are so badly scored
+sweep of the Viterbi algorithm increases, but this           that they could never be considered. Neverthe-
+is more than offset by the decrease in the number            less, what these numbers show is that scores based
+of required sweeps.                                          on character-level trigrams, while theoretically ad-
+   The results, however, do not show that running            missible, are really not all that clever when it
+time monotonically decreases with length. In par-            comes to navigating through the search space of
+ticular, the length 8500 cipher generates more so-           all possible letter substitution ciphers, apart from
+lutions than the length 3500 or 6000 ones. Recall            their very keen ability at assigning zeros to a
+that the ciphers in this section are all prefixes of         large number of partial solutions. A more com-
+the same string. Because the algorithm fixes char-           plex heuristic that can additionally rank non-zero
+acters starting from the end of the cipher, these            probability solutions with more prescience would
+prefixes have very different character orderings,            likely make a very great difference to the running
+c1 , . . . , cnC , and thus a very different order of par-   time of this method.
+
+
+                                                         1046
+
+
+6   Conclusions                                          Kevin Knight. 1999. Decoding Complexity in Word-
+                                                           Replacement Translation Models. Computational
+In the above paper, we have presented an algo-             Linguistics, 25(4):607–615.
+rithm for solving letter-substitution ciphers, with
+                                                         Kevin Knight, Anish Nair, Nishit Rathod, Kenji Ya-
+an eye towards discovering unknown encoding                mada. Unsupervised Analysis for Decipherment
+standards in electronic documents on the fly. In           Problems. Proceedings of the COLING/ACL 2006,
+a test of our algorithm over ciphers drawn from            2006, 499–506.
+Wikipedia, we found its accuracy to be 100% on           George Nagy, Sharad Seth, Kent Einspahr. 1987.
+the ciphers that it solved within a threshold of 12        Decoding Substitution Ciphers by Means of Word
+hours, this being 80% of the total attempted. We           Matching with Application to OCR. IEEE Transac-
+found that the running time of our algorithm is            tions on Pattern Analysis and Machine Intelligence,
+highly variable depending on the order of char-            9(5):710–715.
+acters attempted, and, due to the linear-time the-       Shmuel Peleg and Azriel Rosenfeld. 1979. Breaking
+oretical complexity of this method, that running           Substitution Ciphers Using a Relaxation Algorithm.
+times tend to decrease with larger ciphertexts due         Communications of the ACM, 22(11):589–605.
+to our character-level language model’s facility at      Sujith Ravi, Kevin Knight. 2008. Attacking Decipher-
+eliminating highly improbable solutions. There is,         ment Problems Optimally with Low-Order N-gram
+however, a great deal of room for improvement in           Models Proceedings of the ACL 2008, 812–819.
+the trigram model’s ability to rank partial solutions    Antal van den Bosch, Sander Canisius. 2006. Im-
+that are not eliminated outright.                          proved Morpho-phonological Sequence Processing
+   Perhaps the most valuable insight gleaned from          with Constraint Satisfaction Inference Proceedings
+this study has been on the role of the language            of the Eighth Meeting of the ACL Special Interest
+                                                           Group on Computational Phonology at HLT-NAACL
+model. This algorithm’s asymptotic runtime com-            2006, 41–49.
+plexity is actually a function of entropic aspects of
+the character-level language model that it uses —
+more uniform models provide less prominent sep-
+arations between candidate partial solutions, and
+this leads to badly ordered queues, in which ex-
+tended partial solutions can never compete with
+partial solutions that have smaller domains, lead-
+ing to a blind search. We believe that there is a
+great deal of promise in characterizing natural lan-
+guage processing algorithms in this way, due to the
+prevalence of Bayesian methods that use language
+models as priors.
+   Our approach makes no explicit attempt to ac-
+count for noisy ciphers, in which characters are
+erroneously mapped, nor any attempt to account
+for more general substitution ciphers in which a
+single plaintext (resp. ciphertext) letter can map to
+multiple ciphertext (resp. plaintext) letters, nor for
+ciphers in which ciphertext units corresponds to
+larger units of plaintext such syllables or words.
+Extensions in these directions are all very worth-
+while to explore.
+
+
+References
+Friedrich L. Bauer.      2007.    Decrypted Secrets.
+   Springer-Verlag, Berlin Heidelberg.
+
+George W. Hart. 1994. To Decode Short Cryptograms.
+  Communications of the ACM, 37(9): 102–108.
+
+
+                                                     1047
+

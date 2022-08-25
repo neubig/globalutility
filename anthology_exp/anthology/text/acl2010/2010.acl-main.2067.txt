@@ -1,0 +1,395 @@
+ Active Learning-Based Elicitation for Semi-Supervised Word Alignment
+
+
+                    Vamshi Ambati, Stephan Vogel and Jaime Carbonell
+                          {vamshi,vogel,jgc}@cs.cmu.edu
+                  Language Technologies Institute, Carnegie Mellon University
+                       5000 Forbes Avenue, Pittsburgh, PA 15213, USA
+
+
+
+
+                    Abstract                                    Two directions of research have been pursued
+    Semi-supervised word alignment aims to                   for improving generative word alignment. The
+    improve the accuracy of automatic word                   first is to relax or update the independence as-
+    alignment by incorporating full or par-                  sumptions based on more information, usually
+    tial manual alignments. Motivated by                     syntactic, from the language pairs (Cherry and
+    standard active learning query sampling                  Lin, 2006; Fraser and Marcu, 2007a). The sec-
+    frameworks like uncertainty-, margin- and                ond is to use extra annotation, typically word-level
+    query-by-committee sampling we propose                   human alignment for some sentence pairs, in con-
+    multiple query strategies for the alignment              junction with the parallel data to learn alignment
+    link selection task. Our experiments show                in a semi-supervised manner. Our research is in
+    that by active selection of uncertain and                the direction of the latter, and aims to reduce the
+    informative links, we reduce the overall                 effort involved in hand-generation of word align-
+    manual effort involved in elicitation of                 ments by using active learning strategies for care-
+    alignment link data for training a semi-                 ful selection of word pairs to seek alignment.
+    supervised word aligner.                                    Active learning for MT has not yet been ex-
+                                                             plored to its full potential. Much of the litera-
+1   Introduction                                             ture has explored one task – selecting sentences
+Corpus-based approaches to machine translation               to translate and add to the training corpus (Haf-
+have become predominant, with phrase-based sta-              fari and Sarkar, 2009). In this paper we explore
+tistical machine translation (PB-SMT) (Koehn et              active learning for word alignment, where the in-
+al., 2003) being the most actively progressing area.         put to the active learner is a sentence pair (S, T )
+The success of statistical approaches to MT can              and the annotation elicited from human is a set of
+be attributed to the IBM models (Brown et al.,               links {aij , ∀si ∈ S, tj ∈ T }. Unlike previous ap-
+1993) that characterize word-level alignments in             proaches, our work does not require elicitation of
+parallel corpora. Parameters of these alignment              full alignment for the sentence pair, which could
+models are learnt in an unsupervised manner us-              be effort-intensive. We propose active learning
+ing the EM algorithm over sentence-level aligned             query strategies to selectively elicit partial align-
+parallel corpora. While the ease of automati-                ment information. Experiments in Section 5 show
+cally aligning sentences at the word-level with              that our selection strategies reduce alignment error
+tools like GIZA++ (Och and Ney, 2003) has en-                rates significantly over baseline.
+abled fast development of SMT systems for vari-
+                                                             2   Related Work
+ous language pairs, the quality of alignment is typ-
+ically quite low for language pairs like Chinese-            Researchers have begun to explore models that
+English, Arabic-English that diverge from the in-            use both labeled and unlabeled data to build
+dependence assumptions made by the generative                word-alignment models for MT. Fraser and Marcu
+models. Increased parallel data enables better es-           (2006) pose the problem of alignment as a search
+timation of the model parameters, but a large num-           problem in log-linear space with features com-
+ber of language pairs still lack such resources.             ing from the IBM alignment models. The log-
+
+
+                                                       365
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 365–370,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+linear model is trained on available labeled data              model Mt from current iteration t for scoring the
+to improve performance. They propose a semi-                   links. Re-training and re-tuning an SMT system
+supervised training algorithm which alternates be-             for each link at a time is computationally infeasi-
+tween discriminative error training on the la-                 ble. We therefore perform batch learning by se-
+beled data to learn the weighting parameters and               lecting a set of N links scored high by our query
+maximum-likelihood EM training on unlabeled                    strategy. We seek manual corrections for the se-
+data to estimate the parameters. Callison-Burch                lected links and add the alignment data to the
+et al. (2004) also improve alignment by interpolat-            current labeled data set. The word-level aligned
+ing human alignments with automatic alignments.                labeled data is provided to our semi-supervised
+They observe that while working with such data                 word alignment algorithm for training an align-
+sets, alignments of higher quality should be given             ment model Mt+1 over U .
+a much higher weight than the lower-quality align-
+ments. Wu et al. (2006) learn separate models                  Algorithm 1 AL FOR W ORD A LIGNMENT
+from labeled and unlabeled data using the standard              1: Unlabeled Data Set: U = {(Sk , Tk )}
+EM algorithm. The two models are then interpo-                  2: Manual Alignment Set : A0 = {akij , ∀si ∈
+lated to use as a learner in the semi-supervised                   Sk , tj ∈ Tk }
+algorithm to improve word alignment. To our                     3: Train Semi-supervised Word Alignment using
+knowledge, there is no prior work that has looked                  (U , A0 ) → M0
+at reducing human effort by selective elicitation of            4: N : batch size
+partial word alignment using active learning tech-              5: for t = 0 to T do
+niques.                                                         6:       Lt = LinkSelection(U ,At ,Mt ,N )
+                                                                7:       Request Human Alignment for Lt
+3     Active Learning for Word Alignment                        8:       At+1 = At + Lt
+                                                                9:       Re-train Semi-Supervised Word Align-
+Active learning attempts to optimize performance                         ment on (U, At+1 ) → Mt+1
+by selecting the most informative instances to la-             10: end for
+bel where ‘informativeness’ is defined as maximal
+expected improvement in accuracy. The objective                   We can iteratively perform the algorithm for a
+is to select optimal instance for an external expert           defined number of iterations T or until a certain
+to label and then run the learning method on the               desired performance is reached, which is mea-
+newly-labeled and previously-labeled instances to              sured by alignment error rate (AER) (Fraser and
+minimize prediction or translation error, repeat-              Marcu, 2007b) in the case of word alignment. In
+ing until either the maximal number of external                a more typical scenario, since reducing human ef-
+queries is reached or a desired accuracy level is              fort or cost of elicitation is the objective, we iterate
+achieved. Several studies (Tong and Koller, 2002;              until the available budget is exhausted.
+Nguyen and Smeulders, 2004; Donmez and Car-
+bonell, 2008) show that active learning greatly                3.2   Semi-Supervised Word Alignment
+helps to reduce the labeling effort in various clas-           We use an extended version of MGIZA++ (Gao
+sification tasks.                                              and Vogel, 2008) to perform the constrained semi-
+                                                               supervised word alignment. Manual alignments
+3.1    Active Learning Setup                                   are incorporated in the EM training phase of these
+We discuss our active learning setup for word                  models as constraints that restrict the summation
+alignment in Algorithm 1. We start with an un-                 over all possible alignment paths. Typically in the
+labeled dataset U = {(Sk , Tk )}, indexed by k,                EM procedure for IBM models, the training pro-
+and a seed pool of partial alignment links A0 =                cedure requires for each source sentence position,
+{akij , ∀si ∈ Sk , tj ∈ Tk }. This is usually an empty         the summation over all positions in the target sen-
+set at iteration t = 0. We iterate for T itera-                tence. The manual alignments allow for one-to-
+tions. We take a pool-based active learning strat-             many alignments and many-to-many alignments
+egy, where we have access to all the automatically             in both directions. For each position i in the source
+aligned links and we can score the links based                 sentence, there can be more than one manually
+on our active learning query strategy. The query               aligned target word. The restricted training will
+strategy uses the automatically trained alignment              allow only those paths, which are consistent with
+
+
+                                                         366
+
+
+the manual alignments. Therefore, the restriction            links that the initial word aligner is least confi-
+of the alignment paths reduces to restricting the            dent according to our metric and seek manual cor-
+summation in EM.                                             rection of the links. We use t2s to denote com-
+                                                             putation using higher order (IBM4) target-given-
+4     Query Strategies for Link Selection                    source models and s2t to denote source-given-
+We propose multiple query selection strategies for           target models. Targeting some of the uncertain
+our active learning setup. The scoring criteria is           parts of word alignment has already been shown
+designed to select alignment links across sentence           to improve translation quality in SMT (Huang,
+pairs that are highly uncertain under current au-            2009). We use confidence metrics as an active
+tomatic translation models. These links are diffi-           learning sampling strategy to obtain most informa-
+cult to align correctly by automatic alignment and           tive links. We also experimented with other con-
+will cause incorrect phrase pairs to be extracted in         fidence metrics as discussed in (Ueffing and Ney,
+the translation model, in turn hurting the transla-          2007), especially the IBM 1 model score metric,
+tion quality of the SMT system. Manual correc-               but it did not show significant improvement in this
+tion of such links produces the maximal benefit to           task.
+the model. We would ideally like to elicit the least
+number of manual corrections possible in order to                   Pt2s (aij , tJ1 /sI1 ) =
+                                                                                               pt2s (tj /si ,aij ∈A)
+                                                                                                PM                     (2)
+reduce the cost of data acquisition. In this section                                              i pt2s (tj /si )
+                                                                                               ps2t (si /tj ,aij ∈A)
+we discuss our link selection strategies based on                   Ps2t (aij , sI1 /tJ1 ) =    PN                     (3)
+                                                                                                   i ps2t (si /tj )
+the standard active learning paradigm of ‘uncer-                                                  2∗Pt2s ∗Ps2t
+tainty sampling’(Lewis and Catlett, 1994). We use                  Conf 1(aij /S, T )          = Pt2s +Ps2t            (4)
+the automatically trained translation model θt for                                                                     (5)
+scoring each link for uncertainty, which consists of
+                                                             4.3   Query by Committee
+bidirectional translation lexicon tables computed
+from the bidirectional alignments.                          The generative alignments produced differ based
+                                                            on the choice of direction of the language pair. We
+4.1 Uncertainty Sampling: Bidirectional                     use As2t to denote alignment in the source to target
+      Alignment Scores                                      direction and At2s to denote the target to source
+The automatic Viterbi alignment produced by                 direction. We consider these alignments to be two
+the alignment models is used to obtain transla-             experts that have two different views of the align-
+tion lexicons. These lexicons capture the condi-            ment process. We formulate our query strategy
+tional distributions of source-given-target P (s/t)         to select links where the agreement differs across
+and target-given-source P (t/s) probabilities at the        these two alignments. In general query by com-
+word level where si ∈ S and tj ∈ T . We de-                 mittee is a standard sampling strategy in active
+fine certainty of a link as the harmonic mean of the        learning(Freund et al., 1997), where the commit-
+bidirectional probabilities. The selection strategy         tee consists of any number of experts, in this case
+selects the least scoring links according to the for-       alignments, with varying opinions. We formulate
+mula below which corresponds to links with max-             a query by committee sampling strategy for word
+imum uncertainty:                                           alignment as shown in Equation 6. In order to
+                                                            break ties, we extend this approach to select the
+                          2 ∗ P (tj /si ) ∗ P (si /tj )
+              I    J
+Score(aij /s1 , t1 ) =                                  (1) link with higher average frequency of occurrence
+                           P (tj /si ) + P (si /tj )        of words involved in the link.
+4.2    Confidence Sampling: Posterior
+       Alignment probabilities                                 Score(aij ) =          α                                (6)
+Confidence estimation for MT output is an in-
+                                                                             
+                                                                              2 aij ∈ As2t ∩ At2s
+teresting area with meaningful initial exploration              where     α=   1 aij ∈ As2t ∪ At2s
+(Blatz et al., 2004; Ueffing and Ney, 2007). Given                           
+                                                                               0       otherwise
+a sentence pair (sI1 , tJ1 ) and its word alignment,
+we compute two confidence metrics at alignment               4.4   Margin Sampling
+link level – based on the posterior link probability         The strategy for confidence based sampling only
+as seen in Equation 5. We select the alignment               considers information about the best scoring link
+
+
+                                                       367
+
+
+conf (aij /S, T ). However we could benefit from
+information about the second best scoring link as
+well. In typical multi-class classification prob-
+lems, earlier work shows success using such a
+‘margin based’ approach (Scheffer et al., 2001),
+where the difference between the probabilities as-
+signed by the underlying model to the first best
+and second best labels is used as a sampling cri-
+teria. We adapt such a margin-based approach to
+link-selection using the Conf 1 scoring function
+discussed in the earlier sub-section. Our margin
+technique is formulated below, where a1   ˆ ij and
+ ˆ
+a2ij are potential first best and second best scor-
+ing alignment links for a word at position i in the
+source sentence S with translation T . The word             Figure 1: Performance of active sampling strate-
+with minimum margin value is chosen for human               gies for link selection
+alignment. Intuitively such a word is a possible
+candidate for mis-alignment due to the inherent
+confusion in its target translation.                        the gold standard. We select the partial align-
+                                                            ment as a set of alignment links and provide it to
+                                                            our semi-supervised word aligner. We plot per-
+       M argin(i) =
+                                                            formance curves as number of links used in each
+           ˆ ij /S, T ) −Conf 1(a2
+    Conf 1(a1                    ˆ ij /S, T )               iteration vs. the overall reduction of AER on the
+5     Experiments                                           corpus.
+                                                               Query by committee performs worse than ran-
+5.1    Data Setup                                           dom indicating that two alignments differing in
+Our aim in this paper is to show that active learn-         direction are not sufficient in deciding for uncer-
+ing can help select the most informative alignment          tainty. We will be exploring alternative formula-
+links that have high uncertainty according to a             tions to this strategy. We observe that confidence
+given automatically trained model. We also show             based metrics perform significantly better than the
+that fixing such alignments leads to the maximum            baseline. From the scatter plots in Figure 1 1 we
+reduction of error in word alignment, as measured           can say that using our best selection strategy one
+by AER. We compare this with a baseline where               achieves similar performance to the baseline, but
+links are selected at random for manual correction.         at a much lower cost of elicitation assuming cost
+To run our experiments iteratively, we automate             per link is uniform.
+the setup by using a parallel corpus for which the             We also perform end-to-end machine transla-
+gold-standard human alignment is already avail-             tion experiments to show that our improvement
+able. We select the Chinese-English language pair,          of alignment quality leads to an improvement of
+where we have access to 21,863 sentence pairs               translation scores. For this experiment, we train
+along with complete manual alignment.                       a standard phrase-based SMT system (Koehn et
+                                                            al., 2007) over the entire parallel corpus. We tune
+5.2    Results
+                                                            on the MT-Eval 2004 dataset and test on a subset
+We first automatically align the Cn-En corpus us-           of MT-Eval 2004 dataset consisting of 631 sen-
+ing GIZA++ (Och and Ney, 2003). We then                     tences. We first obtain the baseline score where
+use the learned model in running our link selec-            no manual alignment was used. We also train a
+tion algorithm over the entire corpus to determine          configuration using gold standard manual align-
+the most uncertain links according to each active           ment data for the parallel corpus. This is the max-
+learning strategy. The links are then looked up in          imum translation accuracy that we can achieve by
+the gold-standard human alignment database and              any link selection algorithm. We now take the
+corrected. In case a link is not present in the             best link selection criteria, which is the confidence
+gold-standard data, we introduce a NULL align-
+                                                               1
+ment, else we propose the alignment as given in                    X axis has number of links elicited on a log-scale
+
+
+                                                      368
+
+
+         System             BLEU      METEOR
+        Baseline            18.82      42.70
+   Human Alignment          19.96      44.22
+  Active Selection 20%      19.34      43.25
+
+   Table 1: Alignment and Translation Quality
+
+
+
+based method and train a system by only selecting
+20% of all the links. We observe that at this point
+we have reduced the AER from 37.09 AER to
+26.57 AER. The translation accuracy as measured
+by BLEU (Papineni et al., 2002) and METEOR
+(Lavie and Agarwal, 2007) also shows improve-
+ment over baseline and approaches gold standard               Figure 2: Batch decay effects on Conf-posterior
+quality. Therefore we achieve 45% of the possible             sampling strategy
+improvement by only using 20% elicitation effort.
+                                                              6   Conclusion and Future Work
+
+5.3   Batch Selection                                         Word-Alignment is a particularly challenging
+                                                              problem and has been addressed in a completely
+                                                              unsupervised manner thus far (Brown et al., 1993).
+Re-training the word alignment models after elic-
+                                                              While generative alignment models have been suc-
+iting every individual alignment link is infeasible.
+                                                              cessful, lack of sufficient data, model assump-
+In our data set of 21,863 sentences with 588,075
+                                                              tions and local optimum during training are well
+links, it would be computationally intensive to re-
+                                                              known problems. Semi-supervised techniques use
+train after eliciting even 100 links in a batch. We
+                                                              partial manual alignment data to address some of
+therefore sample links as a discrete batch, and train
+                                                              these issues. We have shown that active learning
+alignment models to report performance at fixed
+                                                              strategies can reduce the effort involved in elicit-
+points. Such a batch selection is only going to be
+                                                              ing human alignment data. The reduction in ef-
+sub-optimal as the underlying model changes with
+                                                              fort is due to careful selection of maximally un-
+every alignment link and therefore becomes ‘stale’
+                                                              certain links that provide the most benefit to the
+for future selections. We observe that in some sce-
+                                                              alignment model when used in a semi-supervised
+narios while fixing one alignment link could po-
+                                                              training fashion. Experiments on Chinese-English
+tentially fix all the mis-alignments in a sentence
+                                                              have shown considerable improvements. In future
+pair, our batch selection mechanism still samples
+                                                              we wish to work with word alignments for other
+from the rest of the links in the sentence pair. We
+                                                              language pairs like Arabic and English. We have
+experimented with an exponential decay function
+                                                              tested out the feasibility of obtaining human word
+over the number of links previously selected, in
+                                                              alignment data using Amazon Mechanical Turk
+order to discourage repeated sampling from the
+                                                              and plan to obtain more data reduce the cost of
+same sentence pair. We performed an experiment
+                                                              annotation.
+by selecting one of our best performing selection
+strategies (conf ) and ran it in both configurations          Acknowledgments
+- one with the decay parameter (batchdecay) and
+one without it (batch). As seen in Figure 2, the              This research was partially supported by DARPA
+decay function has an effect in the initial part of           under grant NBCHC080097. Any opinions, find-
+the curve where sampling is sparse but the effect             ings, and conclusions expressed in this paper are
+gradually fades away as we observe more samples.              those of the authors and do not necessarily reflect
+In the reported results we do not use batch decay,            the views of the DARPA. The first author would
+but an optimal estimation of ‘staleness’ could lead           like to thank Qin Gao for the semi-supervised
+to better gains in batch link selection using active          word alignment software and help with running
+learning.                                                     experiments.
+
+
+                                                        369
+
+
+References                                                              Philipp Koehn, Franz Josef Och, and Daniel Marcu. 2003.
+                                                                           Statistical phrase-based translation. In Proc. of the
+John Blatz, Erin Fitzgerald, George Foster, Simona Gan-                    HLT/NAACL, Edomonton, Canada.
+   drabur, Cyril Goutte, Alex Kulesza, Alberto Sanchis, and
+   Nicola Ueffing. 2004. Confidence estimation for machine              Philipp Koehn, Hieu Hoang, Alexandra Birch Mayne,
+   translation. In Proceedings of Coling 2004, pages 315–                  Christopher Callison-Burch, Marcello Federico, Nicola
+   321, Geneva, Switzerland, Aug 23–Aug 27. COLING.                        Bertoldi, Brooke Cowan, Wade Shen, Christine Moran,
+                                                                           Richard Zens, Chris Dyer, Ondrej Bojar, Alexandra Con-
+Peter F. Brown, Vincent J. Della Pietra, Stephen A. Della                  stantin, and Evan Herbst. 2007. Moses: Open source
+   Pietra, and Robert L. Mercer. 1993. The mathematics                     toolkit for statistical machine translation. In ACL Demon-
+   of statistical machine translation: parameter estimation.               stration Session.
+   Computational Linguistics, 19(2):263–311.
+                                                                        Alon Lavie and Abhaya Agarwal. 2007. Meteor: an auto-
+Chris Callison-Burch, David Talbot, and Miles Osborne.                    matic metric for mt evaluation with high levels of corre-
+  2004. Statistical machine translation with word- and                    lation with human judgments. In WMT 2007, pages 228–
+  sentence-aligned parallel corpora. In ACL 2004, page                    231, Morristown, NJ, USA.
+  175, Morristown, NJ, USA. Association for Computa-
+  tional Linguistics.                                                   David D. Lewis and Jason Catlett. 1994. Heterogeneous un-
+                                                                          certainty sampling for supervised learning. In In Proceed-
+Colin Cherry and Dekang Lin. 2006. Soft syntactic con-                    ings of the Eleventh International Conference on Machine
+  straints for word alignment through discriminative train-               Learning, pages 148–156. Morgan Kaufmann.
+  ing. In Proceedings of the COLING/ACL on Main con-
+  ference poster sessions, pages 105–112, Morristown, NJ,               Hieu T. Nguyen and Arnold Smeulders. 2004. Active learn-
+  USA.                                                                    ing using pre-clustering. In ICML.
+
+Pinar Donmez and Jaime G. Carbonell. 2008. Optimizing es-               Franz Josef Och and Hermann Ney. 2003. A systematic com-
+   timated loss reduction for active sampling in rank learning.            parison of various statistical alignment models. Computa-
+   In ICML ’08: Proceedings of the 25th international con-                 tional Linguistics, pages 19–51.
+   ference on Machine learning, pages 248–255, New York,
+                                                                        Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing
+   NY, USA. ACM.
+                                                                           Zhu. 2002. Bleu: a method for automatic evaluation of
+                                                                           machine translation. In ACL 2002, pages 311–318, Mor-
+Alexander Fraser and Daniel Marcu. 2006. Semi-supervised
+                                                                           ristown, NJ, USA.
+   training for statistical word alignment. In ACL-44: Pro-
+   ceedings of the 21st International Conference on Compu-              Tobias Scheffer, Christian Decomain, and Stefan Wrobel.
+   tational Linguistics and the 44th annual meeting of the                2001. Active hidden markov models for information ex-
+   Association for Computational Linguistics, pages 769–                  traction. In IDA ’01: Proceedings of the 4th Interna-
+   776, Morristown, NJ, USA. Association for Computa-                     tional Conference on Advances in Intelligent Data Anal-
+   tional Linguistics.                                                    ysis, pages 309–318, London, UK. Springer-Verlag.
+Alexander Fraser and Daniel Marcu. 2007a. Getting the                   Simon Tong and Daphne Koller. 2002. Support vector ma-
+   structure right for word alignment: LEAF. In Proceedings               chine active learning with applications to text classifica-
+   of the 2007 Joint Conference on EMNLP-CoNLL, pages                     tion. Journal of Machine Learning, pages 45–66.
+   51–60.
+                                                                        Nicola Ueffing and Hermann Ney. 2007. Word-level con-
+Alexander Fraser and Daniel Marcu. 2007b. Measuring word                  fidence estimation for machine translation. Comput. Lin-
+   alignment quality for statistical machine translation. Com-            guist., 33(1):9–40.
+   put. Linguist., 33(3):293–303.
+                                                                        Hua Wu, Haifeng Wang, and Zhanyi Liu. 2006. Boost-
+Yoav Freund, Sebastian H. Seung, Eli Shamir, and Naftali                  ing statistical word alignment using labeled and unlabeled
+  Tishby. 1997. Selective sampling using the query by com-                data. In Proceedings of the COLING/ACL on Main con-
+  mittee algorithm. Machine. Learning., 28(2-3):133–168.                  ference poster sessions, pages 913–920, Morristown, NJ,
+                                                                          USA. Association for Computational Linguistics.
+Qin Gao and Stephan Vogel. 2008. Parallel implementa-
+  tions of word alignment tool. In Software Engineering,
+  Testing, and Quality Assurance for Natural Language Pro-
+  cessing, pages 49–57, Columbus, Ohio, June. Association
+  for Computational Linguistics.
+
+Gholamreza Haffari and Anoop Sarkar. 2009. Active learn-
+  ing for multilingual statistical machine translation. In
+  Proceedings of the Joint Conference of the 47th Annual
+  Meeting of the ACL and the 4th International Joint Con-
+  ference on Natural Language Processing of the AFNLP,
+  pages 181–189, Suntec, Singapore, August. Association
+  for Computational Linguistics.
+
+Fei Huang. 2009. Confidence measure for word alignment.
+   In Proceedings of the Joint ACL and IJCNLP, pages 932–
+   940, Suntec, Singapore, August. Association for Compu-
+   tational Linguistics.
+
+
+                                                                  370
+

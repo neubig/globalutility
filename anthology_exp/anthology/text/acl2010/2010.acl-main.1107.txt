@@ -1,0 +1,682 @@
+                   A Statistical Model for Lost Language Decipherment
+
+         Benjamin Snyder and Regina Barzilay                                   Kevin Knight
+                         CSAIL                                                       ISI
+          Massachusetts Institute of Technology                       University of Southern California
+        {bsnyder,regina}@csail.mit.edu                                     knight@isi.edu
+
+
+
+                         Abstract                                     Our definition of the computational decipher-
+                                                                   ment task closely follows the setup typically faced
+        In this paper we propose a method for the                  by human decipherers (Robinson, 2002). Our in-
+        automatic decipherment of lost languages.                  put consists of texts in a lost language and a corpus
+        Given a non-parallel corpus in a known re-                 of non-parallel data in a known related language.
+        lated language, our model produces both                    The decipherment itself involves two related sub-
+        alphabetic mappings and translations of                    tasks: (i) finding the mapping between alphabets
+        words into their corresponding cognates.                   of the known and lost languages, and (ii) translat-
+        We employ a non-parametric Bayesian                        ing words in the lost language into corresponding
+        framework to simultaneously capture both                   cognates of the known language.
+        low-level character mappings and high-                        While there is no single formula that human de-
+        level morphemic correspondences. This                      cipherers have employed, manual efforts have fo-
+        formulation enables us to encode some of                   cused on several guiding principles. A common
+        the linguistic intuitions that have guided                 starting point is to compare letter and word fre-
+        human decipherers. When applied to                         quencies between the lost and known languages.
+        the ancient Semitic language Ugaritic, the                 In the presence of cognates the correct mapping
+        model correctly maps 29 of 30 letters to                   between the languages will reveal similarities in
+        their Hebrew counterparts, and deduces                     frequency, both at the character and lexical level.
+        the correct Hebrew cognate for 60% of                      In addition, morphological analysis plays a cru-
+        the Ugaritic words which have cognates in                  cial role here, as highly frequent morpheme cor-
+        Hebrew.                                                    respondences can be particularly revealing. In
+                                                                   fact, these three strands of analysis (character fre-
+1       Introduction                                               quency, morphology, and lexical frequency) are
+                                                                   intertwined throughout the human decipherment
+Dozens of lost languages have been deciphered
+                                                                   process. Partial knowledge of each drives discov-
+by humans in the last two centuries. In each
+                                                                   ery in the others.
+case, the decipherment has been considered a ma-
+                                                                      We capture these intuitions in a generative
+jor intellectual breakthrough, often the culmina-
+                                                                   Bayesian model. This model assumes that each
+tion of decades of scholarly efforts. Computers
+                                                                   word in the lost language is composed of mor-
+have played no role in the decipherment any of
+                                                                   phemes which were generated with latent coun-
+these languages. In fact, skeptics argue that com-
+                                                                   terparts in the known language. We model bilin-
+puters do not possess the “logic and intuition” re-
+                                                                   gual morpheme pairs as arising through a series
+quired to unravel the mysteries of ancient scripts.1
+                                                                   of Dirichlet processes. This allows us to assign
+In this paper, we demonstrate that at least some of
+                                                                   probabilities based both on character-level corre-
+this logic and intuition can be successfully mod-
+                                                                   spondences (using a character-edit base distribu-
+eled, allowing computational tools to be used in
+                                                                   tion) as well as higher-level morpheme correspon-
+the decipherment process.
+                                                                   dences. In addition, our model carries out an im-
+    1
+     “Successful archaeological decipherment has turned out        plicit morphological analysis of the lost language,
+to require a synthesis of logic and intuition . . . that comput-   utilizing the known morphological structure of the
+ers do not (and presumably cannot) possess.” A. Robinson,
+“Lost Languages: The Enigma of the World’s Undeciphered            related language. This model structure allows us
+Scripts” (2002)                                                    to capture the interplay between the character-
+
+
+                                                               1048
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1048–1057,
+                    Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+and morpheme-level correspondences that humans          Haghighi et al., 2008). Moreover, distributional
+have used in the manual decipherment process.           methods that rely on co-occurrence analysis oper-
+   In addition, we introduce a novel technique          ate over large corpora, which are typically unavail-
+for imposing structural sparsity constraints on         able for a lost language.
+character-level mappings. We assume that an ac-            Finally, Knight and Yamada (1999) and Knight
+curate alphabetic mapping between related lan-          et al. (2006) describe a computational HMM-
+guages will be sparse in the following way: each        based method for deciphering an unknown script
+letter will map to a very limited subset of letters     that represents a known spoken language. This
+in the other language. We capture this intuition        method “makes the text speak” by gleaning
+by adapting the so-called “spike and slab” prior to     character-to-sound mappings from non-parallel
+the Dirichlet-multinomial setting. For each pair        character and sound sequences. It does not relate
+of characters in the two languages, we posit an         words in different languages, thus it cannot encode
+indicator variable which controls the prior likeli-     deciphering constraints similar to the ones consid-
+hood of character substitutions. We define a joint      ered in this paper. More importantly, this method
+prior over these indicator variables which encour-      had not been applied to archaeological data. While
+ages sparse settings.                                   lost languages are gaining increasing interest in
+   We applied our model to a corpus of Ugaritic,        the NLP community (Knight and Sproat, 2009),
+an ancient Semitic language discovered in 1928.         there have been no successful attempts of their au-
+Ugaritic was manually deciphered in 1932, us-           tomatic decipherment.
+ing knowledge of Hebrew, a related language.
+We compare our method against the only existing         3 Background on Ugaritic
+decipherment baseline, an HMM-based character
+substitution cipher (Knight and Yamada, 1999;           Manual Decipherment of Ugaritic Ugaritic
+Knight et al., 2006). The baseline correctly maps       tablets were first found in Syria in 1929 (Smith,
+the majority of letters — 22 out of 30 — to their       1955; Watson and Wyatt, 1999). At the time, the
+correct Hebrew counterparts, but only correctly         cuneiform writing on the tablets was of an un-
+translates 29% of all cognates. In comparison, our      known type. Charles Virolleaud, who lead the ini-
+method yields correct mappings for 29 of 30 let-        tial decipherment effort, recognized that the script
+ters, and correctly translates 60.4% of all cognates.   was likely alphabetic, since the inscribed words
+                                                        consisted of only thirty distinct symbols. The lo-
+2   Related Work                                        cation of the tablets discovery further suggested
+                                                        that Ugaritic was likely to have been a Semitic
+Our work on decipherment has connections to             language from the Western branch, with proper-
+three lines of work in statistical NLP. First, our      ties similar to Hebrew and Aramaic. This real-
+work relates to research on cognate identifica-         ization was crucial for deciphering the Ugaritic
+tion (Lowe and Mazaudon, 1994; Guy, 1994;               script. In fact, German cryptographer and Semitic
+Kondrak, 2001; Bouchard et al., 2007; Kondrak,          scholar Hans Bauer decoded the first two Ugaritic
+2009). These methods typically rely on informa-         letters—mem and lambda—by mapping them to
+tion that is unknown in a typical deciphering sce-      Hebrew letters with similar occurrence patterns
+nario (while being readily available for living lan-    in prefixes and suffixes. Bootstrapping from this
+guages). For instance, some methods employ a            finding, Bauer found words in the tablets that were
+hand-coded similarity function (Kondrak, 2001),         likely to serve as cognates to Hebrew words—
+while others assume knowledge of the phonetic           e.g., the Ugaritic word for king matches its He-
+mapping or require parallel cognate pairs to learn      brew equivalent. Through this process a few
+a similarity function (Bouchard et al., 2007).          more letters were decoded, but the Ugaritic texts
+   A second related line of work is lexicon in-         were still unreadable. What made the final deci-
+duction from non-parallel corpora. While this           pherment possible was a sheer stroke of luck—
+research has similar goals, it typically builds on      Bauer guessed that a word inscribed on an ax dis-
+information or resources unavailable for ancient        covered in the Ras Shamra excavations was the
+texts, such as comparable corpora, a seed lexi-         Ugaritic word for ax. Bauer’s guess was cor-
+con, and cognate information (Fung and McKe-            rect, though he selected the wrong phonetic se-
+own, 1997; Rapp, 1999; Koehn and Knight, 2002;          quence. Edouard Dhorme, another cryptographer
+
+
+                                                    1049
+
+
+and Semitic scholar, later corrected the reading,        rect morphological analysis of words in the lost
+expanding a set of translated words. Discoveries         language must be learned, we assume that the in-
+of additional tablets allowed Bauer, Dhorme and          ventory and frequencies of prefixes and suffixes in
+Virolleaud to revise their hypothesis, successfully      the known language are given.
+completing the decipherment.                                In summary, the observed input to the model
+   Linguistic Features of Ugaritic Ugaritic              consists of two elements: (i) a list of unanalyzed
+shares many features with other ancient Semitic          word types derived from a corpus in the lost lan-
+languages, following the same word order, gender,        guage, and (ii) a morphologically analyzed lexicon
+number, and case structure (Hetzron, 1997). It is a      in a known related language derived from a sepa-
+morphologically rich language, with triliteral roots     rate corpus, in our case non-parallel.
+and many prefixes and suffixes.
+   At the same time, it exhibits a number of fea-        5 Model
+tures that distinguish it from Hebrew. Ugaritic has      5.1 Intuitions
+a bigger phonemic inventory than Hebrew, yield-
+                                                         Our goal is to incorporate the logic and intuition
+ing a bigger alphabet – 30 letters vs. 22 in He-
+                                                         used by human decipherers in an unsupervised sta-
+brew. Another distinguishing feature of Ugaritic
+                                                         tistical model. To make these intuitions concrete,
+is that vowels are only written with glottal stops
+                                                         consider the following toy example, consisting of
+while in Hebrew many long vowels are written us-
+                                                         a lost language much like English, but written us-
+ing homorganic consonants. Ugaritic also does not
+                                                         ing numerals:
+have articles, while Hebrew nouns and adjectives
+take definite articles which are realized as prefixes.      • 15234 (asked)
+These differences result in significant divergence
+                                                            • 1525 (asks)
+between Hebrew and Ugaritic cognates, thereby
+complicating the decipherment process.                      • 4352 (desk)
+
+4   Problem Formulation                                  Analyzing the undeciphered corpus, we might first
+                                                         notice a pair of endings, -34, and -5, which both
+We are given a corpus in a lost language and a non-      occur after the initial sequence 152- (and may like-
+parallel corpus in a related language from the same      wise occur at the end of a variety of words in
+language family. Our primary goal is to translate        the corpus). If we know this lost language to be
+words in the unknown language by mapping them            closely related to English, we can surmise that
+to cognates in the known language. As part of this       these two endings correspond to the English ver-
+process, we induce a lower-level mapping between         bal suffixes -ed and -s. Using this knowledge,
+the letters of the two alphabets, capturing the reg-     we can hypothesize the following character corre-
+ular phonetic correspondences found in cognates.         spondences: (3 = e), (4 = d), (5 = s). We now know
+   We make several assumptions about the writ-           that (4252 = des2) and we can use our knowl-
+ing system of the lost language. First, we assume        edge of the English lexicon to hypothesize that this
+that the writing system is alphabetic in nature. In      word is desk, thereby learning the correspondence
+general, this assumption can be easily validated by      (2 = k). Finally, we can use similar reasoning to
+counting the number of symbols found in the writ-        reveal that the initial character sequence 152- cor-
+ten record. Next, we assume that the corpus has          responds to the English verb ask.
+been transcribed into electronic format, where the          As this example illustrates, human deci-
+graphemes present in the physical text have been         pherment efforts proceed by discovering both
+unambiguously identified. Finally, we assume that        character-level and morpheme-level correspon-
+words are explicitly separated in the text, either by    dences. This interplay implicitly relies on a
+white space or a special symbol.                         morphological analysis of words in the lost lan-
+   We also make a mild assumption about the mor-         guage, while utilizing knowledge of the known
+phology of the lost language. We posit that each         language’s lexicon and morphology.
+word consists of a stem, prefix, and suffix, where          One final intuition our model should capture is
+the latter two may be omitted. This assumption           the sparsity of the alphabetic correspondence be-
+captures a wide range of human languages and a           tween related languages. We know from compar-
+variety of morphological systems. While the cor-         ative linguistics that the correct mapping will pre-
+
+
+                                                     1050
+
+
+serve regular phonetic relationships between the
+two languages (as exemplified by cognates). As a                     !λ           !v
+result, each character in one language will map to
+a small number of characters in the other language
+(typically one, but sometimes two or three). By                                   G0
+incorporating this structural sparsity intuition, we
+can allow the model to focus on on a smaller set of
+linguistically valid hypotheses.                                Gpre|stm         Gstm               Gsuf |stm
+   Below we give an overview of our model, which                      stm                                   stm
+is designed to capture these linguistic intuitions.
+                                                                 upre             ustm               usuf
+5.2 Model Structure                                              hpre             hstm               hsuf
+                                                                                                             word
+Our model posits that every observed word in the
+lost language is composed of a sequence of mor-
+phemes (prefix, stem, suffix). Furthermore we             Figure 1: Plate diagram of the decipherment
+posit that each morpheme was probabilistically            model. The structural sparsity indicator variables
+generated jointly with a latent counterpart in the       ⃗λ determine the values of the base distribution hy-
+known language.                                           perparameters ⃗v . The base distribution G0 de-
+   Our goal is to find those counterparts that lead to    fines probabilities over string-pairs based solely on
+high frequency correspondences both at the char-          character-level edits. The morpheme-pair distri-
+acter and morpheme level. The technical chal-             butions Gstm , Gpre|stm , Gsuf |stm directly assign
+lenge is that each level of correspondence (char-         probabilities to highly frequent morpheme pairs.
+acter and morpheme) can completely describe the
+observed data. A probabilistic mechanism based
+simply on one leaves no room for the other to play          We now go through each step in more detail.
+a role. We resolve this tension by employing a
+non-parametric Bayesian model: the distributions         Structural Sparsity The first step of the genera-
+over bilingual morpheme pairs assign probabil-           tive process provides a control on the sparsity of
+ity based on recurrent patterns at the morpheme          edit-operation probabilities, encoding the linguis-
+level. These distributions are themselves drawn          tic intuition that the correct character-level map-
+from a prior probabilistic process which favors          pings should be sparse. The set of edit opera-
+distributions with consistent character-level corre-     tions includes character substitutions, insertions,
+spondences.                                              and deletions, as well as a special end sym-
+   We now give a formal description of the model         bol: {(u, h), (ϵ, h), (u, ϵ), EN D} (where u and h
+(see Figure 1 for a graphical overview). There are       range over characters in the lost and known lan-
+four basic layers in the generative process:             guages, respectively). For each edit operation e we
+                                                         posit a corresponding indicator variable λe . The
+  1. Structural sparsity: draw a set of indicator        set of character substitutions with indicators set to
+     variables ⃗λ corresponding to character-edit        one, {(u, h) : λ(u,h) = 1}) conveys the set of
+     operations.                                         phonetically valid correspondences. We define a
+                                                         joint prior over these variables to encourage sparse
+  2. Character-edit distribution: draw a base            character mappings. This prior can be viewed as a
+     distribution G0 parameterized by weights on         distribution over binary matrices and is defined to
+     character-edit operations.                          encourage rows and columns to sum to low integer
+  3. Morpheme-pair distributions: draw a set             values (typically 1). More precisely, for each char-
+     of distributions on bilingual morpheme pairs        acter u in the lost language,
+                                                                                 ∑       we count the number
+     Gstm , Gpre|stm , Gsuf |stm .                       of mappings c(u) =            λ
+                                                                                     h (u,h) . We then define
+                                                         a set of features which count how many of these
+  4. Word generation: draw pairs of cognates             characters map to i other characters beyond some
+     in the lost and known language, as well as          budget bi : fi = max (0, |{u : c(u) = i}| − bi ).
+     words in the lost language with no cognate          Likewise, we define corresponding features fi′ and
+     counterpart.                                        budgets b′i for the characters h in the known lan-
+
+
+                                                     1051
+
+
+guage. The prior over ⃗λ is then defined as                      0. When λe = 1, the corresponding marginal prior
+                        (                )                       density remains relatively flat and unconstrained.
+            ⃗      exp f⃗ · w⃗ + f⃗′ · w
+                                       ⃗                         See (Ishwaran and Rao, 2005) for a similar appli-
+         P (λ) =                                          (1)
+                              Z                                  cation of “spike-and-slab” priors in the regression
+where the feature weight vector w ⃗ is set to encour-            scenario.
+age sparse mappings, and Z is a corresponding                    Morpheme-pair Distributions Next we draw a
+normalizing constant, which we never need com-                   series of distributions which directly assign prob-
+pute. We set w ⃗ so that each character must map to              ability to morpheme pairs. The previously drawn
+at least one other character, and so that mappings               base distribution G0 along with a fixed concentra-
+to more than one other character are discouraged 2               tion parameter α define a Dirichlet process (An-
+   Character-edit Distribution The next step in                  toniak, 1974): DP (G0 , α), which provides prob-
+the generative process is drawing a base distri-                 abilities over morpheme-pair distributions. The
+bution G0 over character edit sequences (each of                 resulting distributions are likely to be skewed in
+which yields a bilingual pair of morphemes). This                favor of a few frequently occurring morpheme-
+distribution is parameterized by a set of weights ϕ⃗             pairs, while remaining sensitive to the character-
+on edit operations, where the weights over substi-               level probabilities of the base distribution.
+tutions, insertions, and deletions each individually                Our model distinguishes between three types of
+sum to one. In addition, G0 provides a fixed dis-                morphemes: prefixes, stems, and suffixes. As a
+tribution q over the number of insertions and dele-              result, we model each morpheme type as arising
+tions occurring in any single edit sequence. Prob-               from distinct Dirichlet processes, that share a sin-
+abilities over edit sequences (and consequently on               gle base distribution:
+bilingual morpheme pairs) are then defined ac-
+cording to G0 as:                                                       Gstm             ∼ DP (G0 , αstm )
+                ∏                                                       Gpre|stm         ∼ DP (G0 , αpre )
+       P (⃗e) =     ϕei · q (#ins (⃗e), #del (⃗e))                      Gsuf |stm        ∼ DP (G0 , αsuf )
+                   i
+
+We observe that the average Ugaritic word is over
+two letters longer than the average Hebrew word.                 We model prefix and suffix distributions as con-
+Thus, occurrences of Hebrew character insertions                 ditionally dependent on the part-of-speech of the
+are a priori likely, and Ugaritic character deletions            stem morpheme-pair. This choice capture the lin-
+are very unlikely. In our experiments, we set q                  guistic fact that different parts-of-speech bear dis-
+to disallow Ugaritic deletions, and to allow one                 tinct affix frequencies. Thus, while we draw a sin-
+Hebrew insertion per morpheme (with probability                  gle distribution Gstm , we maintain separate distri-
+0.4).                                                            butions Gpre|stm and Gsuf |stm for each possible
+   The prior on the base distribution G0 is a                    stem part-of-speech.
+Dirichlet distribution with hyperparameters ⃗v , i.e.,           Word Generation Once the morpheme-pair
+⃗ ∼ Dirichlet(⃗v ). Each value ve thus corre-
+ϕ                                                                distributions have been drawn, actual word pairs
+sponds to a character edit operation e. Crucially,               may now be generated. First the model draws a
+the value of each ve depends deterministically on                boolean variable ci to determine whether word i in
+its corresponding indicator variable:                            the lost language has a cognate in the known lan-
+                      {                                          guage, according to some prior P (ci ). If ci = 1,
+                       1 if λe = 0,                              then a cognate word pair (u, h) is produced:
+               ve =
+                       K if λe = 1.
+                                                                       (ustm , hstm )            ∼ Gstm
+where K is some constant value >           1.3
+                                       The overall                     (upre , hpre )            ∼ Gpre|stm
+effect is that when λe = 0, the marginal prior den-                    (usuf , hsuf )            ∼ Gsuf |stm
+sity of the corresponding edit weight ϕe spikes at
+                                                                       u = upre ustm usuf
+   2
+      We set w0 = −∞, w1 = 0, w2 = −50, w>2 = −∞,
+with budgets b′2 = 7, b′3 = 1 (otherwise zero), reflecting the         h = hpre hstm hsuf
+knowledge that there are eight more Ugaritic than Hebrew
+letters.                                                         Otherwise, a lone word u is generated, according
+    3
+      Set to 50 in our experiments.                              a uniform character-level language model.
+
+
+                                                             1052
+
+
+   In summary, this model structure captures both          guage (hpre , hstm , hsuf )i . More precisely, we
+character and lexical level correspondences, while         need to sample three character-edit sequences
+utilizing morphological knowledge of the known            ⃗epre , ⃗estm , ⃗esuf which together yield the observed
+language. An additional feature of this multi-             word ui .
+layered model structure is that each distribution             We break this into two sampling steps. First
+over morpheme pairs is derived from the single             we sample the morphological segmentation of ui ,
+character-level base distribution G0 . As a re-            along with the part-of-speech pos of the latent
+sult, any character-level mappings learned from            stem cognate. To do so, we enumerate each pos-
+one type of morphological correspondence will be           sible segmentation and part-of-speech and calcu-
+propagated to all other morpheme distributions.            late its joint conditional probability (for notational
+Finally, the character-level mappings discovered           clarity, we leave implicit the conditioning on the
+by the model are encouraged to obey linguistically         other samples in the corpus):
+motivated structural sparsity constraints.
+                                                             P (upre , ustm , usuf , pos) =
+                                                             ∑               ∑                  ∑
+6 Inference                                                      P (⃗estm )      P (⃗epre |pos)   P (⃗esuf |pos)
+                                                             ⃗estm         ⃗epre             ⃗esuf
+For each word ui in our undeciphered lan-
+guage we predict a morphological segmentation                                                                 (2)
+(upre ustm usuf )i and corresponding cognate in the
+                                                          where the summations over character-edit se-
+known language (hpre hstm hsuf )i . Ideally we
+                                                          quences are restricted to those which yield the seg-
+would like to predict the analysis with highest
+                                                          mentation (upre , ustm , usuf ) and a latent cognate
+marginal probability under our model given the
+                                                          with part-of-speech pos.
+observed undeciphered corpus and related lan-
+                                                             For a particular stem edit-sequence ⃗estm , we
+guage lexicon. In order to do so, we need to
+                                                          compute its conditional probability in closed form
+integrate out all the other latent variables in our
+                                                          according to a Chinese Restaurant Process (An-
+model. As these integrals are intractable to com-
+                                                          toniak, 1974). To do so, we use counts from
+pute exactly, we resort to the standard Monte Carlo
+                                                          the other sampled word analyses: countstm (⃗estm )
+approximation. We collect samples of the vari-
+                                                          gives the number of times that the entire edit-
+ables over which we wish to marginalize but for
+                                                          sequence ⃗estm has been observed:
+which we cannot compute closed-form integrals.
+                                                                                                  ∏
+We then approximate the marginal probabilities                             countstm (⃗estm ) + α i p(ei )
+for undeciphered word ui by summing over all the              P (⃗estm ) ∝
+                                                                                        n+α
+samples, and predicting the analysis with highest
+probability.                                              where n is the number of other word analyses sam-
+   In our sampling algorithm, we avoid sam-               pled, and∏α is a fixed concentration parameter. The
+pling the base distribution G0 and the derived            product i p(ei ) gives the probability of ⃗estm ac-
+morpheme-pair distributions (Gstm etc.), instead          cording to the base distribution G0 . Since the
+using analytical closed forms. We explicitly sam-         parameters of G0 are left unsampled, we use the
+ple the sparsity indicator variables ⃗λ, the cognate      marginalized form:
+indicator variables ci , and latent word analyses                               ve + count(e)
+(segmentations and Hebrew counterparts). To do                            p(e) = ∑                            (3)
+                                                                                    e′ ve′ + k
+so tractably, we use Gibbs sampling to draw each
+latent variable conditioned on our current sample         where count(e) is the number of times that
+of the others. Although the samples are no longer         character-edit e appears in distinct edit-sequences
+independent, they form a Markov chain whose sta-          (across prefixes, stems, and suffixes), and k is the
+tionary distribution is the true joint distribution de-   sum of these counts across all character-edits. Re-
+fined by the model (Geman and Geman, 1984).               call that ve is a hyperparameter for the Dirichlet
+                                                          prior on G0 and depends on the value of the corre-
+6.1 Sampling Word Analyses                                sponding indicator variable λe .
+For each undeciphered word, we need to sample                Once the segmentation (upre , ustm , usuf ) and
+a morphological segmentation (upre , ustm , usuf )i       part-of-speech pos have been sampled, we pro-
+along with latent morphemes in the known lan-             ceed to sample the actual edit-sequences (and thus
+
+
+                                                      1053
+
+
+latent morphemes counterparts). Now, instead of         6.5 Implementation Details
+summing over the values in Equation 2, we instead       Many of the steps detailed above involve the con-
+sample from them.                                       sideration of all possible edit-sequences consis-
+6.2 Sampling Sparsity Indicators                        tent with (i) a particular undeciphered word ui and
+                                                        (ii) the entire lexicon of words in the known lan-
+Recall that each sparsity indicator λe determines       guage (or some subset of words with a particu-
+the value of the corresponding hyperparameter ve        lar part-of-speech). In particular, we need to both
+of the Dirichlet prior for the character-edit base      sample from and sum over this space of possibil-
+distribution G0 . In addition, we have an unnormal-     ities repeatedly. Doing so by simple enumeration
+                             ⃗
+ized joint prior P (⃗λ) = g(Zλ) which encourages a      would needlessly repeat many sub-computations.
+sparse setting of these variables. To sample a par-     Instead we use finite-state acceptors to compactly
+ticular λe , we consider the set ⃗λ in which λe = 0     represent both the entire Hebrew lexicon as well
+and λ⃗′ in which λe = 1. We then compute:               as potential Hebrew word forms for each Ugaritic
+                              [count(e)]                word. By intersecting two such FSAs and mini-
+                              ve
+             P (⃗λ) ∝ g(⃗λ) · ∑       [k]
+                                                        mizing the result we can efficiently represent all
+                                e′   ve′                potential Hebrew words for a particular Ugaritic
+where k is the sum of counts for all edit opera-        word. We weight the edges in the FSA according
+tions, and the notation a[b] indicates the ascending    to the base distribution probabilities (in Equation 3
+factorial. Likewise, we can compute a probability       above). Although these intersected acceptors have
+for λ⃗′ with corresponding values ve′ .                 to be constantly reweighted to reflect changing
+                                                        probabilities, their topologies need only be com-
+6.3 Sampling Cognate Indicators                         puted once. One weighted correctly, marginals
+Finally, for each word ui , we sample a correspond-     and samples can be computed using dynamic pro-
+ing indicator variable ci . To do so, we calcu-         gramming.
+late Equation 2 for all possible segmentations and         Even with a large number of sampling rounds, it
+parts-of-speech and sum the resulting values to ob-     is difficult to fully explore the latent variable space
+tain the conditional likelihood P (ui |ci = 1). We      for complex unsupervised models. Thus a clever
+also calculate P (ui |ci = 0) using a uniform uni-      initialization is usually required to start the sam-
+gram character-level language model (and thus de-       pler in a high probability region. We initialize our
+pends only on the number of characters in ui ). We      model with the results of the HMM-based baseline
+then sample from among the two values:                  (see section 8), and rule out character substitutions
+                                                        with probability < 0.05 according to the baseline.
+             P (ui |ci = 1) · P (ci = 1)
+             P (ui |ci = 0) · P (ci = 0)                7 Experiments
+6.4 High-level Resampling                               7.1 Corpus and Annotations
+Besides the individual sampling steps detailed          We apply our model to the ancient Ugaritic lan-
+above, we also consider several larger sampling         guage (see Section 3 for background). Our un-
+moves in order to speed convergence. For exam-          deciphered corpus consists of an electronic tran-
+ple, for each type of edit-sequence ⃗e which has        scription of the Ugaritic tablets (Cunchillos et al.,
+been sampled (and may now occur many times              2002). This corpus contains 7,386 unique word
+throughout the data), we consider a single joint        types. As our known language corpus, we use the
+move to another edit-sequence e⃗′ (both of which        Hebrew Bible, which is both geographically and
+yield the same lost language morpheme u). The           temporally close to Ugaritic. To extract a Hebrew
+details are much the same as above, and as before       morphological lexicon we assume the existence
+the set of possible edit-sequences is limited by the    of manual morphological and part-of-speech an-
+string u and the known language lexicon.                notations (Groves and Lowery, 2006). We divide
+   We also resample groups of the sparsity indica-      Hebrew stems into four main part-of-speech cat-
+tor variables ⃗λ in tandem, to allow a more rapid ex-   egories each with a distinct affix profile: Noun,
+ploration of the probability space. For each char-      Verb, Pronoun, and Particle. For each part-of-
+acter u, we block sample the entire set {λ(u,h) }h ,    speech category, we determine the set of allowable
+and likewise for each character h.                      affixes using the annotated Bible corpus.
+
+
+                                                    1054
+
+
+                       Words              Morphemes            ability sequence of latent Hebrew letters is pre-
+                    type     token        type   token
+ Baseline        28.82% 46.00%            N/A     N/A          dicted for each Ugaritic word-form, using Viterbi
+ Our Model       60.42% 66.71%         75.07% 81.25%           decoding.
+ No Sparsity     46.08% 54.01%         69.48% 76.10%
+                                                               Alphabetic Mapping The first essential step to-
+Table 1: Accuracy of cognate translations, mea-                wards successful decipherment is recovering the
+sured with respect to complete word-forms and                  mapping between the symbols of the lost language
+morphemes, for the HMM-based substitution ci-                  and the alphabet of a known language. As a gold
+pher baseline, our complete model, and our model               standard for this comparison, we use the well-
+without the structural sparsity priors. Note that the          established relationship between the Ugaritic and
+baseline does not provide per-morpheme results,                Hebrew alphabets (Hetzron, 1997). This mapping
+as it does not predict morpheme boundaries.                    is not one-to-one but is generally quite sparse. Of
+                                                               the 30 Ugaritic symbols, 28 map predominantly
+                                                               to a single Hebrew letter, and the remaining two
+   To evaluate the output of our model, we anno-
+                                                               map to two different letters. As the Hebrew alpha-
+tated the words in the Ugaritic lexicon with the
+                                                               bet contains only 22 letters, six map to two dis-
+corresponding Hebrew cognates found in the stan-
+                                                               tinct Ugaritic letters and two map to three distinct
+dard reference dictionary (del Olo Lete and San-
+                                                               Ugaritic letters.
+martı́n, 2004). In addition, manual morphological
+                                                                  We recover our model’s predicted alphabetic
+segmentation was carried out with the guidance of
+                                                               mappings by simply examining the sampled val-
+a standard Ugaritic grammar (Schniedewind and
+                                                               ues of the binary indicator variables λu,h for each
+Hunt, 2007). Although Ugaritic is an inflectional
+                                                               Ugaritic-Hebrew letter pair (u, h). Due to our
+rather than agglutinative language, in its written
+                                                               structural sparsity prior P (⃗λ), the predicted map-
+form (which lacks vowels) words can easily be
+                                                               pings are sparse: each Ugaritic letter maps to only
+segmented (e.g. wyplt.n becomes wy-plt.-n).
+                                                               a single Hebrew letter, and most Hebrew letters
+   Overall, we identified Hebrew cognates for
+                                                               map to only a single Ugaritic letter. To recover
+2,155 word forms, covering almost 1/3 of the
+                                                               alphabetic mappings from the HMM substitution
+Ugaritic vocabulary.4
+                                                               cipher baseline, we predict the Hebrew letter h
+8 Evaluation Tasks and Results                                 which maximizes the model’s probability P (h|u),
+                                                               for each Ugaritic letter u.
+We evaluate our model on four separate decipher-                  To evaluate these mappings, we simply count
+ment tasks: (i) Learning alphabetic mappings,                  the number of Ugaritic letters that are correctly
+(ii) translating cognates, (iii) identifying cognates,         mapped to one of their Hebrew reflexes. By this
+and (iv) morphological segmentation.                           measure, the baseline recovers correct mappings
+   As a baseline for the first three of these tasks            for 22 out of 30 Ugaritic characters (73.3%). Our
+(learning alphabetic mappings and translating and              model recovers correct mappings for all but one
+identifying cognates), we adapt the HMM-based                  (very low frequency) Ugaritic characters, yielding
+method of Knight et al. (2006) for learning let-               96.67% accuracy.
+ter substitution ciphers. In its original setting, this           Cognate Decipherment We compare the deci-
+model was used to map written texts to spoken lan-             pherment accuracy for Ugaritic words that have
+guage, under the assumption that each character                corresponding Hebrew cognates. We evaluate
+was emitted from a hidden phonemic state. In our               our model’s predictions on each distinct Ugaritic
+adaptation, we assume instead that each Ugaritic               word-form at both the type and token level. As
+character was generated by a hidden Hebrew let-                Table 1 shows, our method correctly translates
+ter. Hebrew character trigram transition probabili-            over 60% of all distinct Ugaritic word-forms with
+ties are estimated using the Hebrew Bible, and He-             Hebrew cognates and over 71% of the individ-
+brew to Ugaritic character emission probabilities              ual morphemes that compose them, outperform-
+are learned using EM. Finally, the highest prob-               ing the baseline by significant margins. Accu-
+   4
+    We are confident that a large majority of Ugaritic words   racy improves when the frequency of the word-
+with known Hebrew cognates were thus identified. The           forms is taken into account (token-level evalua-
+remaining Ugaritic words include many personal and geo-
+graphic names, words with cognates in other Semitic lan-       tion), indicating that the model is able to deci-
+guages, and words whose etymology is uncertain.                pher frequent words more accurately than infre-
+
+
+                                                           1055
+
+
+                      1
+                                                                                              precision        recall     f-measure
+                                                                              Morfessor        88.87%        67.48%         76.71%
+                     0.8
+                                                                              Our Model        86.62%        90.53%         88.53%
+True positive rate
+
+
+
+
+                     0.6                                                   Table 2: Morphological segmentation accuracy for
+                                                                           a standard unsupervised baseline and our model.
+                     0.4
+                                                           Our Model
+                                                           Baseline        those Ugaritic word-forms which are very unlikely
+                                                           Random
+                     0.2                                                   to have Hebrew cognates.
+
+                      0
+                                                                           Morphological segmentation Finally, we eval-
+                           0   0.2    0.4           0.6      0.8       1
+                                     False positive rate
+                                                                           uate the accuracy of our model’s morphological
+                                                                           segmentation for Ugaritic words. As a baseline
+                                                                           for this comparison, we use Morfessor Categories-
+      Figure 2: ROC curve for cognate identification.
+                                                                           MAP (Creutz and Lagus, 2007). As Table 2
+                                                                           shows, our model provides a significant boost in
+quent words. We also measure the average Leven-                            performance, especially for recall. This result is
+shtein distance between predicted and actual cog-                          consistent with previous work showing that mor-
+nate word-forms. On average, our model’s pre-                              phological annotations can be projected to new
+dictions lie 0.52 edit operations from the true cog-                       languages lacking annotation (Yarowsky et al.,
+nate, whereas the baseline’s predictions average a                         2000; Snyder and Barzilay, 2008), but generalizes
+distance of 1.26 edit operations.                                          those results to the case where parallel data is un-
+   Finally, we evaluated the performance of our                            available.
+model when the structural sparsity constraints are
+not used. As Table 1 shows, performance degrades                           9 Conclusion and Future Work
+significantly in the absence of these priors, indi-                        In this paper we proposed a method for the au-
+cating the importance of modeling the sparsity of                          tomatic decipherment of lost languages. The key
+character mappings.                                                        strength of our model lies in its ability to incorpo-
+                                                                           rate a range of linguistic intuitions in a statistical
+Cognate identification We evaluate our
+                                                                           framework.
+model’s ability to identify cognates using the
+                                                                              We hope to address several issues in future
+sampled indicator variables ci . As before, we
+                                                                           work. Our model fails to take into account
+compare our performance against the HMM
+                                                                           the known frequency of Hebrew words and mor-
+substitution cipher baseline. To produce baseline
+                                                                           phemes. In fact, the most common error is incor-
+cognate identification predictions, we calculate
+                                                                           rectly translating the masculine plural suffix (-m)
+the probability of each latent Hebrew letter se-
+                                                                           as the third person plural possessive suffix (-m)
+quence predicted by the HMM, and compare it to
+                                                                           rather than the correct and much more common
+a uniform character-level Ugaritic language model
+                                                                           plural suffix (-ym). Also, even with the correct al-
+(as done by our model, to avoid automatically
+                                                                           phabetic mapping, many words can only be deci-
+assigning higher cognate probability to shorter
+                                                                           phered by examining their literary context. Our
+Ugaritic words). For both our model and the
+                                                                           model currently operates purely on the vocabulary
+baseline, we can vary the threshold for cognate
+                                                                           level and thus fails to take this contextual infor-
+identification by raising or lowering the cognate
+                                                                           mation into account. Finally, we intend to explore
+prior P (ci ). As the prior is set higher, we detect
+                                                                           our model’s predictive power when the family of
+more true cognates, but the false positive rate
+                                                                           the lost language is unknown.5
+increases as well.
+                                                                              5
+   Figure 2 shows the ROC curve obtained by                                     The authors acknowledge the support of the NSF (CA-
+                                                                           REER grant IIS-0448168, grant IIS-0835445, and grant IIS-
+varying this prior both for our model and the base-                        0835652) and the Microsoft Research New Faculty Fellow-
+line. At all operating points, our model outper-                           ship. Thanks to Michael Collins, Tommi Jaakkola, and
+forms the baseline, and both models always pre-                            the MIT NLP group for their suggestions and comments.
+                                                                           Any opinions, findings, conclusions, or recommendations ex-
+dict better than chance. In practice for our model,                        pressed in this paper are those of the authors, and do not nec-
+we use a high cognate prior, thus only ruling out                          essarily reflect the views of the funding organizations.
+
+
+                                                                       1056
+
+
+References                                                 Kevin Knight, Anish Nair, Nishit Rathod, and Kenji
+                                                             Yamada. 2006. Unsupervised analysis for deci-
+C. E. Antoniak. 1974. Mixtures of Dirichlet pro-             pherment problems. In Proceedings of the COL-
+  cesses with applications to bayesian nonparametric         ING/ACL, pages 499–506.
+  problems. The Annals of Statistics, 2:1152–1174,
+  November.                                                Philipp Koehn and Kevin Knight. 2002. Learning a
+                                                             translation lexicon from monolingual corpora. In
+Alexandre Bouchard, Percy Liang, Thomas Griffiths,           Proceedings of the ACL-02 workshop on Unsuper-
+  and Dan Klein. 2007. A probabilistic approach to           vised lexical acquisition, pages 9–16.
+  diachronic phonology. In Proceedings of EMNLP,
+  pages 887–896.                                           Grzegorz Kondrak. 2001. Identifying cognates by
+                                                             phonetic and semantic similarity. In Proceeding of
+Mathias Creutz and Krista Lagus. 2007. Unsuper-              NAACL, pages 1–8.
+ vised models for morpheme segmentation and mor-
+ phology learning. ACM Transactions on Speech and          Grzegorz Kondrak. 2009. Identification of cognates
+ Language Processing, 4(1).                                  and recurrent sound correspondences in word lists.
+                                                             Traitement Automatique des Langues, 50(2):201–
+Jesus-Luis Cunchillos, Juan-Pablo Vita, and Jose-            235.
+   Ángel Zamora. 2002. Ugaritic data bank. CD-
+   ROM.                                                    John B. Lowe and Martine Mazaudon. 1994. The re-
+                                                             construction engine: a computer implementation of
+Gregoria del Olo Lete and Joaquı́n Sanmartı́n. 2004.         the comparative method. Computational Linguis-
+  A Dictionary of the Ugaritic Language in the Alpha-        tics, 20(3):381–417.
+  betic Tradition. Number 67 in Handbook of Oriental
+  Studies. Section 1 The Near and Middle East. Brill.      Reinhard Rapp. 1999. Automatic identification of
+                                                             word translations from unrelated english and german
+Pascale Fung and Kathleen McKeown. 1997. Find-               corpora. In Proceedings of the ACL, pages 519–526.
+  ing terminology translations from non-parallel cor-
+  pora. In Proceedings of the Annual Workshop on           Andrew Robinson. 2002. Lost Languages: The
+  Very Large Corpora, pages 192–202.                         Enigma of the World’s Undeciphered Scripts.
+                                                             McGraw-Hill.
+S. Geman and D. Geman. 1984. Stochastic relaxation,
+   gibbs distributions and the bayesian restoration of     William M. Schniedewind and Joel H. Hunt. 2007. A
+   images. IEEE Transactions on Pattern Analysis and         Primer on Ugaritic: Language, Culture and Litera-
+   Machine Intelligence, 12:609–628.                         ture. Cambridge University Press.
+
+Alan Groves and Kirk Lowery, editors. 2006. The            Mark S. Smith, editor. 1955. Untold Stories: The Bible
+  Westminster Hebrew Bible Morphology Database.             and Ugaritic Studies in the Twentieth Century. Hen-
+  Westminster Hebrew Institute, Philadelphia, PA,           drickson Publishers.
+  USA.
+                                                           Benjamin Snyder and Regina Barzilay. 2008. Cross-
+Jacques B. M. Guy. 1994. An algorithm for identifying        lingual propagation for morphological analysis. In
+   cognates in bilingual wordlists and its applicability     Proceedings of the AAAI, pages 848–854.
+   to machine translation. Journal of Quantitative Lin-
+   guistics, 1(1):35–42.                                   Wilfred Watson and Nicolas Wyatt, editors.      1999.
+                                                             Handbook of Ugaritic Studies. Brill.
+Aria Haghighi, Percy Liang, Taylor Berg-Kirkpatrick,
+  and Dan Klein. 2008. Learning bilingual lexicons         David Yarowsky, Grace Ngai, and Richard Wicen-
+  from monolingual corpora. In Proceedings of the            towski. 2000. Inducing multilingual text analysis
+  ACL/HLT, pages 771–779.                                    tools via robust projection across aligned corpora.
+                                                             In Proceedings of HLT, pages 161–168.
+Robert Hetzron, editor. 1997. The Semitic Languages.
+  Routledge.
+
+H. Ishwaran and J.S. Rao. 2005. Spike and slab vari-
+  able selection: frequentist and Bayesian strategies.
+  The Annals of Statistics, 33(2):730–773.
+
+Kevin Knight and Richard Sproat. 2009. Writing sys-
+  tems, transliteration and decipherment. NAACL Tu-
+  torial.
+
+K. Knight and K. Yamada. 1999. A computa-
+  tional approach to deciphering unknown scripts. In
+  ACL Workshop on Unsupervised Learning in Natu-
+  ral Language Processing.
+
+
+                                                       1057
+

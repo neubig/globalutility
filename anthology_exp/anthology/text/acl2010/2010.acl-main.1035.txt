@@ -1,0 +1,619 @@
+ Accurate Context-Free Parsing with Combinatory Categorial Grammar
+
+                             Timothy A. D. Fowler and Gerald Penn
+                       Department of Computer Science, University of Toronto
+                                 Toronto, ON, M5S 3G4, Canada
+                           {tfowler, gpenn}@cs.toronto.edu
+
+
+
+                      Abstract                                 variation of CCG seen in the literature can be de-
+                                                               fined. Then, we prove that for a wide range of
+    The definition of combinatory categorial                   CCGs there is a context-free grammar (CFG) that
+    grammar (CCG) in the literature varies                     has exactly the same derivations. Included in this
+    quite a bit from author to author. How-                    class of strongly context-free CCGs are a grammar
+    ever, the differences between the defini-                  including all the derivations in CCGbank and the
+    tions are important in terms of the lan-                   grammar used in the Clark and Curran parser.
+    guage classes of each CCG. We prove                           Due to this insight, we investigate the potential
+    that a wide range of CCGs are strongly                     of using tools from the probabilistic CFG com-
+    context-free, including the CCG of CCG-                    munity to improve CCG parsing results. The
+    bank and of the parser of Clark and Cur-                   Petrov parser (Petrov and Klein, 2007) uses la-
+    ran (2007). In light of these new results,                 tent variables to refine the grammar extracted from
+    we train the PCFG parser of Petrov and                     a corpus to improve accuracy, originally used
+    Klein (2007) on CCGbank and achieve                        to improve parsing results on the Penn treebank
+    state of the art results in supertagging ac-               (PTB). We train the Petrov parser on CCGbank
+    curacy, PARSEVAL measures and depen-                       and achieve the best results to date on sentences
+    dency accuracy.                                            from section 23 in terms of supertagging accuracy,
+                                                               PARSEVAL measures and dependency accuracy.
+1 Introduction                                                    These results should not be interpreted as proof
+Combinatory categorial grammar (CCG) is a vari-                that grammars extracted from the Penn treebank
+ant of categorial grammar which has attracted in-              and from CCGbank are equivalent. Bos’s system
+terest for both theoretical and practical reasons.             for building semantic representations from CCG
+On the theoretical side, we know that it is mildly             derivations is only possible due to the categorial
+context-sensitive (Vijay-Shanker and Weir, 1994)               nature of CCG. Furthermore, the long distance de-
+and that it can elegantly analyze a wide range of              pendencies involved in extraction and coordina-
+linguistic phenomena (Steedman, 2000). On the                  tion phenomena have a more natural representa-
+practical side, we have corpora with CCG deriva-               tion in CCG.
+tions for each sentence (Hockenmaier and Steed-
+                                                               2 The Language Classes of Combinatory
+man, 2007), a wide-coverage parser trained on that
+                                                                 Categorial Grammars
+corpus (Clark and Curran, 2007) and a system for
+converting CCG derivations into semantic repre-                A categorial grammar is a grammatical system
+sentations (Bos et al., 2004).                                 consisting of a finite set of words, a set of cate-
+   However, despite being treated as a single uni-             gories, a finite set of sentential categories, a finite
+fied grammar formalism, each of these authors use              lexicon mapping words to categories and a rule
+variations of CCG which differ primarily on which              system dictating how the categories can be com-
+combinators are included in the grammar and the                bined. The set of categories are constructed from a
+restrictions that are put on them. These differences           finite set of atoms A (e.g. A = {S, N P, N, P P })
+are important because they affect whether the                  and a finite set of binary connectives B (e.g.
+mild context-sensitivity proof of Vijay-Shanker                B = {/, \}) to build an infinite set of categories
+and Weir (1994) applies. We will provide a gen-                C(A, B) (e.g. C(A, B) = {S, S\N P, (S\N P )/
+eralized framework for CCG within which the full               N P, . . .}). For a category C, its size |C| is the
+
+
+                                                         335
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 335–344,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+number of atom occurrences it contains. When not                      (1) Application
+specified, connectives are left associative.
+                                                                           • X/Y, Y → X
+    According to the literature, combinatory cate-
+gorial grammar has been defined to have a vari-                            • Y, X\Y → X
+ety of rule systems. These rule systems vary from                     (2) Composition
+a small rule set, motivated theoretically (Vijay-
+Shanker and Weir, 1994), to a larger rule set,                             • X/Y, Y /Z → X/Z
+motivated linguistically, (Steedman, 2000) to a                            • Y \Z, X\Y → X\Z
+very large rule set, motivated by practical cover-
+age (Hockenmaier and Steedman, 2007; Clark and                        (3) Crossed Composition
+Curran, 2007). We provide a definition general                             • X/Y, Y \Z → X\Z
+enough to incorporate these four main variants of                          • Y /Z, X\Y → X/Z
+CCG, as well as others.
+    A combinatory categorial grammar (CCG) is a                       (4) Generalized Composition
+categorial grammar whose rule system consists of
+                                                                           • X/Y, Y /Z1 / . . . /Zn → X/Z1 / . . . /Zn
+rule schemata where the left side is a sequence of
+categories and the right side is a single category                         • Y \Z1 \ . . . \Zn , X\Y → X\Z1 \ . . . \Zn
+where the categories may include variables over                       (5) Generalized Crossed Composition
+both categories and connectives. In addition, rule
+schemata may specify a sequence of categories                              • X/Y, Y |1 Z1 |2 . . . |n Zn
+and connectives using the . . . convention1 . When                           → X|1 Z1 |2 . . . |n Zn
+. . . appears in a rule, it matches any sequence of                        • Y |1 Z1 |2 . . . |n Zn , X\Y
+categories and connectives according to the con-                             → X|1 Z1 |2 . . . |n Zn
+nectives adjacent to the . . .. For example, the rule
+schema for forward composition is:                                    (6) Reducing Generalized Crossed Composition
+                                                                          Generalized Composition or Generalized
+                  X/Y, Y /Z → X/Z                                         Crossed Composition where |X| ≤ |Y |.
+
+and the rule schema for generalized forward                           (7) Substitution
+crossed composition is:
+                                                                           • (X/Y )|1 Z, Y |1 Z → X|1 Z
+   X/Y, Y |1 Z1 |2 . . . |n Zn → X|1 Z1 |2 . . . |n Zn                     • Y |1 Z, (X\Y )|1 Z → X|1 Z
+
+                                                                      (8) D Combinator2
+where X, Y and Zi for 1 ≤ i ≤ n are variables
+over categories and |i for 1 ≤ i ≤ n are variables                         • X/(Y |1 Z), Y |2 W → X|2 (W |1 Z)
+over connectives. Figure 1 shows a CCG deriva-                             • Y |2 W, X\(Y |1 Z) → X|2 (W |1 Z)
+tion from CCGbank.
+   A well-known categorial grammar which is not                       (9) Type-Raising
+a CCG is Lambek categorial grammar (Lambek,                                • X → T /(T \X)
+1958) whose introduction rules cannot be charac-
+                                                                           • X → T \(T /X)
+terized as combinatory rules (Zielonka, 1981).
+                                                                  (10) Finitely Restricted Type-Raising
+2.1   Classes for defining CCG
+We define a number of schema classes general                               • X → T /(T \X) where hX, T i ∈ S for fi-
+enough that the important variants of CCG can be                             nite S
+defined by selecting some subset of the classes. In                        • X → T \(T /X) where hX, T i ∈ S for fi-
+addition to the schema classes, we also define two                           nite S
+restriction classes which define ways in which the
+                                                                  (11) Finite Unrestricted Variable-Free Rules
+rule schemata from the schema classes can be re-
+stricted. We define the following schema classes:                            ~ → Y where hX,
+                                                                           • X            ~ Y i ∈ S for finite S
+   1                                                                     2
+     The . . . convention (Vijay-Shanker and Weir, 1994) is                Hoyt and Baldridge (2008) argue for the inclusion of the
+essentially identical to the $ convention of Steedman (2000).         D Combinator in CCG.
+
+
+                                                                336
+
+
+                                                                                        S[dcl]
+                                                                     S[dcl]
+                                                                             S[dcl]\N P
+                                                                                     NP
+                                                                                           N P \N P
+                                                                                                    NP
+                                                                                                         N P [conj]
+                                                                                                                 NP
+    NP                                                                       NP                                        N
+     N                                 NP                                     N                                              N
+N/N    N S[dcl]\N P/N P N N P \N P/N P N/N                                         N ,        N P [nb]/N N/N     N/N        N      .
+ Mr. Vinken     is    chairman  of    Elsevier                                    N.V. ,          the    Dutch publishing group    .
+                               Figure 1: A CCG derivation from section 00 of CCGbank.
+
+
+     We define the following restriction classes:                          such rules, limiting the new atoms to a finite num-
+                                                                           ber.
+  (A) Rule Restriction to a Finite Set
+                                                                           Definition 1. The subcategories for a category c
+         The rule schemata in the schema classes of a
+                                                                           are c1 and c2 if c = c1 • c2 for • ∈ B and c if c is
+         CCG are limited to a finite number of instan-
+                                                                           atomic. Its second subcategories are the subcate-
+         tiations.
+                                                                           gories of its subcategories.
+  (B) Rule Restrictions to Certain Categories 3                            Proposition 2. Any CCG consisting of a subset
+         The rule schemata in the schema classes of a                      of the rule schemata (1-3), (6-8) and (10-11) has
+         CCG are limited to a finite number of instan-                     derivations consisting of only a finite number of
+         tiations although variables are allowed in the                    categories.
+         instantiations.
+                                                                           Proof. We first prove the proposition excluding
+     Vijay-Shanker and Weir (1994) define CCG to                           schema class (8). We will use structural induction
+  be schema class (4) with restriction class (B).                          on the derivations to prove that there is a bound on
+  Steedman (2000) defines CCG to be schema                                 the size of the subcategories of any category in the
+  classes (1-5), (6), (10) with restriction class (B).                     derivation. The base case is the assignment of a
+                                                                           lexical category to a word and the inductive step is
+  2.2     Strongly Context-Free CCGs                                       the use of a rule from schema classes (1-4), (6-7)
+  Proposition 1. The set of atoms in any derivation                        and (10-11).
+  of any CCG consisting of a subset of the schema                             Given that the lexicon is finite, there is a bound
+  classes (1-8) and (10-11) is finite.                                     k on the size of the subcategories of lexical cate-
+                                                                           gories. Furthermore, there is a bound l on the size
+  Proof. A finite lexicon can introduce only a finite                      of the subcategories of categories on the right side
+  number of atoms in lexical categories.                                   of any rule in (10) and (11). Let m = max(k, l).
+     Any rule corresponding to a schema in the                                For rules from schema class (1), the category
+  schema classes (1-8) has only those atoms on the                         on the right is a subcategory of the first category
+  right that occur somewhere on the left. Rules in                         on the left, so the subcategories on the right are
+  classes (10-11) can each introduce a finite number                       bound by m. For rules from schema classes (2-3),
+  of atoms, but there can be only a finite number of                       the category on the right has subcategories X and
+     3
+       Baldridge (2002) introduced a variant of CCG where                  Z each of which is bound in size by m since they
+  modalities are added to the connectives / and \ along with               occur as subcategories of categories on the left.
+  variants of the combinatory rules based on these modalities.
+  Our proofs about restriction class (B) are essentially identical            For rules from schema class (6), since reduc-
+  to proofs regarding the multi-modal variant.                             ing generalized composition is a special case of re-
+
+
+                                                                     337
+
+
+ducing generalized crossing composition, we need               Proposition 4. Any CCG consisting of a subset of
+only consider the latter. The category on the right            the schema classes (1-3), (6-8) and (10-11) along
+has subcategories X|1 Z1 |2 . . . |n−1 |Zn−1 and Zn .          with restriction class (B) is strongly context-free.
+Zn is bound in size by m because it occurs as
+a subcategory of the second category on the left.              Proof. If a CCG is allowed to restrict the use of
+Then, the size of Y |1 Z1 |2 . . . |n−1 |Zn−1 must be          its rules to certain categories as in schema class
+bound by m and since |X| ≤ |Y |, the size of                   (B), then when we construct the context-free rules
+X|1 Z1 |2 . . . |n−1 |Zn−1 must also be bound by m.            by enumerating only those categories in the set C
+                                                               allowed by the restriction.
+   For rules from schema class (7), the category on
+the right has subcategories X and Z. The size of               Proposition 5. Any CCG that includes restriction
+Z is bound by m because it is a subcategory of a               class (A) is strongly context-free.
+category on the left. The size of X is bound by
+m because it is a second subcategory of a category             Proof. We construct a context-free grammar with
+on the left.                                                   exactly those rules in the finite set of instantiations
+   Finally, the use of rules in schema classes (10-            of the CCG rule schemata along with context-
+11) have categories on the right that are bounded              free rules corresponding to the lexicon. This
+by l, which is, in turn, bounded by m. Then, by                CFG generates exactly the same derivations as the
+proposition 1, there must only be a finite number              CCG.
+of categories in any derivation in a CCG consisting               We have thus proved that of a wide range of the
+of a subset of rule schemata (1-3), (6-7) and (10-             rule schemata used to define CCGs are context-
+11).                                                           free.
+   The proof including schema class (8) is essen-
+tially identical except that k must be defined in              2.3 Combinatory Categorial Grammars in
+terms of the size of the second subcategories.                     Practice
+                                                               CCGbank (Hockenmaier and Steedman, 2007)
+Definition 2. A grammar is strongly context-free               is a corpus of CCG derivations that was semi-
+if there exists a CFG such that the derivations of             automatically converted from the Wall Street Jour-
+the two grammars are identical.                                nal section of the Penn treebank. Figure 2 shows
+Proposition 3. Any CCG consisting of a subset                  a categorization of the rules used in CCGbank ac-
+of the schema classes (1-3), (6-8) and (10-11) is              cording to the schema classes defined in the pre-
+strongly context-free.                                         ceding section where a rule is placed into the least
+                                                               general class to which it belongs. In addition to
+Proof. Since the CCG generates derivations                     having no generalized composition other than the
+whose categories are finite in number let C be that            reducing variant, it should also be noted that in all
+set of categories. Let S(C, X) be the subset of C              generalized composition rules, X = Y implying
+matching category X (which may have variables).                that the reducing class of generalized composition
+Then, for each rule schema C1 , C2 → C3 in (1-3)               is a very natural schema class for CCGbank.
+and (6-8), we construct a context-free rule C3′ →                 If we assume that type-raising is restricted to
+C1′ , C2′ for each Ci′ in S(C, Ci ) for 1 ≤ i ≤ 3.             those instances occurring in CCGbank4 , then a
+Similarly, for each rule schema C1 → C2 in (10),               CCG consisting of schema classes (1-3), (6-7) and
+we construct a context-free rule C2′ → C1′ which               (10-11) can generate all the derivations in CCG-
+results in a finite number of such rules. Finally, for         bank. By proposition 3, such a CCG is strongly
+each rule schema X    ~ → Z in (11) we construct a             context-free. One could also observe that since
+context-free rule Z → X.  ~ Then, for each entry in            CCGbank is finite, its grammar is not only a
+the lexicon w → C, we construct a context-free                 context-free grammar but can produce only a finite
+rule C → w.                                                    number of derivations. However, our statement is
+   The constructed CFG has precisely the same                  much stronger because this CCG can generate all
+rules as the CCG restricted to the categories in C             of the derivations in CCGbank given only the lex-
+except that the left and right sides have been re-             icon, the finite set of unrestricted rules and the fi-
+versed. Thus, by proposition 2, the CFG has ex-                nite number of type-raising rules.
+actly the same derivations as the CCG.                            4
+                                                                      Without such an assumption, parsing is intractable.
+
+
+                                                         338
+
+
+  Schema Class                         Rules      Instances               in Petrov’s experiments on the Penn treebank, the
+  Application                           519        902176                 syntactic category N P was refined to the more
+  Composition                           102          7189                 fine-grained N P 1 and N P 2 roughly correspond-
+  Crossed Composition                    64         14114                 ing to N P s in subject and object positions. Rather
+  Reducing Generalized                   50           612                 than requiring such distinctions to be made in the
+  Crossed Composition                                                     corpus, the Petrov parser hypothesizes these splits
+  Generalized Composition                 0            0                  automatically.
+  Generalized Crossed                     0            0                     The Petrov parser operates by performing a
+  Composition                                                             fixed number of iterations of splitting, merging
+  Substitution                           3            4                   and smoothing. The splitting process is done
+  Type-Raising                          27          3996                  by performing Expectation-Maximization to de-
+  Unrestricted Rules                   642         335011                 termine a likely potential split for each syntactic
+  Total                                1407       1263102                 category. Then, during the merging process some
+                                                                          of the splits are undone to reduce grammar size
+Figure 2: The rules of CCGbank by schema class.                           and avoid overfitting according to the likelihood
+                                                                          of the split against the training data.
+   The Clark and Curran CCG Parser (Clark and                                The Petrov parser was chosen for our experi-
+Curran, 2007) is a CCG parser which uses CCG-                             ments because it refines the grammar in a mathe-
+bank as a training corpus. Despite the fact that                          matically principled way without altering the na-
+there is a strongly context-free CCG which gener-                         ture of the derivations that are output. This is
+ates all of the derivations in CCGbank, it is still                       important because the input to the semantic back-
+possible that the grammar learned by the Clark                            end and the system that converts CCG derivations
+and Curran parser is not a context-free grammar.                          to dependencies requires CCG derivations as they
+However, in addition to rule schemata (1-6) and                           appear in CCGbank.
+(10-11) they also include restriction class (A) by
+restricting rules to only those found in the train-                       3.1 Experiments
+ing data5 . Thus, by proposition 5, the Clark and                         Our experiments use CCGbank as the corpus and
+Curran parser is a context-free parser.                                   we use sections 02-21 for training (39603 sen-
+3 A Latent Variable CCG Parser                                            tences), 00 for development (1913 sentences) and
+                                                                          23 for testing (2407 sentences).
+The context-freeness of a number of CCGs should                              CCGbank, in addition to the basic atoms S, N ,
+not be considered evidence that there is no ad-                           N P and P P , also differentiates both the S and
+vantage to CCG as a grammar formalism. Unlike                             N P atoms with features allowing more subtle dis-
+the context-free grammars extracted from the Penn                         tinctions. For example, declarative sentences are
+treebank, these allow for the categorial semantics                        S[dcl], wh-questions are S[wq] and sentence frag-
+that accompanies any categorial parse and for a                           ments are S[f rg] (Hockenmaier and Steedman,
+more elegant analysis of linguistic structures such                       2007). These features allow finer control of the use
+as extraction and coordination. However, because                          of combinatory rules in the resulting grammars.
+we now know that the CCG defined by CCGbank                               However, this fine-grained control is exactly what
+is strongly context-free, we can use tools from the                       the Petrov parser does automatically. Therefore,
+CFG parsing community to improve CCG parsing.                             we trained the Petrov parser twice, once on the
+   To illustrate this point, we train the Petrov                          original version of CCGbank (denoted “Petrov”)
+parser (Petrov and Klein, 2007) on CCGbank.                               and once on a version of CCGbank without these
+The Petrov parser uses latent variables to refine                         features (denoted “Petrov no feats”). Furthermore,
+a coarse-grained grammar extracted from a train-                          we will evaluate the parsers obtained after 0, 4, 5
+ing corpus to a grammar which makes much more                             and 6 training iterations (denoted I-0, I-4, I-5 and
+fine-grained syntactic distinctions. For example,                         I-6). When we evaluate on sets of sentences for
+   5
+     The Clark and Curran parser has an option, which is dis-             which not all parsers return an analysis, we report
+abled by default, for not restricting the rules to those that ap-         the coverage (denoted “Cover”).
+pear in the training data. However, they find that this restric-
+tion is “detrimental to neither parser accuracy or coverage”                 We use the evalb package for PARSEVAL
+(Clark and Curran, 2007).                                                 evaluation and a modified version of Clark and
+
+
+                                                                    339
+
+
+       Parser                 Accuracy %       No feats %         both labeled and unlabeled versions. In addition,
+ C&C Normal Form                 92.92           93.38            we report a variant of the labeled PARSEVAL
+   C&C Hybrid                    93.06           93.52            measures where we ignore the features on the cat-
+     Petrov I-5                  93.18           93.73            egories. For reasons of brevity, we report the PAR-
+ Petrov no feats I-6               -             93.74            SEVAL measures for all sentences in sections 00
+                                                                  and 23, rather than for sentences of length is less
+Figure 3: Supertagging accuracy on the sentences                  than 40 or less than 100. The results are essentially
+in section 00 that receive derivations from the four              identical for those two sets of sentences.
+parsers shown.                                                       Figure 5 gives the PARSEVAL measures on sec-
+       Parser                Accuracy %       No feats %          tion 00 for Clark and Curran’s two best models
+                                                                  and the Petrov parser trained on the original CCG-
+   C&C Hybrid                   92.98           93.43
+                                                                  bank and the version without features after various
+     Petrov I-5                 93.10           93.59
+                                                                  numbers of training iterations. Figure 7 gives the
+ Petrov no feats I-6              -             93.62
+                                                                  accuracies on section 23.
+Figure 4: Supertagging accuracy on the sentences                     In the case of Clark and Curran’s hybrid model,
+in section 23 that receive derivations from the                   the poor accuracy relative to the Petrov parsers can
+three parsers shown.                                              be attributed to the fact that this model chooses
+                                                                  derivations based on the associated dependencies
+                                                                  at the expense of constituent accuracy (see section
+Curran’s evaluate script for dependency eval-
+                                                                  3.4). In the case of Clark and Curran’s normal
+uation. To determine statistical significance, we
+                                                                  form model, the large difference between labeled
+obtain p-values from Bikel’s randomized parsing
+                                                                  and unlabeled accuracy is primarily due to the mis-
+evaluation comparator6 , modified for use with tag-
+                                                                  labeling of a small number of features (specifi-
+ging accuracy, F-score and dependency accuracy.
+                                                                  cally, NP[nb] and NP[num]). The labeled accu-
+3.2      Supertag Evaluation                                      racies without features gives the results when fea-
+                                                                  tures are disregarded.
+Before evaluating the parse trees as a whole, we
+                                                                     Due to the similarity of the accuracies and the
+evaluate the categories assigned to words. In the
+                                                                  difference in the coverage between I-5 of the
+supertagging literature, POS tagging and supertag-
+                                                                  Petrov parser on CCGbank and I-6 of the Petrov
+ging are distinguished – POS tags are the tradi-
+                                                                  parser on CCGbank without features, we reevalu-
+tional Penn treebank tags (e.g. NN, VBZ and DT)
+                                                                  ate their results on only those sentences for which
+and supertags are CCG categories. However, be-
+                                                                  they both return derivations in figures 6 and 8.
+cause the Petrov parser trained on CCGbank has
+                                                                  These results show that the features in CCGbank
+no notion of Penn treebank POS tags, we can only
+                                                                  actually inhibit accuracy (to a statistically signifi-
+evaluate the accuracy of the supertags.
+                                                                  cant degree in the case of unlabeled accuracy on
+   The results are shown in figures 3 and 4 where
+                                                                  section 00) when used as training data for the
+the “Accuracy” column shows accuracy of the su-
+                                                                  Petrov parser.
+pertags against the CCGbank categories and the
+                                                                     Figure 9 gives a comparison between the Petrov
+“No feats” column shows accuracy when features
+                                                                  parser trained on the Penn treebank and on CCG-
+are ignored. Despite the lack of POS tags in the
+                                                                  bank. These numbers should not be directly com-
+Petrov parser, we can see that it performs slightly
+                                                                  pared, but the similarity of the unlabeled measures
+better than the Clark and Curran parser. The dif-
+                                                                  indicates that the difference between the structure
+ference in accuracy is only statistically significant
+                                                                  of the Penn treebank and CCGbank is not large.7
+between Clark and Curran’s Normal Form model
+ignoring features and the Petrov parser trained on                3.4 Dependency Evaluation
+CCGbank without features (p-value = 0.013).
+                                                                  The constituent-based PARSEVAL measures are
+3.3      Constituent Evaluation                                   simple to calculate from the output of the Petrov
+In this section we evaluate the parsers using the                 parser but the relationship of the PARSEVAL
+traditional PARSEVAL measures which measure                           7
+                                                                        Because punctuation in CCG can have grammatical
+recall, precision and F-score on constituents in                  function, we include it in our accuracy calculations result-
+                                                                  ing in lower scores for the Petrov parser trained on the Penn
+   6
+       http://www.cis.upenn.edu/ dbikel/software.html             treebank than those reported in Petrov and Klein (2007).
+
+
+                                                            340
+
+
+                                     Labeled %          Labeled no feats %          Unlabeled %
+         Parser                R         P     F         R      P        F        R      P      F       Cover
+   C&C Normal Form           71.14     70.76 70.95     80.66 80.24 80.45        86.16 85.71 85.94       98.95
+     C&C Hybrid              50.08     49.47 49.77     58.13 57.43 57.78        61.27 60.53 60.90       98.95
+       Petrov I-0            74.19     74.27 74.23     74.66 74.74 74.70        78.65 78.73 78.69       99.95
+       Petrov I-4            85.86     85.78 85.82     86.36 86.29 86.32        89.96 89.88 89.92       99.90
+       Petrov I-5            86.30     86.16 86.23     86.84 86.70 86.77        90.28 90.13 90.21       99.90
+       Petrov I-6            85.95     85.68 85.81     86.51 86.23 86.37        90.22 89.93 90.08       99.22
+   Petrov no feats I-0         -         -     -       72.16 72.59 72.37        76.52 76.97 76.74       99.95
+   Petrov no feats I-5         -         -     -       86.67 86.57 86.62        90.30 90.20 90.25       99.90
+   Petrov no feats I-6         -         -     -       87.45 87.37 87.41        90.99 90.91 90.95       99.84
+
+                      Figure 5: Constituent accuracy on all sentences from section 00.
+
+                                       Labeled %           Labeled no feats %         Unlabeled %
+             Parser              R         P     F         R       P        F       R      P      F
+           Petrov I-5          86.56     86.46 86.51     87.10 87.01 87.05        90.43 90.33 90.38
+       Petrov no feats I-6       -         -     -       87.45 87.37 87.41        90.99 90.91 90.95
+            p-value              -         -     -       0.089 0.090 0.088        0.006 0.008 0.007
+
+  Figure 6: Constituent accuracy on the sentences in section 00 that receive a derivation from both parsers.
+
+                                     Labeled %          Labeled no feats %          Unlabeled %
+         Parser                R         P     F         R      P        F        R      P      F       Cover
+   C&C Normal Form           71.15     70.79 70.97     80.73 80.32 80.53        86.31 85.88 86.10       99.58
+       Petrov I-5            86.94     86.80 86.87     87.47 87.32 87.39        90.75 90.59 90.67       99.83
+   Petrov no feats I-6         -         -     -       87.49 87.49 87.49        90.81 90.82 90.81       99.96
+
+                      Figure 7: Constituent accuracy on all sentences from section 23.
+
+                                    Labeled %              Labeled no feats %         Unlabeled %
+             Parser              R      P     F            R       P        F       R      P      F
+           Petrov I-5          86.94 86.80 86.87         87.47 87.32 87.39        90.75 90.59 90.67
+       Petrov no feats I-6       -      -     -          87.48 87.49 87.49        90.81 90.82 90.81
+            p-value              -      -     -          0.463 0.215 0.327        0.364 0.122 0.222
+
+  Figure 8: Constituent accuracy on the sentences in section 23 that receive a derivation from both parsers.
+
+                                                   Labeled %              Unlabeled %
+                     Parser                     R      P     F          R      P      F         Cover
+               Petrov on PTB I-6              89.65 89.97 89.81       90.80 91.13 90.96        100.00
+            Petrov on CCGbank I-5             86.94 86.80 86.87       90.75 90.59 90.67         99.83
+        Petrov on CCGbank no feats I-6        87.49 87.49 87.49       90.81 90.82 90.81         99.96
+
+   Figure 9: Constituent accuracy for the Petrov parser on the corpora on all sentences from Section 23.
+
+
+
+N/N    N S[dcl]\N P/N P N N P \N P/N P N/N                        N ,        N P [nb]/N N/N     N/N        N     .
+ Mr. Vinken     is    chairman  of    Elsevier                   N.V. ,          the    Dutch publishing group   .
+               Figure 10: The argument-functor relations for the CCG derivation in figure 1.
+
+
+                                                        341
+
+
+N/N    N S[dcl]\N P/N P N N P \N P/N P N/N                     N ,      N P [nb]/N N/N     N/N        N     .
+ Mr. Vinken     is    chairman  of    Elsevier                N.V. ,        the    Dutch publishing group   .
+   Figure 11: The set of dependencies obtained by reorienting the argument-functor edges in figure 10.
+
+
+                                            Labeled %           Unlabeled %
+                  Parser              R         P     F       R      P      F        Cover
+              C&C Normal Form       84.39     85.28 84.83   90.93 91.89 91.41        98.95
+                C&C Hybrid          84.53     86.20 85.36   90.84 92.63 91.73        98.95
+                 Petrov I-0         79.87     78.81 79.34   87.68 86.53 87.10        96.45
+                 Petrov I-4         84.76     85.27 85.02   91.69 92.25 91.97        96.81
+                 Petrov I-5         85.30     85.87 85.58   92.00 92.61 92.31        96.65
+                 Petrov I-6         84.86     85.46 85.16   91.79 92.44 92.11        96.65
+
+      Figure 12: Dependency accuracy on CCGbank dependencies on all sentences from section 00.
+
+
+                                         Labeled %               Unlabeled %
+                      Parser          R      P     F           R       P     F
+                    C&C Hybrid      84.71 86.35 85.52        90.96   92.72 91.83
+                     Petrov I-5     85.50 86.08 85.79        92.12   92.75 92.44
+                      p-value       0.005 0.189 0.187       < 0.001 0.437 0.001
+
+  Figure 13: Dependency accuracy on the section 00 sentences that receive an analysis from both parsers.
+
+
+                                            Labeled %            Unlabeled %
+                      Parser          R         P     F        R       P     F
+                    C&C Hybrid      85.11     86.46 85.78    91.15   92.60 91.87
+                     Petrov I-5     85.73     86.29 86.01    92.04   92.64 92.34
+                      p-value       0.013     0.278 0.197   < 0.001 0.404 0.005
+
+  Figure 14: Dependency accuracy on the section 23 sentences that receive an analysis from both parsers.
+
+
+                                                 Training Time      Parsing Time    Training RAM
+                       Parser                   in CPU minutes    in CPU minutes     in gigabytes
+       Clark and Curran Normal Form Model            1152                 2               28
+          Clark and Curran Hybrid Model              2672                 4               37
+                 Petrov on PTB I-0                     1                  5                2
+                 Petrov on PTB I-5                    180                20                8
+                 Petrov on PTB I-6                    660                21               16
+              Petrov on CCGbank I-0                    1                  5                2
+              Petrov on CCGbank I-4                   103                70                8
+              Petrov on CCGbank I-5                   410               600               14
+              Petrov on CCGbank I-6                  2760               2880              24
+          Petrov on CCGbank no feats I-0               1                  5                2
+          Petrov on CCGbank no feats I-5              360               240                7
+          Petrov on CCGbank no feats I-6             1980               390               13
+
+       Figure 15: Time and space usage when training on sections 02-21 and parsing on section 00.
+
+
+                                                   342
+
+
+scores to the quality of a parse is not entirely clear.         age, we again evaluate the top two parsers on only
+For this reason, the word to word dependencies                  those sentences that they both generate dependen-
+of categorial grammar parsers are often evaluated.              cies for and report those results in figures 13 and
+This evaluation is aided by the fact that in addition           14. The Petrov parser has better results by a sta-
+to the CCG derivation for each sentence, CCG-                   tistically significant margin for both labeled and
+bank also includes a set of dependencies. Fur-                  unlabeled recall and unlabeled F-score.
+thermore, extracting dependencies from a CCG
+derivation is well-established (Clark et al., 2002).            3.5 Time and Space Evaluation
+   A CCG derivation can be converted into de-                   As a final evaluation, we compare the resources
+pendencies by, first, determining which arguments               that are required to both train and parse with the
+go with which functors as specified by the CCG                  Petrov parser on the Penn Treebank, the Petrov
+derivation. This can be represented as in figure                parser on the original version of CCGbank, the
+10. Although this is not difficult, some care must              Petrov parser on CCGbank without features and
+be taken with respect to punctuation and the con-               the Clark and Curran parser using the two mod-
+junction rules. Next, we reorient some of the                   els. All training and parsing was done on a 64-bit
+edges according to information in the lexical cat-              machine with 8 dual core 2.8 Ghz Opteron 8220
+egories. A language for specifying these instruc-               CPUs and 64GB of RAM. Our training times are
+tions using variables and indices is given in Clark             much larger than those reported in Clark and Cur-
+et al. (2002). This process is shown in figures 1,              ran (2007) because we report the cumulative time
+10 and 11 with the directions of the dependencies               spent on all CPUs rather than the maximum time
+reversed from Clark et al. (2002).                              spent on a CPU. Figure 15 shows the results.
+                                                                   As can be seen, the Clark and Curran parser
+   We used the CCG derivation to dependency
+                                                                has similar training times, although signifi-
+converter generate included in the C&C tools
+                                                                cantly greater RAM requirements than the Petrov
+package to convert the output of the Petrov parser
+                                                                parsers. In contrast, the Clark and Curran parser is
+to dependencies. Other than a CCG derivation,
+                                                                significantly faster than the Petrov parsers, which
+their system requires only the lexicon of edge re-
+                                                                we hypothesize to be attributed to the degree
+orientation instructions and methods for convert-
+                                                                to which Clark and Curran have optimized their
+ing the unrestricted rules of CCGbank into the
+                                                                code, their use of C++ as opposed to Java and
+argument-functor relations. Important for the pur-
+                                                                their use of a supertagger to prune the lexicon.
+pose of comparison, this system does not depend
+on their parser.                                                4 Conclusion
+   An unlabeled dependency is correct if the or-
+                                                                We have provided a number of theoretical results
+dered pair of words is correct. A labeled depen-
+                                                                proving that CCGbank contains no non-context-
+dency is correct if the ordered pair of words is cor-
+                                                                free structure and that the Clark and Curran parser
+rect, the head word has the correct category and
+                                                                is actually a context-free parser. Based on these
+the position of the category that is the source of
+                                                                results, we trained the Petrov parser on CCGbank
+that edge is correct. Figure 12 shows accuracies
+                                                                and achieved state of the art results in terms of
+from the Petrov parser trained on CCGbank along
+                                                                supertagging accuracy, PARSEVAL measures and
+with accuracies for the Clark and Curran parser.
+                                                                dependency accuracy.
+We only show accuracies for the Petrov parser
+                                                                   This demonstrates the following. First, the abil-
+trained on the original version of CCGbank be-
+                                                                ity to extract semantic representations from CCG
+cause the dependency converter cannot currently
+                                                                derivations is not dependent on the language class
+generate dependencies for featureless derivations.
+                                                                of a CCG. Second, using a dedicated supertagger,
+   The relatively poor coverage of the Petrov                   as opposed to simply using a general purpose tag-
+parser is due to the failure of the dependency con-             ger, is not necessary to accurately parse with CCG.
+verter to output dependencies from valid CCG
+derivations. However, the coverage of the depen-                Acknowledgments
+dency converter is actually lower when run on the
+gold standard derivations indicating that this cov-             We would like to thank Stephen Clark, James Cur-
+erage problem is not indicative of inaccuracies in              ran, Jackie C. K. Cheung and our three anonymous
+the Petrov parser. Due to the difference in cover-              reviewers for their insightful comments.
+
+
+                                                          343
+
+
+References
+J. Baldridge. 2002. Lexically Specified Deriva-
+   tional Control in Combinatory Categorial Gram-
+   mar. Ph.D. thesis, University of Edinburgh.
+J. Bos, S. Clark, M. Steedman, J. R Curran, and
+   J. Hockenmaier. 2004. Wide-coverage semantic
+   representations from a CCG parser. In Proceedings
+   of COLING, volume 4, page 1240–1246.
+S. Clark and J. R. Curran. 2007. Wide-Coverage ef-
+   ficient statistical parsing with CCG and Log-Linear
+   models. Computational Linguistics, 33(4):493–552.
+S. Clark, J. Hockenmaier, and M. Steedman. 2002.
+   Building deep dependency structures with a wide-
+   coverage CCG parser. In Proceedings of the 40th
+   Meeting of the ACL, page 327–334.
+
+J. Hockenmaier and M. Steedman. 2007. CCGbank:
+   a corpus of CCG derivations and dependency struc-
+   tures extracted from the penn treebank. Computa-
+   tional Linguistics, 33(3):355–396.
+
+F. Hoyt and J. Baldridge. 2008. A logical basis for
+   the d combinator and normal form in CCG. In Pro-
+   ceedings of ACL-08: HLT, page 326–334, Colum-
+   bus, Ohio. Association for Computational Linguis-
+   tics.
+J. Lambek.       1958.   The mathematics of sen-
+   tence structure. American Mathematical Monthly,
+   65(3):154–170.
+S. Petrov and D. Klein. 2007. Improved inference
+   for unlexicalized parsing. In Proceedings of NAACL
+   HLT 2007, page 404–411.
+M. Steedman. 2000. The syntactic process. MIT
+  Press.
+K. Vijay-Shanker and D. Weir. 1994. The equivalence
+  of four extensions of context-free grammars. Math-
+  ematical Systems Theory, 27(6):511–546.
+W. Zielonka. 1981. Axiomatizability of Ajdukiewicz-
+  Lambek calculus by means of cancellation schemes.
+  Zeitschrift fur Mathematische Logik und Grundla-
+  gen der Mathematik, 27:215–224.
+
+
+
+
+                                                     344
+

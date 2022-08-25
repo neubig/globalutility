@@ -1,0 +1,723 @@
+           Untangling the Cross-Lingual Link Structure of Wikipedia
+
+                 Gerard de Melo                                       Gerhard Weikum
+         Max Planck Institute for Informatics                  Max Planck Institute for Informatics
+              Saarbrücken, Germany                                 Saarbrücken, Germany
+          demelo@mpi-inf.mpg.de                                 weikum@mpi-inf.mpg.de
+
+
+
+                      Abstract                                    Contribution. Our research contributions are:
+    Wikipedia articles in different languages                  1) We identify criteria to detect inaccurate connec-
+    are connected by interwiki links that are                  tions in Wikipedia’s cross-lingual link structure.
+    increasingly being recognized as a valu-                   2) We formalize the task of removing such links
+    able source of cross-lingual information.                  as an optimization problem. 3) We introduce an
+    Unfortunately, large numbers of links are                  algorithm that attempts to repair the cross-lingual
+    imprecise or simply wrong. In this pa-                     graph in a minimally invasive way. This algorithm
+    per, techniques to detect such problems are                has an approximation guarantee with respect to
+    identified. We formalize their removal as                  optimal solutions. 4) We show how this algorithm
+    an optimization task based on graph re-                    can be used to combine all editions of Wikipedia
+    pair operations. We then present an al-                    into a single large-scale multilingual register of
+    gorithm with provable properties that uses                 named entities and concepts.
+    linear programming and a region growing
+    technique to tackle this challenge. This                   2   Detecting Inaccurate Links
+    allows us to transform Wikipedia into a
+    much more consistent multilingual regis-
+                                                               In this paper, we model the union of cross-lingual
+    ter of the world’s entities and concepts.
+                                                               links provided by all editions of Wikipedia as an
+1   Introduction                                               undirected graph G = (V, E) with edge weights
+Motivation. The open community-maintained en-                  w(e) for e ∈ E. In our experiments, we simply
+cyclopedia Wikipedia has not only turned the In-               honour each individual link equally by defining
+ternet into a more useful and linguistically di-               w(e) = 2 if there are reciprocal links between the
+verse source of information, but is also increas-              two pages, 1 if there is a single link, and 0 other-
+ingly being used in computational applications as              wise. However, our framework is flexible enough
+a large-scale source of linguistic and encyclope-              to deal with more advanced weighting schemes,
+dic knowledge. To allow cross-lingual navigation,              e.g. one could easily plug in cross-lingual mea-
+Wikipedia offers cross-lingual interwiki links that            sures of semantic relatedness between article texts.
+for instance connect the Indonesian article about                 It turns out that an astonishing number of con-
+Albert Einstein to the corresponding articles in               nected components in this graph harbour inac-
+over 100 other languages. Such links are extraor-              curate links between articles. For instance, the
+dinarily valuable for cross-lingual applications.              Esperanto article ‘Germana Imperiestro’ is about
+   In the ideal case, a set of articles connected di-          German emporers and another Esperanto article
+rectly or indirectly via such links would all de-              ‘Germana Imperiestra Regno’ is about the Ger-
+scribe the same entity or concept. Due to concep-              man Empire, but, as of June 2010, both are linked
+tual drift, different granularities, as well as mis-           to the English and German articles about the Ger-
+takes made by editors, we frequently find con-                 man Empire. Over time, some inaccurate links
+cepts as different as economics and manager in the             may be fixed, but in this and in large numbers of
+same connected component. Filtering out inaccu-                other cases, the imprecise connection has persisted
+rate links enables us to exploit Wikipedia’s multi-            for many years. In order to detect such cases, we
+linguality in a much safer manner and allows us to             need to have some way of specifying that two ar-
+create a multilingual register of named entities.              ticles are likely to be distinct.
+
+
+                                                         844
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 844–853,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                                 ‘Georgia (U.S. State)’. Additionally, there are also
+                                                                 redirects that are clearly marked by a category or
+                                                                 template as involving topic drift, e.g. redirects
+                                                                 from songs to albums or artists, from products to
+                                                                 companies, etc. We keep such redirects in a Di,j
+                                                                 distinct from the one of their redirect targets.
+                                                                 Criterion 2. (Distinctness between categories
+                                                                 from the same Wikipedia edition) For each
+                                                                 language-specific edition of Wikipedia, a separate
+                                                                 assertion (Di,1 , Di,2 , . . . ) is made, where each
+                                                                 Di,j contains a category page together with any
+                                                                 redirects. For instance, ‘Category:Writers’ is dis-
+Figure 1: Connected component with inaccurate                    tinct from ‘Category:Writing’.
+links (simplified)
+                                                                 Criterion 3. (Distinctness for links with anchor
+                                                                 identifiers) The English ‘Division by zero’, for in-
+2.1   Distinctness Assertions                                    stance, links to the German ‘Null#Division’. The
+Figure 1 shows a connected component that con-                   latter is only a part of a larger article about the
+flates the concept of television as a medium with                number zero in general, so we can make a dis-
+the concept of TV sets as devices. Among other                   tinctness assertion to separate ‘Division by zero’
+things, we would like to state that ‘Television’ and             from ‘Null’. In general, for each interwiki link or
+‘T.V.’ are distinct from ‘Television set’ and ‘TV                redirection with an anchor identifier, we add an as-
+set’. In general, we may have several sets of enti-              sertion (Di,1 , Di,2 ) where Di,1 ,Di,2 represent the
+ties Di,1 , . . . , Di,li , for which we assume that any         respective articles without anchor identifiers.
+two entities u,v from different sets are pairwise
+                                                                    These three types of distinctness assertions are
+distinct with some degree of confidence or weight.
+                                                                 instantiated for all articles and categories of all
+In our example, Di,1 = {‘Television’,‘T.V.’}
+                                                                 Wikipedia editions. The assertion weights are tun-
+would be one set, and Di,2 = {‘Television set’,‘TV
+                                                                 able; the simplest choice is using a uniform weight
+set’} would be another set, which means that we
+                                                                 for all assertions (note that these weights are dif-
+are assuming ‘Television’, for example, to be dis-
+                                                                 ferent from the edge weights in the graph). We
+tinct from both ‘Television set’ and ‘TV set’.
+                                                                 will revisit this issue in our experiments.
+Definition 1. (Distinctness Assertions) Given a
+set of nodes V , a distinctness assertion is a col-              2.2   Enforcing Consistency
+lection Di = (Di,1 , . . . , Di,li ) of pairwise dis-
+joint (i.e. Di,j ∩ Di,k = ∅ for j 6= k) sub-                     Given a graph G representing cross-lingual links
+sets Di,j ⊂ V that expresses that any two nodes                  between Wikipedia pages, as well as distinctness
+u ∈ Di,j , v ∈ Di,k from different subsets (j 6= k)              assertions D1 , . . . , Dn with weights w(Di ), we
+are asserted to be distinct from each other with                 may find that nodes that are asserted to be dis-
+some weight w(Di ) ∈ R.                                          tinct are in the same connected component. We
+                                                                 can then try to apply repair operations to recon-
+We found that many components with inaccurate                    cile the graph’s link structure with the distinctness
+links can be identified automatically with the fol-              asssertions and obtain global consistency. There
+lowing distinctness assertions.                                  are two ways to modify the input, and for each
+Criterion 1. (Distinctness between articles from                 we can also consider the corresponding weights
+the same Wikipedia edition) For each language-                   as a sort of cost that quantifies how much we are
+specific edition of Wikipedia, a separate asser-                 changing the original input:
+tion (Di,1 , Di,2 , . . . ) can be made, where each
+Di,j contains an individual article together with                 a) Edge cutting: We may remove an edge e ∈
+its respective redirection pages. Two articles from                  E from the graph, paying cost w(e).
+the same Wikipedia very likely describe distinct                  b) Distinctness assertion relaxation: We may
+concepts unless they are redirects of each other.                    remove a node v ∈ V from a distinctness as-
+For example, ‘Georgia (country)’ is distinct from                    sertion Di , paying cost w(Di ).
+
+
+                                                           845
+
+
+Removing edges allows us to split connected com-               S = (C, U1 , . . . , Un ) is then defined as
+ponents into multiple smaller components, thereby
+ensuring that two nodes asserted to be distinct are                   c(S) = c(C, U1 , . . . , Un )
+                                                                             "            # " n                  #
+no longer connected directly or indirectly. In Fig-                            X                  X
+ure 1, for instance, we could delete the edge from                         =      w(e) +            |Ui | w(Di )
+the Spanish ‘TV set’ article to the Japanese ‘televi-                           e∈C             i=1
+
+sion’ article. In constrast, removing nodes from               Definition 4. (WDGS). A WDGS problem instance
+distinctness assertions means that we decide to                P consists of a graph G = (V, E) with edge
+give up our claim of them being distinct, instead              weights w(e) and n distinctness assertions D1 ,
+allowing them to share a connected component.                  . . . , Dn with weights w(Di ). The objective con-
+   Our reliance on costs is based on the assump-               sists in finding a solution (C, U1 , . . . , Un ) with
+tion that the link structure or topology of the graph          minimal cost c(C, U1 , . . . , Un ).
+provides the best indication of which cross-lingual               It turns out that finding optimal solutions effi-
+links to remove. In Figure 1, we have distinct-                ciently is a hard problem (proofs in Appendix A).
+ness assertions between nodes in two densely con-              Theorem 1. WDGS is NP-hard and APX-hard. If
+nected clusters that are tied together only by a sin-          the Unique Games Conjecture (Khot, 2002) holds,
+gle spurious link. In such cases, edge removals                then it is NP-hard to approximate WDGS within
+can easily yield separate connected components.                any constant factor α > 0.
+When, however, the two nodes are strongly con-
+nected via many different paths with high weights,             3      Approximation Algorithm
+we may instead opt for removing one of the two
+nodes from the distinctness assertion.                         Due to the hardness of WDGS, we devise a
+                                                               polynomial-time approximation algorithm with an
+   The aim will be to balance the costs for remov-             approximation factor of 4 ln(nq + 1) where n is
+ing edges from the graph with the costs for remov-             the number of distinctness assertions and q =
+ing nodes from distinctness assertions to produce              max |Di,j |. This means that for all problem in-
+a consistent solution with a minimal total repair               i,j
+                                                               stances P , we can guarantee
+cost. We accommodate our knowledge about dis-
+tinctness while staying as close as possible to what                          c(S(P ))
+Wikipedia provides as input.                                                             ≤ 4 ln(nq + 1),
+                                                                             c(S ∗ (P ))
+   This can be formalized as the Weighted
+                                                               where S(P ) is the solution determined by our al-
+Distinctness-Based Graph Separation (WDGS)
+                                                               gorithm, and S ∗ (P ) is an optimal solution. Note
+problem. Let G be an undirected graph with a set
+                                                               that this approximation guarantee is independent
+of vertices V and a set of edges E weighted by
+                                                               of how long each Di is, and that it merely repre-
+w : E → R. If we use a set C ⊆ V to spec-
+                                                               sents an upper bound on the worst case scenario.
+ify which edges we want to cut from the original
+                                                               In practice, the results tend to be much closer to
+graph, and sets Ui to specify which nodes we want
+                                                               the optimum, as will be shown in Section 4.
+to remove from distinctness assertions, we can be-
+                                                                  Our algorithm first solves a linear program (LP)
+gin by defining WDGS solutions as follows.
+                                                               relaxation of the original problem, which gives
+                                                               us hints as to which edges should most likely be
+Definition 2. (WDGS Solution). Given a graph                   cut and which nodes should most likely be re-
+G = (V, E) and n distinctness assertions D1 , . . . ,          moved from distinctness assertions. Note that this
+Dn , a tuple (C, U1 , . . . , Un ) is a valid WDGS so-         is a continuous LP, not an integer linear program
+lution if and only if ∀i, j, k 6= j, u ∈ Di,j \ Ui ,           (ILP); the latter would not be tractable due to the
+v ∈ Di,k \ Ui : P(u, v, E \ C) = ∅, i.e. the set of            large number of variables and constraints of the
+paths from u to v in the graph (V, E \ C) is empty.            problem. After solving the linear program, a new
+                                                               – extended – graph is constructed and the optimal
+Definition 3. (WDGS Cost). Let w : E → R                       LP solution is used to define a distance metric on
+be a weight function for edges e ∈ E, and w(Di )               it. The final solution is obtained by smartly se-
+(i = 1 . . . n) be weights for the distinctness as-            lecting regions in this extended graph as the in-
+sertions. The (total) cost of a WDGS solution                  dividual output components, employing a region
+
+
+                                                         846
+
+
+growing technique in the spirit of the seminal work              empty (C, U1 , . . . , Un ) = (∅, ∅, . . . , ∅). Instead,
+by Leighton and Rao (1999). Edges that cross the                 a more sophisticated technique is necessary. The
+boundaries of these regions are cut.                             optimal solution of the LP can be used to define
+Definition 5. Given a WDGS instance, we define a                 an extended graph G0 with a distance metric d be-
+linear program of the following form:                            tween nodes. The algorithm then operates on this
+                                                                 graph, in each iteration selecting regions that be-
+ minimize                                                        come output components and removing them from
+                  li
+                n P
+   P            P    P                                           the graph. A simple example is shown in Figure 2.
+      de w(e) +        ui,v w(Di )
+    e∈E            i=1 j=1 v∈Di,j                                The extended graph contains additional nodes and
+ subject to                                                      edges representing distinctness assertions. Cutting
+   pi,j,v = ui,v           ∀i, j<li , v ∈ Di,j       (1)         one of these additional edges corresponds to re-
+   pi,j,v + ui,v ≥ 1       ∀i, j<li , v ∈
+                                          S
+                                              Di,k   (2)         moving a node from a distinctness assertion.
+                                            k>j
+    pi,j,v ≤ pi,j,u + de   ∀i, j<li , e=(u,v) ∈ E    (3)         Definition 6. Given G = (V, E) and distinct-
+    de ≥ 0                 ∀e ∈ E                    (4)         ness assertions D1 , . . . , Dn with weights w(Di ),
+                                     li                          we define an undirected graph G0 = (V 0 , E 0 )
+    ui,v ≥ 0                                         (5)
+                                     S
+                           ∀i, v ∈         Di,j
+                                     j=1                         where VS0 = V ∪ {vi,v | i = 1 . . . n, w(Di ) >
+    pi,j,v ≥ 0             ∀i, j<li , v∈V            (6)         0, v ∈ j Di,j }, E 0 = {e ∈ E | w(e) > 0} ∪
+                                                                 {(v, vi,v ) | v ∈ Di,j , w(Di ) > 0}. We accordingly
+The LP uses decision variables de and ui,v , and
+                                                                 extend the definition of w(e) to additionally cover
+auxiliary variables pi,j,v that we refer to as poten-
+                                                                 the new edges by defining w(e) = w(Di ) for e =
+tial variables. The de variables indicate whether
+                                                                 (v, vi,v ). We alsoP   extend it for sets S of edges by
+(in the continuous LP: to what degree) an edge
+                                                                 defining w(S) = e∈S w(e). Finally, we define a
+e should be deleted, and the ui,v variables indi-
+                                                                 node distance metric
+cate whether (to what degree) v should be removed                              
+from a distinctness assertion Di . The LP objec-                               
+                                                                                0                             u=v
+                                                                               
+tive function corresponds to Definition 3, aiming                              
+                                                                               
+                                                                                de                            (u, v) ∈ E
+                                                                               
+to minimize the total costs. A potential variable                              
+                                                                               
+                                                                               u
+                                                                                   i,v                         u = vi,v
+pi,j,v reflects a sort of potential difference between            d(u, v) =
+an assertion Di,j and a node v. If pi,j,v = 0, then v
+                                                                               
+                                                                               
+                                                                                ui,u                          v = vi,u
+                                                                                                        0   0
+                                                                                              P
+is still connected to nodes in Di,j . Constraints (1)
+                                                                               
+                                                                                   min              d(u , v ) otherwise,
+                                                                                     p∈
+                                                                               
+                                                                                              0 0
+and (2) enforce potential differences between Di,j                                       0 ) (u ,v )
+                                                                               
+                                                                               P(u,v,E
+                                                                                           ∈p
+and all nodes in Di,k with k > j. For instance,
+for distinctness between ‘New York City’ and ‘New                where P(u, v, E 0 ) denotes the set of acyclic paths
+York’ (the state), they might require ‘New York’                 between two nodes in E 0 . We further fix
+to have a potential of 1, while ‘New York City’                                       X
+has a potential of 0. The potential variables are                           ĉf =          d(u, v) w(e)
+tied to the deletion variables de for edges in Con-                                 (u,v)∈E 0
+
+straint (3) as well as to the ui,v in Constraints (1)            as the weight of the fractional solution of the LP
+and (2). This means that the potential difference                (ĉf is a constant based on the original E 0 , irre-
+pi,j,v + ui,v ≥ 1 can only be obtained if edges are              spective of later modifications to the graph).
+deleted on every path between ‘New York City’ and
+‘New York’, or if at least one of these two nodes is             Definition 7. Around a given node v in G0 , we
+removed from the distinctness assertion (by setting              consider regions R(v, r) ⊆ V with radius r. The
+the corresponding ui,v to non-zero values). Con-                 cut C(v, r) of a given region is defined as the set
+straints (4), (5), (6) ensure non-negativity.                    of edges in G0 with one endpoint within the region
+   Having solved the linear program, the next ma-                and one outside the region:
+jor step is to convert the optimal LP solution into                      R(v, r) = {v 0 ∈ V 0 | d(v, v 0 ) ≤ r}
+the final – discrete – solution. We cannot rely
+on standard rounding methods to turn the optimal                       C(v, r) = {e ∈ E 0 | |e ∩ R(v, r)| = 1}
+fractional values of the de and ui,v variables into
+a valid solution. Often, all solution variables have              S sets of nodes S ⊆ V , S
+                                                                 For                       we define R(S, r) =
+                                                                     R(v, r) and C(S, r) =   C(v, r).
+small values and rounding will merely produce an                 v∈S                            v∈S
+
+
+                                                           847
+
+
+                                                                        are given by the following two theorems (proofs in
+                                                                        Appendix A).
+                                                                        Theorem 2. The algorithm yields a valid WDGS
+                                                                        solution (C, U1 , . . . , Un ).
+                                                                        Theorem 3. The algorithm yields a solution
+                                                                        (C, U1 , . . . , Un ) with an approximation factor of
+                                                                        4 ln(nq + 1) with respect to the cost of the op-
+                                                                        timal WDGS solution (C ∗ , U1∗ , . . . , Un∗ ), where n
+                                                                        is the number of distinctness assertions and q =
+                                                                        max |Di,j |. This solution can be obtained in poly-
+                                                                         i,j
+                                                                        nomial time.
+
+Figure 2: Extended graph with two added nodes
+                                                                        4      Results
+v1,u , v1,v representing distinctness between ‘Tele-                    4.1     Wikipedia
+visión’ and ‘Televisor’, and a region around v1,u
+                                                                        We downloaded February 2010 XML dumps of
+that would cut the link from the Japanese ‘Televi-
+                                                                        all available editions of Wikipedia, in total 272
+sion’ to ‘Televisor’
+                                                                        editions that amount to 86.5 GB uncompressed.
+                                                                        From these dumps we produced two datasets.
+Definition 8. Given q = max |Di,j |, we approxi-                        Dataset A captures cross-lingual interwiki links
+                                i,j
+mate the optimal cost of regions as:                                    between pages, in total 77.07 million undirected
+                                                                        edges (146.76 million original links). Dataset
+                         X
+   ĉ(v, r) =                         d(u, u0 ) w(e)        (1)         B additionally includes 2.2 million redirect-based
+                    e=(u,u0 )∈E 0 :                                     edges. Wikipedia deals with interwiki links to
+                      e⊆R(v,r)                                          redirects transparently, however there are many
+                                                                        redirects with titles that do not co-refer, e.g. redi-
+                        X
+                +                   (r − d(v, v 0 )) w(e)
+                       e∈C(v,r)
+                                                                        rects from members of a band to the band, or from
+                    v 0 ∈e∩R(v,r)                                       aspects of a topic to the topic in general. We only
+                    1        X                                          included redirects in the following cases:
+   ĉ(S, r) =          ĉf +   ĉ(v, r)                     (2)
+                    nq
+                              v∈S                                           • the titles of redirect and redirect target match
+                                                                              after Unicode NFKD normalization, diacrit-
+   The first summand accounts for the edges en-
+                                                                              ics removal, case conversion, and removal of
+tirely within the region, and the second one ac-
+                                                                              punctuation characters
+counts for the edges in C(v, r) to the extent that
+                                                                            • the redirect uses certain templates or cate-
+they are within the radius. The definition of ĉ(S, r)
+                                                                              gories that indicate co-reference with the tar-
+contains an additional slack component that is re-
+                                                                              get (alternative names, abbreviations, etc.)
+quired for the approximation guarantee proof.
+   Based on these definitions, Algorithm 3.1 uses                       We treated them like reciprocal interwiki links by
+the LP solution to construct the extended graph.                        assigning them a weight of 2.
+It then repeatedly, as long as there is an unsatis-
+fied assertion Di , chooses a set S of nodes con-                       4.2     Application of Algorithm
+taining one node from each relevant Di,j . Around                       The choice of distinctness assertion weights de-
+the nodes in S it simultaneously grows |S| regions                      pends on how lenient we wish to be towards con-
+with the same radius, a technique previously sug-                       ceptual drift, allowing us to opt for more fine- or
+gested by Avidor and Langberg (2007). These re-                         more coarse-grained distinctions. In our experi-
+gions are essentially output components that de-                        ments, we decided to prefer fine-grained concep-
+termine the solution. Repeatedly choosing the                           tual distinctions, and settled on a weight of 100.
+radius that minimizes w(C(S,r))
+                           ĉ(S,r) allows us to ob-                       We analysed over 20 million connected com-
+tain the approximation guarantee, because the dis-                      ponents in each dataset, checking for distinctness
+tances in this extended graph are based on the so-                      assertions. For the roughly 110,000 connected
+lution of the LP. The properties of this algorithm                      components with relevant distinctness assertions,
+
+
+                                                                  848
+
+
+Algorithm 3.1 WDGS Approximation Algorithm
+ 1: procedure SELECT(V, E, V 0 , E 0 , w, D1 , . . . , Dn , l1 , . . . , ln )
+ 2:    solve linear program given by Definition 5                             . determine optimal fractional solution
+ 3:    construct G0 = (V 0 , E 0 )                                                   . extended graph (Definition 6)
+ 4:    C ← {e ∈ E | w(e) = 0}                                                             . cut zero-weighted edges
+                −1
+              liS
+ 5:    Ui ←        Di,j ∀i : w(Di ) = 0                                                  . remove zero-weighted Di
+                j=1
+ 6:      while ∃i, j, k > j, u ∈ Di,j , v ∈ Di,k : P(vi,u , vi,v , E 0 ) 6= ∅ do       . find unsatisfied assertion
+ 7:         S←∅                                          . set of nodes around which regions will be grown
+ 8:         for all j in 1 . . . li − 1 do                              . arbitrarily choose node from each Di,j
+ 9:                                        0
+                if ∃v ∈ Di,j : vi,v ∈ V then S ← S ∪ vi,v
+10:          D ← {d(u, v) ≤ 21 | u ∈ S, v ∈ V 0 } ∪ { 21 }                                      . set of distances
+11:          choose  such that ∀d, d0 ∈ D : 0 <   |d − d0 |                            . infinitesimally small
+                                      w(C(S, r))
+12:          r←         argmin                                   . choose optimal radius (ties broken arbitrarily)
+                  r=d−: d∈D\{0}          ĉ(S, r)
+13:          V 0 ← V 0 \ R(S, r)                                                      . remove regions from G0
+14:            0             0
+             E ← {e ∈ E | e ⊆ V }         0
+
+15:          C ← C ∪ (C(S, r) ∩ E)                                                      . update global solution
+16:                   0
+             for all i in 1 . . . n do
+17:              Ui0 ← Ui0 ∪ {v | (vi0 ,v , v) ∈ C(S, r)}
+18:              for all j in 1 . . . li0 do Di0 ,j ← Di0 ,j ∩ V 0                . prune distinctness assertions
+19:      return (C, U1 , . . . , Un )
+
+
+we applied our algorithm, relying on the commer-
+                                                                         Table 1: Algorithm Results
+cial CPLEX tool to solve the linear programs. In
+                                                                                      Dataset A     Dataset B
+most cases, the LP solving took less than a second,
+however the LP sizes grow exponentially with the               Connected             23,356,027 21,161,631
+number of nodes and hence the time complex-                      components
+ity increases similarly. In about 300 cases per                – with distinctness      112,857      113,714
+dataset, CPLEX took too long and was automat-                    assertions
+ically killed or the linear program was a priori               – algorithm applied      112,580      113,387
+deemed too large to complete in a short amount                   successfully
+of time. For these cases, we adopted an alternative            Distinctness             380,694      379,724
+strategy described later on.                                     assertions
+   Table 1 provides the experimental results for the           Node pairs con-          916,554 1,047,299
+two datasets. Dataset B is more connected and                    sidered distinct
+thus has fewer connected components with more                  Lower bound on         1,255,111 1,245,004
+pairs of nodes asserted to be distinct by distinct-              optimal cost
+ness assertions. The LP given by Definition 5                  Cost of our solution   1,306,747 1,294,196
+provides fractional solutions that constitute lower            Factor                      1.04          1.04
+bounds on the optimal solution (cf. also Lemma                 Edges to be deleted    1,209,798 1,199,181
+5 in Appendix A), so the optimal solution can-                   (undirected)
+not have a cost lower than the fractional LP solu-             Nodes to be merged           603           573
+tion. Table 1 shows that in practice, our algorithm
+achieves near-optimal results.
+                                                              sive way. It may happen, however, that the graph’s
+4.3   Linguistic Adequacy                                     topology is misleading, and that in a specific case
+The near-optimal results of our algorithm apply               deleting many cross-lingual links to separate two
+with respect to our problem formalization, which              entities is more appropriate than looking for a
+aims at repairing the graph in a minimally inva-              conservative way to separate them. This led us
+
+
+                                                        849
+
+
+to study the linguistic adequacy. Two annotators             sponding Indonesian category for the correspond-
+evaluated 200 randomly selected separated pairs              ing Indonesian article.
+from Dataset A consisting of an English and a                   Moreover, we believe that this database will
+German article, with an inter-annotator agreement            help extend resources like DBPedia and YAGO
+(Cohen κ) of 0.656. Examples are given in Table              that to date have exclusively used the English
+2. We obtained a precision of 87.97% ± 0.04%                 Wikipedia as their repository of entities and
+(Wilson score interval) against the consensus an-            classes. With YAGO’s category heuristics, even
+notation. Many of the errors are the result of ar-           entirely non-English connected components can
+ticles having many inaccurate outgoing links, in             be assigned a class in WordNet as long as at least
+which case they may be assigned to the wrong                 one of the relevant categories has an English page.
+component. In other cases, we noted duplicate ar-            So, the French Wikipedia article on the Dutch
+ticles in Wikipedia.                                         schooner ‘JR Tolkien’, despite the lack of a cor-
+   Occasionally, we also observed differences in             responding English article, can be assigned to the
+scope, where one article would actually describe             WordNet synset for ‘ship’. Using YAGO’s plu-
+two related concepts in a single page. Our algo-             ral heuristic to distinguish classes (Einstein is a
+rithm will then either make a somewhat arbitrary             physicist) from topic descriptors (Einstein belongs
+assignment to the component of either the first or           to the topic physics), we determined that over 4.8
+second concept, or the broader generalization of             million connected components can be linked to
+the two concepts becomes a separate, more gen-               WordNet, greatly surpassing the 3.2 million arti-
+eral connected component.                                    cles covered by the English Wikipedia alone.
+
+4.4   Large Problem Instances                                5       Related Work
+When problem instances become too large, the lin-
+                                                             A number of projects have used Wikipedia as a
+ear programs can become too unwieldy for lin-
+                                                             database of named entities (Ponzetto and Strube,
+ear optimization software to cope with on current
+                                                             2007; Silberer et al., 2008). The most well-
+hardware. In such cases, the graphs tend to be very
+                                                             known are probably DBpedia (Auer et al., 2007),
+sparsely connected, consisting of many smaller,
+                                                             which serves as a hub in the Linked Data Web,
+more densely connected subgraphs. We thus in-
+                                                             Freebase1 , which combines human input and au-
+vestigated graph partitioning heuristics to decom-
+                                                             tomatic extractors, and YAGO (Suchanek et al.,
+pose larger graphs into smaller parts that can more
+                                                             2007), which adds an ontological structure on top
+easily be handled with our algorithm. The METIS
+                                                             of Wikipedia’s entities. Wikipedia has been used
+algorithms (Karypis and Kumar, 1998) can de-
+                                                             cross-lingually for cross-lingual IR (Nguyen et al.,
+compose graphs with hundreds of thousands of
+                                                             2009), question answering (Ferrández et al., 2007)
+nodes almost instantly, but favour equally sized
+                                                             as well as for learning transliterations (Pasternack
+clusters over lower cut costs. We obtained parti-
+                                                             and Roth, 2009), among other things.
+tionings with costs orders of magnitude lower us-
+                                                                Mihalcea and Csomai (2007) have studied pre-
+ing the heuristic by Dhillon et al. (2007).
+                                                             dicting new links within a single edition of
+4.5   Database of Named Entities                             Wikipedia. Sorg and Cimiano (2008) considered
+                                                             the problem of suggesting new cross-lingual links,
+The partitioning heuristics allowed us to process
+                                                             which could be used as additional inputs in our
+all entries in the complete set of Wikipedia dumps
+                                                             problem. Adar et al. (2009) and Bouma et al.
+and produce a clean output set of connected com-
+                                                             (2009) show how cross-lingual links can be used
+ponents where each Wikipedia article or category
+                                                             to propagate information from one Wikipedia’s in-
+belongs to a connected component consisting of
+                                                             foboxes to another edition.
+pages about the same entity or concept. We can re-
+                                                                Our aggregation consistency algorithm uses
+gard these connected components as equivalence
+                                                             theoretical ideas put forward by researchers study-
+classes. This means that we obtain a large-scale
+                                                             ing graph cuts (Leighton and Rao, 1999; Garg et
+multilingual database of named entities and their
+                                                             al., 1996; Avidor and Langberg, 2007). Our prob-
+translations. We are also able to more safely trans-
+                                                             lem setting is related to that of correlation cluster-
+fer information cross-lingually between editions.
+                                                             ing (Bansal et al., 2004), where a graph consist-
+For example, when an article a has a category c in
+                                                                 1
+the French Wikipedia, we can suggest the corre-                      http://www.freebase.com/
+
+
+                                                       850
+
+
+                                 Table 2: Examples of separated concepts
+    English concept             German concept             Explanation
+                                (translated)
+    Coffee percolator           French Press               different types of brewing devices
+    Baqa-Jatt                   Baqa al-Gharbiyye          Baqa-Jatt is a city resulting from a merger
+                                                           of Baqa al-Gharbiyye and Jatt
+    Leucothoe (plant)           Leucothea (Orchamos)       the second refers to a figure of Greek
+                                                           mythology
+    Old Belarusian language     Ruthenian language         the second is often considered slightly
+                                                           broader
+
+
+ing of positively and negatively labelled similar-            A     Proofs
+ity edges is clustered such that similar items are
+                                                              Proof (Theorem 1). We shall reduce the mini-
+grouped together, however our approach is much
+                                                              mum multicut problem to WDGS. The hardness
+more generic than conventional correlation clus-
+                                                              claims then follow from Chawla et al. (2005).
+tering. Charikar et al. (2005) studied a variation
+                                                              Given a graph G = (V, E) with a positive cost
+of correlation clustering that is similar to WDGS,
+                                                              c(e) for each e ∈ E, and a set D = {(si , ti ) | i =
+but since a negative edge would have to be added
+                                                              1 . . . k} of k demand pairs, our goal is to find
+between each relevant pair of entities in a distinct-
+                                                              a multicutP    M with respect to D with minimum
+ness assertion, the approximation guarantee would
+                                                              total cost e∈M c(e). We convert each demand
+only be O(log(n |V |2 )). Minimally invasive re-
+                                                              pair (si , ti ) into a distinctness assertion
+                                                                                                       P Di =
+pair operations on graphs have also been stud-
+                                                              ({si }, {ti }) with weight w(Di ) = 1 + e∈E c(e).
+ied for graph similarity computation (Zeng et al.,
+                                                              An optimal WDGS solution (C, U1 , . . . , Uk ) with
+2009), where two graphs are provided as input.
+                                                              cost c then implies a multicut C P    with the same
+                                                              weight, because each w(Di ) >           e∈E c(e), so
+6     Conclusions and Future Work
+                                                              all demand pairs will be satisfied. C is a minimal
+We have presented an algorithmic framework for                multicut because any multicut C 0 with lower cost
+the problem of co-reference that produces consis-             would imply a valid WDGS solution (C 0 , ∅, . . . , ∅)
+tent partitions by intelligently removing edges or            with a cost lower than the optimal one, which is a
+allowing nodes to remain connected. This algo-                contradiction.
+rithm has successfully been applied to Wikipedia’s
+                                                              Lemma 4. The linear program given by Defini-
+cross-lingual graph, where we identified and elim-
+                                                              tion 5 enforces that for any i,j,k 6= j,u ∈ Di,j ,
+inated surprisingly large numbers of inaccurate
+                                                              v ∈ Di,k , and any pathPv0 , . . . , vt with v0 = u,
+connections, leading to a large-scale multilingual
+                                                              vt = v we obtain ui,u + t−1    l=0 d(vl ,vl+1 ) +ui,v ≥ 1.
+register of names.
+                                                              The integer linear program obtained by aug-
+   In future work, we would like to investigate               menting Definition 5 with integer constraints
+how our algorithm behaves in extended settings,               de , ui,v , pi,j,v ∈ {0, 1} (for all applicable e, i, j,
+e.g. we can use heuristics to connect isolated,               v) produces optimal solutions (C, U1 , . . . , Uk ) for
+unconnected articles to likely candidates in other            WDGS problems, obtained as C = ({e ∈ E | de =
+Wikipedias using weighted edges. This can be                  1}, Ui = {v | ui,v = 1}.
+extended to include mappings from multiple lan-
+guages to WordNet synsets, with the hope that                 Proof. Without loss of generality, let us assume
+the weights and link structure will then allow the            that j < k. The LP constraints give us pi,j,vt ≤
+algorithm to make the final disambiguation deci-              pi,j,vt−1 +d(vt−1 ,vt ) , . . . , pi,j,v1 ≤ pi,j,v0 +d(v0 ,v1 ) ,
+sion. Additional scenarios include dealing with               as well as pi,j,v0 = ui,u and pi,j,v         t + ui,v ≥ 1.
+                                                                                                         Pt−1
+co-reference on the Linked Data Web or mappings               Hence 1 ≤ pi,j,vt +ui,v ≤ ui,u + l=0 d(vl ,vl+1 ) +
+between thesauri. As such resources are increas-              ui,v .
+ingly being linked to Wikipedia and DBpedia, we                  With added integrality constraints, we obtain ei-
+believe that our techniques will prove useful in              ther u ∈ Ui , v ∈ Ui , or at least one edge along any
+making mappings more consistent.                              path from u to v is cut, i.e. P(u, v, E \ C) = ∅.
+
+
+                                                        851
+
+
+                                                                    l R
+This proves that any ILP solution enduces a valid                   P   rj −     w(S,r)
+                                                                          rj−1 + ĉ(S,r)     dr
+WDGS solution (Definition 2).                                       j=1            "                        #
+   Clearly, the integer program’s objective func-                                      l
+                                                                                       P
+tion minimizes c(C, U1 , . . . , Un ) (Definition 3) if                        >             rj − rj−1 − 2 2 ln(nq + 1)
+                                                                                       j=1
+C = ({e ∈ E | de = 1}, Ui = {v | ui,v = 1}.                         l
+                                                                    P
+To see that the solutions are optimal, it thus suf-                      ln ĉ(S, rj − ) − ln ĉ(S, rj−1 + )
+fices to observe that any optimal WDGS solution                     j=1
+                                                                               > 12 − 2l 2 ln(nq + 1)
+                                                                                           
+(C ∗ , U1∗ , . . . , Un∗ ) yields a feasible ILP solution
+de = IC ∗ (e), ui,v = IUi∗ (v).                                     ln ĉ(S, 21 − ) − ln ĉ(S, 0)
+                                                                               > (1 − 4l) ln(nq + 1)
+                                                                     ĉ(S, 12 −)          1−4l
+Proof (Theorem 2). ri < 12 holds for any ra-                            ĉ(S,0) > (nq + 1)
+                                                                              1
+dius ri chosen by the algorithm, so for any re-                     ĉ(S, 2 − ) > (nq + 1)1−4l ĉ(S, 0)
+gion R(v0 , r) grown around a node v0 , and any
+two nodes u, v within that region, the triangle in-
+equality gives us d(u, v) ≤ d(u, v0 ) + d(v0 , v) <               For small , the right term can get arbitrarily close
+1     1                                                           to (nq + 1)ĉ(S, 0) ≥ ĉf + ĉ(S, 0), which is strictly
+2 + 2 = 1 (maximal distance condition). At
+the same time, by Lemma 4 and Definition 6 for                    larger than ĉ(S, 12 − ) no matter how small  be-
+any u ∈ Di,j , v ∈ Di,k (j 6= k), we obtain                       comes, so the initial assumption is false.
+d(vi,u , vi,v ) = d(vi,u , u) + d(u, v) + d(v, vi,v ) ≥
+1. With the maximal distance condition above, this                Proof (Theorem 3). Let Si , ri denote the set
+means that vi,u and vi,v cannot be in the same re-                S and radius r chosen in particular iterations,
+gion. Hence u, v cannot be in the same region,                    and ci the corresponding costs incurred: ci =
+unless the edge from vi,u to u is cut (in which case              w(C(Si , r) ∩ E) + |Ui |w(Di ) = w(C(Di , r)).
+u will be placed in Ui ) or the edge from v to vi,v               Note that any ri chosen by the algorithm will in
+is cut (in which case v will be placed in Ui ). Since             fact fulfil the criterion described by Lemma 5, be-
+each region is separated from other regions via C,                cause ri is chosen to minimize the ratio between
+we obtain that ∀i, j, k 6= j, u, v: u ∈ Di,j \ Ui ,               the two terms, and the minimizing r ∈ [0, 12 )
+v ∈ Di,k \ Ui implies P(u, v, E \ C) = ∅, so a                    must be among the r considered by the algo-
+valid solution is obtained.                                       rithm (w(C(Di , r)) only changes at one of those
+                                                                  points, so the minimum is reached by approach-
+Lemma 5 (essentially due to Garg et al. (1996)).                  ing the points from the left). Hence, we obtain
+For any i where ∃j, k > j, u ∈ Di,j , v ∈ Di,k :                  ci ≤ 2 ln(n + 1)ĉ(Si , ri ). For our global solution,
+P(vi,u , vi,v , E 0 ) 6= ∅ and w(Di ) > 0, there exists           note that there is no overlap between the regions
+an r such that w(C(S, r)) ≤ 2 ln(nq + 1) ĉ(S, r),                chosen within an iteration, since regions have a
+0 ≤ r < 21 for any set S consisting of vi,v nodes.                radius strictly smaller than 12 , while vi,u , vi,v for
+                                                                  u ∈ Di,j , v ∈ Di,k , j 6= k have a distance of
+                              P
+Proof. Define w(S, r) = v∈S w(C(v, r)). We                        at least 1. Nor is there any overlap between re-
+will prove that there exists an appropriate r with                gions from different iterations, because in each it-
+w(C(S, r)) ≤ w(S, r) ≤ 2 ln(nq+1) ĉ(S, r). As-                   eration the selected regions are removed from G0 .
+sume, for reductio ad absurdum, that ∀r ∈ [0, 12 ) :              Globally,
+                                                                  P            we therefore obtainP       c(C, U1 , . . . , Un ) =
+w(S, r) > 2 ln(nq + 1)ĉ(S, r). As we expand                         i ci < 2 ln(nq + 1)             i ĉ(Si , ri ) ≤ 2 ln(nq +
+                                        d                         1)2ĉf (observe that i ≤ nq). Since ĉf is the ob-
+the radius r, we note that ĉ(S, r) dr    = w(S, r)
+whereever ĉ is differentiable with respect to r.                 jective score for the fractional LP relaxation solu-
+There are only a finite number of points r1 ,. . . ,rl−1          tion of the WDGS ILP (Lemma 4), we obtain ĉf ≤
+in (0, 21 ) where this is not the case (namely, when              c(C ∗ , U1∗ , . . . , Un∗ ), and thus c(C, U1 , . . . , Un ) <
+∃u ∈ S, v ∈ V 0 : d(u, v) = ri ). Also note                       4 ln(n + 1)c(C ∗ , U1∗ , . . . , Un∗ ).
+that ĉ increases monotonically for increasing val-                  To obtain a solution in polynomial time, note
+ues of r, and that it is universally greater than                 that the LP size is polynomial with respect to nq
+zero (since there is a path between vi,u , vi,v ). Set            and may be solved using a polynomial algorithm
+r0 = 0, rl = 21 and choose  such that 0 <                      (Karmarkar, 1984). The subsequent steps run in
+min{rj+1 − rj | j < l}. Our assumption then                       O(nq) iterations, each growing up to |V | regions
+implies:                                                          using O(|V |2 ) uniform cost searches.
+
+
+                                                            852
+
+
+References                                                       George Karypis and Vipin Kumar. 1998. A fast and
+                                                                   high quality multilevel scheme for partitioning irreg-
+Eytan Adar, Michael Skinner, and Daniel S. Weld.                   ular graphs. SIAM Journal on Scientific Computing,
+  2009. Information arbitrage across multi-lingual                 20(1):359–392.
+  Wikipedia. In Ricardo A. Baeza-Yates, Paolo Boldi,
+  Berthier A. Ribeiro-Neto, and Berkant Barla Cam-               Subhash Khot. 2002. On the power of unique 2-prover
+  bazoglu, editors, Proceedings of the 2nd Interna-                1-round games. In STOC ’02: Proceedings of the
+  tional Conference on Web Search and Web Data                     34th Annual ACM Symposium on Theory of Com-
+  Mining, WSDM 2009, pages 94–103. ACM.                            puting, pages 767–775, New York, NY, USA. ACM.
+Sören Auer, Chris Bizer, Jens Lehmann, Georgi Kobi-             Tom Leighton and Satish Rao. 1999. Multicommodity
+   larov, Richard Cyganiak, and Zachary Ives. 2007.                max-flow min-cut theorems and their use in design-
+   DBpedia: a nucleus for a web of open data. In                   ing approximation algorithms. Journal of the ACM,
+   Aberer et al., editor, The Semantic Web, 6th Interna-           46(6):787–832.
+   tional Semantic Web Conference, 2nd Asian Seman-
+   tic Web Conference, ISWC 2007 + ASWC 2007, Bu-                Rada Mihalcea and Andras Csomai. 2007. Wikify!:
+   san, Korea, November 11–15, 2007, Lecture Notes                 Linking documents to encyclopedic knowledge. In
+   in Computer Science 4825. Springer.                             Proceedings of the 16th ACM Conference on Infor-
+                                                                   mation and Knowledge Management (CIKM 2007),
+Adi Avidor and Michael Langberg. 2007. The multi-                  pages 233–242, New York, NY, USA. ACM.
+  multiway cut problem. Theoretical Computer Sci-
+  ence, 377(1-3):35–42.                                          D. Nguyen, A. Overwijk, C. Hauff, R.B. Trieschnigg,
+                                                                   D. Hiemstra, and F.M.G. Jong de. 2009. Wiki-
+Nikhil Bansal, Avrim Blum, and Shuchi Chawla. 2004.                Translate: query translation for cross-lingual infor-
+  Correlation clustering. Machine Learning, 56(1-                  mation retrieval using only Wikipedia. In Carol
+  3):89–113.                                                       Peters, Thomas Deselaers, Nicola Ferro, and Julio
+                                                                   Gonzalo, editors, Evaluating Systems for Multilin-
+Gosse Bouma, Sergio Duarte, and Zahurul Islam.                     gual and Multimodal Information Access, Lecture
+  2009. Cross-lingual alignment and completion of                  Notes in Computer Science 5706, pages 58–65.
+  Wikipedia templates. In CLIAWS3 ’09: Proceed-
+  ings of the Third International Workshop on Cross              Jeff Pasternack and Dan Roth. 2009. Learning bet-
+  Lingual Information Access, pages 21–29, Morris-                  ter transliterations. In CIKM ’09: Proceeding of the
+  town, NJ, USA. Association for Computational Lin-                 18th ACM Conference on Information and Knowl-
+  guistics.                                                         edge Management, pages 177–186, New York, NY,
+                                                                    USA. ACM.
+Moses Charikar, Venkatesan Guruswami, and Anthony
+ Wirth. 2005. Clustering with qualitative informa-               Simone Paolo Ponzetto and Michael Strube. 2007. De-
+ tion. Journal of Computer and System Sciences,                    riving a large scale taxonomy from Wikipedia. In
+ 71(3):360–383.                                                    AAAI 2007: Proceedings of the 22nd Conference
+                                                                   on Artificial Intelligence, pages 1440–1445. AAAI
+Shuchi Chawla, Robert Krauthgamer, Ravi Kumar, Yu-                 Press.
+  val Rabani, and D. Sivakumar. 2005. On the hard-
+  ness of approximating multicut and sparsest-cut. In            Carina Silberer, Wolodja Wentland, Johannes Knopp,
+  In Proceedings of the 20th Annual IEEE Conference                and Matthias Hartung. 2008. Building a multilin-
+  on Computational Complexity, pages 144–153.                      gual lexical resource for named entity disambigua-
+                                                                   tion, translation and transliteration. In European,
+Inderjit S. Dhillon, Yuqiang Guan, and Brian Kulis.                editor, Proceedings of the Sixth International Lan-
+   2007. Weighted graph cuts without eigenvectors.                 guage Resources and Evaluation (LREC’08), Mar-
+   a multilevel approach. IEEE Trans. Pattern Anal.                rakech, Morocco.
+   Mach. Intell., 29(11):1944–1957.
+                                                                 Philipp Sorg and Philipp Cimiano. 2008. Enrich-
+Sergio Ferrández, Antonio Toral, Óscar Ferrández, An-           ing the crosslingual link structure of Wikipedia - a
+  tonio Ferrández, and Rafael Muñoz. 2007. Ap-                   classification-based approach. In Proceedings of the
+  plying Wikipedia’s multilingual knowledge to cross-              AAAI 2008 Workshop on Wikipedia and Artifical In-
+  lingual question answering. In NLDB, pages 352–                  telligence.
+  363.
+                                                                 Fabian M. Suchanek, Gjergji Kasneci, and Gerhard
+Naveen Garg, Vijay V. Vazirani, and Mihalis Yan-                   Weikum. 2007. Yago: A Core of Semantic Knowl-
+  nakakis.    1996.   Approximate max-flow min-                    edge. In Proceedings of the 16th International
+  (multi)cut theorems and their applications. SIAM                 World Wide Web conference, WWW, New York, NY,
+  Journal on Computing (SICOMP), 25:698–707.                       USA. ACM Press.
+Narendra Karmarkar. 1984. A new polynomial-time                  Zhiping Zeng, Anthony K. H. Tung, Jianyong Wang,
+  algorithm for linear programming. In STOC ’84:                   Jianhua Feng, and Lizhu Zhou. 2009. Comparing
+  Proceedings of the 16th Annual ACM Symposium on                  stars: On approximating graph edit distance. Pro-
+  Theory of Computing, pages 302–311, New York,                    ceedings of the VLDB Endowment, 2(1):25–36.
+  NY, USA. ACM.
+
+
+                                                           853
+

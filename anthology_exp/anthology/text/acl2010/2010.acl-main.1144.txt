@@ -1,0 +1,665 @@
+                 Coreference Resolution across Corpora:
+         Languages, Coding Schemes, and Preprocessing Information
+                  Marta Recasens                                        Eduard Hovy
+            CLiC - University of Barcelona                     USC Information Sciences Institute
+                    Gran Via 585                                     4676 Admiralty Way
+                  Barcelona, Spain                                Marina del Rey CA, USA
+               mrecasens@ub.edu                                       hovy@isi.edu
+
+
+                      Abstract                                ture called CISTELL—on different corpus config-
+                                                              urations, varying three parameters. First, we show
+    This paper explores the effect that dif-                  how much language-specific issues affect perfor-
+    ferent corpus configurations have on the                  mance when trained and tested on English and
+    performance of a coreference resolution                   Spanish. Second, we demonstrate the extent to
+    system, as measured by MUC, B3 , and                      which the specific annotation scheme (used on the
+    CEAF. By varying separately three param-                  same corpus) makes evaluated performance vary.
+    eters (language, annotation scheme, and                   Third, we compare the performance using gold-
+    preprocessing information) and applying                   standard preprocessing information with that us-
+    the same coreference resolution system,                   ing automatic preprocessing tools.
+    the strong bonds between system and cor-                     Throughout, we apply the three principal coref-
+    pus are demonstrated. The experiments                     erence evaluation measures in use today: MUC,
+    reveal problems in coreference resolution                 B3 , and CEAF. We highlight the systematic prefer-
+    evaluation relating to task definition, cod-              ences of each measure to reward different config-
+    ing schemes, and features. They also ex-                  urations. This raises the difficult question of why
+    pose systematic biases in the coreference                 one should use one or another evaluation mea-
+    evaluation metrics. We show that system                   sure, and how one should interpret their differ-
+    comparison is only possible when corpus                   ences in reporting changes of performance score
+    parameters are in exact agreement.                        due to ‘secondary’ factors like preprocessing in-
+                                                              formation.
+1   Introduction
+                                                                 To this end, we employ three corpora: ACE
+The task of coreference resolution, which aims to             (Doddington et al., 2004), OntoNotes (Pradhan
+automatically identify the expressions in a text that         et al., 2007), and AnCora (Recasens and Martı́,
+refer to the same discourse entity, has been an in-           2009). In order to isolate the three parameters
+creasing research topic in NLP ever since MUC-6               as far as possible, we benefit from a 100k-word
+made available the first coreferentially annotated            portion (from the TDT collection) that is common
+corpus in 1995. Most research has centered around             to both ACE and OntoNotes. We apply the same
+the rules by which mentions are allowed to corefer,           coreference resolution system in all cases. The re-
+the features characterizing mention pairs, the algo-          sults show that a system’s score is not informative
+rithms for building coreference chains, and coref-            by itself, as different corpora or corpus parameters
+erence evaluation methods. The surprisingly im-               lead to different scores. Our goal is not to achieve
+portant role played by different aspects of the cor-          the best performance to date, but rather to ex-
+pus, however, is an issue to which little attention           pose various issues raised by the choices of corpus
+has been paid. We demonstrate the extent to which             preparation and evaluation measure and to shed
+a system will be evaluated as performing differ-              light on the definition, methods, evaluation, and
+ently depending on parameters such as the corpus              complexities of the coreference resolution task.
+language, the way coreference relations are de-                  The paper is organized as follows. Section 2
+fined in the corresponding coding scheme, and the             sets our work in context and provides the motiva-
+nature and source of preprocessing information.               tions for undertaking this study. Section 3 presents
+   This paper unpacks these issues by running the             the architecture of CISTELL, the system used in
+same system—a prototype entity-based architec-                the experimental evaluation. In Sections 4, 5,
+
+
+                                                        1423
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1423–1432,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+and 6, we describe the experiments on three differ-                et al. (2009) report on differences between MUC
+ent datasets and discuss the results. We conclude                  and ACE, while we contrast ACE and OntoNotes.
+in Section 7.                                                      Given that ACE and OntoNotes include some of
+                                                                   the same texts but annotated according to their re-
+2       Background                                                 spective guidelines, we can better isolate the effect
+                                                                   of differences as well as add the additional dimen-
+The bulk of research on automatic coreference res-
+                                                                   sion of gold preprocessing. Second, we evaluate
+olution to date has been done for English and used
+                                                                   not only with the MUC and B3 scoring metrics,
+two different types of corpus: MUC (Hirschman
+                                                                   but also with CEAF. Third, all our experiments
+and Chinchor, 1997) and ACE (Doddington et al.,
+                                                                   use true mentions3 to avoid effects due to spuri-
+2004). A variety of learning-based systems have
+                                                                   ous system mentions. Finally, including different
+been trained and tested on the former (Soon et al.,
+                                                                   baselines and variations of the resolution model al-
+2001; Uryupina, 2006), on the latter (Culotta et
+                                                                   lows us to reveal biases of the metrics.
+al., 2007; Bengtson and Roth, 2008; Denis and
+                                                                      Coreference resolution systems have been
+Baldridge, 2009), or on both (Finkel and Manning,
+                                                                   tested on languages other than English only within
+2008; Haghighi and Klein, 2009). Testing on both
+                                                                   the ACE program (Luo and Zitouni, 2005), prob-
+is needed given that the two annotation schemes
+                                                                   ably due to the fact that coreferentially annotated
+differ in some aspects. For example, only ACE
+                                                                   corpora for other languages are scarce. Thus there
+includes singletons (mentions that do not corefer)
+                                                                   has been no discussion of the extent to which sys-
+and ACE is restricted to seven semantic types.1
+                                                                   tems are portable across languages. This paper
+Also, despite a critical discussion in the MUC task
+                                                                   studies the case of English and Spanish.4
+definition (van Deemter and Kibble, 2000), the
+                                                                      Several coreference systems have been devel-
+ACE scheme continues to treat nominal predicates
+                                                                   oped in the past (Culotta et al., 2007; Finkel
+and appositive phrases as coreferential.
+                                                                   and Manning, 2008; Poon and Domingos, 2008;
+   A third coreferentially annotated corpus—the
+                                                                   Haghighi and Klein, 2009; Ng, 2009). It is not our
+largest for English—is OntoNotes (Pradhan et al.,
+                                                                   aim to compete with them. Rather, we conduct
+2007; Hovy et al., 2006). Unlike ACE, it is not
+                                                                   three experiments under a specific setup for com-
+application-oriented, so coreference relations be-
+                                                                   parison purposes. To this end, we use a different,
+tween all types of NPs are annotated. The identity
+                                                                   neutral, system, and a dataset that is small and dif-
+relation is kept apart from the attributive relation,
+                                                                   ferent from official ACE test sets despite the fact
+and it also contains gold-standard morphological,
+                                                                   that it prevents our results from being compared
+syntactic and semantic information.
+                                                                   directly with other systems.
+   Since the MUC and ACE corpora are annotated
+with only coreference information,2 existing sys-                  3     Experimental Setup
+tems first preprocess the data using automatic tools
+(POS taggers, parsers, etc.) to obtain the infor-                  3.1    System Description
+mation needed for coreference resolution. How-                     The system architecture used in our experiments,
+ever, given that the output from automatic tools                   CISTELL, is based on the incrementality of dis-
+is far from perfect, it is hard to determine the                   course. As a discourse evolves, it constructs a
+level of performance of a coreference module act-                  model that is updated with the new information
+ing on gold-standard preprocessing information.                    gradually provided. A key element in this model
+OntoNotes makes it possible to separate the coref-                 are the entities the discourse is about, as they form
+erence resolution problem from other tasks.                        the discourse backbone, especially those that are
+   Our study adds to the previously reported evi-                  mentioned multiple times. Most entities, however,
+dence by Stoyanov et al. (2009) that differences in                are only mentioned once. Consider the growth of
+corpora and in the task definitions need to be taken               the entity Mount Popocatépetl in (1).5
+into account when comparing coreference resolu-                        3
+                                                                         The adjective true contrasts with system and refers to the
+tion systems. We provide new insights as the cur-                  gold standard.
+rent analysis differs in four ways. First, Stoyanov                    4
+                                                                         Multilinguality is one of the focuses of SemEval-2010
+                                                                   Task 1 (Recasens et al., 2010).
+    1                                                                  5
+      The ACE-2004/05 semantic types are person, organiza-               Following the ACE terminology, we use the term men-
+tion, geo-political entity, location, facility, vehicle, weapon.   tion for an instance of reference to an object, and entity for a
+    2
+      ACE also specifies entity types and relations.               collection of mentions referring to the same object. Entities
+
+
+                                                               1424
+
+
+(1)      We have an update tonight on [this, the volcano in           3. H EAD MATCH + PRON. Like H EAD MATCH,
+         Mexico, they call El Popo]m3 . . . As the sun rises             plus allowing personal and possessive pro-
+         over [Mt. Popo]m7 tonight, the only hint of the fire
+         storm inside, whiffs of smoke, but just a few hours             nouns to link to the closest noun with which
+         earlier, [the volcano]m11 exploding spewing rock                they agree in gender and number.
+         and red-hot lava. [The fourth largest mountain in
+         North America, nearly 18,000 feet high]m15 , erupt-          4. S TRONG MATCH. Each mention (e.g., m11 ) is
+         ing this week with [its]m20 most violent outburst in            paired with previous mentions starting from
+         1,200 years.                                                    the beginning of the document (m1 –m11 , m2 –
+Mentions can be pronouns (m20), they can be a                            m11 , etc.).7 When a pair (e.g., m3 –m11 ) is
+(shortened) string repetition using either the name                      classified as coreferent, additional pairwise
+(m7) or the type (m11), or they can add new infor-                       checks are performed with all the mentions
+mation about the entity: m15 provides the super-                         contained in the (growing) entity basket (e.g.,
+type and informs the reader about the height of the                      m7 –m11 ). Only if all the pairs are classified
+volcano and its ranking position.                                        as coreferent is the mention under consider-
+   In CISTELL,6 discourse entities are conceived                         ation attached to the existing growing entity.
+as ‘baskets’: they are empty at the beginning of                         Otherwise, the search continues.8
+the discourse, but keep growing as new attributes                     5. S UPER STRONG MATCH. Similar to S TRONG
+(e.g., name, type, location) are predicated about                        MATCH but with a threshold. Coreference
+them. Baskets are filled with this information,                          pairwise classifications are only accepted
+which can appear within a mention or elsewhere                           when TiMBL distance is smaller than 0.09.9
+in the sentence. The ever-growing amount of in-                       6. B EST MATCH. Similar to S TRONG MATCH
+formation in a basket allows richer comparisons to                       but following Ng and Cardie (2002)’s best
+new mentions encountered in the text.                                    link approach. Thus, the mention under anal-
+   CISTELL follows the learning-based corefer-                           ysis is linked to the most confident men-
+ence architecture in which the task is split into                        tion among the previous ones, using TiMBL’s
+classification and clustering (Soon et al., 2001;                        confidence score.
+Bengtson and Roth, 2008) but combines them si-                        7. W EAK MATCH. A simplified version of
+multaneously. Clustering is identified with basket-                      S TRONG MATCH: not all mentions in the
+growing, the core process, and a pairwise clas-                          growing entity need to be classified as coref-
+sifier is called every time CISTELL considers                            erent with the mention under analysis. A sin-
+whether a basket must be clustered into a (grow-                         gle positive pairwise decision suffices for the
+ing) basket, which might contain one or more                             mention to be clustered into that entity.10
+mentions. We use a memory-based learning clas-
+sifier trained with TiMBL (Daelemans and Bosch,                   3.3    Features
+2005). Basket-growing is done in four different                   We follow Soon et al. (2001), Ng and Cardie
+ways, explained next.                                             (2002) and Luo et al. (2004) to generate most
+                                                                  of the 29 features we use for the pairwise
+3.2   Baselines and Models                                        model. These include features that capture in-
+In each experiment, we compute three baselines                    formation from different linguistic levels: textual
+(1, 2, 3), and run CISTELL under four different                   strings (head match, substring match, distance,
+models (4, 5, 6, 7).                                              frequency), morphology (mention type, coordi-
+                                                                  nation, possessive phrase, gender match, number
+  1. A LL SINGLETONS. No coreference link is                      match), syntax (nominal predicate, apposition, rel-
+     ever created. We include this baseline given                 ative clause, grammatical function), and semantic
+     the high number of singletons in the datasets,               match (named-entity type, is-a type, supertype).
+     since some evaluation measures are affected                      7
+                                                                        The opposite search direction was also tried but gave
+     by large numbers of singletons.                              worse results.
+                                                                      8
+                                                                        Taking the first mention classified as coreferent follows
+  2. H EAD MATCH. All non-pronominal NPs that                     Soon et al. (2001)’s first-link approach.
+     have the same head are clustered into the                        9
+                                                                        In TiMBL, being a memory-based learner, the closer the
+     same entity.                                                 distance to an instance, the more confident the decision. We
+                                                                  chose 0.09 because it appeared to offer the best results.
+containing one single mention are referred to as singletons.         10
+                                                                        S TRONG and W EAK MATCH are similar to Luo et al.
+   6
+     ‘Cistell’ is the Catalan word for ‘basket.’                  (2004)’s entity-mention and mention-pair models.
+
+
+                                                               1425
+
+
+   For Spanish, we use 34 features as a few varia-       Datasets Two datasets of similar size were se-
+tions are needed for language-specific issues such       lected from AnCora and OntoNotes in order to
+as zero subjects (Recasens and Hovy, 2009).              rule out corpus size as an explanation of any differ-
+                                                         ence in performance. Corpus statistics about the
+3.4    Evaluation                                        distribution of mentions and entities are shown in
+Since they sometimes provide quite different re-         Tables 1 and 2. Given that this paper is focused on
+sults, we evaluate using three coreference mea-          coreference between NPs, the number of mentions
+sures, as there is no agreement on a standard.           only includes NPs. Both AnCora and OntoNotes
+                                                         annotate only multi-mention entities (i.e., those
+    • MUC (Vilain et al., 1995). It computes the         containing two or more coreferent mentions), so
+      number of links common between the true            singleton entities are assumed to correspond to
+      and system partitions. Recall (R) and preci-       NPs with no coreference annotation.
+      sion (P) result from dividing it by the mini-         Apart from a larger number of mentions in
+      mum number of links required to specify the        Spanish (Table 1), the two datasets look very sim-
+      true and the system partitions, respectively.      ilar in the distribution of singletons and multi-
+                                                         mention entities: about 85% and 15%, respec-
+    • B3 (Bagga and Baldwin, 1998). R and P are
+                                                         tively. Multi-mention entities have an average
+      computed for each mention and averaged at
+                                                         of 3.9 mentions per entity in AnCora and 3.5 in
+      the end. For each mention, the number of
+                                                         OntoNotes. The distribution of mention types (Ta-
+      common mentions between the true and the
+                                                         ble 2), however, differs in two important respects:
+      system entity is divided by the number of
+                                                         AnCora has a smaller number of personal pro-
+      mentions in the true entity or in the system
+                                                         nouns as Spanish typically uses zero subjects, and
+      entity to obtain R and P, respectively.
+                                                         it has a smaller number of bare NPs as the definite
+    • CEAF (Luo, 2005). It finds the best one-to-        article accompanies more NPs than in English.
+      one alignment between true and system en-          Results and Discussion Table 3 presents CIS-
+      tities. Using true mentions and the φ3 sim-        TELL’s results for each dataset. They make evi-
+      ilarity function, R and P are the same and         dent problems with the evaluation metrics, namely
+      correspond to the number of common men-            the fact that the generated rankings are contradic-
+      tions between the aligned entities divided by      tory (Denis and Baldridge, 2009). They are con-
+      the total number of mentions.                      sistent across the two corpora though: MUC re-
+                                                         wards W EAK MATCH the most, B3 rewards H EAD
+4     Parameter 1: Language
+                                                         MATCH the most, and CEAF is divided between
+The first experiment compared the performance            S UPER STRONG MATCH and B EST MATCH.
+of a coreference resolution system on a Germanic            These preferences seem to reveal weaknesses
+and a Romance language—English and Spanish—              of the scoring methods that make them biased to-
+to explore to what extent language-specific issues       wards a type of output. The model preferred by
+such as zero subjects11 or grammatical gender            MUC is one that clusters many mentions together,
+might influence a system.                                thus getting a large number of correct coreference
+   Although OntoNotes and AnCora are two dif-            links (notice the high R for W EAK MATCH), but
+ferent corpora, they are very similar in those as-
+pects that matter most for the study’s purpose:
+                                                                                        AnCora   OntoNotes
+they both include a substantial amount of texts
+                                                               Pronouns                  14.09       17.62
+belonging to the same genre (news) and manu-                   Personal pronouns          2.00       12.10
+ally annotated from the morphological to the se-               Zero subject pronouns      6.51           –
+mantic levels (POS tags, syntactic constituents,               Possessive pronouns        3.57        2.96
+                                                               Demonstrative pronouns     0.39        1.83
+NEs, WordNet synsets, and coreference relations).              Definite NPs              37.69       20.67
+More importantly, very similar coreference anno-               Indefinite NPs             7.17        8.44
+tation guidelines make AnCora the ideal Spanish                Demonstrative NPs          1.98        3.41
+                                                               Bare NPs                  33.02       42.92
+counterpart to OntoNotes.                                      Misc.                      6.05        6.94
+  11
+     Most Romance languages are pro-drop allowing zero
+subject pronouns, which can be inferred from the verb.      Table 2: Mention types (%) in Table 1 datasets.
+
+
+                                                     1426
+
+
+                              #docs         #words        #mentions      #entities (e)    #singleton e      #multi-mention e
+                Training        955         299,014          91,904           64,535             54,991               9,544
+AnCora
+                Test             30           9,851           2,991            2,189              1,877                 312
+                Training        850         301,311          74,692           55,819             48,199               7,620
+OntoNotes
+                Test             33           9,763           2,463            1,790              1,476                 314
+
+                  Table 1: Corpus statistics for the large portion of OntoNotes and AnCora.
+
+                                                  MUC                                     B3                        CEAF
+                                        P          R            F                P        R           F             P/R/F
+AnCora - Spanish
+1. A LL SINGLETONS                      –           –          –               100       73.32      84.61           73.32
+2. H EAD MATCH                        55.03       37.72      44.76            91.12      79.88      85.13           75.96
+3. H EAD MATCH + PRON                 48.22       44.24      46.14            86.21      80.66      83.34           76.30
+4. S TRONG MATCH                      45.64       51.88      48.56            80.13      82.28      81.19           75.79
+5. S UPER STRONG MATCH                45.68       36.47      40.56            86.10      79.09      82.45           77.20
+6. B EST MATCH                        43.10       35.59      38.98            85.24      79.67      82.36           75.23
+7. W EAK MATCH                        45.73       65.16      53.75            68.50      87.71      76.93           69.21
+OntoNotes - English
+1. A LL SINGLETONS                      –           –          –               100       72.68      84.18           72.68
+2. H EAD MATCH                        55.14       39.08      45.74            90.65      80.87      85.48           76.05
+3. H EAD MATCH + PRON                 47.10       53.05      49.90            82.28      83.13      82.70           75.15
+4. S TRONG MATCH                      47.94       55.42      51.41            81.13      84.30      82.68           78.03
+5. S UPER STRONG MATCH                48.27       47.55      47.90            84.00      82.27      83.13           78.24
+6. B EST MATCH                        50.97       46.66      48.72            86.19      82.70      84.41           78.44
+7. W EAK MATCH                        47.46       66.72      55.47            70.36      88.05      78.22           71.21
+
+                             Table 3: CISTELL results varying the corpus language.
+
+
+also many spurious links that are not duly penal-                   uments occurred as 22 ACE-2003 documents, 185
+ized. The resulting output is not very desirable.12                 ACE-2004 documents, and 123 ACE-2005 docu-
+In contrast, B3 is more P-oriented and scores con-                  ments). CISTELL was trained on the same texts
+servative outputs like H EAD MATCH and B EST                        in both corpora and applied to the remainder. The
+MATCH first, even if R is low. CEAF achieves a                      three measures were then applied to each result.
+better compromise between P and R, as corrobo-
+                                                                    Datasets Since the two annotation schemes dif-
+rated by the quality of the output.
+                                                                    fer significantly, we made the results comparable
+   The baselines and the system runs perform very
+                                                                    by mapping the ACE entities (the simpler scheme)
+similarly in the two corpora, but slightly better
+                                                                    onto the information contained in OntoNotes.13
+for English. It seems that language-specific issues
+                                                                    The mapping allowed us to focus exclusively on
+do not result in significant differences—at least
+                                                                    the differences expressed on both corpora: the
+for English and Spanish—once the feature set has
+                                                                    types of mentions that were annotated, the defi-
+been appropriately adapted, e.g., including fea-
+                                                                    nition of identity of reference, etc.
+tures about zero subjects or removing those about
+                                                                       Table 4 presents the statistics for the OntoNotes
+possessive phrases. Comparing the feature ranks,
+                                                                    dataset merged with the ACE entities. The map-
+we find that the features that work best for each
+                                                                    ping was not straightforward due to several prob-
+language largely overlap and are language inde-
+                                                                    lems: there was no match for some mentions
+pendent, like head match, is-a match, and whether
+                                                                    due to syntactic or spelling reasons (e.g., El Popo
+the mentions are pronominal.
+                                                                    in OntoNotes vs. Ell Popo in ACE). ACE men-
+5    Parameter 2: Annotation Scheme                                 tions for which there was no parse tree node in
+                                                                    the OntoNotes gold-standard tree were omitted, as
+In the second experiment, we used the 100k-word                     creating a new node could have damaged the tree.
+portion (from the TDT collection) shared by the                        Given that only seven entity types are annotated
+OntoNotes and ACE corpora (330 OntoNotes doc-                       in ACE, the number of OntoNotes mentions is al-
+  12                                                                  13
+     Due to space constraints, the actual output cannot be               Both ACE entities and types were mapped onto the
+shown here. We are happy to send it to interested requesters.       OntoNotes dataset.
+
+
+                                                             1427
+
+
+                               #docs          #words       #mentions       #entities (e)   #singleton e       #multi-mention e
+                Training         297          87,068          22,127            15,983             13,587               2,396
+OntoNotes
+                Test              33           9,763           2,463             1,790              1,476                 314
+                Training         297          87,068          12,951             5,873              3,599               2,274
+ACE
+                Test              33           9,763           1,464               746                459                 287
+
+      Table 4: Corpus statistics for the aligned portion of ACE and OntoNotes on gold-standard data.
+
+                                                   MUC                                      B3                        CEAF
+                                          P         R             F                P        R           F             P/R/F
+OntoNotes scheme
+1. A LL SINGLETONS                       –           –           –                100      72.68      84.18           72.68
+2. H EAD MATCH                         55.14       39.08       45.74             90.65     80.87      85.48           76.05
+3. H EAD MATCH + PRON                  47.10       53.05       49.90             82.28     83.13      82.70           75.15
+4. S TRONG MATCH                       46.81       53.34       49.86             80.47     83.54      81.97           76.78
+5. S UPER STRONG MATCH                 46.51       40.56       43.33             84.95     80.16      82.48           76.70
+6. B EST MATCH                         52.47       47.40       49.80             86.10     82.80      84.42           77.87
+7. W EAK MATCH                         47.91       64.64       55.03             71.73     87.46      78.82           71.74
+ACE scheme
+1. A LL SINGLETONS                       –           –           –                100      50.96      67.51           50.96
+2. H EAD MATCH                         82.35       39.00       52.93             95.27     64.05      76.60           66.46
+3. H EAD MATCH + PRON                  70.11       53.90       60.94             86.49     68.20      76.27           68.44
+4. S TRONG MATCH                       64.21       64.21       64.21             76.92     73.54      75.19           70.01
+5. S UPER STRONG MATCH                 60.51       56.55       58.46             76.71     69.19      72.76           66.87
+6. B EST MATCH                         67.50       56.69       61.62             82.18     71.67      76.57           69.88
+7. W EAK MATCH                         63.52       80.50       71.01             59.76     86.36      70.64           64.21
+
+              Table 5: CISTELL results varying the annotation scheme on gold-standard data.
+
+
+most twice as large as the number of ACE men-                         of an entity rather than refer to a second (corefer-
+tions. Unlike OntoNotes, ACE mentions include                         ent) entity (van Deemter and Kibble, 2000). Fi-
+premodifiers (e.g., state in state lines), national                   nally, the two schemes frequently disagree on bor-
+adjectives (e.g., Iraqi) and relative pronouns (e.g.,                 derline cases in which coreference turns out to be
+who, that). Also, given that ACE entities corre-                      especially complex (4). As a result, some features
+spond to types that are usually coreferred (e.g.,                     will behave differently, e.g., the appositive feature
+people, organizations, etc.), singletons only rep-                    has the opposite effect in the two datasets.
+resent 61% of all entities, while they are 85% in
+OntoNotes. The average entity size is 4 in ACE                        Results and Discussion From the differences
+and 3.5 in OntoNotes.                                                 pointed out above, the results shown in Table 5
+                                                                      might be surprising at first. Given that OntoNotes
+   A second major difference is the definition of
+                                                                      is not restricted to any semantic type and is based
+coreference relations, illustrated here:
+                                                                      on a more sophisticated definition of coreference,
+(2)      [This] was [an all-white, all-Christian community            one would not expect a system to perform better
+         that all the sudden was taken over ... by different          on it than on ACE. The explanation is given by the
+         groups].
+                                                                      A LL SINGLETONS baseline, which is 73–84% for
+(3)      [ [Mayor] John Hyman] has a simple answer.
+                                                                      OntoNotes and only 51–68% for ACE. The fact
+(4)      [Postville] now has 22 different nationalities ... For       that OntoNotes contains a much larger number of
+         those who prefer [the old Postville], Mayor John
+         Hyman has a simple answer.                                   singletons—as Table 4 shows—results in an ini-
+                                                                      tial boost of performance (except with the MUC
+In ACE, nominal predicates corefer with their                         score, which ignores singletons). In contrast, the
+subject (2), and appositive phrases corefer with                      score improvement achieved by H EAD MATCH is
+the noun they are modifying (3). In contrast,                         much more noticeable on ACE than on OntoNotes,
+they do not fall under the identity relation in                       which indicates that many of its coreferent men-
+OntoNotes, which follows the linguistic under-                        tions share the same head.
+standing of coreference according to which nom-                          The systematic biases of the measures that were
+inal predicates and appositives express properties                    observed in Table 3 appear again in the case of
+
+
+                                                              1428
+
+
+MUC and B3 . CEAF is divided between B EST            (Hall et al., 2007).
+MATCH and S TRONG MATCH . The higher value               Although the number of words in Tables 4 and 6
+of the MUC score for ACE is another indication        should in principle be the same, the latter con-
+of its tendency to reward correct links much more     tains fewer words as it lacks the null elements
+than to penalize spurious ones (ACE has a larger      (traces, ellipsed material, etc.) manually anno-
+proportion of multi-mention entities).                tated in OntoNotes. Missing parse tree nodes in
+   The feature rankings obtained for each dataset     the automatically parsed data account for the con-
+generally coincide as to which features are ranked    siderably lower number of OntoNotes mentions
+best (namely NE match, is-a match, and head           (approx. 5,700 fewer mentions).14 However, the
+match), but differ in their particular ordering.      proportions of singleton:multi-mention entities as
+   It is also possible to compare the OntoNotes re-   well as the average entity size do not vary.
+sults in Tables 3 and 5, the only difference being
+that the first training set was three times larger.   Results and Discussion The ACE scores for the
+Contrary to expectation, the model trained on a       automatically preprocessed models in Table 7 are
+larger dataset performs just slightly better. The     about 3% lower than those based on OntoNotes
+fact that more training data does not necessarily     gold-standard data in Table 5, providing evidence
+lead to an increase in performance conforms to        for the advantage offered by gold-standard prepro-
+the observation that there appear to be few general   cessing information. In contrast, the similar—if
+rules (e.g., head match) that systematically gov-     not higher—scores of OntoNotes can be attributed
+ern coreference relationships; rather, coreference    to the use of the annotated ACE entity types. The
+appeals to individual unique phenomena appear-        fact that these are annotated not only for proper
+ing in each context, and thus after a point adding    nouns (as predicted by an automatic NER) but also
+more training data does not add much new gener-       for pronouns and full NPs is a very helpful feature
+alizable information. Pragmatic information (dis-     for a coreference resolution system.
+course structure, world knowledge, etc.) is proba-       Again, the scoring metrics exhibit similar bi-
+bly the key, if ever there is a way to encode it.     ases, but note that CEAF prefers H EAD MATCH
+                                                      + PRON in the case of ACE, which is indicative of
+6   Parameter 3: Preprocessing                        the noise brought by automatic preprocessing.
+                                                         A further insight is offered from comparing the
+The goal of the third experiment was to determine
+                                                      feature rankings with gold-standard syntax to that
+how much the source and nature of preprocess-
+                                                      with automatic preprocessing. Since we are evalu-
+ing information matters. Since it is often stated
+                                                      ating now on the ACE data, the NE match feature
+that coreference resolution depends on many lev-
+                                                      is also ranked first for OntoNotes. Head and is-a
+els of analysis, we again compared the two cor-
+                                                      match are still ranked among the best, yet syntac-
+pora, which differ in the amount and correctness
+                                                      tic features are not. Instead, features like NP type
+of such information. However, in this experiment,
+                                                      have moved further up. This reranking probably
+entity mapping was applied in the opposite direc-
+                                                      indicates that if there is noise in the syntactic infor-
+tion: the OntoNotes entities were mapped onto the
+                                                      mation due to automatic tools, then morphological
+automatically preprocessed ACE dataset. This ex-
+                                                      and syntactic features switch their positions.
+poses the shortcomings of automated preprocess-
+                                                         Given that the noise brought by automatic pre-
+ing in ACE for identifying all the mentions identi-
+                                                      processing can be harmful, we tried leaving out the
+fied and linked in OntoNotes.
+                                                      grammatical function feature. Indeed, the results
+Datasets The ACE data was morphologically             increased about 2–3%, S TRONG MATCH scoring
+annotated with a tokenizer based on manual rules      the highest. This points out that conclusions drawn
+adapted from the one used in CoNLL (Tjong             from automatically preprocessed data about the
+Kim Sang and De Meulder, 2003), with TnT 2.2,         kind of knowledge relevant for coreference reso-
+a trigram POS tagger based on Markov models           lution might be mistaken. Using the most success-
+(Brants, 2000), and with the built-in WordNet lem-    ful basic features can lead to the best results when
+matizer (Fellbaum, 1998). Syntactic chunks were       only automatic preprocessing is available.
+obtained from YamCha 1.33, an SVM-based NP-              14
+                                                           In order to make the set of mentions as similar as possible
+chunker (Kudoh and Matsumoto, 2000), and parse        to the set in Section 5, OntoNotes singletons were mapped
+trees from Malt Parser 0.4, an SVM-based parser       from the ones detected in the gold-standard treebank.
+
+
+                                                  1429
+
+
+                         #docs        #words       #mentions      #entities (e)   #singleton e       #multi-mention e
+              Training     297        80,843          16,945           12,127             10,253               1,874
+OntoNotes
+              Test          33         9,073           1,931            1,403              1,156                 247
+              Training     297        80,843          13,648            6,041              3,652               2,389
+ACE
+              Test          33         9,073           1,537              775                475                 300
+
+Table 6: Corpus statistics for the aligned portion of ACE and OntoNotes on automatically parsed data.
+
+                                           MUC                                     B3                        CEAF
+                                  P         R            F                P        R           F             P/R/F
+OntoNotes scheme
+1. A LL SINGLETONS                 –         –           –               100      72.66      84.16           72.66
+2. H EAD MATCH                   56.76     35.80       43.90            92.18     80.52      85.95           76.33
+3. H EAD MATCH + PRON            47.44     54.36       50.66            82.08     83.61      82.84           74.83
+4. S TRONG MATCH                 52.66     58.14       55.27            83.11     85.05      84.07           78.30
+5. S UPER STRONG MATCH           51.67     46.78       49.11            85.74     82.07      83.86           77.67
+6. B EST MATCH                   54.38     51.70       53.01            86.00     83.60      84.78           78.15
+7. W EAK MATCH                   49.78     64.58       56.22            75.63     87.79      81.26           74.62
+ACE scheme
+1. A LL SINGLETONS                 –         –           –               100      50.42      67.04           50.42
+2. H EAD MATCH                   81.25     39.24       52.92            94.73     63.82      76.26           65.97
+3. H EAD MATCH + PRON            69.76     53.28       60.42            86.39     67.73      75.93           68.05
+4. S TRONG MATCH                 58.85     58.92       58.89            73.36     70.35      71.82           66.30
+5. S UPER STRONG MATCH           56.19     50.66       53.28            75.54     66.47      70.72           63.96
+6. B EST MATCH                   63.38     49.74       55.74            80.97     68.11      73.99           65.97
+7. W EAK MATCH                   60.22     78.48       68.15            55.17     84.86      66.87           59.08
+
+      Table 7: CISTELL results varying the annotation scheme on automatically preprocessed data.
+
+
+7     Conclusion                                             the first place, and what preprocessing we include
+                                                             or omit? Doing so would seem like circular rea-
+Regarding evaluation, the results clearly expose             soning: it invalidates the notion of the existence of
+the systematic tendencies of the evaluation mea-             a true and independent gold standard. But if ap-
+sures. The way each measure is computed makes                parently incidental aspects of the corpora can have
+it biased towards a specific model: MUC is gen-              such effects—effects rated quite differently by the
+erally too lenient with spurious links, B3 scores            various measures—then we have no fixed ground
+too high in the presence of a large number of sin-           to stand on.
+gletons, and CEAF does not agree with either of
+                                                                The worrisome fact that there is currently no
+them. It is a cause for concern that they provide
+                                                             clearly preferred and ‘correct’ evaluation measure
+contradictory indications about the core of coref-
+                                                             for coreference resolution means that we cannot
+erence, namely the resolution models—for exam-
+                                                             draw definite conclusions about coreference reso-
+ple, the model ranked highest by B3 in Table 7 is
+                                                             lution systems at this time, unless they are com-
+ranked lowest by MUC. We always assume eval-
+                                                             pared on exactly the same corpus, preprocessed
+uation measures provide a ‘true’ reflection of our
+                                                             under the same conditions, and all three measures
+approximation to a gold standard in order to guide
+                                                             agree in their rankings.
+research in system development and tuning.
+   Further support to our claims comes from the              Acknowledgments
+results of SemEval-2010 Task 1 (Recasens et al.,
+2010). The performance of the six participating              We thank Dr. M. Antònia Martı́ for her generosity
+systems shows similar problems with the evalua-              in allowing the first author to visit ISI to work with
+tion metrics, and the singleton baseline was hard            the second. Special thanks to Edgar Gonzàlez for
+to beat even by the highest-performing systems.              his kind help with conversion issues.
+   Since the measures imply different conclusions               This work was partially supported by the Span-
+about the nature of the corpora and the preprocess-          ish Ministry of Education through an FPU schol-
+ing information applied, should we use them now              arship (AP2006-00994) and the TEXT-MESS 2.0
+to constrain the ways our corpora are created in             Project (TIN2009-13391-C04-04).
+
+
+                                                      1430
+
+
+References                                                Taku Kudoh and Yuji Matsumoto. 2000. Use of sup-
+                                                            port vector learning for chunk identification. In Pro-
+Amit Bagga and Breck Baldwin. 1998. Algorithms for          ceedings of CoNLL 2000 and LLL 2000, pages 142–
+ scoring coreference chains. In Proceedings of the          144, Lisbon, Portugal.
+ LREC 1998 Workshop on Linguistic Coreference,
+ pages 563–566, Granada, Spain.                           Xiaoqiang Luo and Imed Zitouni. 2005. Multi-lingual
+                                                            coreference resolution with syntactic features. In
+Eric Bengtson and Dan Roth. 2008. Understanding             Proceedings of HLT-EMNLP 2005, pages 660–667,
+   the value of features for coreference resolution. In     Vancouver.
+   Proceedings of EMNLP 2008, pages 294–303, Hon-
+   olulu, Hawaii.                                         Xiaoqiang Luo, Abe Ittycheriah, Hongyan Jing, Nanda
+                                                            Kambhatla, and Salim Roukos. 2004. A mention-
+Thorsten Brants. 2000. TnT – A statistical part-of-         synchronous coreference resolution algorithm based
+  speech tagger. In Proceedings of ANLP 2000, Seat-         on the Bell tree. In Proceedings of ACL 2004, pages
+  tle, WA.                                                  21–26, Barcelona.
+Aron Culotta, Michael Wick, Robert Hall, and Andrew       Xiaoqiang Luo. 2005. On coreference resolution
+  McCallum. 2007. First-order probabilistic models          performance metrics.  In Proceedings of HLT-
+  for coreference resolution. In Proceedings of HLT-        EMNLP 2005, pages 25–32, Vancouver.
+  NAACL 2007, pages 81–88, Rochester, New York.
+                                                          Vincent Ng and Claire Cardie. 2002. Improving
+Walter Daelemans and Antal Van den Bosch. 2005.             machine learning approaches to coreference resolu-
+  Memory-Based Language Processing. Cambridge               tion. In Proceedings of ACL 2002, pages 104–111,
+  University Press.                                         Philadelphia.
+Pascal Denis and Jason Baldridge. 2009. Global joint      Vincent Ng. 2009. Graph-cut-based anaphoricity de-
+  models for coreference resolution and named entity        termination for coreference resolution. In Proceed-
+  classification. Procesamiento del Lenguaje Natural,       ings of NAACL-HLT 2009, pages 575–583, Boulder,
+  42:87–96.                                                 Colorado.
+George Doddington, Alexis Mitchell, Mark Przybocki,       Hoifung Poon and Pedro Domingos. 2008. Joint unsu-
+  Lance Ramshaw, Stephanie Strassel, and Ralph              pervised coreference resolution with Markov logic.
+  Weischedel. 2004. The Automatic Content Extrac-           In Proceedings of EMNLP 2008, pages 650–659,
+  tion (ACE) Program - Tasks, Data, and Evaluation.         Honolulu, Hawaii.
+  In Proceedings of LREC 2004, pages 837–840.
+                                                          Sameer S. Pradhan, Eduard Hovy, Mitch Mar-
+Christiane Fellbaum. 1998. WordNet: An Electronic           cus, Martha Palmer, Lance Ramshaw, and Ralph
+  Lexical Database. The MIT Press.                          Weischedel. 2007. Ontonotes: A unified rela-
+                                                            tional semantic representation. In Proceedings of
+Jenny Rose Finkel and Christopher D. Manning.               ICSC 2007, pages 517–526, Washington, DC.
+   2008. Enforcing transitivity in coreference resolu-
+   tion. In Proceedings of ACL-HLT 2008, pages 45–        Marta Recasens and Eduard Hovy.       2009.   A
+   48, Columbus, Ohio.                                     Deeper Look into Features for Coreference Res-
+                                                           olution.    In S. Lalitha Devi, A. Branco, and
+Aria Haghighi and Dan Klein. 2009. Simple coref-           R. Mitkov, editors, Anaphora Processing and Ap-
+  erence resolution with rich syntactic and semantic       plications (DAARC 2009), volume 5847 of LNAI,
+  features. In Proceedings of EMNLP 2009, pages            pages 29–42. Springer-Verlag.
+  1152–1161, Singapore. Association for Computa-
+  tional Linguistics.                                     Marta Recasens and M. Antònia Martı́. 2009. AnCora-
+                                                           CO: Coreferentially annotated corpora for Spanish
+Johan Hall, Jens Nilsson, Joakim Nivre, Gülsen            and Catalan. Language Resources and Evaluation,
+  Eryigit, Beáta Megyesi, Mattias Nilsson, and            DOI 10.1007/s10579-009-9108-x.
+  Markus Saers. 2007. Single malt or blended?
+  A study in multilingual parser optimization. In         Marta Recasens, Lluı́s Màrquez, Emili Sapena,
+  Proceedings of the CoNLL shared task session of          M. Antònia Martı́, Mariona Taulé, Véronique Hoste,
+  EMNLP-CoNLL 2007, pages 933–939.                         Massimo Poesio, and Yannick Versley.           2010.
+                                                           SemEval-2010 Task 1: Coreference resolution in
+Lynette Hirschman and Nancy Chinchor. 1997. MUC-           multiple languages. In Proceedings of the Fifth In-
+  7 Coreference Task Definition – Version 3.0. In Pro-     ternational Workshop on Semantic Evaluations (Se-
+  ceedings of MUC-7.                                       mEval 2010), Uppsala, Sweden.
+
+Eduard Hovy, Mitchell Marcus, Martha Palmer,              Wee M. Soon, Hwee T. Ng, and Daniel C. Y. Lim.
+  Lance Ramshaw, and Ralph Weischedel. 2006.                2001. A machine learning approach to coreference
+  OntoNotes: the 90% solution. In Proceedings of            resolution of noun phrases. Computational Linguis-
+  HLT-NAACL 2006, pages 57–60.                              tics, 27(4):521–544.
+
+
+                                                      1431
+
+
+Veselin Stoyanov, Nathan Gilbert, Claire Cardie, and
+  Ellen Riloff. 2009. Conundrums in noun phrase
+  coreference resolution: Making sense of the state-
+  of-the-art. In Proceedings of ACL-IJCNLP 2009,
+  pages 656–664, Singapore.
+Erik F. Tjong Kim Sang and Fien De Meulder.
+   2003. Introduction to the CoNLL-2003 Shared
+   Task: Language-independent Named Entity Recog-
+   nition. In Walter Daelemans and Miles Osborne, ed-
+   itors, Proceedings of CoNLL 2003, pages 142–147.
+   Edmonton, Canada.
+Olga Uryupina. 2006. Coreference resolution with
+  and without linguistic knowledge. In Proceedings
+  of LREC 2006.
+Kees van Deemter and Rodger Kibble. 2000. On core-
+  ferring: Coreference in MUC and related annotation
+  schemes. Computational Linguistics, 26(4):629–
+  637.
+Marc Vilain, John Burger, John Aberdeen, Dennis Con-
+ nolly, and Lynette Hirschman. 1995. A model-
+ theoretic coreference scoring scheme. In Proceed-
+ ings of MUC-6, pages 45–52, San Francisco.
+
+
+
+
+                                                    1432
+

@@ -1,0 +1,324 @@
+                        Unsupervised Discourse Segmentation
+                   of Documents with Inherently Parallel Structure
+
+                              Minwoo Jeong and Ivan Titov
+                                  Saarland University
+                                 Saarbrücken, Germany
+                       {m.jeong|titov}@mmci.uni-saarland.de
+
+
+                     Abstract                                (e.g., (Hearst, 1994)). The most straightforward
+                                                             approach would be to use a pipeline strategy,
+    Documents often have inherently parallel                 where an existing segmentation algorithm finds
+    structure: they may consist of a text and                discourse boundaries of each part independently,
+    commentaries, or an abstract and a body,                 and then the segments are aligned. Or, conversely,
+    or parts presenting alternative views on                 a sentence-alignment stage can be followed by a
+    the same problem. Revealing relations be-                segmentation stage. However, as we will see in our
+    tween the parts by jointly segmenting and                experiments, these strategies may result in poor
+    predicting links between the segments,                   segmentation and alignment quality.
+    would help to visualize such documents                      To address this problem, we construct a non-
+    and construct friendlier user interfaces. To             parametric Bayesian model for joint segmenta-
+    address this problem, we propose an un-                  tion and alignment of parallel parts. In com-
+    supervised Bayesian model for joint dis-                 parison with the discussed pipeline approaches,
+    course segmentation and alignment. We                    our method has two important advantages: (1) it
+    apply our method to the “English as a sec-               leverages the lexical cohesion phenomenon (Hal-
+    ond language” podcast dataset where each                 liday and Hasan, 1976) in modeling the paral-
+    episode is composed of two parallel parts:               lel parts of documents, and (2) ensures that the
+    a story and an explanatory lecture. The                  effective number of segments can grow adap-
+    predicted topical links uncover hidden re-               tively. Lexical cohesion is an idea that topically-
+    lations between the stories and the lec-                 coherent segments display compact lexical distri-
+    tures. In this domain, our method achieves               butions (Hearst, 1994; Utiyama and Isahara, 2001;
+    competitive results, rivaling those of a pre-            Eisenstein and Barzilay, 2008). We hypothesize
+    viously proposed supervised technique.                   that not only isolated fragments but also each
+                                                             group of linked fragments displays a compact and
+1   Introduction                                             consistent lexical distribution, and our generative
+Many documents consist of parts exhibiting a high            model leverages this inter-part cohesion assump-
+degree of parallelism: e.g., abstract and body of            tion.
+academic publications, summaries and detailed                   In this paper, we consider the dataset of “En-
+news stories, etc. This is especially common with            glish as a second language” (ESL) podcast1 , where
+the emergence of the Web 2.0 technologies: many              each episode consists of two parallel parts: a story
+texts on the web are now accompanied with com-               (an example monologue or dialogue) and an ex-
+ments and discussions. Segmentation of these par-            planatory lecture discussing the meaning and us-
+allel parts into coherent fragments and discovery            age of English expressions appearing in the story.
+of hidden relations between them would facilitate            Fig. 1 presents an example episode, consisting of
+the development of better user interfaces and im-            two parallel parts, and their hidden topical rela-
+prove the performance of summarization and in-               tions.2 From the figure we may conclude that there
+formation retrieval systems.                                 is a tendency of word repetition between each pair
+   Discourse segmentation of the documents com-              of aligned segments, illustrating our hypothesis of
+posed of parallel parts is a novel and challeng-             compactness of their joint distribution. Our goal is
+ing problem, as previous research has mostly fo-                1
+                                                                    http://www.eslpod.com/
+                                                                2
+cused on the linear segmentation of isolated texts                  Episode no. 232 post on Jan. 08, 2007.
+
+
+                                                       151
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 151–155,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                  Story                                                                    Lecture transcript
+
+                                              This podcast is all about business vocabulary related to accounting.
+ I have a day job, but I recently started a   The title of the podcast is Business Bookkeeping. ...
+ small business on the side.                  The story begins by Magdalena saying that she has a day job.
+                                              A day job is your regular job that you work at from nine in the morning 'til five in the afternoon, for
+                                                   example.
+ I didn't know anything about accounting
+                                              She also has a small business on the side. ...
+ and my friend, Roland, said that he would    Magdalena continues by saying that she didn't know anything about accounting and her friend,
+ give me some advice.                             Roland, said he would give her some advice.
+                                              Accounting is the job of keeping correct records of the money you spend; it's very similar to
+ Roland: So, the reason that you need to          bookkeeping. ...
+ do your bookkeeping is so you can            Roland begins by saying that the reason that you need to do your bookkeeping is so you can
+ manage your cash flow.                           manage your cash flow.
+                                              Cash flow, flow, means having enough money to run your business - to pay your bills. ...
+ ...
+                                              ...
+
+
+
+Figure 1: An example episode of ESL podcast. Co-occurred words are represented in italic and underline.
+
+
+to divide the lecture transcript into discourse units                  3      Model
+and to align each unit to the related segment of the
+story. Predicting these structures for the ESL pod-                    In this section we describe our model for discourse
+cast could be the first step in development of an                      segmentation of documents with inherently paral-
+e-learning system and a podcast search engine for                      lel structure. We start by clarifying our assump-
+ESL learners.                                                          tions about their structure.
+                                                                          We assume that a document x consists of K
+                                                                       parallel parts, that is, x = {x(k) }k=1:K , and
+2      Related Work                                                    each part of the document consists of segments,
+                                                                                   (k)
+                                                                       x(k) = {si }i=1:I . Note that the effective num-
+Discourse segmentation has been an active area                         ber of fragments I is unknown. Each segment can
+of research (Hearst, 1994; Utiyama and Isahara,                        either be specific to this part (drawn from a part-
+2001; Galley et al., 2003; Malioutov and Barzilay,                                                   (k)
+                                                                       specific language model φi ) or correspond to
+2006). Our work extends the Bayesian segmenta-                         the entire document (drawn from a document-level
+tion model (Eisenstein and Barzilay, 2008) for iso-                                         (doc)
+                                                                       language model φi ). For example, the first
+lated texts, to the problem of segmenting parallel                     and the second sentences of the lecture transcript
+parts of documents.                                                    in Fig. 1 are part-specific, whereas other linked
+   The task of aligning each sentence of an abstract                   sentences belong to the document-level segments.
+to one or more sentences of the body has been                          The document-level language models define top-
+studied in the context of summarization (Marcu,                        ical links between segments in different parts of
+1999; Jing, 2002; Daumé and Marcu, 2004). Our                         the document, whereas the part-specific language
+work is different in that we do not try to extract                     models define the linear segmentation of the re-
+the most relevant sentence but rather aim to find                      maining unaligned text.
+coherent fragments with maximally overlapping                             Each document-level language model corre-
+lexical distributions. Similarly, the query-focused                    sponds to the set of aligned segments, at most one
+summarization (e.g., (Daumé and Marcu, 2006))                         segment per part. Similarly, each part-specific lan-
+is also related but it focuses on sentence extraction                  guage model corresponds to a single segment of
+rather than on joint segmentation.                                     the single corresponding part. Note that all the
+   We are aware of only one previous work on joint                     documents are modeled independently, as we aim
+segmentation and alignment of multiple texts (Sun                      not to discover collection-level topics (as e.g. in
+et al., 2007) but their approach is based on similar-                  (Blei et al., 2003)), but to perform joint discourse
+ity functions rather than on modeling lexical cohe-                    segmentation and alignment.
+sion in the generative framework. Our application,                        Unlike (Eisenstein and Barzilay, 2008), we can-
+the analysis of the ESL podcast, was previously                        not make an assumption that the number of seg-
+studied in (Noh et al., 2010). They proposed a su-                     ments is known a-priori, as the effective number of
+pervised method which is driven by pairwise clas-                      part-specific segments can vary significantly from
+sification decisions. The main drawback of their                       document to document, depending on their size
+approach is that it neglects the discourse structure                   and structure. To tackle this problem, we use
+and the lexical cohesion phenomenon.                                   Dirichlet processes (DP) (Ferguson, 1973) to de-
+
+
+                                                                152
+
+
+                                                                            (a)               (b)               (c)
+fine priors on the number of segments. We incor-
+porate them in our model in a similar way as it
+is done for the Latent Dirichlet Allocation (LDA)
+by Yu et al. (2005). Unlike the standard LDA, the
+topic proportions are chosen not from a Dirichlet                         Figure 2: Three types of moves: (a) shift, (b) split
+prior but from the marginal distribution GEM (α)                          and (c) merge.
+defined by the stick breaking construction (Sethu-
+raman, 1994), where α is the concentration param-                         is the current segmentation and its type. The new
+eter of the underlying DP distribution. GEM (α)                           pair (z 0 , t0 ) is accepted with the probability
+defines a distribution of partitions of the unit inter-
+val into a countable number of parts.                                                          P (z 0 , t0 , x)Q(z 0 , t0 |z, t)
+                                                                                                                                
+   The formal definition of our model is as follows:                             min 1,                                           .
+                                                                                                P (z, t, x)Q(z, t|z 0 , t0 )
+    • Draw the document-level topic proportions β (doc) ∼
+                                                                             In order to implement the MH algorithm for our
+      GEM (α(doc) ).
+                                                        (doc)
+                                                                          model, we need to define the set of potential moves
+    • Choose the document-level language model φi               ∼         (i.e. admissible changes from (z, t) to (z 0 , t0 )),
+      Dir(γ (doc) ) for i ∈ {1, 2, . . .}.
+                                                                          and the proposal distribution Q over these moves.
+    • Draw the part-specific topic proportions β (k)            ∼         If the actual number of segments is known and
+      GEM (α(k) ) for k ∈ {1, . . . , K}.
+                                                                          only a linear discourse structure is acceptable, then
+                                                         (k)
+    • Choose the part-specific language models φi               ∼         a single move, shift of the segment border (Fig.
+      Dir(γ (k) ) for k ∈ {1, . . . , K} and i ∈ {1, 2, . . .}.           2(a)), is sufficient (Eisenstein and Barzilay, 2008).
+    • For each part k and each sentence n:                                In our case, however, a more complex set of moves
+                          (k)
+          – Draw type tn ∼ U nif (Doc, P art).                            is required.
+                 (k)                             (k)
+          – If (tn = Doc); draw topic zn ∼ β (doc) ; gen-                    We make two assumptions which are moti-
+                         (k)          (doc)
+            erate words xn ∼ M ult(φ (k) )                                vated by the problem considered in Section 5:
+                                                zn
+                                          (k)
+          – Otherwise; draw topic zn ∼ β (k) ; generate                   we assume that (1) we are given the number of
+                   (k)           (k)
+            words xn ∼ M ult(φ (k) ).                                     document-level segments and also that (2) the
+                                     zn
+                                                                          aligned segments appear in the same order in each
+   The priors γ (doc) , γ (k) , α(doc) and α(k) can be                    part of the document. With these assumptions in
+estimated at learning time using non-informative                          mind, we introduce two additional moves (Fig.
+hyperpriors (as we do in our experiments), or set                         2(b) and (c)):
+manually to indicate preferences of segmentation                            • Split move: select a segment, and split it at
+granularity.                                                                  one of the spanned sentences; if the segment
+   At inference time, we enforce each latent topic                            was a document-level segment then one of
+  (k)
+zn to be assigned to a contiguous span of text,                               the fragments becomes the same document-
+assuming that coherent topics are not recurring                               level segment.
+across the document (Halliday and Hasan, 1976).                             • Merge move: select a pair of adjacent seg-
+It also reduces the search space and, consequently,                           ments where at least one of the segments is
+speeds up our sampling-based inference by reduc-                              part-specific, and merge them; if one of them
+ing the time needed for Monte Carlo chains to                                 was a document-level segment then the new
+mix. In fact, this constraint can be integrated in the                        segment has the same document-level topic.
+model definition but it would significantly compli-
+                                                                          All the moves are selected with the uniform prob-
+cate the model description.
+                                                                          ability, and the distance c for the shift move is
+4    Inference                                                            drawn from the proposal distribution proportional
+                                                                          to c−1/cmax . The moves are selected indepen-
+As exact inference is intractable, we follow Eisen-                       dently for each part.
+stein and Barzilay (2008) and instead use a                                 Although the above two assumptions are not
+Metropolis-Hastings (MH) algorithm. At each                               crucial as a simple modification to the set of moves
+iteration of the MH algorithm, a new potential                            would support both introduction and deletion of
+alignment-segmentation pair (z 0 , t0 ) is drawn from                     document-level fragments, this modification was
+a proposal distribution Q(z 0 , t0 |z, t), where (z, t)                   not necessary for our experiments.
+
+
+                                                                    153
+
+
+5     Experiment                                                     Method              Pk         WD       1 − F1
+                                                                     Uniform            0.453      0.458      0.682
+5.1    Dataset and setup
+                                                                     SentAlign          0.446      0.547      0.313
+Dataset We apply our model to the ESL podcast                        Pipeline (I)       0.250      0.249      0.443
+dataset (Noh et al., 2010) of 200 episodes, with                     Pipeline (2I+1)    0.268      0.289      0.318
+an average of 17 sentences per story and 80 sen-                     Our model (I)      0.193      0.204      0.254
+tences per lecture transcript. The gold standard                     +split/merge       0.181      0.193      0.239
+alignments assign each fragment of the story to a
+segment of the lecture transcript. We can induce             Table 1: Results on the ESL podcast dataset. For
+segmentations at different levels of granularity on          all metrics, lower values are better.
+both the story and the lecture side. However, given
+that the segmentation of the story was obtained by
+an automatic sentence splitter, there is no reason           take the 100,000th iteration of each chain as a sam-
+to attempt to reproduce this segmentation. There-            ple. Results are the average over these five runs.
+fore, for quantitative evaluation purposes we fol-           Also we perform L-BFGS optimization to auto-
+low Noh et al. (2010) and restrict our model to              matically adjust the non-informative hyperpriors
+alignment structures which agree with the given              after each 1,000 iterations of sampling.
+segmentation of the story. For all evaluations, we
+                                                             5.2      Result
+apply standard stemming algorithm and remove
+common stop words.                                           Table 1 summarizes the obtained results. ‘Uni-
+Evaluation metrics To measure the quality of seg-            form’ denotes the minimal baseline which uni-
+mentation of the lecture transcript, we use two              formly draws a random set of I spans for each lec-
+standard metrics, Pk (Beeferman et al., 1999) and            ture, and then aligns them to the segments of the
+WindowDiff (WD) (Pevzner and Hearst, 2002),                  story preserving the linear order. Also, we con-
+but both metrics disregard the alignment links (i.e.         sider two variants of the pipeline approach: seg-
+the topic labels). Consequently, we also use the             menting the lecture on I and 2I + 1 segments, re-
+macro-averaged F1 score on pairs of aligned span,            spectively.3 Our joint model substantially outper-
+which measures both the segmentation and align-              forms the baselines. The difference is statistically
+ment quality.                                                significant with the level p < .01 measured with
+Baseline Since there has been little previous re-            the paired t-test. The significant improvement over
+search on this problem, we compare our results               the pipeline results demonstrates benefits of joint
+against two straightforward unsupervised base-               modeling for the considered problem. Moreover,
+lines. For the first baseline, we consider the               additional benefits are obtained by using the DP
+pairwise sentence alignment (SentAlign) based                priors and the split/merge moves (the last line in
+on the unigram and bigram overlap. The sec-                  Table 1). Finally, our model significantly outper-
+ond baseline is a pipeline approach (Pipeline),              forms the previously proposed supervised model
+where we first segment the lecture transcript with           (Noh et al., 2010): they report micro-averaged F1
+BayesSeg (Eisenstein and Barzilay, 2008) and                 score 0.698 while our best model achieves 0.778
+then use the pairwise alignment to find their best           with the same metric. This observation confirms
+alignment to the segments of the story.                      that lexical cohesion modeling is crucial for suc-
+Our model We evaluate our joint model of seg-                cessful discourse analysis.
+mentation and alignment both with and without
+                                                             6       Conclusions
+the split/merge moves. For the model without
+these moves, we set the desired number of seg-               We studied the problem of joint discourse segmen-
+ments in the lecture to be equal to the actual num-          tation and alignment of documents with inherently
+ber of segments in the story I. In this setting,             parallel structure and achieved favorable results on
+the moves can only adjust positions of the seg-              the ESL podcast dataset outperforming the cas-
+ment borders. For the model with the split/merge             caded baselines. Accurate prediction of these hid-
+moves, we start with the same number of segments             den relations would open interesting possibilities
+I but it can be increased or decreased during in-                3
+                                                                  The use of the DP priors and the split/merge moves on
+ference. For evaluation of our model, we run our             the first stage of the pipeline did not result in any improve-
+inference algorithm from five random states, and             ment in accuracy.
+
+
+                                                       154
+
+
+for construction of friendlier user interfaces. One           Hyungjong Noh, Minwoo Jeong, Sungjin Lee,
+example being an application which, given a user-               Jonghoon Lee, and Gary Geunbae Lee. 2010.
+                                                                Script-description pair extraction from text docu-
+selected fragment of the abstract, produces a sum-
+                                                                ments of English as second language podcast. In
+mary from the aligned segment of the document                   Proceedings of the 2nd International Conference on
+body.                                                           Computer Supported Education.
+
+Acknowledgment                                                Lev Pevzner and Marti Hearst. 2002. A critique and
+                                                                improvement of an evaluation metric for text seg-
+The authors acknowledge the support of the                      mentation. Computational Linguistics, 28(1):19–
+Excellence Cluster on Multimodal Computing                      36.
+and Interaction (MMCI), and also thank Mikhail                Jayaram Sethuraman. 1994. A constructive definition
+Kozhevnikov and the anonymous reviewers for                      of Dirichlet priors. Statistica Sinica, 4:639–650.
+their valuable comments, and Hyungjong Noh for
+                                                              Bingjun Sun, Prasenjit Mitra, C. Lee Giles, John Yen,
+providing their data.                                           and Hongyuan Zha. 2007. Topic segmentation
+                                                                with shared topic detection and alignment of mul-
+                                                                tiple documents. In Proceedings of ACM SIGIR,
+References                                                      pages 199–206.
+Doug Beeferman, Adam Berger, and John Lafferty.               Masao Utiyama and Hitoshi Isahara. 2001. A statis-
+  1999. Statistical models for text segmentation.              tical model for domain-independent text segmenta-
+  Computational Linguistics, 34(1–3):177–210.                  tion. In Proceedings of ACL, pages 491–498.
+David M. Blei, Andrew Ng, and Michael I. Jordan.              Kai Yu, Shipeng Yu, and Vokler Tresp. 2005. Dirichlet
+  2003. Latent dirichlet allocation. JMLR, 3:993–               enhanced latent semantic analysis. In Proceedings
+  1022.                                                         of AISTATS.
+Hal Daumé and Daniel Marcu. 2004. A phrase-based
+  hmm approach to document/abstract alignment. In
+  Proceedings of EMNLP, pages 137–144.
+Hal Daumé and Daniel Marcu. 2006. Bayesian query-
+  focused summarization. In Proceedings of ACL,
+  pages 305–312.
+Jacob Eisenstein and Regina Barzilay. 2008. Bayesian
+   unsupervised topic segmentation. In Proceedings of
+   EMNLP, pages 334–343.
+Thomas S. Ferguson. 1973. A Bayesian analysis of
+  some non-parametric problems. Annals of Statistics,
+  1:209–230.
+Michel Galley, Kathleen R. McKeown, Eric Fosler-
+  Lussier, and Hongyan Jing. 2003. Discourse seg-
+  mentation of multi-party conversation. In Proceed-
+  ings of ACL, pages 562–569.
+M. A. K. Halliday and Ruqaiya Hasan. 1976. Cohe-
+  sion in English. Longman.
+Marti Hearst. 1994. Multi-paragraph segmentation of
+ expository text. In Proceedings of ACL, pages 9–16.
+Hongyan Jing. 2002. Using hidden Markov modeling
+  to decompose human-written summaries. Computa-
+  tional Linguistics, 28(4):527–543.
+Igor Malioutov and Regina Barzilay. 2006. Minimum
+   cut model for spoken lecture segmentation. In Pro-
+   ceedings of ACL, pages 25–32.
+Daniel Marcu. 1999. The automatic construction of
+  large-scale corpora for summarization research. In
+  Proceedings of ACM SIGIR, pages 137–144.
+
+
+                                                        155
+

@@ -1,0 +1,681 @@
+    Experiments in Graph-based Semi-Supervised Learning Methods for
+                       Class-Instance Acquisition
+
+               Partha Pratim Talukdar∗                                   Fernando Pereira
+            Search Labs, Microsoft Research                                 Google, Inc.
+               Mountain View, CA 94043                                Mountain View, CA 94043
+              partha@talukdar.net                                     pereira@google.com
+
+
+                       Abstract                                   To overcome these difficulties, seed-based in-
+                                                               formation extraction methods have been devel-
+    Graph-based semi-supervised learning                       oped over the years (Hearst, 1992; Riloff and
+    (SSL) algorithms have been successfully                    Jones, 1999; Etzioni et al., 2005; Talukdar et
+    used to extract class-instance pairs from                  al., 2006; Van Durme and Paşca, 2008). Start-
+    large unstructured and structured text col-                ing with a few seed instances for some classes,
+    lections. However, a careful comparison                    these methods, through analysis of unstructured
+    of different graph-based SSL algorithms                    text, extract new instances of the same class. This
+    on that task has been lacking. We com-                     line of work has evolved to incorporate ideas from
+    pare three graph-based SSL algorithms                      graph-based semi-supervised learning in extrac-
+    for class-instance acquisition on a variety                tion from semi-structured text (Wang and Cohen,
+    of graphs constructed from different do-                   2007), and in combining extractions from free
+    mains. We find that the recently proposed                  text and from structured sources (Talukdar et al.,
+    MAD algorithm is the most effective. We                    2008). The benefits of combining multiple sources
+    also show that class-instance extraction                   have also been demonstrated recently (Pennac-
+    can be significantly improved by adding                    chiotti and Pantel, 2009).
+    semantic information in the form of                           We make the following contributions:
+    instance-attribute edges derived from
+    an independently developed knowledge                          • Even though graph-based SSL algorithms
+    base. All of our code and data will be                          have achieved early success in class-instance
+    made publicly available to encourage                            acquisition, there is no study comparing dif-
+    reproducible research in this area.                             ferent graph-based SSL methods on this task.
+                                                                    We address this gap with a series of experi-
+1   Introduction                                                    ments comparing three graph-based SSL al-
+                                                                    gorithms (Section 2) on graphs constructed
+Traditionally, named-entity recognition (NER) has                   from several sources (Metaweb Technolo-
+focused on a small number of broad classes such                     gies, 2009; Banko et al., 2007).
+as person, location, organization. However, those
+classes are too coarse to support important ap-                   • We investigate whether semantic informa-
+plications such as sense disambiguation, seman-                     tion in the form of instance-attribute edges
+tic matching, and textual inference in Web search.                  derived from an independent knowledge
+For those tasks, we need a much larger inventory                    base (Suchanek et al., 2007) can improve
+of specific classes and accurate classification of                  class-instance acquisition. The intuition be-
+terms into those classes. While supervised learn-                   hind this is that instances that share attributes
+ing methods perform well for traditional NER,                       are more likely to belong to the same class.
+they are impractical for fine-grained classification                We demonstrate that instance-attribute edges
+because sufficient labeled data to train classifiers                significantly improve the accuracy of class-
+for all the classes is unavailable and would be very                instance extraction. In addition, useful class-
+expensive to obtain.                                                attribute relationships are learned as a by-
+                                                                    product of this process.
+    ∗
+      Research carried out while at the University of Penn-
+sylvania, Philadelphia, PA, USA.                                  • In contrast to previous studies involving pro-
+
+
+                                                          1473
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1473–1481,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+         prietary datasets (Van Durme and Paşca,            where Ŷl of size n × 1 is the lth column of Ŷ .
+         2008; Talukdar et al., 2008; Pennacchiotti          The constraint SY = S Ŷ makes sure that the su-
+         and Pantel, 2009), all of our experiments use       pervised labels are not changed during inference.
+         publicly available datasets and we plan to re-      The above objective can be rewritten as:
+         lease our code1 .
+                                                                         Ŷl> LŶl =
+                                                                   X                        X
+                                                                                                   Wuv (Ŷul − Ŷvl )2
+   In Section 2, we review three graph-based                       l∈C                 u,v∈V,l∈C
+SSL algorithms that are compared for the class-
+instance acquisition task in Section 3. In Section           From this, we observe that LP-ZGL penalizes any
+3.6, we show how additional instance-attribute               label assignment where two nodes connected by a
+based semantic constraints can be used to improve            highly weighted edge are assigned different labels.
+class-instance acquisition performance. We sum-              In other words, LP-ZGL prefers smooth labelings
+marize the results and outline future work in Sec-           over the graph. This property is also shared by the
+tion 4.                                                      two algorithms we shall review next. LP-ZGL has
+                                                             been the basis for much subsequent work in the
+2       Graph-based SSL
+                                                             graph-based SSL area, and is still one of the most
+We now review the three graph-based SSL algo-                effective graph-based SSL algorithms.
+rithms for class inference over graphs that we have
+evaluated.                                                   2.3    Adsorption
+                                                             Adsorption (Baluja et al., 2008) is a graph-based
+2.1       Notation
+                                                             SSL algorithm which has been used for open-
+All the algorithms compute a soft assignment of              domain class-instance acquisition (Talukdar et al.,
+labels to the nodes of a graph G = (V, E, W ),               2008). Adsorption is an iterative algorithm, where
+where V is the set of nodes with |V | = n, E is              label estimates on node v in the (t + 1)th iteration
+the set of edges, and W is an edge weight ma-                are updated using estimates from the tth iteration:
+trix. Out of the n = nl + nu nodes in G, nl
+nodes are labeled, while the remaining nu nodes
+are unlabeled. If edge (u, v) 6∈ E, Wuv = 0.                    Ŷv(t+1) ← pinj     cont
+                                                                                         ×Bv(t) +pabnd
+                                                                            v ×Yv +pv             v    ×r (2)
+The (unnormalized) Laplacian, L, of G is given by
+L = D − W , where D is an n × n diagonal degree              where,
+matrix with Duu = v Wuv . Let S be an n × n
+                     P
+                                                                                       X        Wuv
+diagonal matrix with Suu = 1 iff node u ∈ V is                              Bv(t) =         P          Ŷu(t)
+                                                                                                 0 W 0
+                                                                                        u       u   uv
+labeled. That is, S identifies the labeled nodes in
+the graph. C is the set of labels, with |C| = m
+                                                                In (2), pinj   cont , and pabnd are three proba-
+                                                                          v , pv           v
+representing the total number of labels. Y is the
+                                                             bilities defined on each node v ∈ V by Ad-
+n × m matrix storing training label information,
+                                                             sorption; and r is a vector used by Adsorption
+if any. Ŷ is an n × m matrix of soft label assign-
+                                                             to express label uncertainty at a node. On each
+ments, with Ŷvl representing the score of label l
+                                                             node v, the three probabilities sum to one, i.e.,
+on node v. A graph-based SSL computes Ŷ from
+                                                             pinj
+                                                               v + pv
+                                                                      cont + pabnd = 1, and they are based on
+                                                                               v
+{G, SY }.
+                                                             the random-walk interpretation of the Adsorption
+2.2       Label Propagation (LP-ZGL)                         algorithm (Talukdar et al., 2008). The main idea
+                                                             of Adsorption is to control label propagation more
+The label propagation method presented by Zhu                tightly by limiting the amount of information that
+et al. (2003), which we shall refer to as LP-ZGL             passes through a node. For instance, Adsorption
+in this paper, is one of the first graph-based SSL           can reduce the importance of a high-degree node
+methods. The objective minimized by LP-ZGL is:               v during the label inference process by increas-
+                                                             ing pabnd
+                                                                   v    on that node. For more details on these,
+                                                             please refer to Section 2 of (Talukdar and Cram-
+                       Ŷl> LŶl , s.t. SYl = S Ŷl
+                 X
+          min                                          (1)   mer, 2009). In contrast to LP-ZGL, Adsorption
+           Ŷ    l∈C
+                                                             allows labels on labeled (seed) nodes to change,
+    1
+        http://www.talukdar.net/datasets/class inst/         which is desirable in case of noisy input labels.
+
+
+                                                         1474
+
+
+2.4        Modified Adsorption (MAD)                             of this paper. Statistics of the graphs used during
+Talukdar and Crammer (2009) introduced a modi-                   experiments in this section are presented in Table
+fication of Adsorption called MAD, which shares                  1.
+Adsorption’s desirable properties but can be ex-
+                                                                 3.1                                    Freebase-1 Graph with Pantel Classes
+pressed as an unconstrained optimization problem:
+                                                                                                   Table ID: people-person
+               X                   >                                                          Name           Place of Birth                  Gender
+    min              µ1 Yl − Ŷl          S Yl − Ŷl +
+      Ŷ       l∈C
+                                                                                                   ···            ···                             ···
+                              0                    2
+                                                                                                  Isaac Newton Lincolnshire                      Male
+                µ2 Ŷl>   L Ŷl + µ3 Ŷl − Rl              (3)                                     Bob Dylan      Duluth                          Male
+                                                                                                   Johnny Cash Kingsland                          Male
+                                                             0
+where µ1 , µ2 , and µ3 are hyperparameters; L                                                      ···            ···                             ···
+is the Laplacian of an undirected graph derived
+                                                                                                         Table ID: film-music contributor
+from G, but with revised edge weights; and R is
+                                                                                                         Name         Film Music Credits
+an n × m matrix of per-node label prior, if any,
+with Rl representing the lth column of R. As in                                                          ···          ···
+Adsorption, MAD allows labels on seed nodes to                                                           Bob Dylan No Direction Home
+change. In case of MAD, the three random-walk                                                            ···          ···
+probabilities, pinj
+                 v , pv
+                       cont , and pabnd , defined by
+                                   v
+Adsorption on each node are folded inside the ma-                Figure 1: Examples of two tables from Freebase,
+            0
+trices S, L , and R, respectively. The optimization              one table is from the people domain while the
+problem in (3) can be solved with an efficient iter-             other is from the film domain.
+ative algorithm described in detail by Talukdar and
+Crammer (2009).
+                                                                                                                 Freebase-1 Graph, 23 Pantel Classes
+   These three algorithms are all easily paralleliz-                                              0.8
+
+able in a MapReduce framework (Talukdar et al.,
+                                                                                                              LP-ZGL       Adsorption       MAD
+2008; Rao and Yarowsky, 2009), which makes
+                                                                 Mean Reciprocal Rank (MRR)
+
+
+
+
+                                                                                              0.725
+them suitable for SSL on large datasets. Addition-
+ally, all three algorithms have similar space and
+time complexity.                                                                               0.65
+
+
+
+3     Experiments
+                                                                                              0.575
+
+We now compare the experimental performance
+of the three graph-based SSL algorithms reviewed                                                  0.5
+                                                                                                                  23 x 2                        23 x 10
+in the previous section, using graphs constructed
+                                                                                                           Amount of Supervision (# classes x seeds per class)
+from a variety of sources described below. Fol-
+lowing previous work (Talukdar et al., 2008), we
+use Mean Reciprocal Rank (MRR) as the evalua-                    Figure 3: Comparison of three graph transduction
+tion metric in all experiments:                                  methods on a graph constructed from the Freebase
+                                                                 dataset (see Section 3.1), with 23 classes. All re-
+                                   1 X 1                         sults are averaged over 4 random trials. In each
+                  MRR =                                    (4)
+                                  |Q| v∈Q rv                     group, MAD is the rightmost bar.
+
+where Q ⊆ V is the set of test nodes, and rv is the
+                                                                    Freebase (Metaweb Technologies, 2009)2 is
+rank of the gold label among the labels assigned to
+                                                                 a large collaborative knowledge base.          The
+node v. Higher MRR reflects better performance.
+                                                                 knowledge base harvests information from many
+We used iterative implementations of the graph-
+                                                                 open data sets (for instance Wikipedia and Mu-
+based SSL algorithms, and the number of itera-
+                                                                 sicBrainz), as well as from user contributions. For
+tions was treated as a hyperparameter which was
+                                                                 our current purposes, we can think of the Freebase
+tuned, along with other hyperparameters, on sep-
+                                                                                              2
+arate held-out sets, as detailed in a longer version                                              http://www.freebase.com/
+
+
+                                                             1475
+
+
+                        Graph                         Vertices      Edges       Avg.      Min.      Max.
+                                                                                Deg.      Deg.      Deg.
+              Freebase-1 (Section 3.1)                32970        957076       29.03      1       13222
+              Freebase-2 (Section 3.2)                301638       2310002      7.66       1       137553
+              TextRunner (Section 3.3)                175818       529557       3.01       1        2738
+                YAGO (Section 3.6)                    142704       777906       5.45       0       74389
+          TextRunner + YAGO (Section 3.6)             237967       1307463      5.49       1       74389
+
+Table 1: Statistics of various graphs used in experiments in Section 3. Some of the test instances in the
+YAGO graph, added for fair comparison with the TextRunner graph in Section 3.6, had no attributes in
+YAGO KB, and hence these instance nodes had degree 0 in the YAGO graph.
+
+
+
+        Isaac Newton                                             Isaac Newton
+
+                                 people-person-name                                         people-person-name
+
+           Johnny                                                   Johnny
+            Cash                                                     Cash
+
+                             film-music_contributor-name                                film-music_contributor-name
+
+
+          Bob Dylan                                               Bob Dylan
+                                                                                           has_attribute:albums
+
+
+
+                          (a)                                                      (b)
+
+Figure 2: (a) Example of a section of the graph constructed from the two tables in Figure 1. Rectangular
+nodes are properties, oval nodes are entities or cell values. (b) The graph in part (a) augmented with
+an attribute node, has attribue:albums, along with the edges incident on it. This results is additional
+constraints for the nodes Johnny Cash and Bob Dylan to have similar labels (see Section 3.6).
+
+
+dataset as a collection of relational tables, where                v is present in the column corresponding to
+each table is assigned a unique ID. A table con-                   property p. Similarly, add an edge in the re-
+sists of one or more properties (column names)                     verse direction.
+and their corresponding cell values (column en-
+tries). Examples of two Freebase tables are shown              By applying this graph construction process on
+in Figure 1. In this figure, Gender is a property           the first column of the two tables in Figure 1, we
+in the table people-person, and Male is a corre-            end up with the graph shown in Figure 2 (a). We
+sponding cell value. We use the following process           note that even though the resulting graph consists
+to convert the Freebase data tables into a single           of edges connecting nodes of different types: cell
+graph:                                                      value nodes to property nodes; the graph-based
+                                                            SSL methods (Section 2) can still be applied on
+  • Create a node for each unique cell value                such graphs as a cell value node and a property
+  • Create a node for each unique property name,            node connected by an edge should be assigned
+    where unique property name is obtained by               same or similar class labels. In other words, the la-
+    prefixing the unique table ID to the prop-              bel smoothness assumption (see Section 2.2) holds
+    erty name. For example, in Figure 1, people-            on such graphs.
+    person-gender is a unique property name.                   We applied the same graph construction pro-
+                                                            cess on a subset of the Freebase dataset consist-
+  • Add an edge of weight 1.0 from cell-value               ing of topics from 18 randomly selected domains:
+    node v to unique property node p, iff value             astronomy, automotive, biology, book, business,
+
+
+                                                       1476
+
+
+chemistry, comic books, computer, film, food, ge-                                                lapping with the larger Freebase graph constructed
+ography, location, people, religion, spaceflight,                                                above. This resulted in 192 WN classes which we
+tennis, travel, and wine. The topics in this subset                                              use for the experiments in this section. The reason
+were further filtered so that only cell-value nodes                                              behind imposing such frequency constraints dur-
+with frequency 10 or more were retained. We call                                                 ing class selection is to make sure that each class
+the resulting graph Freebase-1 (see Table 1).                                                    is left with a sufficient number of instances during
+   Pantel et al. (2009) have made available                                                      testing.
+a set of gold class-instance pairs derived                                                          Experimental results comparing LP-ZGL, Ad-
+from Wikipedia, which is downloadable from                                                       sorption, and MAD with 2 and 10 seeds per class
+http://ow.ly/13B57. From this set, we selected                                                   are shown in Figure 4. A total of 292k test nodes
+all classes which had more than 10 instances                                                     were used for testing in the 10 seeds per class con-
+overlapping with the Freebase graph constructed                                                  dition, showing that these methods can be applied
+above. This resulted in 23 classes, which along                                                  to large datasets. Once again, we observe MAD
+with their overlapping instances were used as the                                                outperforming both LP-ZGL and Adsorption. It is
+gold standard set for the experiments in this sec-                                               interesting to note that MAD with 2 seeds per class
+tion.                                                                                            outperforms LP-ZGL and adsorption even with 10
+   Experimental results with 2 and 10 seeds (la-                                                 seeds per class.
+beled nodes) per class are shown in Figure 3. From
+the figure, we see that that LP-ZGL and Adsorp-                                                  3.3                                     TextRunner Graph with WordNet
+tion performed comparably on this dataset, with                                                                                          Classes
+MAD significantly outperforming both methods.
+                                                                                                                                               TextRunner Graph, 170 WordNet Classes
+                                                                                                                                  0.35
+3.2                                  Freebase-2 Graph with WordNet Classes
+                                                                                                                                             LP-ZGL          Adsorption    MAD
+                                                                                                     Mean Reciprocal Rank (MRR)
+
+
+
+
+                                           Freebase-2 Graph, 192 WordNet Classes                                                   0.3
+                              0.39
+                                         LP-ZGL          Adsorption    MAD
+
+                                                                                                                                  0.25
+Mean Reciprocal Rank (MRR)
+
+
+
+
+                             0.355
+
+
+
+                                                                                                                                   0.2
+                              0.32
+
+
+
+                                                                                                                                  0.15
+                                                                                                                                                   170 x 2                       170 x 10
+                             0.285
+                                                                                                                                            Amount of Supervision (# classes x seeds per class)
+
+
+
+                              0.25
+                                               192 x 2                       192 x 10
+                                                                                                 Figure 5: Comparison of graph transduction meth-
+                                        Amount of Supervision (# classes x seeds per class)      ods on a graph constructed from the hypernym tu-
+                                                                                                 ples extracted by the TextRunner system (Banko
+Figure 4: Comparison of graph transduction meth-                                                 et al., 2007) (see Section 3.3). All results are aver-
+ods on a graph constructed from the Freebase                                                     aged over 10 random trials. In each group, MAD
+dataset (see Section 3.2). All results are averaged                                              is the rightmost bar.
+over 10 random trials. In each group, MAD is the
+rightmost bar.                                                                                      In contrast to graph construction from struc-
+                                                                                                 tured tables as in Sections 3.1, 3.2, in this section
+   To evaluate how the algorithms scale up, we                                                   we use hypernym tuples extracted by TextRun-
+construct a larger graph from the same 18 domains                                                ner (Banko et al., 2007), an open domain IE sys-
+as in Section 3.1, and using the same graph con-                                                 tem, to construct the graph. Example of a hyper-
+struction process. We shall call the resulting graph                                             nym tuple extracted by TextRunner is (http, proto-
+Freebase-2 (see Table 1). In order to scale up the                                               col, 0.92), where 0.92 is the extraction confidence.
+number of classes, we selected all Wordnet (WN)                                                  To convert such a tuple into a graph, we create a
+classes, available in the YAGO KB (Suchanek et                                                   node for the instance (http) and a node for the class
+al., 2007), that had more than 100 instances over-                                               (protocol), and then connect the nodes with two
+
+
+                                                                                              1477
+
+
+directed edges in both directions, with the extrac-                                                     Effect of Per-node Sparsity Constraint
+                                                                                         0.42
+tion confidence (0.92) as edge weights. The graph
+created with this process from TextRunner out-
+
+
+
+
+                                                            Mean Reciprocal Rank (MRR)
+put is called the TextRunner Graph (see Table 1).                                        0.39
+
+As in Section 3.2, we use WordNet class-instance
+pairs as the gold set. In this case, we considered
+                                                                                         0.36
+all WordNet classes, once again from YAGO KB
+(Suchanek et al., 2007), which had more than 50
+instances overlapping with the constructed graph.                                        0.33
+
+
+This resulted in 170 WordNet classes being used
+for the experiments in this section.                                                      0.3
+                                                                                                    5         15          25         35          45
+   Experimental results with 2 and 10 seeds per                                                           Maximum Allowed Classes per Node
+class are shown in Figure 5. The three methods
+are comparable in this setting, with MAD achiev-
+                                                         Figure 6: Effect of per node class sparsity (maxi-
+ing the highest overall MRR.
+                                                         mum number of classes allowed per node) during
+3.4   Discussion                                         MAD inference in the experimental setting of Fig-
+                                                         ure 4 (one random split).
+If we correlate the graph statistics in Table 1 with
+the results of sections 3.1, 3.2, and 3.3, we see
+that MAD is most effective for graphs with high
+                                                         on a node, all classes except for the top scoring
+average degree, that is, graphs where nodes tend
+                                                         15 classes were discarded. Without such sparsity
+to connect to many other nodes. For instance,
+                                                         constraints, a node in a connected graph will end
+the Freebase-1 graph has a high average degree
+                                                         up acquiring all the labels injected into the graph.
+of 29.03, with a corresponding large advantage
+                                                         This is undesirable for two reasons: (1) for ex-
+for MAD over the other methods. Even though
+                                                         periments involving a large numbers of classes (as
+this might seem mysterious at first, it becomes
+                                                         in the previous section and in the general case of
+clearer if we look at the objectives minimized
+                                                         open domain IE), this increases the space require-
+by different algorithms. We find that the objec-
+                                                         ment and also slows down inference; (2) a partic-
+tive minimized by LP-ZGL (Equation 1) is under-
+                                                         ular node is unlikely to belong to a large num-
+regularized, i.e., its model parameters (Ŷ ) are not
+                                                         ber of classes. In order to estimate the effect of
+constrained enough, compared to MAD (Equation
+                                                         such sparsity constraints, we varied the number
+3, specifically the third term), resulting in overfit-
+                                                         of classes allowed per node from 5 to 45 on the
+ting in case of highly connected graphs. In con-
+                                                         graph and experimental setup of Figure 4, with 10
+trast, MAD is able to avoid such overfitting be-
+                                                         seeds per class. The results for MAD inference
+cause of its minimization of a well regularized ob-
+                                                         over the development split are shown in Figure
+jective (Equation 3). Based on this, we suggest
+                                                         6. We observe that performance can vary signifi-
+that average degree, an easily computable struc-
+                                                         cantly as the maximum number of classes allowed
+tural property of the graph, may be a useful indica-
+                                                         per node is changed, with the performance peak-
+tor in choosing which graph-based SSL algorithm
+                                                         ing at 25. This suggests that sparsity constraints
+should be applied on a given graph.
+                                                         during graph based SSL may have a crucial role to
+   Unlike MAD, Adsorption does not optimize
+                                                         play, a question that needs further investigation.
+any well defined objective (Talukdar and Cram-
+mer, 2009), and hence any analysis along the lines
+                                                         3.6                                    TextRunner Graph with additional
+described above is not possible. The heuristic
+                                                                                                Semantic Constraints from YAGO
+choices made in Adsorption may have lead to its
+sub-optimal performance compared to MAD; we              Recently, the problem of instance-attribute extrac-
+leave it as a topic for future investigation.            tion has started to receive attention (Probst et al.,
+                                                         2007; Bellare et al., 2007; Pasca and Durme,
+3.5   Effect of Per-Node Class Sparsity                  2007). An example of an instance-attribute pair
+For all the experiments in Sections 3.1, 3.2, and        is (Bob Dylan, albums). Given a set of seed
+3.6, each node was allowed to have a maximum             instance-attribute pairs, these methods attempt to
+of 15 classes during inference. After each update        extract more instance-attribute pairs automatically
+
+
+                                                     1478
+
+
+                                           170 WordNet Classes, 2 Seeds per Class                                               170 WordNet Classes, 10 Seeds per Class
+                              0.38                                                                                  0.45
+                                                                                                                              TextRunner Graph
+                                      TextRunner Graph
+                                                                                                                              YAGO Graph
+                                      YAGO Graph
+ Mean Reciprocal Rank (MRR)
+
+
+
+
+                                                                                      Mean Reciprocal Rank (MRR)
+                                                                                                                              TextRunner + YAGO Graph
+                                      TextRunner + YAGO Graph
+                              0.33                                                                                 0.413
+
+
+
+
+                              0.28                                                                                 0.375
+
+
+
+
+                              0.23                                                                                 0.338
+
+
+
+
+                              0.18                                                                                   0.3
+                                       LP-ZGL            Adsorption          MAD                                               LP-ZGL            Adsorption        MAD
+                                                         Algorithms                                                                             Algorithms
+
+
+
+Figure 7: Comparison of class-instance acquisition performance on the three different graphs described
+in Section 3.6. All results are averaged over 10 random trials. Addition of YAGO attributes to the
+TextRunner graph significantly improves performance.
+
+                                 YAGO                Top-2 WordNet Classes Assigned by MAD
+                                 Attribute           (example instances for each class are shown in brackets)
+                                 has currency        wordnet country 108544813 (Burma, Afghanistan)
+                                                     wordnet region 108630039 (Aosta Valley, Southern Flinders Ranges)
+                                 works at            wordnet scientist 110560637 (Aage Niels Bohr, Adi Shamir)
+                                                     wordnet person 100007846 (Catherine Cornelius, Jamie White)
+                                 has capital         wordnet state 108654360 (Agusan del Norte, Bali)
+                                                     wordnet region 108630039 (Aosta Valley, Southern Flinders Ranges)
+                                 born in             wordnet boxer 109870208 (George Chuvalo, Fernando Montiel)
+                                                     wordnet chancellor 109906986 (Godon Brown, Bill Bryson)
+                                 has isbn            wordnet book 106410904 (Past Imperfect, Berlin Diary)
+                                                     wordnet magazine 106595351 (Railway Age, Investors Chronicle)
+
+Table 2: Top 2 (out of 170) WordNet classes assigned by MAD on 5 randomly chosen YAGO attribute
+nodes (out of 80) in the TextRunner + YAGO graph used in Figure 7 (see Section 3.6), with 10 seeds per
+class used. A few example instances of each WordNet class is shown within brackets. Top ranked class
+for each attribute is shown in bold.
+
+
+from various sources. In this section, we ex-                                                           edges to the graph, as shown in Figure 2 (b).
+plore whether class-instance assignment can be                                                             In Figure 7, we compare class-instance acqui-
+improved by incorporating new semantic con-                                                             sition performance of the three graph-based SSL
+straints derived from (instance, attribute) pairs. In                                                   methods (Section 2) on the following three graphs
+particular, we experiment with the following type                                                       (also see Table 1):
+of constraint: two instances with a common at-
+tribute are likely to belong to the same class. For                                                                        TextRunner Graph: Graph constructed
+example, in Figure 2 (b), instances Johnny Cash                                                                            from the hypernym tuples extracted by Tex-
+and Bob Dylan are more likely to belong to the                                                                             tRunner, as in Figure 5 (Section 3.3), with
+same class as they have a common attribute, al-                                                                            175k vertices and 529k edges.
+bums. Because of the smooth labeling bias of                                                                               YAGO Graph: Graph constructed from the
+graph-based SSL methods (see Section 2.2), such                                                                            (instance, attribute) pairs obtained from the
+constraints are naturally captured by the methods                                                                          YAGO KB (Suchanek et al., 2007), with 142k
+reviewed in Section 2. All that is necessary is the                                                                        nodes and 777k edges.
+introduction of bidirectional (instance, attribute)
+                                                                                                                           TextRunner + YAGO Graph: Union of the
+
+
+                                                                                    1479
+
+
+     two graphs above, with 237k nodes and 1.3m         semantic constraints in the class-instance acqui-
+     edges.                                             sition process, which for the experiments in this
+                                                        paper were derived from instance-attribute pairs
+   In all experimental conditions with 2 and 10         available in an independently developed knowl-
+seeds per class in Figure 7, we observe that the        edge base. All the data used in these experiments
+three methods consistently achieved the best per-       was drawn from publicly available datasets and we
+formance on the TextRunner + YAGO graph. This           plan to release our code3 to foster reproducible
+suggests that addition of attribute based seman-        research in this area. Topics for future work in-
+tic constraints from YAGO to the TextRunner             clude the incorporation of other kinds of semantic
+graph results in a better connected graph which         constraint for improved class-instance acquisition,
+in turn results in better inference by the graph-       further investigation into per-node sparsity con-
+based SSL algorithms, compared to using either          straints in graph-based SSL, and moving beyond
+of the sources, i.e., TextRunner output or YAGO         bipartite graph constructions.
+attributes, in isolation. This further illustrates
+the advantage of aggregating information across         Acknowledgments
+sources (Talukdar et al., 2008; Pennacchiotti and       We thank William Cohen for valuable discussions,
+Pantel, 2009). However, we are the first, to the        and Jennifer Gillenwater, Alex Kulesza, and Gre-
+best of our knowledge, to demonstrate the effec-        gory Malecha for detailed comments on a draft of
+tiveness of attributes in class-instance acquisition.   this paper. We are also very grateful to the authors
+We note that this work is similar in spirit to the      of (Banko et al., 2007), Oren Etzioni and Stephen
+recent work by Carlson et al. (2010) which also         Soderland in particular, for providing TextRunner
+demonstrates the benefits of additional constraints     output. This work was supported in part by NSF
+in SSL.                                                 IIS-0447972 and DARPA HRO1107-1-0029.
+   Because of the label propagation behavior,
+graph-based SSL algorithms assign classes to all
+nodes reachable in the graph from at least one          References
+of the labeled instance nodes. This allows us           S. Baluja, R. Seth, D. Sivakumar, Y. Jing, J. Yagnik,
+to check the classes assigned to nodes corre-              S. Kumar, D. Ravichandran, and M. Aly. 2008.
+sponding to YAGO attributes in the TextRunner              Video suggestion and discovery for youtube: taking
++ YAGO graph, as shown in Table 2. Even                    random walks through the view graph. Proceedings
+                                                           of WWW-2008.
+though the experiments were designed for class-
+instance acquisition, it is encouraging to see that     M. Banko, M.J. Cafarella, S. Soderland, M. Broadhead,
+the graph-based SSL algorithm (MAD in Table               and O. Etzioni. 2007. Open information extraction
+2) is able to learn class-attribute relationships,        from the web. Procs. of IJCAI.
+an important by-product that has been the fo-           K. Bellare, P. Talukdar, G. Kumaran, F. Pereira,
+cus of recent studies (Reisinger and Pasca, 2009).        M. Liberman, A. McCallum, and M. Dredze. 2007.
+For example, the algorithm is able to learn that          Lightly-Supervised Attribute Extraction. NIPS 2007
+                                                          Workshop on Machine Learning for Web Search.
+works at is an attribute of the WordNet class word-
+net scientist 110560637, and thereby its instances      A. Carlson, J. Betteridge, R.C. Wang, E.R. Hruschka Jr,
+(e.g. Aage Niels Bohr, Adi Shamir).                        and T.M. Mitchell. 2010. Coupled Semi-Supervised
+                                                           Learning for Information Extraction. In Proceed-
+                                                           ings of the Third ACM International Conference on
+4   Conclusion                                             Web Search and Data Mining (WSDM), volume 2,
+                                                           page 110.
+We have started a systematic experimental com-
+parison of graph-based SSL algorithms for class-        O. Etzioni, Michael Cafarella, Doug Downey, Ana-
+instance acquisition on a variety of graphs con-          Maria Popescu, Tal Shaked, Stephen Soderland,
+                                                          Daniel S. Weld, and Alexander Yates. 2005. Unsu-
+structed from different domains. We found that
+                                                          pervised named-entity extraction from the web - an
+MAD, a recently proposed graph-based SSL algo-            experimental study. Artificial Intelligence Journal.
+rithm, is consistently the most effective across the
+various experimental conditions. We also showed         M. Hearst. 1992. Automatic acquisition of hyponyms
+                                                          from large text corpora. In Fourteenth International
+that class-instance acquisition performance can be
+                                                           3
+significantly improved by incorporating additional             http://www.talukdar.net/datasets/class inst/
+
+
+
+
+                                                    1480
+
+
+  Conference on Computational Linguistics, Nantes,        R. Wang and W. Cohen. 2007. Language-Independent
+  France.                                                    Set Expansion of Named Entities Using the Web.
+                                                             Data Mining, 2007. ICDM 2007. Seventh IEEE In-
+Metaweb Technologies. 2009. Freebase data dumps.             ternational Conference on, pages 342–350.
+ http://download.freebase.com/datadumps/.
+                                                          X. Zhu, Z. Ghahramani, and J. Lafferty. 2003. Semi-
+P. Pantel, E. Crestan, A. Borkovsky, A.M. Popescu, and      supervised learning using gaussian fields and har-
+   V. Vyas. 2009. Web-scale distributional similarity       monic functions. ICML-03, 20th International Con-
+   and entity set expansion. Proceedings of EMNLP-          ference on Machine Learning.
+   09, Singapore.
+
+M. Pasca and Benjamin Van Durme. 2007. What you
+  seek is what you get: Extraction of class attributes
+  from query logs. In IJCAI-07. Ferbruary, 2007.
+
+M. Pennacchiotti and P. Pantel. 2009. Entity Ex-
+  traction via Ensemble Semantics. Proceedings of
+  EMNLP-09, Singapore.
+
+K. Probst, R. Ghani, M. Krema, A. Fano, and Y. Liu.
+  2007. Semi-supervised learning of attribute-value
+  pairs from product descriptions. In IJCAI-07, Fer-
+  bruary, 2007.
+
+D. Rao and D. Yarowsky. 2009. Ranking and Semi-
+  supervised Classification on Large Scale Graphs Us-
+  ing Map-Reduce. TextGraphs.
+
+J. Reisinger and M. Pasca. 2009. Bootstrapped extrac-
+   tion of class attributes. In Proceedings of the 18th
+   international conference on World wide web, pages
+   1235–1236. ACM.
+
+E. Riloff and R. Jones. 1999. Learning dictionar-
+   ies for information extraction by multi-level boot-
+   strapping. In Proceedings of the 16th National Con-
+   ference on Artificial Intelligence (AAAI-99), pages
+   474–479, Orlando, Florida.
+
+F.M. Suchanek, G. Kasneci, and G. Weikum. 2007.
+  Yago: a core of semantic knowledge. In Proceed-
+  ings of the 16th international conference on World
+  Wide Web, page 706. ACM.
+
+P. P. Talukdar and Koby Crammer. 2009. New regular-
+   ized algorithms for transductive learning. In ECML-
+   PKDD.
+
+P. P. Talukdar, T. Brants, F. Pereira, and M. Liberman.
+   2006. A context pattern induction method for named
+   entity extraction. In Tenth Conference on Computa-
+   tional Natural Language Learning, page 141.
+
+P. P. Talukdar, J. Reisinger, M. Pasca, D. Ravichan-
+   dran, R. Bhagat, and F. Pereira. 2008. Weakly-
+   Supervised Acquisition of Labeled Class Instances
+   using Graph Random Walks. In Proceedings of the
+   2008 Conference on Empirical Methods in Natural
+   Language Processing, pages 581–589.
+
+B. Van Durme and M. Paşca. 2008. Finding cars, god-
+   desses and enzymes: Parametrizable acquisition of
+   labeled instances for open-domain information ex-
+   traction. Twenty-Third AAAI Conference on Artifi-
+   cial Intelligence.
+
+
+                                                      1481
+

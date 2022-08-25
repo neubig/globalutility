@@ -1,0 +1,494 @@
+          Blocked Inference in Bayesian Tree Substitution Grammars
+
+                   Trevor Cohn                                    Phil Blunsom
+           Department of Computer Science                      Computing Laboratory
+               University of Sheffield                          University of Oxford
+            T.Cohn@dcs.shef.ac.uk                        Phil.Blunsom@comlab.ox.ac.uk
+
+
+
+                    Abstract                                 This used a Gibbs sampler for training, which re-
+                                                             peatedly samples for every node in every training
+    Learning a tree substitution grammar is                  tree a binary value indicating whether the node is
+    very challenging due to derivational am-                 or is not a substitution point in the tree’s deriva-
+    biguity. Our recent approach used a                      tion. Aggregated over the whole corpus, these val-
+    Bayesian non-parametric model to induce                  ues and the underlying trees specify the weighted
+    good derivations from treebanked input                   grammar. Local Gibbs samplers, although con-
+    (Cohn et al., 2009), biasing towards small               ceptually simple, suffer from slow convergence
+    grammars composed of small generalis-                    (a.k.a. poor mixing). The sampler can get easily
+    able productions. In this paper we present               stuck because many locally improbable decisions
+    a novel training method for the model us-                are required to escape from a locally optimal solu-
+    ing a blocked Metropolis-Hastings sam-                   tion. This problem manifests itself both locally to
+    pler in place of the previous method’s lo-               a sentence and globally over the training sample.
+    cal Gibbs sampler. The blocked sam-                      The net result is a sampler that is non-convergent,
+    pler makes considerably larger moves than                overly dependent on its initialisation and cannot be
+    the local sampler and consequently con-                  said to be sampling from the posterior.
+    verges in less time. A core component
+    of the algorithm is a grammar transforma-
+                                                                In this paper we present a blocked Metropolis-
+    tion which represents an infinite tree sub-
+                                                             Hasting sampler for learning a TSG, similar to
+    stitution grammar in a finite context free
+                                                             Johnson et al. (2007). The sampler jointly updates
+    grammar. This enables efficient blocked
+                                                             all the substitution variables in a tree, making
+    inference for training and also improves
+                                                             much larger moves than the local single-variable
+    the parsing algorithm. Both algorithms are
+                                                             sampler. A critical issue when developing a
+    shown to improve parsing accuracy.
+                                                             Metroplis-Hastings sampler is choosing a suitable
+1   Introduction                                             proposal distribution, which must have the same
+                                                             support as the true distribution. For our model the
+Tree Substitution Grammar (TSG) is a compelling              natural proposal distribution is a MAP point esti-
+grammar formalism which allows nonterminal                   mate, however this cannot be represented directly
+rewrites in the form of trees, thereby enabling              as it is infinitely large. To solve this problem we
+the modelling of complex linguistic phenomena                develop a grammar transformation which can suc-
+such as argument frames, lexical agreement and               cinctly represent an infinite TSG in an equivalent
+idiomatic phrases. A fundamental problem with                finite Context Free Grammar (CFG). The trans-
+TSGs is that they are difficult to estimate, even in         formed grammar can be used as a proposal dis-
+the supervised scenario where treebanked data is             tribution, from which samples can be drawn in
+available. This is because treebanks are typically           polynomial time. Empirically, the blocked sam-
+not annotated with their TSG derivations (how to             pler converges in fewer iterations and in less time
+decompose a tree into elementary tree fragments);            than the local Gibbs sampler. In addition, we also
+instead the derivation needs to be inferred.                 show how the transformed grammar can be used
+   In recent work we proposed a TSG model which              for parsing, which yields theoretical and empiri-
+infers an optimal decomposition under a non-                 cal improvements over our previous method which
+parametric Bayesian prior (Cohn et al., 2009).               truncated the grammar.
+
+
+                                                       225
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 225–230,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ 2   Background
+                                                                                     S                                S
+ A Tree Substitution Grammar (TSG; Bod et
+ al. (2003)) is a 4-tuple, G = (T, N, S, R), where                           NP               VP             NP,1              VP,0
+ T is a set of terminal symbols, N is a set of non-                          NP          V         NP       George      V,0           NP,1
+ terminal symbols, S ∈ N is the distinguished root
+                                                                           George     hates        NP                  hates     broccoli
+ nonterminal and R is a set of productions (rules).
+ The productions take the form of tree fragments,                                              broccoli
+ called elementary trees (ETs), in which each in-
+                                                                           Figure 1: TSG derivation and its corresponding Gibbs state
+ ternal node is labelled with a nonterminal and each                       for the local sampler, where each node is marked with a bi-
+ leaf is labelled with either a terminal or a nonter-                      nary variable denoting whether it is a substitution site.
+ minal. The frontier nonterminal nodes in each ET
+ form the sites into which other ETs can be substi-
+                                                                           is the total count of rewriting c. Henceforth we
+ tuted. A derivation creates a tree by recursive sub-
+                                                                           omit the −i sub-/super-script for brevity.
+ stitution starting with the root symbol and finish-
+                                                                              A primary consideration is the definition of P0 .
+ ing when there are no remaining frontier nonter-
+                                                                           Each ei can be generated in one of two ways:
+ minals. Figure 1 (left) shows an example deriva-
+                                                                           by drawing from the base distribution, where the
+ tion where the arrows denote substitution. A Prob-
+                                                                           probability of any particular tree is proportional to
+ abilistic Tree Substitution Grammar (PTSG) as-
+                                                                           αc P0 (ei |c), or by drawing from a cache of previ-
+ signs a probability to each rule in the grammar,
+                                                                           ous expansions of c, where the probability of any
+ where each production is assumed to be condi-
+                                                                           particular expansion is proportional to the number
+ tionally independent given its root nonterminal. A
+                                                                           of times that expansion has been used before. In
+ derivation’s probability is the product of the prob-
+                                                                           Cohn et al. (2009) we presented base distributions
+ abilities of the rules therein.
+                                                                           that favour small elementary trees which we ex-
+    In this work we employ the same non-
+                                                                           pect will generalise well to unseen data. In this
+ parametric TSG model as Cohn et al. (2009),
+                                                                           work we show that if P0 is chosen such that it
+ which we now summarise. The inference prob-
+                                                                           decomposes with the CFG rules contained within
+ lem within this model is to identify the posterior
+                                                                           each elementary tree,1 then we can use a novel dy-
+ distribution of the elementary trees e given whole
+                                                                           namic programming algorithm to sample deriva-
+ trees t. The model is characterised by the use of
+                                                                           tions without ever enumerating all the elementary
+ a Dirichlet Process (DP) prior over the grammar.
+                                                                           trees in the grammar.
+ We define the distribution over elementary trees e
+ with root nonterminal symbol c as                                            The model was trained using a local Gibbs sam-
+                                                                           pler (Geman and Geman, 1984), a Markov chain
+             Gc |αc , P0 ∼ DP(αc , P0 (·|c))                               Monte Carlo (MCMC) method in which random
+               e|c           ∼ Gc                                          variables are repeatedly sampled conditioned on
+                                                                           the values of all other random variables in the
+ where P0 (·|c) (the base distribution) is a distribu-
+                                                                           model. To formulate the local sampler, we asso-
+ tion over the infinite space of trees rooted with c,
+                                                                           ciate a binary variable with each non-root inter-
+ and αc (the concentration parameter) controls the
+                                                                           nal node of each tree in the training set, indicat-
+ model’s tendency towards either reusing elemen-
+                                                                           ing whether that node is a substitution point or
+ tary trees or creating novel ones as each training
+                                                                           not (illustrated in Figure 1). The sampler then vis-
+ instance is encountered.
+                                                                           its each node in a random schedule and resamples
+    Rather than representing the distribution Gc ex-
+                                                                           that node’s substitution variable, where the proba-
+ plicitly, we integrate over all possible values of
+                                                                           bility of the two different configurations are given
+ Gc . The key result required for inference is that
+                                                                           by (1). Parsing was performed using a Metropolis-
+ the conditional distribution of ei , given e−i , =
+                                                                           Hastings sampler to draw derivation samples for
+ e1 . . . en \ei and the root category c is:
+                                                                           a string, from which the best tree was recovered.
+                               n−i
+                                ei ,c          αc P0 (ei |c)               However the sampler used for parsing was biased
+p(ei |e−i , c, αc , P0 ) =                 +                   (1)
+                             n−i
+                              ·,c   + αc        n−i
+                                                 ·,c + αc                      1
+                                                                                 Both choices of base distribution in Cohn et al. (2009)
+                                                                           decompose into CFG rules. In this paper we focus on the
+ where n−i
+         ei ,c is the number number of timesPei has                        better performing one, P0C , which combines a PCFG applied
+ been used to rewrite c in e−i , and n−i
+                                      ·,c =      −i
+                                              e ne,c                       recursively with a stopping probability, s, at each node.
+
+
+                                                                     226
+
+
+because it used as its proposal distribution a trun-                          For every ET, e, rewriting c with non-zero count:
+                                                                                                                                  n−
+                                                                                                                                   e,c
+cated grammar which excluded all but a handful                          c → sign(e)
+                                                                                                                                n−
+                                                                                                                                 ·,c +αc
+
+of the unseen elementary trees. Consequently the                        For every internal node ei in e with children ei,1 , . . . , ei,n
+                                                                        sign(ei ) → sign(ei,1 ) . . . sign(ei,n )                       1
+proposal had smaller support than the true model,
+                                                                                        For every nonterminal, c:
+voiding the MCMC convergence proofs.                                    c → c0                                                  −
+                                                                                                                                   αc
+                                                                                                                                n·,c +αc
+                                                                              For every pre-terminal CFG production, c → t:
+3    Grammar Transformation                                             c0   →t                                     PCF G (c → t)
+                                                                                   For every unary CFG production, c → a:
+We now present a blocked sampler using the                              c0   →a                                  PCF G (c → a)sa
+Metropolis-Hastings (MH) algorithm to perform                           c0   → a0                          PCF G (c → a)(1 − sa )
+sentence-level inference, based on the work of                                   For every binary CFG production, c → ab:
+                                                                        c0   → ab                            PCF G (c → ab)sa sb
+Johnson et al. (2007) who presented a MH sampler                        c0   → ab0                     PCF G (c → ab)sa (1 − sb )
+for a Bayesian PCFG. This approach repeats the                          c0   → a0 b                    PCF G (c → ab)(1 − sa )sb
+following steps for each sentence in the training                       c0   → a0 b0              PCF G (c → ab)(1 − sa )(1 − sb )
+set: 1) run the inside algorithm (Lari and Young,                      Table 1: Grammar transformation rules to map a MAP TSG
+1990) to calculate marginal expansion probabil-                        into a CFG. Production probabilities are shown to the right of
+ities under a MAP approximation, 2) sample an                          each rule. The sign(e) function creates a unique string sig-
+                                                                       nature for an ET e (where the signature of a frontier node is
+analysis top-down and 3) accept or reject using a                      itself) and sc is the Bernoulli probability of c being a substi-
+Metropolis-Hastings (MH) test to correct for dif-                      tution variable (and stopping the P0 recursion).
+ferences between the MAP proposal and the true
+model. Though our model is similar to John-
+                                                                       primed (’) nonterminals. The rule c → c0 bridges
+son et al. (2007)’s, we have an added complica-
+                                                                       from A to B, weighted by the smoothing term
+tion: the MAP grammar cannot be estimated di-
+                                                                       excluding P0 , which is computed recursively via
+rectly. This is a consequence of the base distri-
+                                                                       child productions. The remaining rules in gram-
+bution having infinite support (assigning non-zero
+                                                                       mar B correspond to every CFG production in the
+probability to infinitely many unseen tree frag-
+                                                                       underlying PCFG base distribution, coupled with
+ments), which means the MAP has an infinite rule
+                                                                       the binary decision whether or not nonterminal
+set. For example, if our base distribution licences
+                                                                       children should be substitution sites (frontier non-
+the CFG production NP → NP PP then our TSG
+                                                                       terminals). This choice affects the rule probability
+grammar will contain the infinite set of elemen-
+                                                                       by including a s or 1 − s factor, and child sub-
+tary trees NP → NP PP, NP → (NP NP PP) PP,
+                                                                       stitution sites also function as a bridge back from
+NP → (NP (NP NP PP) PP) PP, . . . with decreas-
+                                                                       grammar B to A. In this way there are often two
+ing but non-zero probability.
+                                                                       equivalent paths to reach the same chart cell using
+   However, we can represent the infinite MAP us-
+                                                                       the same elementary tree – via grammar A using
+ing a grammar transformation inspired by Good-
+                                                                       observed TSG productions and via grammar B us-
+man (2003), which represents the MAP TSG in an
+                                                                       ing P0 backoff; summing these yields the desired
+equivalent finite PCFG.2 Under the transformed
+                                                                       net probability.
+PCFG inference is efficient, allowing its use as
+                                                                          Figure 2 shows an example of the transforma-
+the proposal distribution in a blocked MH sam-
+                                                                       tion of an elementary tree with non-zero count,
+pler. We represent the MAP using the grammar
+                                                                       ne,c ≥ 1, into the two types of CFG rules. Both
+transformation in Table 1 which separates the ne,c
+                                                                       parts are capable of parsing the string NP, saw, NP
+and P0 terms in (1) into two separate CFGs, A and
+                                                                       into a S, as illustrated in Figure 3; summing the
+B. Grammar A has productions for every ET with
+                                                                       probability of both analyses gives the model prob-
+ne,c ≥ 1 which are assigned unsmoothed proba-
+                                                                       ability from (1). Note that although the probabili-
+bilities: omitting the P0 term from (1).3 Grammar
+                                                                       ties exactly match the true model for a single ele-
+B has productions for every CFG production li-
+                                                                       mentary tree, the probability of derivations com-
+censed under P0 ; its productions are denoted using
+                                                                       posed of many elementary trees may not match
+   2
+     Backoff DOP uses a similar packed representation to en-           because the model’s caching behaviour has been
+code the set of smaller subtrees for a given elementary tree           suppressed, i.e., the counts, n, are not incremented
+(Sima’an and Buratto, 2003), which are used to smooth its
+probability estimate.                                                  during the course of a derivation.
+   3
+     The transform assumes inside inference.− For Viterbi re-             For training we define the MH sampler as fol-
+                                           n   +αc P0 (e| c)
+place the probability for c → sign(e) with e,c −             .         lows. First we estimate the MAP grammar over
+                                               n·,c +αc
+
+
+
+
+                                                                 227
+
+
+                                                        n−
+                                                         e,S             Parsing The grammar transform is not only use-
+  S → NP VP{V{saw},NP}
+                                                       n−   +αS
+                                                        ·,S              ful for training, but also for parsing. To parse a
+  VP{V{saw},NP} → V{saw} NP                                    1
+  V{saw} → saw                                                 1         sentence we sample a number of TSG derivations
+                                                          αS
+                                                                         from the MAP which are then accepted or rejected
+  S → S’
+                                                       n−
+                                                        ·,S
+                                                            +αS          into the full model using a MH step. The samples
+  S’ → NP VP’          PCF G (S → NP VP)sN P (1 − sV P )                 are obtained from the same transformed grammar
+  VP’ → V’ NP           PCF G (VP → V NP)(1 − sV )sN P
+  V’ → saw                            PCF G (V → saw)                    but adapting the algorithm for an unsupervised set-
+                                                                         ting where parse trees are not available. For this
+Figure 2: Example of the transformed grammar for the ET                  we use the standard inside algorithm applied to
+(S NP (VP (V saw) NP)). Taking the product of the rule
+scores above the line yields the left term in (1), and the prod-         the sentence, omitting the tree constraints, which
+uct of the scores below the line yields the right term.                  has time complexity cubic in the length of the sen-
+                                                                         tence. We then sample a derivation from the in-
+                                                                         side chart and perform the MH acceptance test.
+              S                               S
+                                                                         This setup is theoretically more appealing than our
+S{NP,{VP{V{hates}},NP}}                      S’                          previous approach in which we truncated the ap-
+                                                                         proximation grammar to exclude most of the zero
+    NP        VP{V{hates}},NP        NP                VP’               count rules (Cohn et al., 2009). We found that
+                                   George         V’         NP          both the maximum probability derivation and tree
+  George     V{hates}        NP
+                                                                         were considerably worse than a tree constructed
+                                              hates       broccoli
+               hates      broccoli                                       to maximise the expected number of correct CFG
+                                                                         rules (MER), based on Goodman’s (2003) algo-
+Figure 3: Example trees under the grammar transform, which
+both encode the same TSG derivation from Figure 1. The left              rithm for maximising labelled recall. For this rea-
+tree encodes that the S → NP (VP (V hates) NP elementary                 son we the MER parsing algorithm using sampled
+tree was drawn from the cache, while for the right tree this             Monte Carlo estimates for the marginals over CFG
+same elementary tree was drawn from the base distribution
+(the left and right terms in (1), respectively).                         rules at each sentence span.
+
+                                                                         4   Experiments
+the derivations of training corpus excluding the
+current tree, which we represent using the PCFG                          We tested our model on the Penn treebank using
+transformation. The next step is to sample deriva-                       the same data setup as Cohn et al. (2009). Specifi-
+tions for a given tree, for which we use a con-                          cally, we used only section 2 for training and sec-
+strained variant of the inside algorithm (Lari and                       tion 22 (devel) for reporting results. Our models
+Young, 1990). We must ensure that the TSG                                were all sampled for 5k iterations with hyperpa-
+derivation produces the given tree, and therefore                        rameter inference for αc and sc ∀ c ∈ N , but in
+during inside inference we only consider spans                           contrast to our previous approach we did not use
+that are constituents in the tree and are labelled                       annealing which we did not find to help general-
+with the correct nonterminal. Nonterminals are                           isation accuracy. The MH acceptance rates were
+said to match their primed and signed counter-                           in excess of 99% across both training and parsing.
+parts, e.g., NP0 and NP{DT,NN{car}} both match                           All results are averages over three runs.
+NP. Under the tree constraints the time complex-                            For training the blocked MH sampler exhibits
+ity of inside inference is linear in the length of the                   faster convergence than the local Gibbs sam-
+sentence. A derivation is then sampled from the                          pler, as shown in Figure 4. Irrespective of the
+inside chart using a top-down traversal (Johnson                         initialisation the blocked sampler finds higher
+et al., 2007), and converted back into its equiva-                       likelihood states in many fewer iterations (the
+lent TSG derivation. The derivation is scored with                       same trend continues until iteration 5k). To be
+the true model and accepted or rejected using the                        fair, the blocked sampler is slower per iteration
+MH test; accepted samples then replace the cur-                          (roughly 50% worse) due to the higher overheads
+rent derivation for the tree, and rejected samples                       of the grammar transform and performing dy-
+leave the previous derivation unchanged. These                           namic programming (despite nominal optimisa-
+steps are then repeated for another tree in the train-                   tion).4 Even after accounting for the time differ-
+ing set, and the process is then repeated over the                          4
+                                                                              The speed difference diminishes with corpus size: on
+full training set many times.                                            sections 2–22 the blocked sampler is only 19% slower per
+
+
+                                                                   228
+
+
+                                                                                         ment over our earlier 84.0 (Cohn et al., 2009)
+                                                                                         although still well below state-of-the-art parsers.
+                                                                                         We conjecture that the performance gap is due to
+                  −305000
+
+
+
+                                                                                         the model using an overly simplistic treatment of
+                  −310000
+
+
+
+
+                                                                                         unknown words, and also a further mixing prob-
+                                                                                         lems with the sampler. For the full data set the
+log likelihood
+
+                  −315000
+
+
+
+
+                                                                                         counts are much larger in magnitude which leads
+                                                                                         to stronger modes. The sampler has difficulty es-
+                  −320000
+
+
+
+
+                                                                                         caping such modes and therefore is slower to mix.
+                                                                                         One way to solve the mixing problem is for the
+                  −325000
+
+
+
+
+                                                              Block maximal init
+                                                              Block minimal init
+                                                                                         sampler to make more global moves, e.g., with
+                                                              Local minimal init         table label resampling (Johnson and Goldwater,
+                  −330000
+
+
+
+
+                                                              Local maximal init
+                                                                                         2009) or split-merge (Jain and Neal, 2000). An-
+                            0   100   200               300      400         500
+                                                                                         other way is to use a variational approximation in-
+                                            iteration                                    stead of MCMC sampling (Wainwright and Jor-
+Figure 4: Training likelihood vs. iteration. Each sampling                               dan, 2008).
+method was initialised with both minimal and maximal ele-
+mentary trees.
+                                                                                         5   Discussion
+                       Training                truncated           transform             We have demonstrated how our grammar trans-
+                  Local minimal init             77.63             77.98                 formation can implicitly represent an exponential
+                  Local maximal init             77.19             77.71                 space of tree fragments efficiently, allowing us
+                 Blocked minimal init            77.98             78.40                 to build a sampler with considerably better mix-
+                 Blocked maximal init            77.67             78.24                 ing properties than a local Gibbs sampler. The
+Table 2: Development F1 scores using the truncated pars-                                 same technique was also shown to improve the
+ing algorithm and the novel grammar transform algorithm for                              parsing algorithm. These improvements are in
+four different training configurations.                                                  no way limited to our particular choice of a TSG
+                                                                                         parsing model, many hierarchical Bayesian mod-
+ence the blocked sampler is more effective than the                                      els have been proposed which would also permit
+local Gibbs sampler. Training likelihood is highly                                       similar optimised samplers. In particular mod-
+correlated with generalisation F1 (Pearson’s cor-                                        els which induce segmentations of complex struc-
+relation efficient of 0.95), and therefore improving                                     tures stand to benefit from this work; Examples
+the sampler convergence will have immediate ef-                                          include the word segmentation model of Goldwa-
+fects on performance.                                                                    ter et al. (2006) for which it would be trivial to
+   Parsing results are shown in Table 2.5 The                                            adapt our technique to develop a blocked sampler.
+blocked sampler results in better generalisation F1                                      Hierarchical Bayesian segmentation models have
+scores than the local Gibbs sampler, irrespective of                                     also become popular in statistical machine transla-
+the initialisation condition or parsing method used.                                     tion where there is a need to learn phrasal transla-
+The use of the grammar transform in parsing also                                         tion structures that can be decomposed at the word
+yields better scores irrespective of the underlying                                      level (DeNero et al., 2008; Blunsom et al., 2009;
+model. Together these results strongly advocate                                          Cohn and Blunsom, 2009). We envisage similar
+the use of the grammar transform for inference in                                        representations being applied to these models to
+infinite TSGs.                                                                           improve their mixing properties.
+   We also trained the model on the standard Penn                                           A particularly interesting avenue for further re-
+treebank training set (sections 2–21). We ini-                                           search is to employ our blocked sampler for un-
+tialised the model with the final sample from a                                          supervised grammar induction. While it is diffi-
+run on the small training set, and used the blocked                                      cult to extend the local Gibbs sampler to the case
+sampler for 6500 iterations. Averaged over three                                         where the tree is not observed, the dynamic pro-
+runs, the test F1 (section 23) was 85.3 an improve-                                      gram for our blocked sampler can be easily used
+                                                                                         for unsupervised inference by omitting the tree
+iteration than the local sampler.
+    5                                                                                    matching constraints.
+      Our baseline ‘Local maximal init’ slightly exceeds pre-
+viously reported score of 76.89% (Cohn et al., 2009).
+
+
+                                                                                   229
+
+
+References                                                      Mark Johnson, Thomas Griffiths, and Sharon Gold-
+                                                                 water. 2007. Bayesian inference for PCFGs via
+Phil Blunsom, Trevor Cohn, Chris Dyer, and Miles Os-             Markov chain Monte Carlo. In Proceedings of
+  borne. 2009. A Gibbs sampler for phrasal syn-                  Human Language Technologies 2007: The Confer-
+  chronous grammar induction. In Proceedings of the              ence of the North American Chapter of the Associa-
+  Joint Conference of the 47th Annual Meeting of the             tion for Computational Linguistics, pages 139–146,
+  ACL and the 4th International Joint Conference on              Rochester, NY, April.
+  Natural Language Processing of the AFNLP (ACL-
+  IJCNLP), pages 782–790, Suntec, Singapore, Au-                Karim Lari and Steve J. Young. 1990. The esti-
+  gust.                                                           mation of stochastic context-free grammars using
+Rens Bod, Remko Scha, and Khalil Sima’an, editors.                the inside-outside algorithm. Computer Speech and
+  2003. Data-oriented parsing. Center for the Study               Language, 4:35–56.
+  of Language and Information - Studies in Computa-             Khalil Sima’an and Luciano Buratto. 2003. Backoff
+  tional Linguistics. University of Chicago Press.                parameter estimation for the dop model. In Nada
+Trevor Cohn and Phil Blunsom. 2009. A Bayesian                    Lavrac, Dragan Gamberger, Ljupco Todorovski, and
+  model of syntax-directed tree to string grammar in-             Hendrik Blockeel, editors, ECML, volume 2837 of
+  duction. In Proceedings of the 2009 Conference on               Lecture Notes in Computer Science, pages 373–384.
+  Empirical Methods in Natural Language Processing                Springer.
+  (EMNLP), pages 352–361, Singapore, August.
+                                                                Martin J Wainwright and Michael I Jordan. 2008.
+Trevor Cohn, Sharon Goldwater, and Phil Blun-                    Graphical Models, Exponential Families, and Vari-
+  som. 2009. Inducing compact but accurate tree-                 ational Inference. Now Publishers Inc., Hanover,
+  substitution grammars. In Proceedings of Human                 MA, USA.
+  Language Technologies: The 2009 Annual Confer-
+  ence of the North American Chapter of the Associ-
+  ation for Computational Linguistics (HLT-NAACL),
+  pages 548–556, Boulder, Colorado, June.
+John DeNero, Alexandre Bouchard-Côté, and Dan
+  Klein. 2008. Sampling alignment structure under
+  a Bayesian translation model. In Proceedings of
+  the 2008 Conference on Empirical Methods in Natu-
+  ral Language Processing, pages 314–323, Honolulu,
+  Hawaii, October.
+Stuart Geman and Donald Geman. 1984. Stochas-
+   tic relaxation, Gibbs distributions and the Bayesian
+   restoration of images. IEEE Transactions on Pattern
+   Analysis and Machine Intelligence, 6:721–741.
+Sharon Goldwater, Thomas L. Griffiths, and Mark
+  Johnson. 2006. Contextual dependencies in un-
+  supervised word segmentation. In Proceedings of
+  the 21st International Conference on Computational
+  Linguistics and 44th Annual Meeting of the Associa-
+  tion for Computational Linguistics, pages 673–680,
+  Sydney, Australia, July.
+Joshua Goodman. 2003. Efficient parsing of DOP with
+   PCFG-reductions. In Bod et al. (Bod et al., 2003),
+   chapter 8.
+Sonia Jain and Radford M. Neal. 2000. A split-merge
+  Markov chain Monte Carlo procedure for the Dirich-
+  let process mixture model. Journal of Computa-
+  tional and Graphical Statistics, 13:158–182.
+Mark Johnson and Sharon Goldwater. 2009. Im-
+ proving nonparameteric bayesian inference: exper-
+ iments on unsupervised word segmentation with
+ adaptor grammars. In Proceedings of Human Lan-
+ guage Technologies: The 2009 Annual Conference
+ of the North American Chapter of the Associa-
+ tion for Computational Linguistics, pages 317–325,
+ Boulder, Colorado, June.
+
+
+                                                          230
+

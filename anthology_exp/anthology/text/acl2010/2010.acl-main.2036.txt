@@ -1,0 +1,433 @@
+                     Sparsity in Dependency Grammar Induction
+
+  Jennifer Gillenwater and Kuzman Ganchev        João Graça
+           University of Pennsylvania           L2 F INESC-ID
+             Philadelphia, PA, USA             Lisboa, Portugal
+{jengi,kuzman}@cis.upenn.edu            joao.graca@l2f.inesc-id.pt
+
+
+                 Fernando Pereira                                        Ben Taskar
+                    Google Inc.                                   University of Pennsylvania
+              Mountain View, CA, USA                               Philadelphia, PA, USA
+              pereira@google.com                                 taskar@cis.upenn.edu
+
+
+
+                    Abstract                                 for a given language. For instance, in English it
+                                                             is ungrammatical for nouns to dominate verbs, ad-
+    A strong inductive bias is essential in un-              jectives to dominate adverbs, and determiners to
+    supervised grammar induction. We ex-                     dominate almost any part of speech. Thus, the re-
+    plore a particular sparsity bias in de-                  alized dependency types should be a sparse subset
+    pendency grammars that encourages a                      of all possible types.
+    small number of unique dependency
+                                                                Previous work in unsupervised grammar induc-
+    types.       Specifically, we investigate
+                                                             tion has tried to achieve sparsity through priors.
+    sparsity-inducing penalties on the poste-
+                                                             Liang et al. (2007), Finkel et al. (2007) and John-
+    rior distributions of parent-child POS tag
+                                                             son et al. (2007) proposed hierarchical Dirichlet
+    pairs in the posterior regularization (PR)
+                                                             process priors. Cohen et al. (2008) experimented
+    framework of Graça et al. (2007). In ex-
+                                                             with a discounting Dirichlet prior, which encour-
+    periments with 12 languages, we achieve
+                                                             ages a standard dependency parsing model (see
+    substantial gains over the standard expec-
+                                                             Section 2) to limit the number of dependent types
+    tation maximization (EM) baseline, with
+                                                             for each head type.
+    average improvement in attachment ac-
+    curacy of 6.3%. Further, our method                         Our experiments show a more effective sparsity
+    outperforms models based on a standard                   pattern is one that limits the total number of unique
+    Bayesian sparsity-inducing prior by an av-               head-dependent tag pairs. This kind of sparsity
+    erage of 4.9%. On English in particular,                 bias avoids inducing competition between depen-
+    we show that our approach improves on                    dent types for each head type. We can achieve the
+    several other state-of-the-art techniques.               desired bias with a constraint on model posteri-
+                                                             ors during learning, using the posterior regulariza-
+1   Introduction                                             tion (PR) framework (Graça et al., 2007). Specifi-
+                                                             cally, to implement PR we augment the maximum
+We investigate an unsupervised learning method
+                                                             marginal likelihood objective of the dependency
+for dependency parsing models that imposes spar-
+                                                             model with a term that penalizes head-dependent
+sity biases on the dependency types. We assume
+                                                             tag distributions that are too permissive.
+a corpus annotated with POS tags, where the task
+is to induce a dependency model from the tags for               Although not focused on sparsity, several other
+corpus sentences. In this setting, the type of a de-         studies use soft parameter sharing to couple dif-
+pendency is defined as a pair: tag of the dependent          ferent types of dependencies. To this end, Cohen
+(also known as the child), and tag of the head (also         et al. (2008) and Cohen and Smith (2009) inves-
+known as the parent). Given that POS tags are de-            tigated logistic normal priors, and Headden III et
+signed to convey information about grammatical               al. (2009) used a backoff scheme. We compare to
+relations, it is reasonable to assume that only some         their results in Section 5.
+of the possible dependency types will be realized              The remainder of this paper is organized as fol-
+
+
+                                                       194
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 194–199,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+lows. Section 2 and 3 review the models and sev-               probability of a sentence with POS tags x and de-
+eral previous approaches for learning them. Sec-               pendency tree y is given by:
+tion 4 describes learning with PR. Section 5 de-
+                                                                pθ (x, y) = proot (r(x))×
+scribes experiments across 12 languages and Sec-                 Y
+tion 6 analyzes the results. For additional details                  pstop (f alse | yp , yd , yvs )pchild (yc | yp , yd , yvc )×
+                                                                y∈y
+on this work see Gillenwater et al. (2010).                        Y
+                                                                       pstop (true | x, lef t, xvl ) pstop (true | x, right, xvr )
+                                                                x∈x
+2     Parsing Model                                                                                                                 (1)
+
+The models we use are based on the generative de-              where y is the dependency of yc on head yp in di-
+pendency model with valence (DMV) (Klein and                   rection yd , and yvc , yvs , xvr , and xvl indicate va-
+Manning, 2004). For a sentence with tags x, the                lence. For the third model extension, the backoff
+root POS r(x) is generated first. Then the model               to a probability not dependent on parent POS can
+decides whether to generate a right dependent con-             be formally expressed as:
+ditioned on the POS of the root and whether other
+                                                                λpchild (yc | yp , yd , yvc ) + (1 − λ)pchild (yc | yd , yvc ) (2)
+right dependents have already been generated for
+this head. Upon deciding to generate a right de-
+                                                               for λ ∈ [0, 1]. We fix λ = 1/3, which is a crude
+pendent, the POS of the dependent is selected by
+                                                               approximation to the value learned by Headden III
+conditioning on the head POS and the direction-
+                                                               et al. (2009).
+ality. After stopping on the right, the root gener-
+ates left dependents using the mirror reversal of              3    Previous Learning Approaches
+this process. Once the root has generated all its
+dependents, the dependents generate their own de-              In our experiments, we compare PR learning
+pendents in the same manner.                                   to standard expectation maximization (EM) and
+                                                               to Bayesian learning with a sparsity-inducing
+2.1    Model Extensions                                        prior. The EM algorithm  P optimizes marginal like-
+                                                               lihood L(θ) = log Y pθ (X, Y), where X =
+For better comparison with previous work we
+                                                               {x1 , . . . , xn } denotes the entire unlabeled corpus
+implemented three model extensions, borrowed
+                                                               and Y = {y1 , . . . , yn } denotes a set of corre-
+from Headden III et al. (2009). The first exten-
+                                                               sponding parses for each sentence. Neal and Hin-
+sion alters the stopping probability by condition-
+                                                               ton (1998) view EM as block coordinate ascent on
+ing it not only on whether there are any depen-
+                                                               a function that lower-bounds L(θ). Starting from
+dents in a particular direction already, but also on
+                                                               an initial parameter estimate θ0 , the algorithm it-
+how many such dependents there are. When we
+                                                               erates two steps:
+talk about models with maximum stop valency Vs
+= S, this means it distinguishes S different cases:                     E : q t+1 = arg min KL(q(Y) k pθt (Y | X))                  (3)
+                                                                                         q
+0, 1, . . . , S − 2, and ≥ S − 1 dependents in a given
+direction. The basic DMV has Vs = 2.                                       M : θt+1 = arg max Eqt+1 [log pθ (X, Y)]                 (4)
+   The second model extension we implement is                                                θ
+
+analogous to the first, but applies to dependent tag           Note that the E-step just sets q t+1 (Y) =
+probabilities instead of stop probabilities. Again,            pθt (Y|X), since it is an unconstrained minimiza-
+we expand the conditioning such that the model                 tion of a KL-divergence. The PR method we
+considers how many other dependents were al-                   present modifies the E-step by adding constraints.
+ready generated in the same direction. When we                    Besides EM, we also compare to learning with
+talk about a model with maximum child valency                  several Bayesian priors that have been applied to
+Vc = C, this means we distinguish C different                  the DMV. One such prior is the Dirichlet, whose
+cases. The basic DMV has Vc = 1. Since this                    hyperparameter we will denote by α. For α < 0.5,
+extension to the dependent probabilities dramati-              this prior encourages parameter sparsity. Cohen
+cally increases model complexity, the third model              et al. (2008) use this method with α = 0.25 for
+extension we implement is to add a backoff for the             training the DMV and achieve improvements over
+dependent probabilities that does not condition on             basic EM. In this paper we will refer to our own
+the identity of the parent POS (see Equation 2).               implementation of the Dirichlet prior as the “dis-
+   More formally, under the extended DMV the                   counting Dirichlet” (DD) method. In addition to
+
+
+                                                         195
+
+
+the Dirichlet, other types of priors have been ap-            4.1 `1 /`∞ Regularization
+plied, in particular logistic normal priors (LN) and          We now define precisely how to count dependency
+shared logistic normal priors (SLN) (Cohen et al.,            types. For each child tag c, let i range over an enu-
+2008; Cohen and Smith, 2009). LN and SLN aim                  meration of all occurrences of c in the corpus, and
+to tie parameters together. Essentially, this has a           let p be another tag. Let the indicator φcpi (X, Y)
+similar goal to sparsity-inducing methods in that it          have value 1 if p is the parent tag of the ith occur-
+posits a more concise explanation for the grammar             rence of c, and value 0 otherwise. The number of
+of a language. Headden III et al. (2009) also im-             unique dependency types is then:
+plement a sort of parameter tying for the E-DMV                                     X
+through a learning a backoff distribution on child                                       max φcpi (X, Y)                    (7)
+                                                                                          i
+                                                                                    cp
+probabilities. We compare against results from all
+these methods.                                                Note there is an asymmetry in this count: occur-
+                                                              rences of child type c are enumerated with i, but
+4       Learning with Sparse Posteriors                       all occurrences of parent type p are or-ed in φcpi .
+                                                              That is, φcpi = 1 if any occurrence of p is the par-
+We would like to penalize models that predict a               ent of the ith occurrence of c. We will refer to PR
+large number of distinct dependency types. To en-             training with this constraint as PR-AS. Instead of
+force this penalty, we use the posterior regular-             counting pairs of a child token and a parent type,
+ization (PR) framework (Graça et al., 2007). PR               we can alternatively count pairs of a child token
+is closely related to generalized expectation con-            and a parent token by letting p range over all to-
+straints (Mann and McCallum, 2007; Mann and                   kens rather than types. Then each potential depen-
+McCallum, 2008; Bellare et al., 2009), and is also            dency corresponds to a different indicator φcpij ,
+indirectly related to a Bayesian view of learning             and the penalty is symmetric with respect to par-
+with constraints on posteriors (Liang et al., 2009).          ents and children. We will refer to PR training
+The PR framework uses constraints on posterior                with this constraint as PR-S. Both approaches per-
+expectations to guide parameter estimation. Here,             form very well, so we report results for both.
+PR allows a natural and tractable representation of              Equation 7 can be viewed as a mixed-norm
+sparsity constraints based on edge type counts that           penalty on the features φcpi or φcpij : the sum cor-
+cannot easily be encoded in model parameters. We              responds to an `1 norm and the max to an `∞
+use a version of PR where the desired bias is a               norm. Thus, the quantity we want to minimize
+penalty on the log likelihood (see Ganchev et al.             fits precisely into the PR penalty framework. For-
+(2010) for more details). For a distribution pθ , we          mally, to optimize the PR objective, we complete
+define a penalty as the (generic) β-norm of expec-            the following E-step:
+tations of some features φ:                                                                           X
+                                                              arg min KL(q(Y)||pθ (Y|X)) + σ                max Eq [φ(X, Y)],
+                                                                  q                                          i
+                                                                                                       cp
+                  ||Epθ [φ(X, Y)]||β              (5)                                                                       (8)
+                                                              which can equivalently be written as:
+For computational tractability, rather than penaliz-                                                             X
+ing the model’s posteriors directly, we use an aux-                     min       KL(q(Y) k pθ (Y|X)) + σ             ξcp
+                                                                       q(Y),ξcp
+                                                                                                                 cp         (9)
+iliary distribution q, and penalize the marginal log-
+                                                                                           s. t.   ξcp ≤ Eq [φ(X, Y)]
+likelihood of a model by the KL-divergence of pθ
+from q, plus the penalty term with respect to q.              where ξcp corresponds to the maximum expecta-
+For a fixed set of model parameters θ the full PR             tion of φ over all instances of c and p. Note that
+penalty term is:                                              the projection problem can be solved efficiently in
+                                                              the dual (Ganchev et al., 2010).
+ min KL(q(Y) k pθ (Y|X)) + σ ||Eq [φ(X, Y)]||β (6)
+    q
+                                                              5       Experiments
+where σ is the strength of the regularization. PR             We evaluate on 12 languages. Following the ex-
+seeks to maximize L(θ) minus this penalty term.               ample of Smith and Eisner (2006), we strip punc-
+The resulting objective can be optimized by a vari-           tuation from the sentences and keep only sen-
+ant of the EM (Dempster et al., 1977) algorithm               tences of length ≤ 10. For simplicity, for all mod-
+used to optimize L(θ).                                        els we use the “harmonic” initializer from Klein
+
+
+                                                        196
+
+
+         Model    EM       PR     Type      σ                      Learning Method                   Accuracy
+         DMV      45.8    62.1    PR-S     140                                                 ≤ 10       ≤ 20      all
+          2-1     45.1    62.7    PR-S     100                     PR-S (σ = 140)               62.1      53.8     49.1
+          2-2     54.4    62.9    PR-S      80                     LN families                  59.3      45.1     39.0
+          3-3     55.3    64.3    PR-S     140                     SLN TieV & N                 61.3      47.4     41.4
+          4-4     55.1    64.4   PR-AS     140                     PR-AS (σ = 140)              64.4      55.2     50.5
+                                                                   DD (α = 1, λ learned)    65.0 (±5.7)
+Table 1: Attachment accuracy results. Column 1: Vc -
+Vs used for the E-DMV models. Column 3: Best PR re-
+sult for each model, which is chosen by applying each of         Table 2: Comparison with previous published results. Rows
+the two types of constraints (PR-S and PR-AS) and trying         2 and 3 are taken from Cohen et al. (2008) and Cohen and
+σ ∈ {80, 100, 120, 140, 160, 180}. Columns 4 & 5: Con-           Smith (2009), and row 5 from Headden III et al. (2009).
+straint type and σ that produced the values in column 3.
+
+
+                                                                 complexity and regularization strength. However,
+and Manning (2004), which we refer to as K&M.                    we feel the comparison is not so unfair as we per-
+We always train for 100 iterations and evaluate                  form only a very limited search of the model-σ
+on the test set using Viterbi parses. Before eval-               space. Specifically, the only values of σ we search
+uating, we smooth the resulting models by adding                 over are {80, 100, 120, 140, 160, 180}.
+e−10 to each learned parameter, merely to remove
+                                                                    First, we consider the top three entries in Ta-
+the chance of zero probabilities for unseen events.
+                                                                 ble 2, which are for the basic DMV. The first en-
+(We did not tune this as it should make very little
+                                                                 try was generated using our implementation of
+difference for final parses.) We score models by
+                                                                 PR-S. The second two entries are logistic nor-
+their attachment accuracy — the fraction of words
+                                                                 mal and shared logistic normal parameter tying re-
+assigned the correct parent.
+                                                                 sults (Cohen et al., 2008; Cohen and Smith, 2009).
+5.1   Results on English                                         The PR-S result is the clear winner, especially as
+                                                                 length of test sentences increases. For the bot-
+We start by comparing English performance for
+                                                                 tom two entries in the table, which are for the E-
+EM, PR, and DD. To find α for DD we searched
+                                                                 DMV, the last entry is best, corresponding to us-
+over five values: {0.01, 0.1, 0.25, 1}. We found
+                                                                 ing a DD prior with α = 1 (non-sparsifying), but
+0.25 to be the best setting for the DMV, the same
+                                                                 with a special “random pools” initialization and a
+as found by Cohen et al. (2008). DD achieves ac-
+                                                                 learned weight λ for the child backoff probabil-
+curacy 46.4% with this α. For the E-DMV we
+                                                                 ity. The result for PR-AS is well within the vari-
+tested four model complexities with valencies Vc -
+                                                                 ance range of this last entry, and thus we conjec-
+Vs of 2-1, 2-2, 3-3, and 4-4. DD’s best accuracy
+                                                                 ture that combining PR-AS with random pools ini-
+was 53.6% with the 4-4 model at α = 0.1. A
+                                                                 tialization and learned λ would likely produce the
+comparison between EM and PR is shown in Ta-
+                                                                 best-performing model of all.
+ble 1. PR-S generally performs better than the PR-
+AS for English. Comparing PR-S to EM, we also
+                                                                 5.3   Results on Other Languages
+found PR-S is always better, independent of the
+particular σ, with improvements ranging from 2%                  Here we describe experiments on 11 additional
+to 17%. Note that in this work we do not perform                 languages. For each we set σ and model complex-
+the PR projection at test time; we found it detri-               ity (DMV versus one of the four E-DMV exper-
+mental, probably due to a need to set the (corpus-               imented with previously) based on the best con-
+size-dependent) σ differently for the test set. We               figuration found for English. This likely will not
+also note that development likelihood and the best               result in the ideal parameters for all languages, but
+setting for σ are not well-correlated, which un-                 provides a realistic test setting: a user has avail-
+fortunately makes it hard to pick these parameters               able a labeled corpus in one language, and would
+without some supervision.                                        like to induce grammars for many other languages.
+                                                                 Table 3 shows the performance for all models and
+5.2   Comparison with Previous Work                              training procedures. We see that the sparsifying
+In this section we compare to previously published               methods tend to improve over EM most of the
+unsupervised dependency parsing results for En-                  time. For the basic DMV, average improvements
+glish. It might be argued that the comparison is                 are 1.6% for DD, 6.0% for PR-S, and 7.5% for
+unfair since we do supervised selection of model                 PR-AS. PR-AS beats PR-S in 8 out of 12 cases,
+
+
+                                                           197
+
+
+                                            Bg           Cz        De        Dk        En        Es    Jp      Nl      Pt    Se      Si    Tr
+                                                                                               DMV Model
+           EM                            37.8           29.6       35.7      47.2      45.8     40.3 52.8      37.1   35.7   39.4   42.3   46.8
+           DD 0.25                       39.3           30.0       38.6      43.1      46.4     47.5 57.8      35.1   38.7   40.2   48.8   43.8
+           PR-S 140                      53.7           31.5       39.6      44.0      62.1     61.1 58.8      31.0   47.0   42.2   39.9   51.4
+           PR-AS 140                     54.0           32.0       39.6      42.4      61.9     62.4 60.2      37.9   47.8   38.7   50.3   53.4
+                                                                                              Extended Model
+           EM (3,3)                      41.7           48.9       40.1      46.4      55.3     44.3 48.5      47.5   35.9   48.6   47.5   46.2
+           DD 0.1 (4,4)                  47.6           48.5       42.0      44.4      53.6     48.9 57.6      45.2   48.3   47.6   35.6   48.9
+           PR-S 140 (3,3)                59.0           54.7       47.4      45.8      64.3     57.9 60.8      33.9   54.3   45.6   49.1   56.3
+           PR-AS 140 (4,4)               59.8           54.6       45.7      46.6      64.4     57.9 59.4      38.8   49.5   41.4   51.2   56.9
+
+Table 3: Attachment accuracy results. The parameters used are the best settings found for English. Values for hyperparameters
+(α or σ) are given after the method name. For the extended model (Vc , Vs ) are indicated in parentheses. En is the English Penn
+Treebank (Marcus et al., 1993) and the other 11 languages are from the CoNLL X shared task: Bulgarian [Bg] (Simov et al.,
+2002), Czech [Cz] (Bohomovà et al., 2001), German [De] (Brants et al., 2002), Danish [Dk] (Kromann et al., 2003), Spanish
+[Es] (Civit and Martí, 2004), Japanese [Jp] (Kawata and Bartels, 2000), Dutch [Nl] (Van der Beek et al., 2002), Portuguese
+[Pt] (Afonso et al., 2002), Swedish [Se] (Nilsson et al., 2005), Slovene [Sl] (Džeroski et al., 2006), and Turkish [Tr] (Oflazer et
+al., 2003).
+
+
+                                                                                              does not occur, it shifts the model parameters to
+    Una           papelera         es       un          objeto            civilizado
+     d               nc            vs        d            nc                  aq              make nouns the parent of determiners instead of
+                   1.00
+                                                          0.57
+                                                            0.51
+                                                                                              the reverse. Then it does not have to pay the cost
+           1.00                   1.00
+                                     0.49        1.00
+                                                                   0.43                       of assigning a parent with a new tag to cover each
+    Una           papelera         es       un          objeto            civilizado          noun that doesn’t come with a determiner.
+     d               nc            vs       d             nc                  aq
+                                                          0.35
+
+          1.00               0.83 0.75       0.92
+                                                0.99
+                                                                   0.48                       7   Conclusion
+    Una           papelera         es       un          objeto            civilizado
+     d               nc            vs       d             nc                  aq
+                                                                                              In this paper we presented a new method for unsu-
+Figure 1: Posterior edge probabilities for an example sen-                                    pervised learning of dependency parsers. In con-
+tence from the Spanish test corpus. At the top are the gold                                   trast to previous approaches that constrain model
+dependencies, the middle are EM posteriors, and bottom are
+PR posteriors. Green indicates correct dependencies and red                                   parameters, we constrain model posteriors. Our
+indicates incorrect dependencies. The numbers on the edges                                    approach consistently outperforms the standard
+are the values of the posterior probabilities.                                                EM algorithm and a discounting Dirichlet prior.
+                                                                                                 We have several ideas for further improving our
+                                                                                              constraints, such as: taking into account the direc-
+though the average increase is only 1.5%. PR-S                                                tionality of the edges, using different regulariza-
+is also better than DD for 10 out of 12 languages.                                            tion strengths for the root probabilities than for the
+If we instead consider these methods for the E-                                               child probabilities, and working directly on word
+DMV, DD performs worse, just 1.4% better than                                                 types rather than on POS tags. In the future, we
+the E-DMV EM, while both PR-S and PR-AS con-                                                  would also like to try applying similar constraints
+tinue to show substantial average improvements                                                to the more complex task of joint induction of POS
+over EM, 6.5% and 6.3%, respectively.                                                         tags and dependency parses.
+
+6    Analysis
+                                                                                              Acknowledgments
+One common EM error that PR fixes in many lan-
+guages is the directionality of the noun-determiner                                           J. Gillenwater was supported by NSF-IGERT
+relation. Figure 1 shows an example of a Span-                                                0504487.      K. Ganchev was supported by
+ish sentence where PR significantly outperforms                                               ARO MURI SUBTLE W911NF-07-1-0216.
+EM because of this. Sentences such as “Lleva                                                  J. Graça was supported by FCT fellowship
+tiempo entenderlos” which has tags “main-verb                                                 SFRH/BD/27528/2006 and by FCT project CMU-
+common-noun main-verb” (no determiner tag)                                                    PT/HuMach/0039/2008. B. Taskar was partly
+provide an explanation for PR’s improvement—                                                  supported by DARPA CSSG and ONR Young
+when PR sees that sometimes nouns can appear                                                  Investigator Award N000141010746.
+without determiners but that the opposite situation
+
+
+                                                                                        198
+
+
+References                                                      Y. Kawata and J. Bartels. 2000. Stylebook for the
+                                                                   Japanese Treebank in VERBMOBIL. Technical re-
+S. Afonso, E. Bick, R. Haber, and D. Santos. 2002.                 port, Eberhard-Karls-Universitat Tubingen.
+   Floresta Sinta(c)tica: a treebank for Portuguese. In
+   Proc. LREC.                                                  D. Klein and C. Manning. 2004. Corpus-based induc-
+                                                                  tion of syntactic structure: Models of dependency
+K. Bellare, G. Druck, and A. McCallum. 2009. Al-                  and constituency. In Proc. ACL.
+  ternating projections for learning with expectation
+  constraints. In Proc. UAI.                                    M.T. Kromann, L. Mikkelsen, and S.K. Lynge. 2003.
+                                                                  Danish Dependency Treebank. In Proc. TLT.
+A. Bohomovà, J. Hajic, E. Hajicova, and B. Hladka.
+  2001. The prague dependency treebank: Three-level             P. Liang, S. Petrov, M.I. Jordan, and D. Klein. 2007.
+  annotation scenario. In Anne Abeillé, editor, Tree-              The infinite PCFG using hierarchical Dirichlet pro-
+  banks: Building and Using Syntactically Annotated                cesses. In Proc. EMNLP.
+  Corpora.
+                                                                P. Liang, M.I. Jordan, and D. Klein. 2009. Learn-
+S. Brants, S. Dipper, S. Hansen, W. Lezius, and                    ing from measurements in exponential families. In
+   G. Smith. 2002. The TIGER treebank. In Proc.                    Proc. ICML.
+   Workshop on Treebanks and Linguistic Theories.
+                                                                G. Mann and A. McCallum. 2007. Simple, robust,
+M. Civit and M.A. Martí. 2004. Building cast3lb: A                scalable semi-supervised learning via expectation
+  Spanish Treebank. Research on Language & Com-                   regularization. In Proc. ICML.
+  putation.
+                                                                G. Mann and A. McCallum. 2008. Generalized expec-
+S.B. Cohen and N.A. Smith. 2009. The shared logistic               tation criteria for semi-supervised learning of condi-
+  normal distribution for grammar induction. In Proc.              tional random fields. In Proc. ACL.
+  NAACL.
+                                                                M. Marcus, M. Marcinkiewicz, and B. Santorini.
+S.B. Cohen, K. Gimpel, and N.A. Smith. 2008. Lo-                  1993. Building a large annotated corpus of En-
+  gistic normal priors for unsupervised probabilistic             glish: The Penn Treebank. Computational Linguis-
+  grammar induction. In Proc. NIPS.                               tics, 19(2):313–330.
+A.P. Dempster, N.M. Laird, and D.B. Rubin. 1977.                R. Neal and G. Hinton. 1998. A new view of the EM
+  Maximum likelihood from incomplete data via the                  algorithm that justifies incremental, sparse and other
+  EM algorithm. Journal of the Royal Statistical So-               variants. In M. I. Jordan, editor, Learning in Graph-
+  ciety, 39(1):1–38.                                               ical Models, pages 355–368. MIT Press.
+S. Džeroski, T. Erjavec, N. Ledinek, P. Pajas,                  J. Nilsson, J. Hall, and J. Nivre. 2005. MAMBA meets
+  Z. Žabokrtsky, and A. Žele. 2006. Towards a                      TIGER: Reconstructing a Swedish treebank from
+  Slovene dependency treebank. In Proc. LREC.                      antiquity. NODALIDA Special Session on Tree-
+                                                                   banks.
+J. Finkel, T. Grenager, and C. Manning. 2007. The
+   infinite tree. In Proc. ACL.                                 K. Oflazer, B. Say, D.Z. Hakkani-Tür, and G. Tür.
+                                                                  2003. Building a Turkish treebank. Treebanks:
+K. Ganchev, J. Graça, J. Gillenwater, and B. Taskar.
+                                                                  Building and Using Parsed Corpora.
+  2010. Posterior regularization for structured latent
+  variable models. Journal of Machine Learning Re-              K. Simov, P. Osenova, M. Slavcheva, S. Kolkovska,
+  search.                                                         E. Balabanova, D. Doikoff, K. Ivanova, A. Simov,
+                                                                  E. Simov, and M. Kouylekov. 2002. Building a lin-
+J. Gillenwater, K. Ganchev, J. Graça, F. Pereira, and
+                                                                  guistically interpreted corpus of bulgarian: the bul-
+   B. Taskar. 2010. Posterior sparsity in unsupervised
+                                                                  treebank. In Proc. LREC.
+   dependency parsing. Technical report, MS-CIS-10-
+   19, University of Pennsylvania.                              N. Smith and J. Eisner. 2006. Annealing structural
+                                                                  bias in multilingual weighted grammar induction. In
+J. Graça, K. Ganchev, and B. Taskar. 2007. Expec-
+                                                                  Proc. ACL.
+   tation maximization and posterior constraints. In
+   Proc. NIPS.                                                  L. Van der Beek, G. Bouma, R. Malouf, and G. Van No-
+W.P. Headden III, M. Johnson, and D. McClosky.                     ord. 2002. The Alpino dependency treebank. Lan-
+  2009. Improving unsupervised dependency pars-                    guage and Computers.
+  ing with richer contexts and smoothing. In Proc.
+  NAACL.
+M. Johnson, T.L. Griffiths, and S. Goldwater. 2007.
+  Adaptor grammars: A framework for specifying
+  compositional nonparametric Bayesian models. In
+  Proc. NIPS.
+
+
+                                                          199
+

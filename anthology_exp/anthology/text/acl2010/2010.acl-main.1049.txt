@@ -1,0 +1,620 @@
+          Training Phrase Translation Models with Leaving-One-Out
+
+                    Joern Wuebker and Arne Mauser and Hermann Ney
+                   Human Language Technology and Pattern Recognition Group
+                             RWTH Aachen University, Germany
+                           <surname>@cs.rwth-aachen.de
+
+
+
+
+                      Abstract                                 matter, whether the phrases are extracted from a
+                                                               highly probable phrase alignment or from an un-
+    Several attempts have been made to learn                   likely one.
+    phrase translation probabilities for phrase-                 Phrase model probabilities are typically defined
+    based statistical machine translation that                 as relative frequencies of phrases extracted from
+    go beyond pure counting of phrases                         word-aligned parallel training data. The joint
+    in word-aligned training data.         Most                counts C(f˜, ẽ) of the source phrase f˜ and the tar-
+    approaches report problems with over-                      get phrase ẽ in the entire training data are normal-
+    fitting. We describe a novel leaving-                      ized by the marginal counts of source and target
+    one-out approach to prevent over-fitting                   phrase to obtain a conditional probability
+    that allows us to train phrase models that
+    show improved translation performance                                                      C(f˜, ẽ)
+                                                                                  pH (f˜|ẽ) =           .        (1)
+    on the WMT08 Europarl German-English                                                        C(ẽ)
+    task. In contrast to most previous work
+    where phrase models were trained sepa-                       The translation process is implemented as a
+    rately from other models used in transla-                  weighted log-linear combination of several mod-
+    tion, we include all components such as                    els hm (eI1 , sK    J
+                                                                              1 , f1 ) including the logarithm of the
+    single word lexica and reordering mod-                     phrase probability in source-to-target as well as in
+    els in training. Using this consistent                     target-to-source direction. The phrase model is
+    training of phrase models we are able to                   combined with a language model, word lexicon
+    achieve improvements of up to 1.4 points                   models, word and phrase penalty, and many oth-
+                                                                                                                     ˆ
+    in BLEU. As a side effect, the phrase table                ers. (Och and Ney, 2004) The best translation êI1
+    size is reduced by more than 80%.                          as defined by the models then can be written as
+                                                                                   ( M                           )
+1   Introduction                                                    Iˆ
+                                                                                      X
+                                                                                                   I K       J
+                                                                  ê1 = argmax             λm hm (e1 , s1 , f1 )   (2)
+                                                                          I,eI1       m=1
+A phrase-based SMT system takes a source sen-
+tence and produces a translation by segmenting the                In this work, we propose to directly train our
+sentence into phrases and translating those phrases            phrase models by applying a forced alignment pro-
+separately (Koehn et al., 2003). The phrase trans-             cedure where we use the decoder to find a phrase
+lation table, which contains the bilingual phrase              alignment between source and target sentences of
+pairs and the corresponding translation probabil-              the training data and then updating phrase transla-
+ities, is one of the main components of an SMT                 tion probabilities based on this alignment. In con-
+system. The most common method for obtain-                     trast to heuristic extraction, the proposed method
+ing the phrase table is heuristic extraction from              provides a way of consistently training and using
+automatically word-aligned bilingual training data             phrase models in translation. We use a modified
+(Och et al., 1999). In this method, all phrases of             version of a phrase-based decoder to perform the
+the sentence pair that match constraints given by              forced alignment. This way we ensure that all
+the alignment are extracted. This includes over-               models used in training are identical to the ones
+lapping phrases. At extraction time it does not                used at decoding time. An illustration of the basic
+
+
+                                                         475
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 475–484,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                               Europarl task from the ACL 2008 Workshop on
+                                                               Statistical Machine Translation (WMT08). Our
+                                                               results show that the proposed phrase model train-
+                                                               ing improves translation quality on the test set by
+                                                               0.9 B LEU points over our baseline. We find that
+                                                               by interpolation with the heuristically extracted
+                                                               phrases translation performance can reach up to
+                                                               1.4 B LEU improvement over the baseline on the
+                                                               test set.
+                                                                  After reviewing the related work in the fol-
+                                                               lowing section, we give a detailed description
+                                                               of phrasal alignment and leaving-one-out in Sec-
+                                                               tion 3. Section 4 explains the estimation of phrase
+                                                               models. The empirical evaluation of the different
+                                                               approaches is done in Section 5.
+Figure 1: Illustration of phrase training with
+forced alignment.                                              2   Related Work
+
+                                                               It has been pointed out in literature, that training
+idea can be seen in Figure 1. In the literature this           phrase models poses some difficulties. For a gen-
+method by itself has been shown to be problem-                 erative model, (DeNero et al., 2006) gave a de-
+atic because it suffers from over-fitting (DeNero              tailed analysis of the challenges and arising prob-
+et al., 2006), (Liang et al., 2006). Since our ini-            lems. They introduce a model similar to the one
+tial phrases are extracted from the same training              we propose in Section 4.2 and train it with the EM
+data, that we want to align, very long phrases can             algorithm. Their results show that it can not reach
+be found for segmentation. As these long phrases               a performance competitive to extracting a phrase
+tend to occur in only a few training sentences, the            table from word alignment by heuristics (Och et
+EM algorithm generally overestimates their prob-               al., 1999).
+ability and neglects shorter phrases, which better
+generalize to unseen data and thus are more useful                Several reasons are revealed in (DeNero et al.,
+for translation. In order to counteract these effects,         2006). When given a bilingual sentence pair, we
+our training procedure applies leaving-one-out on              can usually assume there are a number of equally
+the sentence level. Our results show, that this leads          correct phrase segmentations and corresponding
+to a better translation quality.                               alignments. For example, it may be possible to
+                                                               transform one valid segmentation into another by
+   Ideally, we would produce all possible segmen-              splitting some of its phrases into sub-phrases or by
+tations and alignments during training. However,               shifting phrase boundaries. This is different from
+this has been shown to be infeasible for real-world            word-based translation models, where a typical as-
+data (DeNero and Klein, 2008). As training uses                sumption is that each target word corresponds to
+a modified version of the translation decoder, it is           only one source word. As a result of this am-
+straightforward to apply pruning as in regular de-             biguity, different segmentations are recruited for
+coding. Additionally, we consider three ways of                different examples during training. That in turn
+approximating the full search space:                           leads to over-fitting which shows in overly deter-
+                                                               minized estimates of the phrase translation prob-
+  1. the single-best Viterbi alignment,                        abilities. In addition, (DeNero et al., 2006) found
+                                                               that the trained phrase table shows a highly peaked
+  2. the n-best alignments,
+                                                               distribution in opposition to the more flat distribu-
+  3. all alignments remaining in the search space              tion resulting from heuristic extraction, leaving the
+     after pruning.                                            decoder only few translation options at decoding
+                                                               time.
+ The performance of the different approaches is                  Our work differs from (DeNero et al., 2006)
+measured and compared on the German-English                    in a number of ways, addressing those problems.
+
+
+                                                         476
+
+
+To limit the effects of over-fitting, we apply the           full and competitive translation system as starting
+leaving-one-out and cross-validation methods in              point with reordering and all models included.
+training. In addition, we do not restrict the train-           In (Marcu and Wong, 2002), a joint probability
+ing to phrases consistent with the word alignment,           phrase model is presented. The learned phrases
+as was done in (DeNero et al., 2006). This allows            are restricted to the most frequent n-grams up to
+us to recover from flawed word alignments.                   length 6 and all unigrams. Monolingual phrases
+   In (Liang et al., 2006) a discriminative transla-         have to occur at least 5 times to be considered
+tion system is described. For training of the pa-            in training. Smoothing is applied to the learned
+rameters for the discriminative features they pro-           models so that probabilities for rare phrases are
+pose a strategy they call bold updating. It is simi-         non-zero. In training, they use a greedy algorithm
+lar to our forced alignment training procedure de-           to produce the Viterbi phrase alignment and then
+scribed in Section 3.                                        apply a hill-climbing technique that modifies the
+  For the hierarchical phrase-based approach,                Viterbi alignment by merge, move, split, and swap
+(Blunsom et al., 2008) present a discriminative              operations to find an alignment with a better prob-
+rule model and show the difference between using             ability in each iteration. The model shows im-
+only the viterbi alignment in training and using the         provements in translation quality over the single-
+full sum over all possible derivations.                      word-based IBM Model 4 (Brown et al., 1993) on
+                                                             a subset of the Canadian Hansards corpus.
+  Forced alignment can also be utilized to train a
+phrase segmentation model, as is shown in (Shen                The joint model by (Marcu and Wong, 2002)
+et al., 2008). They report small but consistent              is refined by (Birch et al., 2006) who use
+improvements by incorporating this segmentation              high-confidence word alignments to constrain the
+model, which works as an additional prior proba-             search space in training. They observe that due to
+bility on the monolingual target phrase.                     several constraints and pruning steps, the trained
+                                                             phrase table is much smaller than the heuristically
+   In (Ferrer and Juan, 2009), phrase models are             extracted one, while preserving translation quality.
+trained by a semi-hidden Markov model. They
+train a conditional “inverse” phrase model of the               The work by (DeNero et al., 2008) describes
+target phrase given the source phrase. Addition-             a method to train the joint model described in
+ally to the phrases, they model the segmentation             (Marcu and Wong, 2002) with a Gibbs sampler.
+sequence that is used to produce a phrase align-             They show that by applying a prior distribution
+ment between the source and the target sentence.             over the phrase translation probabilities they can
+They used a phrase length limit of 4 words with              prevent over-fitting. The prior is composed of
+longer phrases not resulting in further improve-             IBM1 lexical probabilities and a geometric distri-
+ments. To counteract over-fitting, they interpolate          bution over phrase lengths which penalizes long
+the phrase model with IBM Model 1 probabilities              phrases. The two approaches differ in that we ap-
+that are computed on the phrase level. We also in-           ply the leaving-one-out procedure to avoid over-
+clude these word lexica, as they are standard com-           fitting, as opposed to explicitly defining a prior
+ponents of the phrase-based system.                          distribution.
+
+  It is shown in (Ferrer and Juan, 2009), that
+                                                             3   Alignment
+Viterbi training produces almost the same results
+as full Baum-Welch training. They report im-                 The training process is divided into three parts.
+provements over a phrase-based model that uses               First we obtain all models needed for a normal
+an inverse phrase model and a language model.                translations system. We perform minimum error
+Experiments are carried out on a custom subset of            rate training with the downhill simplex algorithm
+the English-Spanish Europarl corpus.                         (Nelder and Mead, 1965) on the development data
+  Our approach is similar to the one presented in            to obtain a set of scaling factors that achieve a
+(Ferrer and Juan, 2009) in that we compare Viterbi           good B LEU score. We then use these models and
+and a training method based on the Forward-                  scaling factors to do a forced alignment, where
+Backward algorithm. But instead of focusing on               we compute a phrase alignment for the training
+the statistical model and relaxing the translation           data. From this alignment we then estimate new
+task by using monotone translation only, we use a            phrase models, while keeping all other models un-
+
+
+                                                       477
+
+
+changed. In this section we describe our forced                    phrase model training. In this section, we de-
+alignment procedure that is the basic training pro-                scribe a leaving-one-out method that can improve
+cedure for the models proposed here.                               the phrase alignment in situations, where the prob-
+                                                                   ability of rare phrases and alignments might be
+3.1      Forced Alignment                                          overestimated. The training data that consists of N
+The idea of forced alignment is to perform a                       parallel sentence pairs fn and en for n = 1, . . . , N
+phrase segmentation and alignment of each sen-                     is used for both the initialization of the transla-
+tence pair of the training data using the full transla-            tion model p(f˜|ẽ) and the phrase model training.
+tion system as in decoding. What we call segmen-                   While this way we can make full use of the avail-
+tation and alignment here corresponds to the “con-                 able data and avoid unknown words during train-
+cepts” used by (Marcu and Wong, 2002). We ap-                      ing, it has the drawback that it can lead to over-
+ply our normal phrase-based decoder on the source                  fitting. All phrases extracted from a specific sen-
+side of the training data and constrain the transla-               tence pair fn , en can be used for the alignment of
+tions to the corresponding target sentences from                   this sentence pair. This includes longer phrases,
+the training data.                                                 which only match in very few sentences in the
+                                                                   data. Therefore those long phrases are trained to
+   Given a source sentence f1J and target sentence                 fit only a few sentence pairs, strongly overesti-
+eI1 ,
+    we search for the best phrase segmentation and                 mating their translation probabilities and failing to
+alignment that covers both sentences. A segmen-                    generalize. In the extreme case, whole sentences
+tation of a sentence into K phrase is defined by                   will be learned as phrasal translations. The aver-
+        k → sk := (ik , bk , jk ), for k = 1, . . . , K            age length of the used phrases is an indicator of
+                                                                   this kind of over-fitting, as the number of match-
+where for each segment ik is last position of kth                  ing training sentences decreases with increasing
+target phrase, and (bk , jk ) are the start and end                phrase length. We can see an example in Figure
+positions of the source phrase aligned to the kth                  2. Without leaving-one-out the sentence is seg-
+target phrase. Consequently, we can modify Equa-                   mented into a few long phrases, which are unlikely
+tion 2 to define the best segmentation of a sentence               to occur in data to be translated. Phrase boundaries
+pair as:                                                           seem to be unintuitive and based on some hidden
+                   ( M                            )
+                      X                                            structures. With leaving-one-out the phrases are
+   ŝK̂
+     1 = argmax            λm hm (eI1 , sK    J
+                                         1 , f1 )   (3)            shorter and therefore better suited for generaliza-
+              K,sK       m=1
+                 1                                                 tion to unseen data.
+The identical models as in search are used: condi-
+                                                                      Previous attempts have dealt with the over-
+tional phrase probabilities p(f˜k |ẽk ) and p(ẽk |f˜k ),
+                                                                   fitting problem by limiting the maximum phrase
+within-phrase lexical probabilities, distance-based
+                                                                   length (DeNero et al., 2006; Marcu and Wong,
+reordering model as well as word and phrase
+                                                                   2002) and by smoothing the phrase probabilities
+penalty. A language model is not used in this case,
+                                                                   by lexical models on the phrase level (Ferrer and
+as the system is constrained to the given target sen-
+                                                                   Juan, 2009). However, (DeNero et al., 2006) expe-
+tence and thus the language model score has no
+                                                                   rienced similar over-fitting with short phrases due
+effect on the alignment.
+                                                                   to the fact that the same word sequence can be seg-
+  In addition to the phrase matching on the source                 mented in different ways, leading to specific seg-
+sentence, we also discard all phrase translation                   mentations being learned for specific training sen-
+candidates, that do not match any sequence in the                  tence pairs. Our results confirm these findings. To
+given target sentence.                                             deal with this problem, instead of simple phrase
+   Sentences for which the decoder can not find                    length restriction, we propose to apply the leaving-
+an alignment are discarded for the phrase model                    one-out method, which is also used for language
+training. In our experiments, this is the case for                 modeling techniques (Kneser and Ney, 1995).
+roughly 5% of the training sentences.                                When using leaving-one-out, we modify the
+                                                                   phrase translation probabilities for each sentence
+3.2      Leaving-one-out
+                                                                   pair. For a training example fn , en , we have to
+As was mentioned in Section 2, previous ap-                        remove all phrases Cn (f˜, ẽ) that were extracted
+proaches found over-fitting to be a problem in                     from this sentence pair from the phrase counts that
+
+
+                                                             478
+
+
+Figure 2: Segmentation example from forced alignment. Top: without leaving-one-out. Bottom: with
+leaving-one-out.
+
+
+we used to construct our phrase translation table.
+                                                              Table 1: Avg. source phrase lengths in forced
+The same holds for the marginal counts Cn (ẽ) and
+                                                              alignment without leaving-one-out and with stan-
+Cn (f˜). Starting from Equation 1, the leaving-one-
+                                                              dard and length-based leaving-one-out.
+out phrase probability for training sentence pair n
+is                                                                                      avg. phrase length
+                          C(f˜, ẽ) − Cn (f˜, ẽ)                   without l1o                        2.5
+         pl1o,n (f˜|ẽ) =                         (4)               standard l1o                       1.9
+                            C(ẽ) − Cn (ẽ)
+                                                                    length-based l1o                   1.6
+   To be able to perform the re-computation in an
+efficient way, we store the source and target phrase
+marginal counts for each phrase in the phrase ta-             phrase lengths |f˜| and |ẽ| and fixed β < 1. In our
+ble. A phrase extraction is performed for each                experiments we set α = e−20 and β = e−5 . Ta-
+training sentence pair separately using the same              ble 1 shows the decrease in average source phrase
+word alignment as for the initialization. It is then          length by application of leaving-one-out.
+straightforward to compute the phrase counts after
+leaving-one-out using the phrase probabilities and            3.3   Cross-validation
+marginal counts stored in the phrase table.
+                                                              For the first iteration of the phrase training,
+   While this works well for more frequent obser-             leaving-one-out can be implemented efficiently as
+vations, singleton phrases are assigned a probabil-           described in Section 3.2. For higher iterations,
+ity of zero. We refer to singleton phrases as phrase          phrase counts obtained in the previous iterations
+pairs that occur only in one sentence. For these              would have to be stored on disk separately for each
+sentences, the decoder needs the singleton phrase             sentence and accessed during the forced alignment
+pairs to produce an alignment. Therefore we retain            process. To simplify this procedure, we propose
+those phrases by assigning them a positive proba-             a cross-validation strategy on larger batches of
+bility close to zero. We evaluated with two differ-           data. Instead of recomputing the phrase counts for
+ent strategies for this, which we call standard and           each sentence individually, this is done for a whole
+length-based leaving-one-out. Standard leaving-               batch of sentences at a time. In our experiments,
+one-out assigns a fixed probability α to singleton            we set this batch-size to 10000 sentences.
+phrase pairs. This way the decoder will prefer us-
+ing more frequent phrases for the alignment, but is
+                                                              3.4   Parallelization
+able to resort to singletons if necessary. However,
+we found that with this method longer singleton               To cope with the runtime and memory require-
+phrases are preferred over shorter ones, because              ments of phrase model training that was pointed
+fewer of them are needed to produce the target sen-           out by previous work (Marcu and Wong, 2002;
+tence. In order to better generalize to unseen data,          Birch et al., 2006), we parallelized the forced
+we would like to give the preference to shorter               alignment by splitting the training corpus into
+phrases. This is done by length-based leaving-                blocks of 10k sentence pairs. From the initial
+one-out, where singleton phrases are assigned the             phrase table, each of these blocks only loads the
+                 ˜
+probability β (|f |+|ẽ|) with the source and target          phrases that are required for alignment. The align-
+
+
+                                                        479
+
+
+ment and the counting of phrases are done sep-                 can approximate the space of all possible hypothe-
+arately for each block and then accumulated to                 ses by the search space that was used for the align-
+build the updated phrase model.                                ment. While this might not cover all phrase trans-
+                                                               lation probabilities, it allows the search space and
+4     Phrase Model Training                                    translation times to be feasible and still contains
+                                                               the most probable alignments. This search space
+The produced phrase alignment can be given as a                can be represented as a graph of partial hypothe-
+single best alignment, as the n-best alignments or             ses (Ueffing et al., 2002) on which we can com-
+as an alignment graph representing all alignments              pute expectations using the Forward-Backward al-
+considered by the decoder. We have developed                   gorithm. We will refer to this alignment as the full
+two different models for phrase translation proba-             alignment. In contrast to the method described in
+bilities which make use of the force-aligned train-            Section 4.1, phrases are weighted by their poste-
+ing data. Additionally we consider smoothing by                rior probability in the word graph. As suggested in
+different kinds of interpolation of the generative             work on minimum Bayes-risk decoding for SMT
+model with the state-of-the-art heuristics.                    (Tromble et al., 2008; Ehling et al., 2007), we use
+                                                               a global factor to scale the posterior probabilities.
+4.1    Viterbi
+The simplest of our generative phrase models esti-             4.3   Phrase Table Interpolation
+mates phrase translation probabilities by their rel-           As (DeNero et al., 2006) have reported improve-
+ative frequencies in the Viterbi alignment of the              ments in translation quality by interpolation of
+data, similar to the heuristic model but with counts           phrase tables produced by the generative and the
+from the phrase-aligned data produced in training              heuristic model, we adopt this method and also re-
+rather than computed on the basis of a word align-             port results using log-linear interpolation of the es-
+ment. The translation probability of a phrase pair             timated model with the original model.
+(f˜, ẽ) is estimated as
+                                                                 The log-linear interpolations pint (f˜|ẽ) of the
+                           CF A (f˜, ẽ)                       phrase translation probabilities are estimated as
+           pF A (f˜|ẽ) = X                       (5)
+                            CF A (f˜0 , ẽ)
+                          f˜0                                                             1−ω             (ω)
+                                                                 pint (f˜|ẽ) = pH (f˜|ẽ)     · pgen (f˜|ẽ)
+   where CF A (f˜, ẽ) is the count of the phrase pair                                                           (6)
+(f˜, ẽ) in the phrase-aligned training data. This can
+be applied to either the Viterbi phrase alignment                where ω is the interpolation weight, pH the
+or an n-best list. For the simplest model, each                heuristically estimated phrase model and pgen the
+hypothesis in the n-best list is weighted equally.             count model. The interpolation weight ω is ad-
+We will refer to this model as the count model as              justed on the development corpus. When inter-
+we simply count the number of occurrences of a                 polating phrase tables containing different sets of
+phrase pair. We also experimented with weight-                 phrase pairs, we retain the intersection of the two.
+ing the counts with the estimated likelihood of the
+                                                                  As a generalization of the fixed interpolation of
+corresponding entry in the the n-best list. The sum
+                                                               the two phrase tables we also experimented with
+of the likelihoods of all entries in an n-best list is
+                                                               adding the two trained phrase probabilities as ad-
+normalized to 1. We will refer to this model as the
+                                                               ditional features to the log-linear framework. This
+weighted count model.
+                                                               way we allow different interpolation weights for
+                                                               the two translation directions and can optimize
+4.2    Forward-backward
+                                                               them automatically along with the other feature
+Ideally, the training procedure would consider all             weights. We will refer to this method as feature-
+possible alignment and segmentation hypotheses.                wise combination. Again, we retain the intersec-
+When alternatives are weighted by their posterior              tion of the two phrase tables. With good log-
+probability. As discussed earlier, the run-time re-            linear feature weights, feature-wise combination
+quirements for computing all possible alignments               should perform at least as well as fixed interpo-
+is prohibitive for large data tasks. However, we               lation. However, the results presented in Table 5
+
+
+                                                         480
+
+
+Table 2: Statistics for the Europarl German-                 Table 3: Comparison of different training setups
+English data                                                 for the count model on DEV .
+
+                            German        English             leaving-one-out     max phr.len.    BLEU     TER
+    TRAIN    Sentences            1 311 815                   baseline            6                25.7    61.1
+            Run. Words     34 398 651 36 090 085
+                                                              none                2                25.2    61.3
+            Vocabulary      336 347       118 112
+                                                                                  3                25.7    61.3
+             Singletons     168 686        47 507
+                                                                                  4                25.5    61.4
+    DEV      Sentences              2 000                                         5                25.5    61.4
+            Run. Words       55 118        58 761                                 6                25.4    61.7
+            Vocabulary       9 211         6 549              standard            6                26.4    60.9
+                 OOVs         284            77               length-based        6                26.5    60.6
+    TEST     Sentences              2 000
+            Run. Words       56 635        60 188
+            Vocabulary       9 254         6 497             and T EST . Additionally, we can apply smooth-
+                 OOVs         266            89              ing by interpolation of the new phrase table with
+                                                             the original one estimated heuristically, retrain the
+                                                             scaling factors and evaluate afterwards.
+show a slightly lower performance. This illustrates
+that a higher number of features results in a less              The baseline system is a standard phrase-based
+reliable optimization of the log-linear parameters.          SMT system with eight features: phrase transla-
+                                                             tion and word lexicon probabilities in both transla-
+5     Experimental Evaluation                                tion directions, phrase penalty, word penalty, lan-
+                                                             guage model score and a simple distance-based re-
+5.1    Experimental Setup                                    ordering model. The features are combined in a
+                                                             log-linear way. To investigate the generative mod-
+We conducted our experiments on the German-                  els, we replace the two phrase translation prob-
+English data published for the ACL 2008                      abilities and keep the other features identical to
+Workshop on Statistical Machine Translation                  the baseline. For the feature-wise combination
+(WMT08). Statistics for the Europarl data are                the two generative phrase probabilities are added
+given in Table 2.                                            to the features, resulting in a total of 10 features.
+                                                             We used a 4-gram language model with modified
+   We are given the three data sets T RAIN , DEV             Kneser-Ney discounting for all experiments. The
+and T EST . For the heuristic phrase model, we               metrics used for evaluation are the case-sensitive
+first use GIZA++ (Och and Ney, 2003) to compute              B LEU (Papineni et al., 2002) score and the trans-
+the word alignment on T RAIN . Next we obtain                lation edit rate (TER) (Snover et al., 2006) with
+a phrase table by extraction of phrases from the             one reference translation.
+word alignment. The scaling factors of the trans-
+lation models have been optimized for B LEU on               5.2   Results
+the DEV data.
+   The phrase table obtained by heuristic extraction         In this section, we investigate the different as-
+is also used to initialize the training. The forced          pects of the models and methods presented be-
+alignment is run on the training data T RAIN                 fore. We will focus on the proposed leaving-one-
+from which we obtain the phrase alignments.                  out technique and show that it helps in finding
+Those are used to build a phrase table according             good phrasal alignments on the training data that
+to the proposed generative phrase models. After-             lead to improved translation models. Our final
+ward, the scaling factors are trained on DEV for             results show an improvement of 1.4 B LEU over
+the new phrase table. By feeding back the new                the heuristically extracted phrase model on the test
+phrase table into forced alignment we can reiterate          data set.
+the training procedure. When training is finished              In Section 3.2 we have discussed several meth-
+the resulting phrase model is evaluated on DEV               ods which aim to overcome the over-fitting prob-
+
+
+                                                       481
+
+
+                                                             Table 4: Phrase table size of the count model for
+                                                             different n-best list sizes, the full model and for
+                                                             heuristic phrase extraction.
+                                                                         N     # phrases     % of full table
+                                                                           1       4.9M                  5.3
+                                                                         10        8.4M                  9.1
+                                                                        100       15.9M                 17.2
+                                                                      1000        27.1M                 29.2
+                                                                     10000        40.1M                 43.2
+                                                                        full      59.6M                 64.2
+Figure 3: Performance on DEV in B LEU of the                       heuristic      92.7M               100.0
+count model plotted against size n of n-best list
+on a logarithmic scale.
+                                                             do not retain all phrase table entries. Due to prun-
+                                                             ing in the forced alignment step, not all translation
+lems described in (DeNero et al., 2006). Table 3             options are considered. As a result experiments
+shows translation scores of the count model on the           can be done more rapidly and with less resources
+development data after the first training iteration          than with the heuristically extracted phrase table.
+for both leaving-one-out strategies we have in-              Also, our experiments show that the increased per-
+troduced and for training without leaving-one-out            formance of the count model is partly derived from
+with different restrictions on phrase length. We             the smaller phrase table size. In Table 5 we can see
+can see that by restricting the source phrase length         that the performance of the heuristic phrase model
+to a maximum of 3 words, the trained model is                can be increased by 0.6 B LEU on T EST by fil-
+close to the performance of the heuristic phrase             tering the phrase table to contain the same phrases
+model. With the application of leaving-one-out,              as the count model and reoptimizing the log-linear
+the trained model is superior to the baseline, the           model weights. The experiments on the number of
+length-based strategy performing slightly better             different alignments taken into account were done
+than standard leaving-one-out. For these experi-             with standard leaving-one-out.
+ments the count model was estimated with a 100-
+best list.                                                      The final results are given in Table 5. We can
+                                                             see that the count model outperforms the base-
+   The count model we describe in Section 4.1 esti-          line by 0.8 B LEU on DEV and 0.9 B LEU on
+mates phrase translation probabilities using counts          T EST after the first training iteration. The perfor-
+from the n-best phrase alignments. For smaller n             mance of the filtered baseline phrase table shows
+the resulting phrase table contains fewer phrases            that part of that improvement derives from the
+and is more deterministic. For higher values of              smaller phrase table size. Application of cross-
+n more competing alignments are taken into ac-               validation (cv) in the first iteration yields a perfor-
+count, resulting in a bigger phrase table and a              mance close to training with leaving-one-out (l1o),
+smoother distribution. We can see in Figure 3                which indicates that cross-validation can be safely
+that translation performance improves by moving              applied to higher training iterations as an alterna-
+from the Viterbi alignment to n-best alignments.             tive to leaving-one-out. The weighted count model
+The variations in performance with sizes between             clearly under-performs the simpler count model.
+n = 10 and n = 10000 are less than 0.2 B LEU.                A second iteration of the training algorithm shows
+The maximum is reached for n = 100, which we                 nearly no changes in B LEU score, but a small im-
+used in all subsequent experiments. An additional            provement in TER. Here, we used the phrase table
+benefit of the count model is the smaller phrase             trained with leaving-one-out in the first iteration
+table size compared to the heuristic phrase extrac-          and applied cross-validation in the second itera-
+tion. This is consistent with the findings of (Birch         tion. Log-linear interpolation of the count model
+et al., 2006). Table 4 shows the phrase table sizes          with the heuristic yields a further increase, show-
+for different n. With n = 100 we retain only 17%             ing an improvement of 1.3 B LEU on DEV and 1.4
+of the original phrases. Even for the full model, we         B LEU on T EST over the baseline. The interpo-
+
+
+                                                       482
+
+
+                                                               that considering the 100-best alignments allows to
+Table 5: Final results for the heuristic phrase table
+                                                               better model the ambiguities in phrase segmenta-
+filtered to contain the same phrases as the count
+                                                               tion.
+model (baseline filt.), the count model trained with
+leaving-one-out (l1o) and cross-validation (cv),                  The proposed techniques are shown to be supe-
+the weighted count model and the full model. Fur-              rior to previous approaches that only used lexical
+ther, scores for fixed log-linear interpolation of the         probabilities to smooth phrase tables or imposed
+count model trained with leaving-one-out with the              limits on the phrase lengths. On the WMT08 Eu-
+heuristic as well as a feature-wise combination are            roparl task we show improvements of 0.9 B LEU
+shown. The results of the second training iteration            points with the trained phrase table and 1.4 B LEU
+are given in the bottom row.                                   points when interpolating the newly trained model
+                                                               with the original, heuristically extracted phrase ta-
+                         DEV            TEST                   ble. In TER, improvements are 0.4 and 1.7 points.
+                      BLEU TER        BLEU TER                    In addition to the improved performance, the
+    baseline           25.7 61.1       26.3 60.9               trained models are smaller leading to faster and
+    baseline filt.     26.0 61.6       26.9 61.2               smaller translation systems.
+    count (l1o)        26.5 60.6       27.2 60.5
+    count (cv)         26.4 60.7       27.0 60.7               Acknowledgments
+    weight. count      25.9 61.4       26.4 61.3
+                                                               This work was partly realized as part of the
+    full               26.3 60.0       27.0 60.2
+                                                               Quaero Programme, funded by OSEO, French
+    fixed interpol.    27.0 59.4       27.7 59.2               State agency for innovation, and also partly based
+    feat. comb.        26.8 60.1       27.6 59.9               upon work supported by the Defense Advanced
+    count, iter. 2     26.4 60.3       27.2 60.0               Research Projects Agency (DARPA) under Con-
+                                                               tract No. HR001-06-C-0023. Any opinions,
+                                                               ndings and conclusions or recommendations ex-
+lation weight is adjusted on the development set               pressed in this material are those of the authors and
+and was set to ω = 0.6. Integrating both models                do not necessarily reect the views of the DARPA.
+into the log-linear framework (feat. comb.) yields
+a B LEU score slightly lower than with fixed inter-
+polation on both DEV and T EST . This might                    References
+be attributed to deficiencies in the tuning proce-
+dure. The full model, where we extract all phrases             Alexandra Birch, Chris Callison-Burch, Miles Os-
+                                                                 borne, and Philipp Koehn. 2006. Constraining the
+from the search graph, weighted with their poste-                phrase-based, joint probability statistical translation
+rior probability, performs comparable to the count               model. In smt2006, pages 154–157, Jun.
+model with a slightly worse B LEU and a slightly
+                                                               Phil Blunsom, Trevor Cohn, and Miles Osborne. 2008.
+better TER.
+                                                                 A discriminative latent variable model for statisti-
+                                                                 cal machine translation. In Proceedings of ACL-08:
+6     Conclusion                                                 HLT, pages 200–208, Columbus, Ohio, June. Asso-
+                                                                 ciation for Computational Linguistics.
+We have shown that training phrase models can                  P. F. Brown, V. J. Della Pietra, S. A. Della Pietra, and
+improve translation performance on a state-of-                    R. L. Mercer. 1993. The mathematics of statistical
+the-art phrase-based translation model. This is                   machine translation: parameter estimation. Compu-
+achieved by training phrase translation probabil-                 tational Linguistics, 19(2):263–312, June.
+ities in a way that they are consistent with their             John DeNero and Dan Klein. 2008. The complexity
+use in translation. A crucial aspect here is the use             of phrase alignment problems. In Proceedings of the
+of leaving-one-out to avoid over-fitting. We have                46th Annual Meeting of the Association for Compu-
+                                                                 tational Linguistics on Human Language Technolo-
+shown that the technique is superior to limiting
+                                                                 gies: Short Papers, pages 25–28, Morristown, NJ,
+phrase lengths and smoothing with lexical prob-                  USA. Association for Computational Linguistics.
+abilities alone.
+                                                               John DeNero, Dan Gillick, James Zhang, and Dan
+  While models trained from Viterbi alignments                   Klein. 2006. Why Generative Phrase Models Un-
+already lead to good results, we have demonstrated               derperform Surface Heuristics. In Proceedings of the
+
+
+                                                         483
+
+
+  Workshop on Statistical Machine Translation, pages            F.J. Och, C. Tillmann, and H. Ney. 1999. Improved
+  31–38, New York City, June.                                      alignment models for statistical machine translation.
+                                                                   In Proc. of the Joint SIGDAT Conf. on Empirical
+John DeNero, Alexandre Buchard-Côté, and Dan                     Methods in Natural Language Processing and Very
+  Klein. 2008. Sampling Alignment Structure under                  Large Corpora (EMNLP99), pages 20–28, Univer-
+  a Bayesian Translation Model. In Proceedings of                  sity of Maryland, College Park, MD, USA, June.
+  the 2008 Conference on Empirical Methods in Natu-
+  ral Language Processing, pages 314–323, Honolulu,             Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+  October.                                                        Jing Zhu. 2002. Bleu: a method for automatic eval-
+                                                                  uation of machine translation. In Proceedings of the
+Nicola Ehling, Richard Zens, and Hermann Ney. 2007.               40th Annual Meeting on Association for Computa-
+  Minimum bayes risk decoding for bleu. In ACL ’07:               tional Linguistics, pages 311–318, Morristown, NJ,
+  Proceedings of the 45th Annual Meeting of the ACL               USA. Association for Computational Linguistics.
+  on Interactive Poster and Demonstration Sessions,
+  pages 101–104, Morristown, NJ, USA. Association               Wade Shen, Brian Delaney, Tim Anderson, and Ray
+  for Computational Linguistics.                                 Slyh. 2008. The MIT-LL/AFRL IWSLT-2008 MT
+                                                                 System. In Proceedings of IWSLT 2008, pages 69–
+Jesús-Andrés Ferrer and Alfons Juan. 2009. A phrase-           76, Hawaii, U.S.A., October.
+  based hidden semi-markov approach to machine
+                                                                Matthew Snover, Bonnie Dorr, Rich Schwartz, Linnea
+  translation. In Procedings of European Association
+                                                                 Micciulla, and John Makhoul. 2006. A study of
+  for Machine Translation (EAMT), Barcelona, Spain,
+                                                                 translation edit rate with targeted human annotation.
+  May. European Association for Machine Translation.
+                                                                 In Proc. of AMTA, pages 223–231, Aug.
+Reinhard Kneser and Hermann Ney. 1995. Improved                 Roy Tromble, Shankar Kumar, Franz Och, and Wolf-
+  Backing-Off for M-gram Language Modelling. In                   gang Macherey. 2008. Lattice Minimum Bayes-
+  IEEE Int. Conf. on Acoustics, Speech and Signal                 Risk decoding for statistical machine translation.
+  Processing (ICASSP), pages 181–184, Detroit, MI,                In Proceedings of the 2008 Conference on Empiri-
+  May.                                                            cal Methods in Natural Language Processing, pages
+                                                                  620–629, Honolulu, Hawaii, October. Association
+Philipp Koehn, Franz Josef Och, and Daniel Marcu.                 for Computational Linguistics.
+  2003. Statistical phrase-based translation. In Pro-
+  ceedings of the 2003 Conference of the North Amer-            N. Ueffing, F.J. Och, and H. Ney. 2002. Genera-
+  ican Chapter of the Association for Computational               tion of word graphs in statistical machine translation.
+  Linguistics on Human Language Technology - Vol-                 In Proc. of the Conference on Empirical Methods
+  ume 1, pages 48–54, Morristown, NJ, USA. Associ-                for Natural Language Processing, pages 156–163,
+  ation for Computational Linguistics.                            Philadelphia, PA, USA, July.
+
+Percy Liang, Alexandre Buchard-Côté, Dan Klein, and
+  Ben Taskar. 2006. An End-to-End Discriminative
+  Approach to Machine Translation. In Proceedings of
+  the 21st International Conference on Computational
+  Linguistics and the 44th annual meeting of the As-
+  sociation for Computational Linguistics, pages 761–
+  768, Sydney, Australia.
+
+Daniel Marcu and William Wong. 2002. A phrase-
+ based, joint probability model for statistical machine
+ translation. In Proceedings of the Conference on
+ Empirical Methods in Natural Language Processing
+ (EMNLP-2002), July.
+
+J.A. Nelder and R. Mead. 1965. A Simplex Method
+  for Function Minimization. The Computer Journal),
+  7:308–313.
+
+Franz Josef Och and Hermann Ney. 2003. A sys-
+  tematic comparison of various statistical alignment
+  models. Computational Linguistics, 29(1):19–51,
+  March.
+
+Franz Josef Och and Hermann Ney. 2004. The align-
+  ment template approach to statistical machine trans-
+  lation. Computational Linguistics, 30(4):417–449,
+  December.
+
+
+                                                          484
+

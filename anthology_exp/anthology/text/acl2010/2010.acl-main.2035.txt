@@ -1,0 +1,359 @@
+                    Tree-Based Deterministic Dependency Parsing
+                       — An Application to Nivre’s Method —
+
+                   Kotaro Kitagawa         Kumiko Tanaka-Ishii
+               Graduate School of Information Science and Technology,
+                              The University of Tokyo
+        kitagawa@cl.ci.i.u-tokyo.ac.jp kumiko@i.u-tokyo.ac.jp
+
+
+                    Abstract                                 idea. Instead of selecting a parsing action for
+                                                             two words, as in Nivre’s model, our tree-based
+    Nivre’s method was improved by en-                       model first chooses the most probable head can-
+    hancing deterministic dependency parsing                 didate from among the trees through a tournament
+    through application of a tree-based model.               and then decides the parsing action between two
+    The model considers all words necessary                  trees.
+    for selection of parsing actions by includ-                 Global-optimization parsing methods are an-
+    ing words in the form of trees. It chooses               other common approach (Eisner, 1996; McDon-
+    the most probable head candidate from                    ald et al., 2005). Koo et al. (2008) studied
+    among the trees and uses this candidate to               semi-supervised learning with this approach. Hy-
+    select a parsing action.                                 brid systems have improved parsing by integrat-
+    In an evaluation experiment using the                    ing outputs obtained from different parsing mod-
+    Penn Treebank (WSJ section), the pro-                    els (Zhang and Clark, 2008).
+    posed model achieved higher accuracy                        Our proposal can be situated among global-
+    than did previous deterministic models.                  optimization parsing methods as follows. The pro-
+    Although the proposed model’s worst-case                 posed tree-based model is deterministic but takes a
+    time complexity is O(n2 ), the experimen-                step towards global optimization by widening the
+    tal results demonstrated an average pars-                search space to include all necessary words con-
+    ing time not much slower than O(n).                      nected by previously judged head-dependent rela-
+                                                             tions, thus achieving a higher accuracy yet largely
+1 Introduction                                               retaining the speed of deterministic parsing.
+Deterministic parsing methods achieve both effec-
+                                                             2 Deterministic Dependency Parsing
+tive time complexity and accuracy not far from
+those of the most accurate methods. One such                 2.1 Dependency Parsing
+deterministic method is Nivre’s method, an incre-            A dependency parser receives an input sentence
+mental parsing method whose time complexity is               x = w1 , w2 , . . . , wn and computes a dependency
+linear in the number of words (Nivre, 2003). Still,          graph G = (W, A). The set of nodes W =
+deterministic methods can be improved. As a spe-             {w0 , w1 , . . . , wn } corresponds to the words of a
+cific example, Nivre’s model greedily decides the            sentence, and the node w0 is the root of G. A is
+parsing action only from two words and their lo-             the set of arcs (wi , wj ), each of which represents a
+cally relational words, which can lead to errors.            dependency relation where wi is the head and wj
+   In the field of Japanese dependency parsing,              is the dependent.
+Iwatate et al. (2008) proposed a tournament model               In this paper, we assume that the resulting de-
+that takes all head candidates into account in judg-         pendency graph for a sentence is well-formed and
+ing dependency relations. This method assumes                projective (Nivre, 2008). G is well-formed if and
+backward parsing because the Japanese depen-                 only if it satisfies the following three conditions of
+dency structure has a head-final constraint, so that         being single-headed, acyclic, and rooted.
+any word’s head is located to its right.
+   Here, we propose a tree-based model, applica-             2.2 Nivre’s Method
+ble to any projective language, which can be con-            An incremental dependency parsing algorithm
+sidered as a kind of generalization of Iwatate’s             was first proposed by (Covington, 2001). After
+
+
+                                                       189
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 189–193,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                    Table 1: Transitions for Nivre’s method and the proposed method.
+                            Transition                                                       Precondition
+           Left-Arc         (σ|wi , wj |β, A) ⇒ (σ, wj |β, A ∪ {(wj , wi )})                 i ̸= 0 ∧ ¬∃wk (wk , wi ) ∈ A
+  Nivre’s  Right-Arc        (σ|wi , wj |β, A) ⇒ (σ|wi |wj , β, A ∪ {(wi , wj )})
+  Method   Reduce           (σ|wi , β, A)      ⇒ (σ, β, A)                                   ∃wk (wk , wi ) ∈ A
+           Shift            (σ, wj |β, A)      ⇒ (σ|wj , β, A)
+           Left-Arc         (σ|ti , tj |β, A) ⇒ (σ, tj |β, A ∪ {(wj , wi )})                 i ̸= 0
+  Proposed
+   Method Right-Arc         (σ|ti , tj |β, A) ⇒ (σ|ti , β, A ∪ {(mphc(ti , tj ), wj )})
+           Shift            (σ, tj |β, A) ⇒ (σ|tj , β, A)
+
+studies taking data-driven approaches, by (Kudo                   Features Used for Selecting Reduce
+and Matsumoto, 2002), (Yamada and Matsumoto,                      The features used in (Nivre and Scholz, 2004) to
+2003), and (Nivre, 2003), the deterministic incre-                define a state transition are basically obtained from
+mental parser was generalized to a state transition               the two target words wi and wj , and their related
+system in (Nivre, 2008).                                          words. These words are not sufficient to select Re-
+   Nivre’s method applying an arc-eager algorithm                 duce, because this action means that wj has no de-
+works by using a stack of words denoted as σ, for                 pendency relation with any word in the stack.
+a buffer β initially containing the sentence x. Pars-
+ing is formulated as a quadruple (S, Ts , sinit , St ),           Preconditions
+where each component is defined as follows:                       When the classifier selects a transition, the result-
+                                                                  ing graph satisfies well-formedness and projectiv-
+  • S is a set of states, each of which is denoted                ity only under the preconditions listed in Table 1.
+    as (σ, β, A) ∈ S.                                             Even though the parsing seems to be formulated as
+  • Ts is a set of transitions, and each element of               a four-class classifier problem, it is in fact formed
+    Ts is a function ts : S → S.                                  of two types of three-class classifiers.
+  • sinit = ([w0 ], [w1 , . . . , wn ], ϕ) is the initial            Solving these problems and selecting a more
+    state.                                                        suitable dependency relation requires a parser that
+  • St is a set of terminal states.                               considers more global dependency relations.
+Syntactic analysis generates a sequence of optimal                3 Tree-Based Parsing Applied to Nivre’s
+transitions ts provided by an oracle o : S → Ts ,                   Method
+applied to a target consisting of the stack’s top ele-
+ment wi and the first element wj in the buffer. The               3.1 Overall Procedure
+oracle is constructed as a classifier trained on tree-            Tree-based parsing uses trees as the procedural el-
+bank data. Each transition is defined in the upper                ements instead of words. This allows enhance-
+block of Table 1 and explained as follows:                        ment of previously proposed deterministic mod-
+                                                                  els such as (Covington, 2001; Yamada and Mat-
+Left-Arc Make wj the head of wi and pop wi ,                      sumoto, 2003). In this paper, we show the applica-
+     where wi is located at the stack top (denoted                tion of tree-based parsing to Nivre’s method. The
+     as σ|wi ), when the buffer head is wj (denoted               parser is formulated as a state transition system
+     as wj |β).                                                   (S, Ts , sinit , St ), similarly to Nivre’s parser, but σ
+Right-Arc Make wi the head of wj , and push wj .                  and β for a state s = (σ, β, A) ∈ S denote a stack
+Reduce Pop wi , located at the stack top.                         of trees and a buffer of trees, respectively. A tree
+Shift Push the word wj , located at the buffer head,              ti ∈ T is defined as the tree rooted by the word wi ,
+     onto the stack top.                                          and the initial state is sinit = ([t0 ], [t1 , . . . , tn ], ϕ),
+                                                                  which is formed from the input sentence x.
+  The method explained thus far has the following                    The state transitions Ts are decided through the
+drawbacks.                                                        following two steps.
+Locality of Parsing Action Selection                                1. Select the most probable head candidate
+The dependency relations are greedily determined,                      (MPHC): For the tree ti located at the stack
+so when the transition Right-Arc adds a depen-                         top, search for and select the MPHC for wj ,
+dency arc (wi , wj ), a more probable head of wj                       which is the root word of tj located at the
+located in the stack is disregarded as a candidate.                    buffer head. This procedure is denoted as a
+
+
+                                                            190
+
+
+          most probable
+                                                                                   ti                tj
+                                                                                  was
+          head candidate
+                                                                            robot sold                    mphc (ti , t j )
+        watched                                                       The biped                separately by his company
+
+   He             birds                                                                     Right-Arc
+                                                                              ti                          tj
+          the         across                                                      was
+                                        wj
+     head candidates                                                        robot sold
+                                river   with   the telescope
+                          the                                         The biped         separately        by his company
+
+        Figure 1: Example of a tournament.
+                                                                    Figure 2: Example of the transition Right.
+
+     function mphc(ti , tj ), and its details are ex-
+     plained in §3.2.                                           2008). Since the Japanese language has the head-
+                                                                final property, the tournament model itself consti-
+  2. Select a transition: Choose a transition,                  tutes parsing, whereas for parsing a general pro-
+     by using an oracle, from among the follow-                 jective language, the tournament model can only
+     ing three possibilities (explained in detail in            be used as part of a parsing algorithm.
+     §3.3):                                                        Figure 1 shows a tournament for the example
+                                                                of “with,” where the word “watched” finally wins.
+     Left-Arc Make wj the head of wi and pop
+                                                                Although only the words on the left-hand side of
+          ti , where ti is at the stack top (denoted
+                                                                tree tj are searched, this does not mean that the
+          as σ|ti , with the tail being σ), when the
+                                                                tree-based method considers only one side of a de-
+          buffer head is tj (denoted as tj |β).
+                                                                pendency relation. For example, when we apply
+     Right-Arc Make the MPHC the head of wj ,
+                                                                the tree-based parsing to Yamada’s method, the
+          and pop the MPHC.
+                                                                search problems on both sides are solved.
+     Shift Push the tree tj located at the buffer                  To implement mphc(ti , tj ), a binary classifier
+          head onto the stack top.                              is built to judge which of two given words is more
+These transitions correspond to three possibilities             appropriate as the head for another input word.
+for the relation between ti and tj : (1) a word of ti           This classifier concerns three words, namely, the
+is a dependent of a word of tj ; (2) a word of tj is a          two words l (left) and r (right) in ti , whose ap-
+dependent of a word of ti ; or (3) the two trees are            propriateness as the head is compared for the de-
+not related.                                                    pendent wj . All word pairs of l and r in ti are
+   The formulations of these transitions in the                 compared repeatedly in a “tournament,” and the
+lower block of Table 1 correspond to Nivre’s tran-              survivor is regarded as the MPHC of wj .
+sitions of the same name, except that here a tran-                 The classifier is generated through learning of
+sition is applied to a tree. This enhancement from              training examples for all ti and wj pairs, each
+words to trees allows removal of both the Reduce                of which generates examples comparing the true
+transition and certain preconditions.                           head and other (inappropriate) heads in ti . Ta-
+                                                                ble 2 lists the features used in the classifier. Here,
+3.2 Selection of Most Probable Head                             lex(X) and pos(X) mean the surface form and part
+    Candidate                                                   of speech of X, respectively. X lef t means the
+By using mphc(ti , tj ), a word located far from wj             dependents of X located on the left-hand side of
+(the head of tj ) can be selected as the head can-              X, while X right means those on the right. Also,
+didate in ti . This selection process decreases the             X head means the head of X. The feature design
+number of errors resulting from greedy decision                 concerns three additional words occurring after
+considering only a few candidates.                              wj , as well, denoted as wj+1 , wj+2 , wj+3 .
+   Various procedures can be considered for im-
+plementing mphc(ti , tj ). One way is to apply the              3.3 Transition Selection
+tournament procedure to the words in ti . The tour-             A transition is selected by a three-class classifier
+nament procedure was originally introduced for                  after deciding the MPHC, as explained in §3.1.
+parsing methods in Japanese by (Iwatate et al.,                 Table 1 lists the three transitions and one precon-
+
+
+                                                          191
+
+
+         Table 2: Features used for a tournament.             Table 3: Features used for a state transition.
+       pos(l), lex(l)                                      pos(wi ), lex(wi )
+       pos(lhead ), pos(llef t ), pos(lright )             pos(wilef t ), pos(wiright ), lex(wilef t ), lex(wiright )
+       pos(r), lex(r)                                      pos(MPHC), lex(MPHC)
+       pos(rhead ), pos(rlef t ), pos(rright )             pos(MPHChead ), pos(MPHClef t ), pos(MPHCright )
+       pos(wj ), lex(wj ), pos(wjlef t )                   lex(MPHChead ), lex(MPHClef t ), lex(MPHCright )
+       pos(wj+1 ), lex(wj+1 ), pos(wj+2 ), lex(wj+2 )      pos(wj ), lex(wj ), pos(wjlef t ), lex(wjlef t )
+       pos(wj+3 ), lex(wj+3 )                              pos(wj+1 ), lex(wj+1 ), pos(wj+2 ), lex(wj+2 ), pos(wj+3 ), lex(wj+3 )
+
+
+dition. The transition Shift indicates that the tar-                    was used in several other previous works, enabling
+get trees ti and tj have no dependency relations.                       mutual comparison with the methods reported in
+The transition Right-Arc indicates generation of                        those works.
+the dependent-head relation between wj and the                             The SVMlight package2 was used to build the
+result of mphc(ti , tj ), i.e., the MPHC for wj . Fig-                  support vector machine classifiers. The binary
+ure 2 shows an example of this transition. The                          classifier for MPHC selection and the three-class
+transition Left-Arc indicates generation of the de-                     classifier for transition selection were built using a
+pendency relation in which wj is the head of wi .                       cubic polynomial kernel. The parsing speed was
+While Right-Arc requires searching for the MPHC                         evaluated on a Core2Duo (2.53 GHz) machine.
+in ti , this is not the case for Left-Arc1 .
+   The key to obtaining an accurate tree-based                          4.2 Parsing Accuracy
+parsing model is to extend the search space while                       We measured the ratio of words assigned correct
+at the same time providing ways to narrow down                          heads to all words (accuracy), and the ratio of sen-
+the space and find important information, such as                       tences with completely correct dependency graphs
+the MPHC, for proper judgment of transitions.                           to all sentences (complete match). In the evalua-
+   The three-class classifier is constructed as fol-                    tion, we consistently excluded punctuation marks.
+lows. The dependency relation between the target                           Table 4 compares our results for the proposed
+trees is represented by the three words wi , MPHC,                      method with those reported in some previous
+and wj . Therefore, the features are designed to in-                    works using equivalent training and test data.
+corporate these words, their relational words, and                      The first column lists the four previous methods
+the three words next to wj . Table 3 lists the exact                    and our method, while the second through fourth
+set of features used in this work. Since this transi-                   columns list the accuracy, complete match accu-
+tion selection procedure presumes selection of the                      racy, and time complexity, respectively, for each
+MPHC, the result of mphc(ti , tj ) is also incorpo-                     method. Here, we obtained the scores for the pre-
+rated among the features.                                               vious works from the corresponding articles listed
+                                                                        in the first column. Note that every method used
+4 Evaluation                                                            different features, which depend on the method.
+4.1 Data and Experimental Setting                                          The proposed method achieved higher accuracy
+                                                                        than did the previous deterministic models. Al-
+In our experimental evaluation, we used Yamada’s                        though the accuracy of our method did not reach
+head rule to extract unlabeled dependencies from                        that of (McDonald and Pereira, 2006), the scores
+the Wall Street Journal section of a Penn Treebank.                     were competitive even though our method is de-
+Sections 2-21 were used as the training data, and                       terministic. These results show the capability of
+section 23 was used as the test data. This test data                    the tree-based approach in effectively extending
+   1
+     The head word of wi can only be wj without searching               the search space.
+within tj , because the relations between the other words in tj
+and wi have already been inferred from the decisions made               4.3 Parsing Time
+within previous transitions. If tj has a child wk that could
+become the head of wi under projectivity, this wk must be               Such extension of the search space also concerns
+located between wi and wj . The fact that wk ’s head is wj              the speed of the method. Here, we compare its
+means that there were two phases before ti and tj (i.e., wi
+and wj ) became the target:                                             computational time with that of Nivre’s method.
+    • ti and tk became the target, and Shift was selected.              We re-implemented Nivre’s method to use SVMs
+    • tk and tj became the target, and Left-Arc was selected.           with cubic polynomial kernel, similarly to our
+The first phase precisely indicates that wi and wk are unre-
+                                                                           2
+lated.                                                                         http://svmlight.joachims.org/
+
+
+                                                                  192
+
+
+                                                       Table 4: Dependency parsing performance.
+                                                               Accuracy   Complete     Time                           Global vs.             Learning
+                                                                           match     complexity                      deterministic            method
+                         McDonald & Pereira (2006)               91.5       42.1       O(n3 )                           global                 MIRA
+                          McDonald et al. (2005)                 90.9       37.5       O(n3 )                           global                 MIRA
+                        Yamada & Matsumoto (2003)                90.4       38.4       O(n2 )                        deterministic    support vector machine
+                         Goldberg & Elhadad (2010)               89.7       37.5     O(n log n)                      deterministic     structured perceptron
+                               Nivre (2004)                      87.1       30.4       O(n)                          deterministic    memory based learning
+                             Proposed method                     91.3       41.7       O(n2 )                        deterministic    support vector machine
+
+                                        Nivre’s Method                                                                        Proposed Method
+                            60
+
+
+
+
+                                                                                                                60
+                            50
+
+
+
+
+                                                                                                                50
+       parsing time [sec]
+
+
+
+
+                                                                                           parsing time [sec]
+                            40
+
+
+
+
+                                                                                                                40
+                            30
+
+
+
+
+                                                                                                                30
+                            20
+
+
+
+
+                                                                                                                20
+                            10
+
+
+
+
+                                                                                                                10
+                            0
+
+
+
+
+                                                                                                                0
+                                 10    20       30        40       50                                                  10      20       30        40     50
+                                      length of input sentence                                                                length of input sentence
+
+                                                            Figure 3: Parsing time for sentences.
+
+
+method. Figure 3 shows plots of the parsing times                                     Jason M. Eisner. 1996. Three new probabilistic models
+for all sentences in the test data. The average pars-                                    for dependency parsing: An exploration. Proceedings of
+                                                                                         COLING, pp. 340-345.
+ing time for our method was 8.9 sec, whereas that
+                                                                                      Yoav Goldberg and Michael Elhadad. 2010. An Efficient Al-
+for Nivre’s method was 7.9 sec.                                                         gorithm for Easy-First Non-Directional Dependency Pars-
+   Although the worst-case time complexity for                                          ing. Proceedings of NAACL.
+Nivre’s method is O(n) and that for our method is                                     Masakazu Iwatate, Masayuki Asahara, and Yuji Matsumoto.
+O(n2 ), worst-case situations (e.g., all words hav-                                     2008. Japanese dependency parsing using a tournament
+ing heads on their left) did not appear frequently.                                     model. Proceedings of COLING, pp. 361–368.
+This can be seen from the sparse appearance of the                                    Terry Koo, Xavier Carreras, and Michael Collins. 2008.
+                                                                                         Simple semi-supervised dependency parsing. Proceed-
+upper bound in the second figure.                                                        ings of ACL, pp. 595–603.
+                                                                                      Taku Kudo and Yuji Matsumoto. 2002. Japanese depen-
+5 Conclusion                                                                            dency analysis using cascaded chunking Proceedings of
+                                                                                        CoNLL, pp. 63–69.
+We have proposed a tree-based model that decides
+head-dependency relations between trees instead                                       Ryan McDonald, Koby Crammer, and Fernando Pereira.
+                                                                                        2005.     Online large-margin training of dependency
+of between words. This extends the search space                                         parsers. Proceedings of ACL, pp. 91–98.
+to obtain the best head for a word within a deter-                                    Ryan McDonald and Fernando Pereira. 2006. Online learn-
+ministic model. The tree-based idea is potentially                                      ing of approximate dependency parsing algorithms. Pro-
+applicable to various previous parsing methods; in                                      ceedings of the EACL, pp. 81–88.
+this paper, we have applied it to enhance Nivre’s                                     Joakim Nivre. 2003. An efficient algorithm for projective
+method.                                                                                  dependency parsing. Proceedings of IWPT, pp. 149–160.
+
+   Our tree-based model outperformed various de-                                      Joakim Nivre. 2008. Algorithms for deterministic incremen-
+                                                                                         tal dependency parsing. Computational Linguistics, vol.
+terministic parsing methods reported previously.                                         34, num. 4, pp. 513–553.
+Although the worst-case time complexity of our
+                                                                                      Joakim Nivre and Mario Scholz. 2004. Deterministic depen-
+method is O(n2 ), the average parsing time is not                                        dency parsing of English text. Proceedings of COLING,
+much slower than O(n).                                                                   pp. 64–70.
+                                                                                      Hiroyasu Yamada and Yuji Matsumoto. 2003. Statistical
+References                                                                               dependency analysis with support vector machines. Pro-
+                                                                                         ceedings of IWPT, pp. 195–206.
+Xavier Carreras. 2007. Experiments with a higher-order
+  projective dependency parse. Proceedings of the CoNLL                               Yue Zhang and Stephen Clark. 2008. A tale of two parsers:
+  Shared Task Session of EMNLP-CoNLL, pp. 957-961.                                      investigating and combining graph-based and transition-
+                                                                                        based dependency parsing using beamsearch. Proceed-
+Michael A. Covington. 2001. A fundamental algorithm for                                 ings of EMNLP, pp. 562–571.
+  dependency parsing. Proceedings of ACM, pp. 95-102.
+
+
+                                                                                193
+

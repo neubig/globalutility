@@ -1,0 +1,343 @@
+               An Entity-Level Approach to Information Extraction
+
+                 Aria Haghighi                                               Dan Klein
+             UC Berkeley, CS Division                                  UC Berkeley, CS Division
+           aria42@cs.berkeley.edu                                    klein@cs.berkeley.edu
+
+
+
+
+                     Abstract                                                               Template
+                                                                        SELLER        BUSINESS      ACQUIRED      PURCHASER
+    We present a generative model of                           (a)
+                                                                      CSR Limited    Oil and Gas    Delhi Fund      Esso Inc.
+    template-filling in which coreference                                                  Document
+    resolution and role assignment are jointly                       [S CSR] has said that [S it] has sold [S its] [B oil
+    determined. Underlying template roles                      (b)   interests] held in [A Delhi Fund]. [P Esso Inc.] did not
+    first generate abstract entities, which in                       disclose how much [P they] paid for [A Dehli].
+    turn generate concrete textual mentions.                   Figure 1: Example of the corporate acquisitions role-filling
+    On the standard corporate acquisitions                     task. In (a), an example template specifying the entities play-
+                                                               ing each domain role. In (b), an example document with
+    dataset, joint resolution in our entity-level              coreferent mentions sharing the same role label. Note that
+    model reduces error over a mention-level                   pronoun mentions provide direct clues to entity roles.
+    discriminative approach by up to 20%.
+1   Introduction                                               can naturally incorporate unannotated data, which
+                                                               further increases accuracy.
+Template-filling information extraction (IE) sys-
+tems must merge information across multiple sen-
+tences to identify all role fillers of interest. For           2     Problem Setting
+instance, in the MUC4 terrorism event extrac-
+tion task, the entity filling the individual perpetra-         Figure 1(a) shows an example template-filling
+tor role often occurs multiple times, variously as             task from the corporate acquisitions domain (Fre-
+proper, nominal, or pronominal mentions. How-                  itag, 1998).1 We have a template of K roles
+ever, most template-filling systems (Freitag and               (PURCHASER, AMOUNT, etc.) and we must iden-
+McCallum, 2000; Patwardhan and Riloff, 2007)                   tify which entity (if any) fills each role (CSR Lim-
+assign roles to individual textual mentions using              ited, etc.). Often such problems are modeled at the
+only local context as evidence, leaving aggrega-               mention level, directly labeling individual men-
+tion for post-processing. While prior work has                 tions as in Figure 1(b). Indeed, in this data set,
+acknowledged that coreference resolution and dis-              the mention-level perspective is evident in the gold
+course analysis are integral to accurate role identi-          annotations, which ignore pronominal references.
+fication, to our knowledge no model has been pro-              However, roles in this domain appear in several lo-
+posed which jointly models these phenomena.                    cations throughout the document, with pronominal
+   In this work, we describe an entity-centered ap-            mentions often carrying the critical information
+proach to template-filling IE problems. Our model              for template filling. Therefore, Section 3 presents
+jointly merges surface mentions into underlying                a model in which entities are explicitly modeled,
+entities (coreference resolution) and assigns roles            naturally merging information across all mention
+to those discovered entities. In the generative pro-           types and explicitly representing latent structure
+cess proposed here, document entities are gener-               very much like the entity-level template structure
+ated for each template role, along with a set of               from Figure 1(a).
+non-template entities. These entities then generate
+mentions in a process sensitive to both lexical and
+                                                                   1
+structural properties of the mention. Our model                      In Freitag (1998), some of these fields are split in two to
+                                                               distinguish a full versus abbreviated name, but we ignore this
+outperforms a discriminative mention-level base-               distinction. Also we ignore the status field as it doesn’t apply
+line. Moreover, since our model is generative, it              to entities and its meaning is not consistent.
+
+
+                                                         291
+                       Proceedings of the ACL 2010 Conference Short Papers, pages 291–295,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                Purchaser Role                             Role Entity Parameters        Other Entity Parameters
+
+         r             θr                   fr                                    ....     ....
+                                                                 R1        R2                          RK
+                [bought: 0.02,           [2: 0.18,
+    GOV-NSUBJ obtained:0.015,             3:0.12,
+              acquired: 0.01,...]         1: 0.09,...]
+                  [Inc.: 0.02,           [1: 0.19,                                                                     Role
+    HEAD-NAM     Corp.:0.015,             2:0.14,                               Document                               Priors
+                 Ltd.: 0.01,...]          0: 0.08,...]    Role                              Other
+               [company: 0.02,           [1: 0.02,       Entites                           Entities                        φ
+    MOD-APPOS     firm:0.015,             0:0.015,
+                group: 0.01,...]          2: 0.01,...]
+                                                                 E1        E2 ....            ....     EK
+               Purchaser Entity
+         r                     Lr                                               Entity Indicators                          1
+    HEAD-NAM           Google, GOOG                         Z1        Z2     Z3          ...........        Zn      Purchaser Mention
+    HEAD-NOM                company
+                                                                                   Mentions                            r          w
+     MOD-NN              search, giant                                                                             HEAD-NAM     Google
+                                                           M1         M2    M3           ...........        Mn
+    MOD-PREP                California                                                                             GOV-NSUBJ    bought
+
+
+
+Figure 2: Graphical model depiction of our generative model described in Section 3. Sample values are illustrated for key
+parameters and latent variables.
+
+3      Model                                                                     roles include the K template roles as well as ‘junk’
+                                                                                 roles to represent entities which do not fill a tem-
+We describe our generative model for a document,                                 plate role (see Section 5.2). Each role R is rep-
+which has many similarities to the coreference-                                  resented as a mapping between properties r and
+only model of Haghighi and Klein (2010), but                                     pairs of multinomials (θr , fr ). θr is a unigram dis-
+which integrally models template role-fillers. We                                tribution of words for property r that are seman-
+briefly describe the key abstractions of our model.                              tically licensed for the role (e.g., being the sub-
+   Mentions: A mention is an observed textual                                    ject of “acquired” for the ACQUIRED role). fr is a
+reference to a latent real-world entity. Mentions                                “fertility” distribution over the integers that char-
+are associated with nodes in a parse tree and are                                acterizes entity list lengths. Together, these distri-
+typically realized as NPs. There are three ba-                                   butions control the lists Lr for entities which in-
+sic forms of mentions: proper (NAM), nominal                                     stantiate the role.
+(NOM), and pronominal (PRO). Each mention M
+is represented as collection of key-value pairs.                                    We first present a broad sketch of our model’s
+The keys are called properties and the values are                                components and then detail each in a subsequent
+words. The set of properties utilized here, de-                                  section. We temporarily assume that all men-
+noted R, are the same as in Haghighi and Klein                                   tions belong to a template role-filling entity; we
+(2010) and consist of the mention head, its depen-                               lift this restriction in Section 5.2. First, a se-
+dencies, and its governor. See Figure 2 for a con-                               mantic component generates a sequence of enti-
+crete example. Mention types are trivially deter-                                ties E = (E1 , . . . , EK ), where each Ei is gen-
+mined from mention head POS tag. All mention                                     erated from a corresponding role Ri . We use
+properties and their values are observed.                                        R = (R1 , . . . , RK ) to denote the vector of tem-
+   Entities: An entity is a specific individual or                               plate role parameters. Note that this work assumes
+object in the world. Entities are always latent in                               that there is a one-to-one mapping between entities
+text. Where a mention has a single word for each                                 and roles; in particular, at most one entity can fill
+property, an entity has a list of signature words.                               each role. This assumption is appropriate for the
+Formally, entities are mappings from properties                                  domain considered here.
+r ∈ R to lists Lr of “canonical” words which that                                   Once entities have been generated, a dis-
+entity uses for that property.                                                   course component generates which entities will be
+   Roles: The elements we have described so far                                  evoked in each of the n mention positions. We
+are standard in many coreference systems. Our                                    represent these choices using entity indicators de-
+model performs role-filling by assuming that each                                noted by Z = (Z1 , . . . , Zn ). This component uti-
+entity is drawn from an underlying role. These                                   lizes a learned global prior φ over roles. The Zi in-
+
+
+                                                                           292
+
+
+dicators take values in 1, . . . , K indicating the en-                   restricted to antecedent mention positions j 0 which
+tity number (and thereby the role) underlying the                         occur earlier in the same sentence or in the previ-
+ith mention position. Finally, a mention genera-                          ous sentence.5
+tion component renders each mention conditioned
+on the underlying entity and role. Formally:                              3.3       Mention Generation
+P (E, Z, M|R, φ) =                                                        Once the entity indicator has been drawn, we gen-
+      K
+                    !                                                     erate words associated with mention conditioned
+                                                                          on the underlying entity E and role R. For each
+     Y
+        P (Ei |Ri )                 [Semantic, Sec. 3.1]
+      i=1                                                                 mention property r associated with the mention,
+   
+       n
+                                                                         a word w is drawn utilizing E’s word list Lr as
+                                                                          well as the multinomials (fr , θr ) from role R. The
+       Y
+            P (Zj |Z<j , φ)          [Discourse, Sec. 3.2]
+       j=1                                                                word w is drawn according to,
+                                
+       n                                                                                                  1 [w ∈ Lr ]
+                                                                          P (w|E, R)=(1 − αr )                        + αr P (w|θr )
+       Y
+            P (Mj |EZj , RZj )         [Mention, Sec. 3.3]                                              len(Lr )
+       j=1
+                                                                          For each property r, there is a hyper-parameter αr
+                                                                          which interpolates between selecting a word uni-
+3.1    Semantic Component                                                 formly from the entity list Lr and drawing from
+Each role R generates an entity E as follows: for                         the underlying role distribution θr . Intuitively, a
+each mention property r, a word list, Lr , is drawn                       small αr indicates that an entity prefers to re-use a
+by first generating a list length from the corre-                         small number of words for property r. This is typi-
+sponding fr distribution in R.2 This list is then                         cally the case for proper and nominal heads as well
+populated by an independent draw from R’s uni-                            as modifiers. At the other extreme, setting αr to 1
+gram distribution θr . Formally, for each r ∈ R, an                       indicates the property isn’t particular to the entity
+entity word list is drawn according to,3                                  itself, but rather always drawn from the underly-
+                                   Y                                      ing role distribution. We set αr to 1 for pronoun
+   P (Lr |R) = P (len(Lr )|fr )         P (w|θr )                         heads as well as for the governor properties.
+                                          w∈Lr
+
+3.2    Discourse Component                                                4       Learning and Inference
+The discourse component draws the entity indica-                          Since we will make use of unannotated data (see
+tor Zj for the jth mention according to,                                  Section 5), we utilize a variational EM algorithm
+                   (
+                     P (Zj |φ), if non-pronominal                         to learn parameters R and φ. The E-Step re-
+P (Zj |Z<j , φ) =    P                       0                            quires the posterior P (E, Z|R, M, φ), which is
+                        j 0 1[Zj = Zj 0 ]P (j |j), o.w.
+                                                                          intractable to compute exactly. We approximate
+When the jth mention is non-pronominal, we draw                           it using a surrogate variational distribution of the
+Zj from φ, a global prior over the K roles. When                          following factored form:
+                                                                                                        ! n             
+Mj is a pronoun, we first draw an antecedent men-                                            K
+                                                                                             Y              Y
+tion position j 0 , such that j 0 < j, and then we set                         Q(E, Z) =        qi (Ei )        rj (Zj )
+Zj = Zj 0 . The antecedent position is selected ac-                                                 i=1               j=1
+cording to the distribution,
+                                                                          Each rj (Zj ) is a distribution over the entity in-
+         P (j 0 |j) ∝ exp{−γ T REE D IST(j 0 , j)}                        dicator for mention Mj , which approximates the
+where T REE D IST(j 0 ,j) represents the tree distance                    true posterior of Zj . Similarly, qi (Ei ) approxi-
+between the parse nodes for Mj and Mj 0 .4 Mass is                        mates the posterior over entity Ei which is asso-
+                                                                          ciated with role Ri . As is standard, we iteratively
+    2
+      There is one exception: the sizes of the proper and nom-            update each component distribution to minimize
+inal head property lists are jointly generated, but their word
+lists are still independently populated.                                  KL-divergence, fixing all other distributions:
+    3
+      While, in principle, this process can yield word lists with
+duplicate words, we constrain the model during inference to
+                                                                              qi ← argmin KL(Q(E, Z)|P (E, Z|M, R, φ)
+                                                                                          qi
+not allow that to occur.
+    4
+      Sentence parse trees are merged into a right-branching                      ∝ exp{EQ/qi ln P (E, Z|M, R, φ))}
+document parse tree. This allows us to extend tree distance to
+                                                                              5
+inter-sentence nodes.                                                             The sole parameter γ is fixed at 0.1.
+
+
+                                                                    293
+
+
+                        Ment Acc.         Ent. Acc.                  documents, proper and (usually) nominal men-
+         INDEP            60.0              43.7                     tions are annotated with roles, while pronouns are
+         JOINT            64.6              54.2                     not. We preprocess each document identically to
+         JOINT+PRO        68.2              57.8                     Haghighi and Klein (2010): we sentence-segment
+                                                                     using the OpenNLP toolkit, parse sentences with
+Table 1: Results on corporate acquisition tasks with given
+role mention boundaries. We report mention role accuracy             the Berkeley Parser (Petrov et al., 2006), and ex-
+and entity role accuracy (correctly labeling all entity men-         tract mention properties from parse trees and the
+tions).                                                              Stanford Dependency Extractor (de Marneffe et
+                                                                     al., 2006).
+  For example, the update for a non-pronominal
+entity indicator component rj (·) is given by:6                      5.1    Gold Role Boundaries
+        ln rj (z) ∝ EQ/rj ln P (E, Z, M|R, φ)                        We first consider the simplified task where role
+          ∝ Eqz ln (P (z|φ)P (Mj |Ez , Rz ))                         mention boundaries are given. We map each la-
+                                                                     beled token span in training and test data to a parse
+          = ln P (z|φ) + Eqz ln P (Mj |Ez , Rz )
+                                                                     tree node that shares the same head. In this set-
+A similar update is performed on pronominal en-                      ting, the role-filling task is a collective classifica-
+tity indicator distributions, which we omit here for                 tion problem, since we know each mention is fill-
+space. The update for variational entity distribu-                   ing some role.
+tion is given by:                                                       As our baseline, INDEP, we built a maxi-
+                                                                     mum entropy model which independently classi-
+    ln qi (ei ) ∝ EQ/qi ln P (E, Z, M|R, φ)                          fies each mention’s role. It uses features as similar
+                                                                     as possible to the generative model (and more), in-
+                                                    
+                                Y
+      ∝ E{rj } ln P (ei |Ri )       P (Mj |ei , Ri )               cluding the head word, typed dependencies of the
+                                j:Zj =i                              head, various tree features, governing word, and
+                           X                                         several conjunctions of these features as well as
+      = ln P (ei |Ri ) +       rj (i) ln P (Mj |ei , Ri )            coarser versions of lexicalized features. This sys-
+                           j
+                                                                     tem yields 60.0 mention labeling accuracy (see Ta-
+It is intractable to enumerate all possible entities                 ble 1). The primary difficulty in classification is
+ei (each consisting of several sets of words). We                    the disambiguation amongst the acquired, seller,
+instead limit the support of qi (ei ) to several sam-                and purchaser roles, which have similar internal
+pled entities. We obtain entity samples by sam-                      structure, and differ primarily in their semantic
+pling mention entity indicators according to rj .                    contexts. Our entity-centered model, JOINT in Ta-
+For a given sample, we assume that Ei consists                       ble 1, has no latent variables at training time in this
+of the non-pronominal head words and modifiers                       setting, since each role maps to a unique entity.
+of mentions such that Zj has sampled value i.                        This model yields 64.6, outperforming INDEP.7
+   During the E-Step, we perform 5 iterations of                        During development, we noted that often the
+updating each variational factor, which results in                   most direct evidence of the role of an entity was
+an approximate posterior distribution. Using ex-                     associated with pronoun usage (see the first “it”
+pectations from this approximate posterior, our M-                   in Figure 1). Training our model with pronominal
+Step is relatively straightforward. The role param-                  mentions, whose roles are latent variables at train-
+eters Ri are computed from the qi (ei ) and rj (z)                   ing time, improves accuracy to 68.2.8
+distributions, and the global role prior φ from the
+                                                                     5.2    Full Task
+non-pronominal components of rj (z).
+                                                                     We now consider the more difficult setting where
+5     Experiments                                                    role mention boundaries are not provided at test
+We present results on the corporate acquisitions                     time. In this setting, we automatically extract
+task, which consists of 600 annotated documents                      mentions from a parse tree using a heuristic ap-
+split into a 300/300 train/test split. We use 50                        7
+                                                                           We use the mode of the variational posteriors rj (Zj ) to
+training documents as a development set. In all                      make predictions (see Section 4).
+                                                                         8
+                                                                           While this approach incorrectly assumes that all pro-
+   6
+     For simplicity of exposition, we omit terms where Mj is         nouns have antecedents amongst our given mentions, this did
+an antecedent to a pronoun.                                          not appear to degrade performance.
+
+
+                                                               294
+
+
+                       ROLE ID                 OVERALL                  6   Conclusion
+                  P      R        F1     P       R        F1
+  INDEP         79.0    65.5     71.6   48.6    40.3     44.0           We have presented a joint generative model of
+  JOINT+PRO     80.3    69.2     74.3   53.4    46.4     49.7           coreference resolution and role-filling information
+  BEST          80.1    70.1     74.8   57.3    49.2     52.9           extraction. This model makes role decisions at
+Table 2: Results on corporate acquisitions data where men-              the entity, rather than at the mention level. This
+tion boundaries are not provided. Systems must determine
+which mentions are template role-fillers as well as label them.
+                                                                        approach naturally aggregates information across
+ROLE ID only evaluates the binary decision of whether a                 multiple mentions, incorporates unannotated data,
+mention is a template role-filler or not. OVERALL includes              and yields strong performance.
+correctly labeling mentions. Our BEST system, see Sec-
+tion 5, adds extra unannotated data to our JOINT+PRO sys-               Acknowledgements: This project is funded in
+tem.
+                                                                        part by the Office of Naval Research under MURI
+                                                                        Grant No. N000140911081.
+proach. Our mention extraction procedure yields
+95% recall over annotated role mentions and 45%
+precision.9 Using extracted mentions as input, our                      References
+task is to label some subset of the mentions with
+                                                                        M. C. de Marneffe, B. Maccartney, and C. D. Man-
+template roles. Since systems can label mentions                          ning. 2006. Generating typed dependency parses
+as non-role bearing, only recall is critical to men-                      from phrase structure parses. In LREC.
+tion extraction. To adapt INDEP to this setting, we
+                                                                        Dayne Freitag and Andrew McCallum. 2000. Infor-
+first use a binary classifier trained to distinguish                      mation extraction with hmm structures learned by
+role-bearing mentions. The baseline then classi-                          stochastic optimization. In Association for the Ad-
+fies mentions which pass this first phase as before.                      vancement of Artificial Intelligence (AAAI).
+We add ‘junk’ roles to our model to flexibly model                      Dayne Freitag. 1998. Machine learning for informa-
+entities that do not correspond to annotated tem-                         tion extraction in informal domains.
+plate roles. During training, extracted mentions
+which are not matched in the labeled data have                          A. Haghighi and D. Klein. 2010. Coreference resolu-
+                                                                          tion in a modular, entity-centered model. In North
+posteriors which are constrained to be amongst the                        American Association of Computational Linguistics
+‘junk’ roles.                                                             (NAACL).
+   We first evaluate role identification (ROLE ID in
+                                                                        P. Liang and D. Klein. 2007. Structured Bayesian non-
+Table 2), the task of identifying mentions which                           parametric models with variational inference (tuto-
+play some role in the template. The binary clas-                           rial). In Association for Computational Linguistics
+sifier for INDEP yields 71.6 F1 . Our JOINT+PRO                            (ACL).
+system yields 74.3. On the task of identifying and                      S. Patwardhan and E. Riloff. 2007. Effective infor-
+correctly labeling role mentions, our model out-                           mation extraction with semantic affinity patterns and
+performs INDEP as well (OVERALL in Table 2). As                            relevant regions. In Joint Conference on Empirical
+our model is generative, it is straightforward to uti-                     Methods in Natural Language Processing.
+lize totally unannotated data. We added 700 fully                       S. Patwardhan and E Riloff. 2009. A unified model of
+unannotated documents from the mergers and ac-                             phrasal and sentential evidence for information ex-
+quisitions portion of the Reuters 21857 corpus.                            traction. In Empirical Methods in Natural Language
+Training JOINT+PRO on this data as well as our                             Processing (EMNLP).
+original training data yields the best performance                      Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+(BEST in Table 2).10                                                       Klein. 2006. Learning accurate, compact, and
+   To our knowledge, the best previously pub-                              interpretable tree annotation. In Proceedings of
+                                                                           the 21st International Conference on Computational
+lished results on this dataset are from Siefkes                            Linguistics and 44th Annual Meeting of the Associa-
+(2008), who report 45.9 weighted F1 . Our BEST                             tion for Computational Linguistics, pages 433–440,
+system evaluated in their slightly stricter way                            Sydney, Australia, July. Association for Computa-
+yields 51.1.                                                               tional Linguistics.
+
+   9
+      Following Patwardhan and Riloff (2009), we match ex-              Christian Siefkes. 2008. An Incrementally Train-
+tracted mentions to labeled spans if the head of the mention              able Statistical Approach to Information Extraction:
+matches the labeled span.                                                 Based on Token Classification and Rich Context
+   10
+      We scaled expected counts from the unlabeled data so                Model. VDM Verlag, Saarbrücken, Germany, Ger-
+that they did not overwhelm those from our (partially) labeled            many.
+data.
+
+
+                                                                  295
+

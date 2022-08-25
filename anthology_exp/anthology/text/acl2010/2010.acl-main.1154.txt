@@ -1,0 +1,688 @@
+Knowledge-rich Word Sense Disambiguation Rivaling Supervised Systems
+
+             Simone Paolo Ponzetto                                      Roberto Navigli
+      Department of Computational Linguistics                      Dipartimento di Informatica
+              Heidelberg University                               Sapienza Università di Roma
+     ponzetto@cl.uni-heidelberg.de                               navigli@di.uniroma1.it
+
+
+
+                     Abstract                                contained in such resources is typically insuffi-
+                                                             cient for high-performance WSD (Cuadros and
+    One of the main obstacles to high-                       Rigau, 2006). Several methods have been pro-
+    performance Word Sense Disambigua-                       posed to automatically extend existing resources
+    tion (WSD) is the knowledge acquisi-                     (cf. Section 2) and it has been shown that highly-
+    tion bottleneck. In this paper, we present               interconnected semantic networks have a great im-
+    a methodology to automatically extend                    pact on WSD (Navigli and Lapata, 2010). How-
+    WordNet with large amounts of seman-                     ever, to date, the real potential of knowledge-rich
+    tic relations from an encyclopedic re-                   WSD systems has been shown only in the presence
+    source, namely Wikipedia. We show                        of either a large manually-developed extension of
+    that, when provided with a vast amount                   WordNet (Navigli and Velardi, 2005) or sophisti-
+    of high-quality semantic relations, sim-                 cated WSD algorithms (Agirre et al., 2009).
+    ple knowledge-lean disambiguation algo-                     The contributions of this paper are two-fold.
+    rithms compete with state-of-the-art su-                 First, we relieve the knowledge acquisition bot-
+    pervised WSD systems in a coarse-grained                 tleneck by developing a methodology to extend
+    all-words setting and outperform them on                 WordNet with millions of semantic relations. The
+    gold-standard domain-specific datasets.                  relations are harvested from an encyclopedic re-
+                                                             source, namely Wikipedia. Wikipedia pages are
+1   Introduction                                             automatically associated with WordNet senses,
+Knowledge lies at the core of Word Sense Dis-                and topical, semantic associative relations from
+ambiguation (WSD), the task of computation-                  Wikipedia are transferred to WordNet, thus pro-
+ally identifying the meanings of words in context            ducing a much richer lexical resource. Sec-
+(Navigli, 2009b). In the recent years, two main              ond, two simple knowledge-based algorithms that
+approaches have been studied that rely on a fixed            exploit our extended WordNet are applied to
+sense inventory, i.e., supervised and knowledge-             standard WSD datasets. The results show that
+based methods. In order to achieve high perfor-              the integration of vast amounts of semantic re-
+mance, supervised approaches require large train-            lations in knowledge-based systems yields per-
+ing sets where instances (target words in con-               formance competitive with state-of-the-art super-
+text) are hand-annotated with the most appropri-             vised approaches on open-text WSD. In addition,
+ate word senses. Producing this kind of knowl-               we support previous findings from Agirre et al.
+edge is extremely costly: at a throughput of one             (2009) that in a domain-specific WSD scenario
+sense annotation per minute (Edmonds, 2000)                  knowledge-based systems perform better than su-
+and tagging one thousand examples per word,                  pervised ones, and we show that, given enough
+dozens of person-years would be required for en-             knowledge, simple algorithms perform better than
+abling a supervised classifier to disambiguate all           more sophisticated ones.
+the words in the English lexicon with high accu-
+                                                             2    Related Work
+racy. In contrast, knowledge-based approaches ex-
+ploit the information contained in wide-coverage             In the last three decades, a large body of work
+lexical resources, such as WordNet (Fellbaum,                has been presented that concerns the develop-
+1998). However, it has been demonstrated that                ment of automatic methods for the enrichment of
+the amount of lexical and semantic information               existing resources such as WordNet. These in-
+
+
+                                                       1522
+      Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1522–1531,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+clude proposals to extract semantic information        show that knowledge harvested from Wikipedia
+from dictionaries (e.g. Chodorow et al. (1985)         can be used effectively to improve the perfor-
+and Rigau et al. (1998)), approaches using lexico-     mance of a WSD system. Our proposal builds on
+syntactic patterns (Hearst, 1992; Cimiano et al.,      previous insights from Bunescu and Paşca (2006)
+2004; Girju et al., 2006), heuristic methods based     and Mihalcea (2007) that pages in Wikipedia can
+on lexical and semantic regularities (Harabagiu et     be taken as word senses. Mihalcea (2007) manu-
+al., 1999), taxonomy-based ontologization (Pen-        ally maps Wikipedia pages to WordNet senses to
+nacchiotti and Pantel, 2006; Snow et al., 2006).       perform lexical-sample WSD. We extend her pro-
+Other approaches include the extraction of seman-      posal in three important ways: (1) we fully autom-
+tic preferences from sense-annotated (Agirre and       atize the mapping between Wikipedia pages and
+Martinez, 2001) and raw corpora (McCarthy and          WordNet senses; (2) we use the mappings to en-
+Carroll, 2003), as well as the disambiguation of       rich an existing resource, i.e. WordNet, rather than
+dictionary glosses based on cyclic graph patterns      annotating text with sense labels; (3) we deploy
+(Navigli, 2009a). Other works rely on the dis-         the knowledge encoded by this mapping to per-
+ambiguation of collocations, either obtained from      form unrestricted WSD, rather than apply it to a
+specialized learner’s dictionaries (Navigli and Ve-    lexical sample setting.
+lardi, 2005) or extracted by means of statistical         Knowledge from Wikipedia is injected into a
+techniques (Cuadros and Rigau, 2008), e.g. based       WSD system by means of a mapping to Word-
+on the method proposed by Agirre and de Lacalle        Net. Previous efforts aimed at automatically link-
+(2004). But while most of these methods represent      ing Wikipedia to WordNet include full use of the
+state-of-the-art proposals for enriching lexical and   first WordNet sense heuristic (Suchanek et al.,
+taxonomic resources, none concentrates on aug-         2008), a graph-based mapping of Wikipedia cat-
+menting WordNet with associative semantic rela-        egories to WordNet synsets (Ponzetto and Nav-
+tions for many domains on a very large scale. To       igli, 2009), a model based on vector spaces (Ruiz-
+overcome this limitation, we exploit Wikipedia, a      Casado et al., 2005) and a supervised approach
+collaboratively generated Web encyclopedia.            using keyword extraction (Reiter et al., 2008).
+   The use of collaborative contributions from vol-    These latter methods rely only on text overlap
+unteers has been previously shown to be beneficial     techniques and neither they take advantage of the
+in the Open Mind Word Expert project (Chklovski        input from Wikipedia being semi-structured, e.g.
+and Mihalcea, 2002). However, its current status       hyperlinked, nor they propose a high-performing
+indicates that the project remains a mainly aca-       probabilistic formulation of the mapping problem,
+demic attempt. In contrast, due to its low en-         a task to which we turn in the next section.
+trance barrier and vast user base, Wikipedia pro-
+                                                       3     Extending WordNet
+vides large amounts of information at practically
+no cost. Previous work aimed at transforming           Our approach consists of two main phases: first,
+its content into a knowledge base includes open-       a mapping is automatically established between
+domain relation extraction (Wu and Weld, 2007),        Wikipedia pages and WordNet senses; second, the
+the acquisition of taxonomic (Ponzetto and Strube,     relations connecting Wikipedia pages are trans-
+2007a; Suchanek et al., 2008; Wu and Weld, 2008)       ferred to WordNet. As a result, an extended ver-
+and other semantic relations (Nastase and Strube,      sion of WordNet is produced, that we call Word-
+2008), as well as lexical reference rules (Shnarch     Net++. We present the two resources used in our
+et al., 2009). Applications using the knowledge        methodology in Section 3.1. Sections 3.2 and 3.3
+contained in Wikipedia include, among others,          illustrate the two phases of our approach.
+text categorization (Gabrilovich and Markovitch,
+2006), computing semantic similarity of texts          3.1    Knowledge Resources
+(Gabrilovich and Markovitch, 2007; Ponzetto and
+                                                       WordNet. Being the most widely used compu-
+Strube, 2007b; Milne and Witten, 2008a), coref-
+                                                       tational lexicon of English in Natural Language
+erence resolution (Ponzetto and Strube, 2007b),
+                                                       Processing, WordNet is an essential resource for
+multi-document summarization (Nastase, 2008),
+                                                       WSD. A concept in WordNet is represented as a
+and text generation (Sauper and Barzilay, 2009).
+                                                       synonym set, or synset, i.e. the set of words which
+  In our work we follow this line of research and      share a common meaning. For instance, the con-
+
+
+                                                   1523
+
+
+cept of soda drink is expressed as:                            mapping methodology linked S ODA ( SOFT DRINK )
+{ pop2n , soda2n , soda pop1n , soda water2n , tonic2n }       to the corresponding WordNet sense soda2n , we
+                                                               would have µ(S ODA ( SOFT DRINK )) = soda2n .
+where each word’s subscripts and superscripts in-                 In order to establish a mapping between the
+dicate their parts of speech (e.g. n stands for noun)          two resources, we first identify different kinds of
+and sense number1 , respectively. For each synset,             disambiguation contexts for Wikipages (Section
+WordNet provides a textual definition, or gloss.               3.2.1) and WordNet senses (Section 3.2.2). Next,
+For example, the gloss of the above synset is: “a              we intersect these contexts to perform the mapping
+sweet drink containing carbonated water and fla-               (see Section 3.2.3).
+voring”.
+                                                               3.2.1   Disambiguation Context of a Wikipage
+Wikipedia. Our second resource, Wikipedia, is
+a collaborative Web encyclopedia composed of                   Given a target Wikipage w which we aim to map
+pages2 . A Wikipedia page (henceforth, Wikipage)               to a WordNet sense of w, we use the following
+presents the knowledge about a specific concept                information as a disambiguation context:
+(e.g. S ODA ( SOFT DRINK )) or named entity (e.g.
+F OOD S TANDARDS AGENCY). The page typi-                       • Sense labels: e.g. given the page S ODA ( SOFT
+cally contains hypertext linked to other relevant                DRINK ) , the words soft and drink are added to
+
+Wikipages. For instance, S ODA ( SOFT DRINK )                     the disambiguation context.
+is linked to C OLA, F LAVORED WATER, L EMON -
+                                                               • Links: the titles’ lemmas of the pages linked
+ADE , and many others. The title of a Wikipage
+(e.g. S ODA ( SOFT DRINK )) is composed of the                   from the Wikipage w (outgoing links). For in-
+lemma of the concept defined (e.g. soda) plus                    stance, the links in the Wikipage S ODA ( SOFT
+                                                                 DRINK ) include soda, lemonade, sugar, etc.
+an optional label in parentheses which specifies
+its meaning in case the lemma is ambiguous
+                                                               • Categories: Wikipages are classified accord-
+(e.g. SOFT DRINK vs. SODIUM CARBONATE). Fi-
+                                                                  ing to one or more categories, which repre-
+nally, some Wikipages are redirections to other
+                                                                  sent meta-information used to categorize them.
+pages, e.g. S ODA ( SODIUM CARBONATE ) redirects
+                                                                  For instance, the Wikipage S ODA ( SOFT DRINK )
+to S ODIUM CARBONATE.
+                                                                  is categorized as SOFT DRINKS. Since many
+3.2   Mapping Wikipedia to WordNet                                categories are very specific and do not appear in
+                                                                  WordNet (e.g., SWEDISH WRITERS or SCI-
+During the first phase of our methodology we aim
+                                                                  ENTISTS WHO COMMITTED SUICIDE),
+to establish links between Wikipages and Word-
+                                                                  we use the lemmas of their syntactic heads as
+Net senses. Formally, given the entire set of pages
+                                                                  disambiguation context (i.e. writer and scien-
+SensesWiki and WordNet senses SensesWN , we aim
+                                                                  tist). To this end, we use the category heads
+to acquire a mapping:
+                                                                  provided by Ponzetto and Navigli (2009).
+             µ : SensesWiki → SensesWN ,
+                                                               Given a Wikipage w, we define its disambiguation
+such that, for each Wikipage w ∈ SensesWiki :                  context Ctx(w) as the set of words obtained from
+                                                              some or all of the three sources above.
+           s ∈ SensesWN (w)
+                                   if a link can be
+ µ(w) =                             established,               3.2.2   Disambiguation Context of a WordNet
+           
+                                  otherwise,                         Sense
+
+where SensesWN (w) is the set of senses of the                 Given a WordNet sense s and its synset S , we use
+lemma of w in WordNet. For example, if our                     the following information as disambiguation con-
+                                                               text to provide evidence for a potential link in our
+    1
+      We use WordNet version 3.0. We use word senses to un-    mapping µ:
+ambiguously denote the corresponding synsets (e.g. plane1n
+for { airplane1n , aeroplane1n , plane1n }).
+    2
+      http://download.wikipedia.org. We use the                • Synonymy: all synonyms of s in synset S . For
+English Wikipedia database dump from November 3, 2009,           instance, given the synset of soda2n , all its syn-
+which includes 3,083,466 articles. Throughout this paper, we
+use Sans Serif for words, S MALL C APS for Wikipedia pages       onyms are included in the context (that is, tonic,
+and CAPITALS for Wikipedia categories.                           soda pop, pop, etc.).
+
+
+                                                           1524
+
+
+• Hypernymy/Hyponymy: all synonyms in the               Algorithm 1 The mapping algorithm
+  synsets H such that H is either a hypernym            Input: SensesWiki , SensesWN
+                                                        Output: a mapping µ : SensesWiki → SensesWN
+  (i.e., a generalization) or a hyponym (i.e., a spe-
+  cialization) of S . For example, given soda2n ,        1:   for each w ∈ SensesWiki
+                                                         2:      µ(w) := 
+  we include the words from its hypernym { soft          3:   for each w ∈ SensesWiki
+  drink1n }.                                             4:      if |SensesWiki (w)| = |SensesWN (w)| = 1 then
+                                                         5:          µ(w) := wn1
+• Sisterhood: words from the sisters of S . A sister     6:   for each w ∈ SensesWiki
+                                                         7:      if µ(w) =  then
+  synset S 0 is such that S and S 0 have a common        8:          for each d ∈ SensesWiki s.t. d redirects to w
+  direct hypernym. For example, given soda2n , it        9:              if µ(d) 6=  and µ(d) is in a synset of w then
+  can be found that bitter lemon1n and soda2n are       10:                  µ(w) := sense of w in synset of µ(d); break
+                                                        11:   for each w ∈ SensesWiki
+  sisters. Thus the words bitter and lemon are in-      12:      if µ(w) =  then
+  cluded in the disambiguation context of s.            13:          if no tie occurs then
+                                                        14:              µ(w) :=       argmax p(s|w)
+                                                                                 s∈SensesWN (w)
+• Gloss: the set of lemmas of the content words
+                                                        15: return µ
+  occurring within the gloss of s. For instance,
+  given s = soda2n , defined as “a sweet drink
+  containing carbonated water and flavoring”, we               s ∈ SensesWN (w) (no mapping is established
+  add to the disambiguation context of s the fol-              if a tie occurs, line 13).
+  lowing lemmas: sweet, drink, contain, carbon-
+  ated, water, flavoring.                               As a result of the execution of the algorithm, the
+                                                        mapping µ is returned (line 15). At the heart of the
+Given a WordNet sense s, we define its disam-
+                                                        mapping algorithm lies the calculation of the con-
+biguation context Ctx(s) as the set of words ob-
+                                                        ditional probability p(s|w) of selecting the Word-
+tained from some or all of the four sources above.
+                                                        Net sense s given the Wikipage w. The sense s
+3.2.3 Mapping Algorithm                                 which maximizes this probability can be obtained
+In order to link each Wikipedia page to a Word-         as follows:
+Net sense, we developed a novel algorithm, whose                                                              p(s, w)
+pseudocode is shown in Algorithm 1. The follow-         µ(w) =        argmax        p(s|w)     =    argmax
+                                                                   s∈SensesWN (w)                       s      p(w)
+ing steps are performed:
+                                                                                               =    argmax p(s, w)
+                                                                                                        s
+• Initially (lines 1-2), our mapping µ is empty, i.e.
+  it links each Wikipage w to .                        The latter formula is obtained by observing that
+                                                        p(w) does not influence our maximization, as it is
+• For each Wikipage w whose lemma is monose-            a constant independent of s. As a result, the most
+  mous both in Wikipedia and WordNet (i.e.              appropriate sense s is determined by maximizing
+  |SensesWiki (w)| = |SensesWN (w)| = 1) we map         the joint probability p(s, w) of sense s and page w.
+  w to its only WordNet sense wn1 (lines 3-5).          We estimate p(s, w) as:
+• Finally, for each remaining Wikipage w for
+                                                                                     score(s, w)
+  which no mapping was previously found (i.e.,                  p(s, w) =           X                       ,
+                                                                                            score(s0 , w0 )
+  µ(w) = , line 7), we do the following:
+                                                                            s0 ∈SensesWN (w),
+                                                                            w0 ∈SensesWiki (w)
+  – lines 8-10: for each Wikipage d which is a
+    redirection to w, for which a mapping was           where score(s, w) = |Ctx(s) ∩ Ctx(w)| + 1 (we add
+    previously found (i.e. µ(d) 6= , that is, d is     1 as a smoothing factor). Thus, in our algorithm
+    monosemous in both Wikipedia and Word-              we determine the best sense s by computing the in-
+    Net) and such that it maps to a sense µ(d) in       tersection of the disambiguation contexts of s and
+    a synset S that also contains a sense of w, we      w, and normalizing by the scores summed over all
+    map w to the corresponding sense in S .             senses of w in Wikipedia and WordNet.
+  – lines 11-14: if a Wikipage w has not been
+    linked yet, we assign the most likely sense         3.2.4 Example
+    to w based on the maximization of the con-          We illustrate the execution of our mapping algo-
+    ditional probabilities p(s|w) over the senses       rithm by way of an example. Let us focus on the
+
+
+                                                    1525
+
+
+Wikipage S ODA ( SOFT DRINK ). The word soda                      found in Wikipedia and then integrated into Word-
+is polysemous both in Wikipedia and WordNet,                      Net by means of our mapping. In turn, Word-
+thus lines 3–5 of the algorithm do not concern                    Net++ represents the English-only subset of a
+this Wikipage. Lines 6–14 aim to find a mapping                   larger multilingual resource, BabelNet (Navigli
+µ(S ODA ( SOFT DRINK )) to an appropriate WordNet                 and Ponzetto, 2010), where lexicalizations of the
+sense of the word. First, we check whether a redi-                synsets are harvested for many languages using
+rection exists to S ODA ( SOFT DRINK ) that was pre-              the so-called Wikipedia inter-language links and
+viously disambiguated (lines 8–10). Next, we con-                 applying a machine translation system.
+struct the disambiguation context for the Wikipage
+by including words from its label, links and cate-                4     Experiments
+gories (cf. Section 3.2.1). The context includes,
+among others, the following words: soft, drink,                   We perform two sets of experiments: we first eval-
+cola, sugar. We now construct the disambiguation
+                                                                  uate the intrinsic quality of our mapping (Section
+context for the two WordNet senses of soda (cf.                   4.1) and then quantify the impact of WordNet++
+Section 3.2.2), namely the sodium carbonate (#1)                  for coarse-grained (Section 4.2) and domain-
+and the drink (#2) senses. To do so, we include                   specific WSD (Section 4.3).
+words from their synsets, hypernyms, hyponyms,
+                                                                  4.1    Evaluation of the Mapping
+sisters, and glosses. The context for soda1n in-
+cludes: salt, acetate, chlorate, benzoate. The                    Experimental setting. We first conducted an
+context for soda2n contains instead: soft, drink,                 evaluation of the mapping quality. To create
+cola, bitter, etc. The sense with the largest inter-              a gold standard for evaluation, we started from
+section is #2, so the following mapping is estab-                 the set of all lemmas contained both in Word-
+lished: µ(S ODA ( SOFT DRINK )) = soda2n .                        Net and Wikipedia: the intersection between the
+                                                                  two resources includes 80,295 lemmas which cor-
+3.3    Transferring Semantic Relations                            respond to 105,797 WordNet senses and 199,735
+The output of the algorithm presented in the previ-               Wikipedia pages. The average polysemy is 1.3 and
+ous section is a mapping between Wikipages and                    2.5 for WordNet senses and Wikipages, respec-
+WordNet senses (that is, implicitly, synsets). Our                tively (2.8 and 4.7 when excluding monosemous
+insight is to use this alignment to enable the trans-             words). We selected a random sample of 1,000
+fer of semantic relations from Wikipedia to Word-                 Wikipages and asked an annotator with previous
+Net. In fact, given a Wikipage w we can collect                   experience in lexicographic annotation to provide
+all Wikipedia links occurring in that page. For                   the correct WordNet sense for each page title (an
+any such link from w to w0 , if the two Wikipages                 empty sense label was given if no correct mapping
+are mapped to WordNet senses (i.e., µ(w) 6=                      was possible). 505 non-empty mappings were
+and µ(w0 ) 6= ), we can transfer the correspond-                 found, i.e. Wikipedia pages with a corresponding
+ing edge (µ(w), µ(w0 )) to WordNet. Note that µ(w)                WordNet sense. In order to quantify the quality
+and µ(w0 ) are noun senses, as Wikipages describe                 of the annotations and the difficulty of the task,
+nominal concepts or named entities. We refer to                   a second annotator sense tagged a subset of 200
+this extended resource as WordNet++.                              pages from the original sample. We computed the
+   For instance, consider the Wikipage S ODA                      inter-annotator agreement using the kappa coeffi-
+( SOFT DRINK ). This page contains, among oth-                    cient (Carletta, 1996) and found out that our anno-
+ers, a link to the Wikipage S YRUP. Assuming                      tators achieved an agreement coefficient κ of 0.9,
+µ(S ODA ( SODA DRINK )) = soda2n and µ(S YRUP) =                  indicating almost perfect agreement.
+syrup1n , we can add the corresponding semantic                      Table 1 summarizes the performance of our dis-
+relation (soda2n , syrup1n ) to WordNet3 .                        ambiguation algorithm against the manually anno-
+   Thus, WordNet++ represents an extension of                     tated dataset. Evaluation is performed in terms of
+WordNet which includes semantic associative re-                   standard measures of precision (the ratio of cor-
+lations between synsets. These are originally                     rect sense labels to the non-empty labels output
+                                                                  by the mapping algorithm), recall (the ratio of
+    3
+      Note that such relations are unlabeled. However, for our    correct sense labels to the total of non-empty la-
+purposes this has no impact, since our algorithms do not dis-
+tinguish between is-a and other kinds of relations in the lexi-   bels in the gold standard) and F1 -measure ( P2P+R
+                                                                                                                   R
+                                                                                                                     ).
+cal knowledge base (cf. Section 4.2).                             We also calculate accuracy, which accounts for
+
+
+                                                              1526
+
+
+                           P        R       F1       A         ing the most frequent sense rather than any other
+  Structure               82.2     68.1    74.5     81.1       sense for each target page represents a choice as
+  Gloss                   81.1     64.2    71.7     78.8       arbitrary as picking a sense at random.
+  Structure + Gloss       81.9     77.5    79.6     84.4          The final mapping contains 81,533 pairs of
+  MFS BL                  24.3     47.8    32.2     24.3       Wikipages and word senses they map to, covering
+  Random BL               23.8     46.8    31.6     23.9       55.7% of the noun senses in WordNet.
+                                                                  Using our best performing mapping we are
+ Table 1: Performance of the mapping algorithm.                able to extend WordNet with 1,902,859 semantic
+                                                               edges: of these, 97.93% are deemed novel, i.e. no
+                                                               direct edge could previously be found between the
+empty sense labels (that is, calculated on all 1,000
+                                                               synsets. In addition, we performed a stricter eval-
+test instances). As baseline we use the most fre-
+                                                               uation of the novelty of our relations by check-
+quent WordNet sense (MFS), as well as a ran-
+                                                               ing whether these can still be found indirectly by
+dom sense assignment. We evaluate the map-
+                                                               searching for a connecting path between the two
+ping methodology described in Section 3.2 against
+                                                               synsets of interest. Here we found that 91.3%,
+different disambiguation contexts for the Word-
+                                                               87.2% and 78.9% of the relations are novel to
+Net senses (cf. Section 3.2.2), i.e. structure-based
+                                                               WordNet when performing a graph search of max-
+(including synonymy, hypernymy/hyponymy and
+                                                               imum depth of 2, 3 and 4, respectively.
+sisterhood), gloss-derived evidence, and a combi-
+nation of the two. As disambiguation context of                4.2    Coarse-grained WSD
+a Wikipage (Section 3.2.1) we use all information
+                                                               Experimental setting. We extrinsically evalu-
+available, i.e. sense labels, links and categories4 .
+                                                               ate the impact of WordNet++ on the Semeval-
+Results and discussion. The results show that                  2007 coarse-grained all-words WSD task (Nav-
+our method improves on the baseline by a large                 igli et al., 2007). Performing experiments in a
+margin and that higher performance can be                      coarse-grained setting is a natural choice for sev-
+achieved by using more disambiguation informa-                 eral reasons: first, it has been argued that the fine
+tion. That is, using a richer disambiguation con-              granularity of WordNet is one of the main obsta-
+text helps to better choose the most appropriate               cles to accurate WSD (cf. the discussion in Nav-
+WordNet sense for a Wikipedia page. The combi-                 igli (2009b)); second, the meanings of Wikipedia
+nation of structural and gloss information attains a           pages are intuitively coarser than those in Word-
+slight variation in terms of precision (−0.3% and              Net5 . For instance, mapping T RAVEL to the first
++0.8% compared to Structure and Gloss respec-                  or the second sense in WordNet is an arbitrary
+tively), but a significantly high increase in recall           choice, as the Wikipage refers to both senses. Fi-
+(+9.4% and +13.3%). This implies that the differ-              nally, given their different nature, WordNet and
+ent disambiguation contexts only partially overlap             Wikipedia do not fully overlap. Accordingly,
+and, when used separately, each produces differ-               we expect the transfer of semantic relations from
+ent mappings with a similar level of precision. In             Wikipedia to WordNet to have sometimes the side
+the joint approach, the harmonic mean of preci-                effect to penalize some fine-grained senses of a
+sion and recall, i.e. F1 , is in fact 5 and 8 points           word.
+higher than when separately using structural and                  We experiment with two simple knowledge-
+gloss information, respectively.                               based algorithms that are set to perform coarse-
+   As for the baselines, the most frequent sense is            grained WSD on a sentence-by-sentence basis:
+just 0.6% and 0.4% above the random baseline in
+                                                               • Simplified Extended Lesk (ExtLesk): The first
+terms of F1 and accuracy, respectively. A χ2 test
+                                                                  algorithm is a simplified version of the Lesk
+reveals in fact no statistically significant difference
+                                                                  5
+at p < 0.05. This is related to the random distri-                  Note that our polysemy rates from Section 4.1 also in-
+                                                               clude Wikipages whose lemma is contained in WordNet, but
+bution of senses in our dataset and the Wikipedia              which have out-of-domain meanings, i.e. encyclopedic en-
+unbiased coverage of WordNet senses. So select-                tries referring to specialized named entities such as e.g., D IS -
+                                                               COVERY ( SPACE SHUTTLE ) or F IELD A RTILLERY ( MAGA -
+   4
+     We leave out the evaluation of different contexts for a   ZINE ). We computed the polysemy rate for a random sample
+Wikipage for the sake of brevity. During prototyping we        of 20 polysemous words by manually removing these NEs
+found that the best results were given by using the largest    and found that Wikipedia’s polysemy rate is indeed lower
+context available, as reported in Table 1.                     than that of WordNet – i.e. average polysemy of 2.1 vs. 2.8.
+
+
+                                                           1527
+
+
+  algorithm (Lesk, 1986), that performs WSD                                      Nouns only
+                                                          Resource       Algorithm
+  based on the overlap between the context sur-                                P     R     F1
+  rounding the target word to be disambiguated                       ExtLesk  83.6 57.7 68.3
+                                                          WordNet
+  and the definitions of its candidate senses (Kil-                   Degree  86.3 65.5 74.5
+  garriff and Rosenzweig, 2000). Given a tar-                        ExtLesk  82.3 64.1 72.0
+  get word w, this method assigns to w the                Wikipedia
+                                                                      Degree  96.2 40.1 57.4
+  sense whose gloss has the highest overlap (i.e.                    ExtLesk  82.7 69.2 75.4
+  most words in common) with the context of w,            WordNet++
+                                                                      Degree  87.3 72.7 79.4
+  namely the set of content words co-occurring                       MFS BL   77.4 77.4 77.4
+  with it in a pre-defined window (a sentence in                    Random BL 63.5 63.5 63.5
+  our case). Due to the limited context provided
+  by the WordNet glosses, we follow Banerjee           Table 2: Performance on Semeval-2007 coarse-
+  and Pedersen (2003) and expand the gloss of          grained all-words WSD (nouns only subset).
+  each sense s to include words from the glosses
+  of those synsets in a semantic relation with s.
+                                                          we first collect all words from the category la-
+  These include all WordNet synsets which are
+                                                          bels of w and w0 into two bags of words. We re-
+  directly connected to s, either by means of the
+                                                          move stopwords and lemmatize the remaining
+  semantic pointers found in WordNet or through
+                                                          words. We then compute the degree of overlap
+  the unlabeled links found in WordNet++.
+                                                          between the two sets of categories as the num-
+• Degree Centrality (Degree): The second algo-            ber of words in common between the two bags
+  rithm is a graph-based approach that relies on          of words, normalized in the [0, 1] interval. We fi-
+  the notion of vertex degree (Navigli and Lap-           nally retain the link for the DFS if such score is
+  ata, 2010). Starting from each sense s of the tar-      above an empirically determined threshold. The
+  get word, it performs a depth-first search (DFS)        optimal value for this category overlap thresh-
+  of the WordNet(++) graph and collects all the           old was again estimated by maximizing De-
+  paths connecting s to senses of other words in          gree’s F1 on the development set. The final
+  context. As a result, a sentence graph is pro-          graph used by Degree consists of WordNet, to-
+  duced. A maximum search depth is established            gether with 152,944 relations from our semantic
+  to limit the size of this graph. The sense of the       relation enrichment method (cf. Section 3.3).
+  target word with the highest vertex degree is se-
+  lected. We follow Navigli and Lapata (2010)          Results and discussion. We report our results in
+  and run Degree in a weakly supervised setting        terms of precision, recall and F1 -measure on the
+  where the system attempts no sense assignment        Semeval-2007 coarse-grained all-words dataset
+  if the highest degree score is below a certain       (Navigli et al., 2007). We first evaluated ExtLesk
+  (empirically estimated) threshold. The optimal       and Degree using three different resources: (1)
+  threshold and maximum search depth are es-           WordNet only; (2) Wikipedia only, i.e. only those
+  timated by maximizing Degree’s F1 on a de-           relations harvested from the links found within
+  velopment set of 1,000 randomly chosen noun          Wikipedia pages; (3) their union, i.e. WordNet++.
+  instances from the SemCor corpus (Miller et          In Table 2 we report the results on nouns only. As
+  al., 1993). Experiments on the development           common practice, we compare with random sense
+  dataset using Degree on WordNet++ revealed           assignment and the most frequent sense (MFS)
+  a performance far lower than expected. Error         from SemCor as baselines. Enriching WordNet
+  analysis showed that many instances were in-         with encyclopedic relations from Wikipedia yields
+  correctly disambiguated, due to the noise from       a consistent improvement against using WordNet
+  weak semantic links, e.g. the links from S ODA       (+7.1% and +4.9% F1 for ExtLesk and Degree)
+  ( SOFT DRINK ) to E UROPE or AUSTRALIA. Ac-          or Wikipedia (+3.4% and +22.0%) alone. The
+  cordingly, in order to improve the disambigua-       best results are obtained by using Degree with
+  tion performance, we developed a filter to rule      WordNet++. The better performance of Wikipedia
+  out weak semantic relations from WordNet++.          against WordNet when using ExtLesk (+3.7%)
+  Given a WordNet++ edge (µ(w), µ(w0 )) where          highlights the quality of the relations extracted.
+  w and w0 are both Wikipages and w links to w0 ,      However, no such improvement is found with De-
+
+
+                                                   1528
+
+
+                         Nouns only        All words                                             Sports      Finance
+      Algorithm                                                         Algorithm
+                          P/R/F1            P/R/F1                                               P/R/F1      P/R/F1
+      ExtLesk              81.0              79.1                       k-NN †                    30.3         43.4
+      Degree               85.5              81.7                       Static PR †               20.1         39.6
+      SUSSX-FR             81.1              77.0                       Personalized PR †         35.6         46.9
+      TreeMatch            N/A               73.6                       ExtLesk                   40.1         45.6
+      NUS-PT               82.3              82.5                       Degree                    42.0         47.8
+      SSI                  84.1              83.2                       MFS BL                    19.6         37.1
+      MFS BL               77.4              78.9                       Random BL                 19.5         19.6
+      Random BL            63.5              62.7
+                                                                  Table 4: Performance on the Sports and Finance
+Table 3: Performance on Semeval-2007 coarse-                      sections of the dataset from Koeling et al. (2005):
+grained all-words WSD with MFS as a back-off                      † indicates results from Agirre et al. (2009).
+
+strategy when no sense assignment is attempted.
+                                                                  4.3   Domain WSD
+gree, due to its lower recall. Interestingly, Degree
+                                                                  The main strength of Wikipedia is to provide wide
+on WordNet++ beats the MFS baseline, which is
+                                                                  coverage for many specific domains. Accord-
+notably a difficult competitor for unsupervised and
+                                                                  ingly, on the Semeval dataset our system achieves
+knowledge-lean systems.
+                                                                  the best performance on a domain-specific text,
+   We finally compare our two algorithms using                    namely d004, a document on computer science
+WordNet++ with state-of-the-art WSD systems,                      where we achieve 82.9% F1 (+6.8% when com-
+namely the best unsupervised (Koeling and Mc-                     pared with the best supervised system, namely
+Carthy, 2007, SUSSX-FR) and supervised (Chan                      NUS-PT). To test whether our performance on the
+et al., 2007, NUS-PT) systems participating in                    Semeval dataset is an artifact of the data, i.e. d004
+the Semeval-2007 coarse-grained all-words task.                   coming from Wikipedia itself, we evaluated our
+We also compare with SSI (Navigli and Velardi,                    system on the Sports and Finance sections of the
+2005) – a knowledge-based system that partici-                    domain corpora from Koeling et al. (2005). In Ta-
+pated out of competition – and the unsupervised                   ble 4 we report our results on these datasets and
+proposal from Chen et al. (2009, TreeMatch). Ta-                  compare them with Personalized PageRank, the
+ble 3 shows the results for nouns (1,108) and                     state-of-the-art system from Agirre et al. (2009)7 ,
+all words (2,269 words): we use the MFS as a                      as well as Static PageRank and a k-NN supervised
+back-off strategy when no sense assignment is at-                 WSD system trained on SemCor.
+tempted. Degree with WordNet++ achieves the
+                                                                     The results we obtain on the two domains with
+best performance in the literature6 . On the noun-
+                                                                  our best configuration (Degree using WordNet++)
+only subset of the data, its performance is com-
+                                                                  outperform by a large margin k-NN, thus sup-
+parable with SSI and significantly better than the
+                                                                  porting the findings from Agirre et al. (2009)
+best supervised and unsupervised systems (+3.2%
+                                                                  that knowledge-based systems exhibit a more ro-
+and +4.4% F1 against NUS-PT and SUSSX-FR).
+                                                                  bust performance than their supervised alterna-
+On the entire dataset, it outperforms SUSSX-FR
+                                                                  tives when evaluated across different domains. In
+and TreeMatch (+4.7% and +8.1%) and its re-
+                                                                  addition, our system achieves better results than
+call is not statistically different from that of SSI
+                                                                  Static and Personalized PageRank, indicating that
+and NUS-PT. This result is particularly interest-
+                                                                  competitive disambiguation performance can still
+ing, given that WordNet++ is extended only with
+                                                                  be achieved by a less sophisticated knowledge-
+relations between nominals, and, in contrast to
+                                                                  based WSD algorithm when provided with a rich
+SSI, it does not rely on a costly annotation effort
+                                                                  amount of high-quality knowledge. Finally, the
+to engineer the set of semantic relations. Last but
+                                                                  results show that WordNet++ enables competitive
+not least, we achieve state-of-the-art performance
+                                                                  performance also in a fine-grained domain setting.
+with a much simpler algorithm that is based on the
+                                                                      7
+notion of vertex degree in a graph.                                     We compare only with those system configurations per-
+                                                                  forming token-based WSD, i.e. disambiguating each instance
+  6
+    The differences between the results in bold in each col-      of a target word separately, since our aim is not to perform
+umn of the table are not statistically significant at p < 0.05.   type-based disambiguation.
+
+
+                                                              1529
+
+
+5       Conclusions                                                performing better than generic supervised WSD. In
+                                                                   Proc. of IJCAI-09, pages 1501–1506.
+In this paper, we have presented a large-scale
+                                                                Satanjeev Banerjee and Ted Pedersen. 2003. Extended
+method for the automatic enrichment of a com-                     gloss overlap as a measure of semantic relatedness.
+putational lexicon with encyclopedic relational                   In Proc. of IJCAI-03, pages 805–810.
+knowledge8 . Our experiments show that the large                Razvan Bunescu and Marius Paşca. 2006. Using en-
+amount of knowledge injected into WordNet is of                   cyclopedic knowledge for named entity disambigua-
+high quality and, more importantly, it enables sim-               tion. In Proc. of EACL-06, pages 9–16.
+ple knowledge-based WSD systems to perform as                   Jean Carletta. 1996. Assessing agreement on classi-
+well as the highest-performing supervised ones in                  fication tasks: The kappa statistic. Computational
+                                                                   Linguistics, 22(2):249–254.
+a coarse-grained setting and to outperform them
+                                                                Yee Seng Chan, Hwee Tou Ng, and Zhi Zhong. 2007.
+on domain-specific text. Thus, our results go                     NUS-ML: Exploiting parallel texts for Word Sense
+one step beyond previous findings (Cuadros and                    Disambiguation in the English all-words tasks. In
+Rigau, 2006; Agirre et al., 2009; Navigli and La-                 Proc. of SemEval-2007, pages 253–256.
+pata, 2010) and prove that knowledge-rich dis-                  Ping Chen, Wei Ding, Chris Bowes, and David Brown.
+ambiguation is a competitive alternative to super-                 2009. A fully unsupervised Word Sense Disam-
+vised systems, even when relying on a simple al-                   biguation method using dependency knowledge. In
+                                                                   Proc. of NAACL-HLT-09, pages 28–36.
+gorithm. We note, however, that the present con-
+tribution does not show which knowledge-rich al-                Tim Chklovski and Rada Mihalcea. 2002. Building a
+                                                                  sense tagged corpus with Open Mind Word Expert.
+gorithm performs best with WordNet++. In fact,                    In Proceedings of the ACL-02 Workshop on WSD:
+more sophisticated approaches, such as Personal-                  Recent Successes and Future Directions at ACL-02.
+ized PageRank (Agirre and Soroa, 2009), could be                Martin Chodorow, Roy Byrd, and George E. Heidorn.
+still applied to yield even higher performance. We               1985. Extracting semantic hierarchies from a large
+leave such exploration to future work. Moreover,                 on-line dictionary. In Proc. of ACL-85, pages 299–
+                                                                 304.
+while the mapping has been used to enrich Word-
+Net with a large amount of semantic edges, the                  Philipp Cimiano, Siegfried Handschuh, and Steffen
+                                                                  Staab. 2004. Towards the self-annotating Web. In
+method can be reversed and applied to the ency-                   Proc. of WWW-04, pages 462–471.
+clopedic resource itself, that is Wikipedia, to per-
+                                                                Montse Cuadros and German Rigau. 2006. Quality
+form disambiguation with the corresponding sense                 assessment of large scale knowledge resources. In
+inventory (cf. the task of wikification proposed                 Proc. of EMNLP-06, pages 534–541.
+by Mihalcea and Csomai (2007) and Milne and                     Montse Cuadros and German Rigau. 2008. KnowNet:
+Witten (2008b)). In this paper, we focused on                    building a large net of knowledge from the Web. In
+English Word Sense Disambiguation. However,                      Proc. of COLING-08, pages 161–168.
+since WordNet++ is part of a multilingual seman-                Philip Edmonds.      2000.    Designing a task for
+tic network (Navigli and Ponzetto, 2010), we plan                 SENSEVAL-2.        Technical report, University of
+                                                                  Brighton, U.K.
+to explore the impact of this knowledge in a mul-
+                                                                Christiane Fellbaum, editor. 1998. WordNet: An Elec-
+tilingual setting.
+                                                                  tronic Database. MIT Press, Cambridge, MA.
+                                                                Evgeniy Gabrilovich and Shaul Markovitch. 2006.
+References                                                        Overcoming the brittleness bottleneck using
+                                                                  Wikipedia: Enhancing text categorization with
+Eneko Agirre and Oier Lopez de Lacalle. 2004. Pub-                encyclopedic knowledge. In Proc. of AAAI-06,
+  licly available topic signatures for all WordNet nom-           pages 1301–1306.
+  inal senses. In Proc. of LREC ’04.                            Evgeniy Gabrilovich and Shaul Markovitch. 2007.
+Eneko Agirre and David Martinez. 2001. Learning                   Computing semantic relatedness using Wikipedia-
+  class-to-class selectional preferences. In Proceed-             based explicit semantic analysis. In Proc. of IJCAI-
+  ings of CoNLL-01, pages 15–22.                                  07, pages 1606–1611.
+Eneko Agirre and Aitor Soroa. 2009. Personalizing               Roxana Girju, Adriana Badulescu, and Dan Moldovan.
+  PageRank for Word Sense Disambiguation. In Proc.                2006. Automatic discovery of part-whole relations.
+  of EACL-09, pages 33–41.                                        Computational Linguistics, 32(1):83–135.
+Eneko Agirre, Oier Lopez de Lacalle, and Aitor Soroa.
+                                                                Sanda M. Harabagiu, George A. Miller, and Dan I.
+  2009. Knowledge-based WSD on specific domains:
+                                                                  Moldovan. 1999. WordNet 2 – a morphologically
+    8
+    The resulting resource, WordNet++, is freely available at     and semantically enhanced resource. In Proceed-
+http://lcl.uniroma1.it/wordnetplusplus for                        ings of the SIGLEX99 Workshop on Standardizing
+research purposes.                                                Lexical Resources, pages 1–8.
+
+
+                                                            1530
+
+
+Marti A. Hearst. 1992. Automatic acquisition of          Roberto Navigli, Kenneth C. Litkowski, and Orin Har-
+  hyponyms from large text corpora. In Proc. of            graves. 2007. Semeval-2007 task 07: Coarse-
+  COLING-92, pages 539–545.                                grained English all-words task. In Proc. of SemEval-
+Adam Kilgarriff and Joseph Rosenzweig.           2000.     2007, pages 30–35.
+  Framework and results for English SENSEVAL.            Roberto Navigli. 2009a. Using cycles and quasi-
+  Computers and the Humanities, 34(1-2).                   cycles to disambiguate dictionary glosses. In Proc.
+Rob Koeling and Diana McCarthy. 2007. Sussx: WSD           of EACL-09, pages 594–602.
+  using automatically acquired predominant senses.       Roberto Navigli. 2009b. Word Sense Disambiguation:
+  In Proc. of SemEval-2007, pages 314–317.                 A survey. ACM Computing Surveys, 41(2):1–69.
+Rob Koeling, Diana McCarthy, and John Carroll.           Marco Pennacchiotti and Patrick Pantel. 2006. On-
+  2005. Domain-specific sense distributions and pre-       tologizing semantic relations. In Proc. of COLING-
+  dominant sense acquisition. In Proc. of HLT-             ACL-06, pages 793–800.
+  EMNLP-05, pages 419–426.                               Simone Paolo Ponzetto and Roberto Navigli. 2009.
+Michael Lesk. 1986. Automatic sense disambiguation         Large-scale taxonomy mapping for restructuring
+  using machine readable dictionaries: How to tell a       and integrating Wikipedia. In Proc. of IJCAI-09,
+  pine cone from an ice cream cone. In Proceedings         pages 2083–2088.
+  of the 5th Annual Conference on Systems Documen-       Simone Paolo Ponzetto and Michael Strube. 2007a.
+  tation, Toronto, Ontario, Canada, pages 24–26.           Deriving a large scale taxonomy from Wikipedia. In
+Diana McCarthy and John Carroll. 2003. Disam-              Proc. of AAAI-07, pages 1440–1445.
+  biguating nouns, verbs and adjectives using auto-      Simone Paolo Ponzetto and Michael Strube. 2007b.
+  matically acquired selectional preferences. Compu-       Knowledge derived from Wikipedia for computing
+  tational Linguistics, 29(4):639–654.                     semantic relatedness. Journal of Artificial Intelli-
+Rada Mihalcea and Andras Csomai. 2007. Wikify!             gence Research, 30:181–212.
+  Linking documents to encyclopedic knowledge. In        Nils Reiter, Matthias Hartung, and Anette Frank.
+  Proc. of CIKM-07, pages 233–242.                         2008. A resource-poor approach for linking ontol-
+Rada Mihalcea. 2007. Using Wikipedia for automatic         ogy classes to Wikipedia articles. In Johan Bos and
+  Word Sense Disambiguation. In Proc. of NAACL-            Rodolfo Delmonte, editors, Semantics in Text Pro-
+  HLT-07, pages 196–203.                                   cessing, volume 1 of Research in Computational Se-
+George A. Miller, Claudia Leacock, Randee Tengi, and       mantics, pages 381–387. College Publications, Lon-
+  Ross Bunker. 1993. A semantic concordance. In            don, England.
+  Proceedings of the 3rd DARPA Workshop on Human         German Rigau, Horacio Rodrı́guez, and Eneko Agirre.
+  Language Technology, pages 303–308, Plainsboro,          1998. Building accurate semantic taxonomies from
+  N.J.                                                     monolingual MRDs. In Proc. of COLING-ACL-98,
+David Milne and Ian H. Witten. 2008a. An effective,        pages 1103–1109.
+  low-cost measure of semantic relatedness obtained      Maria Ruiz-Casado, Enrique Alfonseca, and Pablo
+  from Wikipedia links. In Proceedings of the Work-        Castells. 2005. Automatic assignment of Wikipedia
+  shop on Wikipedia and Artificial Intelligence: An        encyclopedic entries to WordNet synsets. In Ad-
+  Evolving Synergy at AAAI-08, pages 25–30.                vances in Web Intelligence, volume 3528 of Lecture
+David Milne and Ian H. Witten. 2008b. Learning to          Notes in Computer Science. Springer Verlag.
+  link with Wikipedia. In Proc. of CIKM-08, pages        Christina Sauper and Regina Barzilay. 2009. Automat-
+  509–518.                                                 ically generating Wikipedia articles: A structure-
+Vivi Nastase and Michael Strube. 2008. Decoding            aware approach. In Proc. of ACL-IJCNLP-09, pages
+  Wikipedia category names for knowledge acquisi-          208–216.
+  tion. In Proc. of AAAI-08, pages 1219–1224.            Eyal Shnarch, Libby Barak, and Ido Dagan. 2009. Ex-
+Vivi Nastase. 2008. Topic-driven multi-document            tracting lexical reference rules from Wikipedia. In
+  summarization with encyclopedic knowledge and            Proc. of ACL-IJCNLP-09, pages 450–458.
+  activation spreading. In Proc. of EMNLP-08, pages      Rion Snow, Dan Jurafsky, and Andrew Ng. 2006. Se-
+  763–772.                                                 mantic taxonomy induction from heterogeneous ev-
+Roberto Navigli and Mirella Lapata. 2010. An ex-           idence. In Proc. of COLING-ACL-06, pages 801–
+  perimental study on graph connectivity for unsuper-      808.
+  vised Word Sense Disambiguation. IEEE Transac-         Fabian M. Suchanek, Gjergji Kasneci, and Gerhard
+  tions on Pattern Anaylsis and Machine Intelligence,      Weikum. 2008. Yago: A large ontology from
+  32(4):678–692.                                           Wikipedia and WordNet. Journal of Web Semantics,
+Roberto Navigli and Simone Paolo Ponzetto. 2010.           6(3):203–217.
+  BabelNet: Building a very large multilingual seman-    Fei Wu and Daniel Weld. 2007. Automatically se-
+  tic network. In Proc. of ACL-10.                         mantifying Wikipedia. In Proc. of CIKM-07, pages
+Roberto Navigli and Paola Velardi. 2005. Struc-            41–50.
+  tural Semantic Interconnections: a knowledge-based     Fei Wu and Daniel Weld. 2008. Automatically refining
+  approach to Word Sense Disambiguation. IEEE              the Wikipedia infobox ontology. In Proc. of WWW-
+  Transactions on Pattern Analysis and Machine In-         08, pages 635–644.
+  telligence, 27(7):1075–1088.
+
+
+                                                     1531
+

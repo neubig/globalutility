@@ -1,0 +1,612 @@
+     Correcting errors in speech recognition with articulatory dynamics
+
+                                           Frank Rudzicz
+                       University of Toronto, Department of Computer Science
+                                      Toronto, Ontario, Canada
+                                    frank@cs.toronto.edu
+
+
+
+                     Abstract                                  elevation, and tongue-dorsum elevation, respec-
+                                                               tively. Having access to the articulatory goals of
+    We introduce a novel mechanism for                         the speaker would, in theory, make the identifica-
+    incorporating articulatory dynamics into                   tion of linguistic intent almost trivial. Although
+    speech recognition with the theory of task                 we don’t typically have access to the vocal tract
+    dynamics. This system reranks sentence-                    during speech recognition, its configuration can
+    level hypotheses by the likelihoods of                     be estimated reasonably well from acoustics alone
+    their hypothetical articulatory realizations               within adequate models or measurements of the
+    which are derived from relationships                       vocal tract (Richmond et al., 2003; Toda et al.,
+    learned with aligned acoustic/articulatory                 2008). Evidence that such inversion takes place
+    data. Experiments compare this with two                    naturally in humans during speech perception sug-
+    baseline systems, namely an acoustic hid-                  gests that the discriminability of speech sounds de-
+    den Markov model and a dynamic Bayes                       pends powerfully on their production (Liberman
+    network augmented with discretized rep-                    and Mattingly, 1985; D’Ausilio et al., 2009).
+    resentations of the vocal tract. Our sys-                     This paper describes the use of explicit models
+    tem based on task dynamics reduces word-                   of physical speech production within recognition
+    error rates significantly by 10.2% relative                systems. Initially, we augment traditional models
+    to the best baseline models.                               of ASR with probabilistic relationships between
+                                                               acoustics and articulation learned from appropri-
+1   Introduction                                               ate data. This leads to the incorporation of a high-
+Although modern automatic speech recognition                   level, goal-oriented, and control-based theory of
+(ASR) takes several cues from the biological per-              speech production within a novel ASR system.
+ception of speech, it rarely models its biological
+                                                               2   Background and related work
+production. The result is that speech is treated
+as a surface acoustic phenomenon with lexical or               The use of theoretical (phonological) features of
+phonetic hidden dynamics but without any phys-                 the vocal tract has provided some improvement
+ical constraints in between. This omission leads               over traditional acoustic ASR systems in phoneme
+to some untenable assumptions. For example,                    recognition with neural networks (Kirchhoff,
+speech is often treated out of convenience as a se-            1999; Roweis, 1999), but there has been very
+quence of discrete, non-overlapping packets, such              little work in ASR informed by direct measure-
+as phonemes, despite the fact that some major dif-             ments of the vocal tract. Recently, Markov et
+ficulties in ASR, such as co-articulation, are by              al. (2006) have augmented hidden Markov models
+definition the result of concurrent physiological              with Bayes networks trained to describe articula-
+phenomena (Hardcastle and Hewlett, 1999).                      tory constraints from a small amount of Japanese
+   Many acoustic ambiguities can be resolved                   vocal tract data, resulting in a small phoneme-
+with knowledge of the vocal tract’s configuration              error reduction. This work has since been ex-
+(O’Shaughnessy, 2000). For example, the three                  panded upon to inform ASR systems sensitive to
+nasal sonorants, /m/, /n/, and /ng/, are acousti-              physiological speech disorders (Rudzicz, 2009).
+cally similar (i.e., they have large concentrations            Common among previous efforts is an interpre-
+of energy at the same frequencies) but uniquely                tation of speech as a sequence of short, instanta-
+and reliably involve bilabial closure, tongue-tip              neous observations devoid of long-term dynamics.
+
+
+                                                          60
+         Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 60–68,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2.1     Articulatory phonology                                         Here, z is a continuous vector representing the in-
+Articulatory phonology bridges the divide be-                          stantaneous positions of the nine tract variables,
+tween the physical manifestation of speech and its                     z∗ is the target (equilibrium) positions of those
+underlying lexical intentions. Within this disci-                      variables, and vectors z0 and z00 represent the first
+pline, the theory of task dynamics is a combined                       and second derivatives of z with respect to time
+model of physical articulator motion and the plan-                     (i.e., velocity and acceleration), respectively. The
+ning of abstract vocal tract configurations (Saltz-                    matrices M, B, and K are syllable-specific coef-
+man, 1986). This theory introduces the notion that                     ficients describing the inertia, damping, and stiff-
+all observed patterns of speech are the result of                      ness, respectively, of the virtual gestures. Gener-
+overlapping gestures, which are abstracted goal-                       ally, this theory assumes that the tract variables are
+oriented reconfigurations of the vocal tract, such                     mutually independent, and that the system is criti-
+as bilabial closure or velar opening (Saltzman and                     cally damped (i.e., the tract variables do not oscil-
+Munhall, 1989). Each gesture occurs within one                         late around their equilibrium positions) (Nam and
+of the following tract variables (TVs): velar open-                    Saltzman, 2003). The continuous state, z, of equa-
+ing (VEL), lip aperture (LA) and protrusion (LP),                      tion (1) is exemplified by black curves in figure 1.
+tongue tip constriction location (TTCL) and de-                        2.2   Articulatory data
+gree (TTCD) 1 , tongue body constriction location
+(TBCL) and degree (TBCD), lower tooth height                           Tract variables provide the dimensions of an ab-
+(LTH), and glottal vibration (GLO). For example,                       stract gestural space independent of the physical
+the syllable pub consists of an onset (/p/), a nu-                     characteristics of the speaker. In order to com-
+cleus (/ah/), and a coda (/b/). Four gestural goals                    plete our articulatory model, however, we require
+are associated with the onset, namely the shutting                     physical data from which to infer these high-level
+of GLO and of VEL, and the closure and release of                      articulatory goals.
+LA. Similarly, the nucleus of the syllable consists                       Electromagnetic articulography (EMA) is a
+of three goals, namely the relocation of TBCD and                      method to measure the motion of the vocal tract
+TBCL, and the opening of GLO. The presence and                         during speech. In EMA, the speaker is placed
+extent of these gestural goals are represented by                      within a low-amplitude electromagnetic field pro-
+filled rectangles in figure 1. Inter-gestural timings                  duced within a cube of a known geometry. Tiny
+between these goals are specified relative to one                      sensors within this field induce small electric cur-
+another according to human data as described by                        rents whose energy allows the inference of artic-
+Nam and Saltzman (2003).                                               ulator positions and velocities to within 1 mm of
+                                                                       error (Yunusova et al., 2009). We derive data for
+                                                         closed        the following study from two EMA sources:
+TBCD
+                                                          open
+                                                                         • The University of Edinburgh’s MOCHA
+                                                          open
+LA                                                                         database, which provides phonetically-
+                                                         closed            balanced sentences repeated from TIMIT
+                                                          open
+                                                                           (Zue et al., 1989) uttered by a male and a
+GLO
+                                                         closed
+                                                                           female speaker (Wrench, 1999), and
+         100          200        300          400
+                            Time (ms)                                    • The University of Toronto’s TORGO
+                                                                           database, from which we select sentences
+Figure 1: Canonical example pub from Saltzman                              repeated from TIMIT from two females
+and Munhall (1989).                                                        and three males (Rudzicz et al., 2008).
+                                                                           (Cerebrally palsied speech, which is the
+  The presence of these discrete goals influences
+                                                                           focus of this database, is not included here).
+the vocal tract dynamically and continuously
+as modelled by the following non-homogeneous                              For the following study we use the eight 2D po-
+second-order linear differential equation:                             sitions common to both databases, namely the up-
+                Mz00 + Bz0 + K(z − z∗ ) = 0.               (1)         per lip (UL), lower lip (LL), upper incisor (UI),
+     1 Constriction
+                                                                       lower incisor (LI), tongue tip (TT), tongue blade
+                    locations generally refer to the front-back
+dimension of the vocal tract and constriction degrees gener-           (TB), and tongue dorsum (TD). Since these po-
+ally refer to the top-down dimension.                                  sitions are recorded in 3D in TORGO, we project
+
+
+                                                                  61
+
+
+these onto the midsagittal plane. (Additionally, the                          1
+MOCHA database provides velum (V) data on this
+plane, and TORGO provides the left and right lip                             0.8
+corners (LL and RL) but these are excluded from
+
+
+
+
+                                                             normalized LA
+study except where noted).                                                   0.6
+   All articulatory data is aligned with its associ-
+ated acoustic data, which is transformed to Mel-                             0.4
+frequency cepstral coefficients (MFCCs). Since
+the 2D EMA system in MOCHA and the 3D EMA
+                                                                             0.2
+system in TORGO differ in their recording rates,
+the length of each MFCC frame in each database
+                                                                              0
+must differ in order to properly align acoustics                               0   50      100      150      200
+                                                                                        Time (ms)
+with articulation in time. Therefore, each MFCC
+frame covers 16 ms in the TORGO database, and
+                                                             Figure 2: Lip aperture (LA) over time during all
+32 ms in MOCHA. Phoneme boundaries are de-
+                                                             MOCHA instances of /b/.
+termined automatically in the MOCHA database
+by forced alignment, and by a speech-language
+pathologist in the TORGO database.                           tic towards dynamic systems or time-varying rela-
+   We approximate the tract variable space from              tionships. Dynamic Bayes networks (DBNs) are
+the physical space of the articulators, in general,          directed acyclic graphs that generalize the power-
+through principal component analysis (PCA) on                ful stochastic mechanisms of Bayesian represen-
+the latter, and subsequent sigmoid normalization             tation to temporal sequences. We are free to ex-
+on [0, 1]. For example, the LTH tract variable is in-        plicitly provide topological (i.e., dependency) re-
+ferred by calculating the first principal component          lationships between relevant variables in our mod-
+of the two-dimensional lower incisor (LI) motion             els, which can include measurements of tract data.
+in the midsagittal plane, and by normalizing the
+                                                                We examine two baseline systems.             The
+resulting univariate data through a scaled sigmoid.
+                                                             first is the standard acoustic hidden Markov
+The VEL variable is inferred similarly from velum
+                                                             model (HMM) augmented with a bigram language
+(V) EMA data. Tongue tip constriction location
+                                                             model, as shown in figure 3(a). Here, Wt → Wt+1
+and degree (TTCL and TTCD, respectively) are
+                                                             represents word transition probabilities, learned
+inferred from the 1st and 2nd principal components
+                                                             by maximum likelihood estimation, and Pht →
+of tongue tip (TT) EMA data, with TBCL and
+                                                             Pht+1 represents phoneme transition probabilities
+TBCD inferred similarly from tongue body (TB)
+                                                             whose order is explicitly specified by the relation-
+data. Finally, the glottis (GLO) is inferred by voic-
+                                                             ship Wt → Pht . Likewise, each phoneme Ph con-
+ing detection on acoustic energy below 150 Hz
+                                                             ditions the sub-phoneme state, Qt , whose transi-
+(O’Shaughnessy, 2000), lip aperture (LA) is the
+                                                             tion probabilities Qt → Qt+1 describe the dynam-
+normalized Euclidean distance between the lips,
+                                                             ics within phonemes. The variable Mt refers to
+and lip protrusion (LP) is the normalized 2nd prin-
+                                                             hidden Gaussian indices so that the likelihoods
+cipal component of the midpoint between the lips.
+                                                             of acoustic observations, Ot , are represented by a
+All PCA is performed without segmentation of the
+                                                             mixture of 4, 8, 16, or 32 Gaussians for each state
+data. The result is a low-dimensional set of contin-
+                                                             and each phoneme. See Murphy (2002) for a fur-
+uous curves describing goal-relevant articulatory
+                                                             ther description of this representation.
+variables. Figure 2, for example, shows the degree
+of the lip aperture (LA) over time for all instances            The second baseline model is the articulatory
+of the /b/ phoneme in the MOCHA database. The                dynamic Bayes network (DBN-A). This augments
+relevant articulatory goal of lip closure is evident.        the standard acoustic HMM by replacing hidden
+                                                             indices, Mt , with discrete observations of the vo-
+3   Baseline systems                                         cal tract, Kt , as shown in figure 3(b). The pattern
+                                                             of acoustics within each phoneme is dependent on
+We now turn to the task of speech recognition.               a relatively restricted set of possible articulatory
+Traditional Bayesian learning is restricted to uni-          configurations (Roweis, 1999). To find these dis-
+versal or immutable relationships, and is agnos-             crete positions, we obtain k vectors that best de-
+
+
+                                                        62
+
+
+scribe the articulatory data according to k-means              haviour is non-deterministic. Moreover, we know
+clustering with the sum-of-squares error function.             that EMA recordings are subject to some error
+During training, the DBN variable Kt is set ex-                (usually less than 1 mm (Yunusova et al., 2009)),
+plicitly to the index of the mean vector nearest to            so the actual observation at time t, yt , will not in
+the current frame of EMA data at time t. In this               general be the true position of the articulators. As-
+way, the relationship Kt → Ot allows us to learn               suming that the relationship between yt and xt is
+how discretized articulatory configurations affect             also linear, and that the measurement noise, wt ,
+acoustics. The training of DBNs involves a spe-                is also Gaussian, then the dynamical articulatory
+cialized version of expectation-maximization, as               system can be described by
+described in the literature (Murphy, 2002; Ghahra-                               xt = Dt xt−1 + vt
+mani, 1998). During inference, variables Wt , Pht ,                                                              (2)
+and Kt become hidden and we marginalize over                                     yt = Ct xt + wt .
+their possible values when computing their likeli-                Eqs. 2 form the basis of the Kalman filter
+hoods. Bigrams are computed by maximum like-                   which allows us to use EMA measurements di-
+lihood on lexical annotations in the training data.            rectly, rather than quantized abstractions thereof
+                                                               as in the DBN-A model. Obviously, since artic-
+     Wt         Wt+1           Wt          Wt+1                ulatory dynamics vary significantly for different
+                                                               goals, we replicate eq. (2) for each phoneme and
+     Pht        Pht+1          Pht         Pht+1               connect these continuous Kalman filters together
+                                                               with discrete conditioning variables for phoneme
+           Qt           Qt+1          Qt           Qt+1        and word, resulting in the switching Kalman fil-
+                                                               ter (SKF) model. Here, parameters Dt and vt are
+     Mt         Mt+1           Kt          Kt+1                implicit in the relationship xt → xt+1 , and param-
+                                                               eters Ct and wt are implicit in xt → yt . In this
+           Ot           Ot+1          Ot           Ot+1        model, observation yt is the instantaneous mea-
+                                                               surements derived from EMA, and xt is their true
+           (a) HMM                   (b) DBN-A
+                                                               hidden states. These parameters are trained using
+                                                               expectation-maximization, as described in the lit-
+Figure 3: Baseline systems: (a) acoustic hidden
+                                                               erature (Murphy, 1998; Deng et al., 2005).
+Markov model and (b) articulatory dynamic Bayes
+network. Node Wt represents the current word, Pht              5     Recognition with task dynamics
+is the current phoneme, Qt is that phoneme’s dy-
+namic state, Ot is the acoustic observation, Mt is             Our goal is to integrate task dynamics within an
+the Gaussian mixture component, and Kt is the dis-             ASR system for continuous sentences called TD-
+cretized articulatory configuration. Filled nodes              ASR. Our approach is to re-rank an N-best list of
+represent observed variables during training, al-              sentence hypotheses according to a weighted like-
+though only Ot is observed during recognition.                 lihood of their articulatory realizations. For ex-
+Square nodes are discrete variables while circular             ample, if a word sequence Wi : wi,1 wi,2 ... wi,m
+nodes are continuous variables.                                has likelihoods LX (Wi ) and LΛ (Wi ) according to
+                                                               purely acoustic and articulatory interpretations of
+                                                               an utterance, respectively, then its overall score
+4   Switching Kalman filter                                    would be
+
+Our first experimental system attempts speech                          L(Wi ) = αLX (Wi ) + (1 − α)LΛ (Wi )      (3)
+recognition given only articulatory data. The true             given a weighting parameter α set manually, as in
+state of the tract variables at time t − 1 constitutes         section 6.2. Acoustic likelihoods LX (Wi ) are ob-
+a 9-dimensional vector, xt−1 , of continuous val-              tained from Viterbi paths through relevant HMMs
+ues. Under the task dynamics model of section                  in the standard fashion.
+2.1, the motions of these tract variables obey crit-
+ically damped second-order oscillatory relation-               5.1    The TADA component
+ships. We start with the simplifying assumption of             In order to obtain articulatory likelihoods, LΛ (Wi ),
+linear dynamics here with allowances for random                for each word sequence, we first generate artic-
+Gaussian process noise, vt , since articulatory be-            ulatory realizations of those sequences according
+
+
+                                                          63
+
+
+to task dynamics. To this end, we use compo-                 observed instantaneous canonical TVs predicted
+nents from the open-source TADA system (Nam                  by TADA. In this way we are explicitly learning
+and Goldstein, 2006), which is a complete imple-             a relationship between TADA’s task dynamics and
+mentation of task dynamics. From this toolbox,               human data. Since the lengths of these sequences
+we use the following components:                             are generally unequal, we align the articulatory be-
+  • A syllabic dictionary supplemented with                  haviour predicted by TADA with training data from
+    the International Speech Lexicon Dictionary              MOCHA and TORGO using standard dynamic
+    (Hasegawa-Johnson and Fleck, 2007). This                 time warping (Sakoe and Chiba, 1978). During
+    breaks word sequences Wi into syllable se-               run-time, the articulatory sequence yt most likely
+    quences Si consisting of onsets, nuclei, and             to have been produced by the human data given the
+    coda and covers all of MOCHA and TORGO.                  canonical sequence TVi is inferred by the Viterbi
+                                                             algorithm through the SKF model with all other
+  • A syllable-to-gesture lookup table. Given                variables hidden. The result is a set of articulatory
+    a syllabic sequence, Si , this table provides            sequences, TV∗i , for i = 1..N, that represent the
+    the gestural goals necessary to produce those            predictions of task dynamics that better resemble
+    syllables. For example, given the syllable               our data.
+    pub in figure 1, this table provides the tar-
+    gets for the GLO, VEL, TBCL, and TBCD                    5.2   Acoustic-articulatory inversion
+    tract variables, and the parameters for the              In order to estimate the articulatory likelihood
+    second-order differential equation, eq. 1,               of an utterance, we need to evaluate each trans-
+    that achieves those goals. These parameters              formed articulatory sequence, TV∗i , within proba-
+    have been empirically tuned by the authors               bility distributions ranging over all tract variables.
+    of TADA according to a generic, speaker-                 These distributions can be inferred using acoustic-
+    independent representation of the vocal tract            articulatory inversion. There are a number of ap-
+    (Saltzman and Munhall, 1989).                            proaches to this task, including vector quantiza-
+                                                             tion, and expectation-maximization with Gaussian
+  • A component that produces the continuous
+                                                             mixtures (Hogden and Valdez, 2001; Toda et al.,
+    tract variable paths that produce an utter-
+                                                             2008). These approaches accurately inferred the
+    ance. This component takes into account var-
+                                                             xy position of articulators to within 0.41 mm and
+    ious physiological aspects of human speech
+                                                             2.73 mm. Here, we modify the approach taken
+    production, including intergestural and in-
+                                                             by Richmond et al. (2003), who estimate proba-
+    terarticulator co-ordination and timing (Nam
+                                                             bility functions over the 2D midsagittal positions
+    and Saltzman, 2003; Goldstein and Fowler,
+                                                             of 7 articulators, given acoustics, with a mixture-
+    2003), and the neutral (“schwa”) forces of the
+                                                             density network (MDN). An MDN is essentially a
+    vocal tract (Saltzman and Munhall, 1989).
+                                                             typical discriminative multi-layer neural network
+    This component takes a sequence of gestu-
+                                                             whose output consists of the parameters to Gaus-
+    ral goals predicted by the segment-to-gesture
+                                                             sian mixtures. Here, each Gaussian mixture de-
+    lookup table, and produces appropriate paths
+                                                             scribes a probability function over TV positions
+    for each tract variable.
+                                                             given the acoustic frame at time t. For exam-
+   The result of the TADA component is a set of              ple, figure 4 shows an intensity map of the likely
+N 9-dimensional articulatory paths, TVi , neces-             values for tongue-tip constriction degree (TTCD)
+sary to produce the associated word sequences, Wi            for each frame of acoustics, superimposed with
+for i = 1..N. Since task dynamics is a prescrip-             the ‘true’ trajectory of that TV. Our networks are
+tive model and fully deterministic, TVi sequences            trained with acoustic and EMA-derived data as de-
+are the canonical or default articulatory realiza-           scribed in section 2.2.
+tions of the associated sentences. These canonical
+realizations are independent of our training data,           5.3   Recognition by reranking
+so we transform them in order to more closely re-            During recognition of a test utterance, a standard
+semble the observed articulatory behaviour in our            acoustic HMM produces word sequence hypothe-
+EMA data. Towards this end, we train a switch-               ses, Wi , and associated likelihoods, L(Wi ), for i =
+ing Kalman filter identical to that in section 4, ex-        1..N. The expected canonical motion of the tract
+cept the hidden state variable xt is replaced by the         variables, TVi is then produced by task dynamics
+
+
+                                                        64
+
+
+                                                             System      Parameters    PER (%)     WER (%)
+                                                                         |M| = 4         29.3       14.5
+                                                                         |M| = 8         27.0       13.9
+                                                              HMM
+                                                                         |M| = 16        26.1       10.2
+                                                                         |M| = 32        25.6        9.7
+                                                                         |K| = 4         26.1       13.0
+                                                                         |K| = 8         25.2       11.3
+                                                             DBN-A
+                                                                         |K| = 16        24.9        9.8
+                                                                         |K| = 32        24.8        9.4
+
+                                                            Table 1: Phoneme- and Word-Error-Rate (PER
+Figure 4: Example probability density of tongue             and WER) for different parameterizations of the
+tip constriction degree over time, inferred from            baseline systems.
+acoustics. The true trajectory is superimposed as a
+black curve.                                                                      No. of Gaussians
+                                                                           1         2       3          4
+                                                                   LTH   −0.28    −0.18 −0.15         −0.11
+for each of these word sequences and transformed                    LA   −0.36    −0.32 −0.30         −0.29
+by an SKF to better match speaker data, giving                      LP   −0.46    −0.44 −0.43         −0.43
+TV∗i . The likelihoods of these paths are then eval-               GLO   −1.48    −1.30 −1.29         −1.25
+uated within probability distributions produced by                TTCD   −1.79    −1.60 −1.51         −1.47
+an MDN. The mechanism for producing the artic-                    TTCL   −1.81    −1.62 −1.53         −1.49
+ulatory likelihood is shown in figure 5. The overall              TBCD   −0.88    −0.79 −0.75         −0.72
+likelihood, L(Wi ) = αLX (Wi ) + (1 − α)LΛ (Wi ), is              TDCL   −0.22    −0.20 −0.18         −0.17
+then used to produce a final hypothesis list for the
+given acoustic input.                                       Table 2: Average log likelihood of true tract vari-
+                                                            able positions in test data, under distributions pro-
+6   Experiments                                             duced by mixture density networks with varying
+                                                            numbers of Gaussians.
+Experimental data is obtained from two sources,
+as described in section 2.2. We procure 1200
+sentences from Toronto’s TORGO database, and                of acoustic observations. Similarly, the DBN-A
+896 from Edinburgh’s MOCHA. In total, there are             model is compared by varying the number of dis-
+460 total unique sentence forms, 1092 total unique          crete quantizations of articulatory configurations,
+word forms, and 11065 total words uttered. Ex-              as described in section 3. Results are obtained by
+cept where noted, all experiments randomly split            direct decoding. The average results across both
+the data into 90% training and 10% testing sets for         databases, between which there are no significant
+5-cross validation. MOCHA and TORGO data are                differences, are shown in table 1. In all cases
+never combined in a single training set due to dif-         the DBN-A model outperforms the HMM, which
+fering EMA recording rates. In all cases, models            highlights the benefit of explicitly conditioning
+are database-dependent (i.e., all TORGO data is             acoustic observations on articulatory causes.
+conflated, as is all of MOCHA).
+   For each of our baseline systems, we calcu-              6.1    Efficacy of TD-ASR components
+late the phoneme-error-rate (PER) and word-error-           In order to evaluate the whole system, we start by
+rate (WER) after training. The phoneme-error-               evaluating its parts. First, we test how accurately
+rate is calculated according to the proportion of           the mixture-density network (MDN) estimates the
+frames of speech incorrectly assigned to the proper         position of the articulators given only information
+phoneme. The word-error-rate is calculated as               from the acoustics available during recognition.
+the sum of insertion, deletion, and substitution er-        Table 2 shows the average log likelihood over each
+rors in the highest-ranked hypothesis divided by            tract variable across both databases. These re-
+the total number of words in the correct orthogra-          sults are consistent with the state-of-the-art (Toda
+phy. The traditional HMM is compared by vary-               et al., 2008). In the following experiments, we use
+ing the number of Gaussians used in the modelling           MDNs that produce 4 Gaussians.
+
+
+                                                       65
+
+
+                         W1                        TV1                                  TV*1
+                         W2                        TV2                                  TV*2
+             ASR
+              ASR                    TADA
+                                      TADA                              TRANS
+                                                                         TRANS
+                         ...                        ...                                  ...
+                         WN                        TVN                                  TV*N
+                        N-best                   Canonical                             Modified          P(TVi*)
+                      hypotheses                  Tract                                 Tract                                  W*1
+                                                 Variables                             Variables                               W*2
+                                                                                                                                ...
+                                                                                                                               W*N
+Acoustics                                                                                                                  Reranked
+                                                 MDN
+                                                 MDN                                                                          list
+
+
+
+Figure 5: The TD-ASR mechanism for deriving articulatory likelihoods, LΛ (Wi ), for each word sequence
+Wi produced by standard acoustic techniques.
+
+      Manner        Canonical      Transformed                          10
+      approximant     0.19             0.16                                                                        TORGO
+                                                                                                                   MOCHA
+      fricative       0.37             0.29
+                                                                        9.5
+      nasal*          0.24             0.18
+      retroflex       0.23             0.19                   WER (%)
+
+      plosive         0.10             0.08                              9
+      vowel           0.27             0.25
+                                                                        8.5
+Table 3: Average difference between predicted
+tract variables and observed data, on [0, 1] scale.
+(*) Nasals are evaluated only with MOCHA data,                           8
+                                                                          0      0.2        0.4        0.6     0.8         1
+since TORGO data lacks velum measurements.                                                         α
+
+
+                                                             Figure 6: Word-error-rate according to varying α,
+   We evaluate how closely transformations to the            for both TORGO and MOCHA data.
+canonical tract variables predicted by TADA match
+the data. Namely, we input the known orthography
+for each test utterance into TADA, obtain the pre-           Figure 6 shows the WER as a function of α with
+dicted canonical tract variables TV, and transform           TD-ASR and N = 4 hypotheses per utterance. The
+these according to our trained SKF. The resulting            effect of α is clearly non-monotonic, with articula-
+predicted and transformed sequences are aligned              tory information clearly proving useful. Although
+with our measurements derived from EMA with                  systems whose rankings are weighted solely by the
+dynamic time warping. Finally, we measure the                articulatory component perform better than the ex-
+average difference between the observed data and             clusively acoustic systems, the lists available to the
+the predicted (canonical and transformed) tract              former are procured from standard acoustic ASR.
+variables. Table 3 shows these differences accord-           Interestingly, the gap between systems trained to
+ing to the phonological manner of articulation. In           the two databases increases as α approaches 1.0.
+all cases the transformed tract variable motion is           Although this gap is not significant, it may be the
+more accurate, and significantly so at the 95% con-          result of increased inter-speaker articulatory varia-
+fidence level for nasal and retroflex phonemes, and          tion in the TORGO database, which includes more
+at 99% for fricatives. The practical utility of the          than twice as many speakers as MOCHA.
+transformation component is evaluated in its effect             Figure 7 shows the WER obtained with TD-
+on recognition rates, as described below.                    ASR given varying-length N-best lists and α =
+                                                             0.7. TD-ASR accuracy at N = 4 is significantly
+6.2    Recognition with TD-ASR
+                                                             better than both TD-ASR at N = 2 and the base-
+With the performance of the components of TD-                line approaches of table 1 at the 95% confidence
+ASR better understood, we combine these and                  level. However, for N > 4 there is a noticeable
+study the resulting composite TD-ASR system.                 and systematic worsening of performance.
+
+
+                                                      66
+
+
+              9.8                                                 errors in speech recognition, especially if that
+                                                 TORGO            knowledge is motivated by high-level abstrac-
+              9.6                                MOCHA
+                                                                  tions of vocal tract behaviour. Task dynamic the-
+              9.4
+                                                                  ory provides a coherent and biologically plausible
+              9.2                                                 model of speech production with consequences for
+    WER (%)
+
+
+
+
+               9                                                  phonology (Browman and Goldstein, 1986), neu-
+              8.8                                                 rolinguistics (Guenther and Perkell, 2004), and the
+              8.6                                                 evolution of speech and language (Goldstein et al.,
+                                                                  2006). We have shown that it is also useful within
+              8.4
+                                                                  speech recognition.
+              8.2
+                 2   3    4       5        6     7       8            We have overcome a conceptual impediment in
+                         Length of N−best list
+                                                                  integrating task dynamics and ASR, which is the
+Figure 7: Word-error-rate according to vary-                      former’s deterministic nature. This integration is
+ing lengths of N-best hypotheses used, for both                   accomplished by stochastically transforming pre-
+TORGO and MOCHA data.                                             dicted articulatory dynamics and by calculating
+                                                                  the likelihoods of these dynamics according to
+                                                                  speaker data. However, there are several new av-
+   The optimal parameterization of the TD-ASR                     enues for exploration. For example, task dynamics
+model results in an average word-error-rate of                    lends itself to more general applications of con-
+8.43%, which represents a 10.3% relative error re-                trol theory, including automated self-correction,
+duction over the best parameterization of our base-               rhythm, co-ordination, and segmentation (Fried-
+line models. The SKF model of section 4 differs                   land, 2005). Other high-level questions also re-
+from the HMM and DBN-A baseline models only                       main, such as whether discrete gestures are the
+in its use of continuous (rather than discrete) hid-              correct biological and practical paradigm, whether
+den dynamics and in its articulatory observations.                a purely continuous representation would be more
+However, its performance is far more variable, and                appropriate, and whether this approach general-
+less conclusive. On the MOCHA database the                        izes to other languages.
+SKF model had an average of 9.54% WER with                            In general, our experiments have revealed very
+a standard deviation of 0.73 over 5 trials, and an                little difference between the use of MOCHA and
+average of 9.04% WER with a standard deviation                    TORGO EMA data. An ad hoc analysis of some
+of 0.64 over 5 trials on the TORGO database. De-                  of the errors produced by the TD-ASR system
+spite the presupposed utility of direct articulatory              found no particular difference between how sys-
+observations, the SKF system does not perform                     tems trained to each of these databases recognized
+significantly better than the best DBN-A model.                   nasal phonemes, although only those trained with
+   Finally, the experiments of tables 6 and 7 are                 MOCHA considered velum motion. Other errors
+repeated with the canonical tract variables passed                common to both sources of data include phoneme
+untransformed to the probability maps generated                   insertion errors, normally vowels, which appear to
+by the MDNs. Predictably, resulting articulatory                  co-occur with some spurious motion of the tongue
+likelihoods LΛ are less representative and increas-               between segments, especially for longer N-best
+ing their contribution α to the hypothesis rerank-                lists. Despite the relative slow motion of the ar-
+ing does not improve TD-ASR performance sig-                      ticulators relative to acoustics, there remains some
+nificantly, and in some instances worsens it. Al-                 intermittent noise.
+though TADA is a useful prescriptive model of                         As more articulatory data becomes available
+generic articulation, its use must be tempered with               and as theories of speech production become more
+knowledge of inter-speaker variability.                           refined, we expect that their combined value to
+                                                                  speech recognition will become indispensable.
+7             Discussion and conclusions
+                                                                  Acknowledgments
+The articulatory medium of speech rarely informs
+modern speech recognition. We have demon-                         This research is funded by the Natural Sciences
+strated that the use of direct articulatory knowl-                and Engineering Research Council and the Uni-
+edge can substantially reduce phoneme and word                    versity of Toronto.
+
+
+                                                             67
+
+
+References                                                           Kevin Patrick Murphy. 2002. Dynamic Bayesian Networks:
+                                                                       Representation, Inference and Learning. Ph.D. thesis,
+Catherine P. Browman and Louis M. Goldstein. 1986. To-                 University of California at Berkeley.
+  wards an articulatory phonology. Phonology Yearbook,
+  3:219–252.                                                         Hosung Nam and Louis Goldstein. 2006. TADA (TAsk Dy-
+                                                                       namics Application) manual.
+Alessandro D’Ausilio, Friedemann Pulvermuller, Paola
+  Salmas, Ilaria Bufalari, Chiara Begliomini, and Luciano            Hosung Nam and Elliot Saltzman. 2003. A competitive, cou-
+  Fadiga. 2009. The motor somatotopy of speech percep-                 pled oscillator model of syllable structure. In Proceedings
+  tion. Current Biology, 19(5):381–385, February.                      of the 15th International Congress of Phonetic Sciences
+                                                                       (ICPhS 2003), pages 2253–2256, Barcelona, Spain.
+Jianping Deng, M. Bouchard, and Tet Yeap. 2005. Speech
+   Enhancement Using a Switching Kalman Filter with a Per-           Douglas O’Shaughnessy. 2000. Speech Communications –
+   ceptual Post-Filter. In Acoustics, Speech, and Signal Pro-          Human and Machine. IEEE Press, New York, NY, USA.
+   cessing, 2005. Proceedings. (ICASSP ’05). IEEE Interna-
+   tional Conference on, volume 1, pages 1121–1124, 18-23,.          Korin Richmond, Simon King, and Paul Taylor. 2003.
+                                                                       Modelling the uncertainty in recovering articulation from
+Bernard Friedland. 2005. Control System Design: An Intro-              acoustics. Computer Speech and Language, 17:153–172.
+  duction to State-Space Methods. Dover.
+                                                                     Sam T. Roweis. 1999. Data Driven Production Models for
+Zoubin Ghahramani. 1998. Learning dynamic Bayesian net-                Speech Processing. Ph.D. thesis, California Institute of
+  works. In Adaptive Processing of Sequences and Data                  Technology, Pasadena, California.
+  Structures, pages 168–197. Springer-Verlag.
+                                                                     Frank Rudzicz, Pascal van Lieshout, Graeme Hirst, Gerald
+Louis M. Goldstein and Carol Fowler. 2003. Articulatory                 Penn, Fraser Shein, and Talya Wolff. 2008. Towards a
+  phonology: a phonology for public language use. Phonet-               comparative database of dysarthric articulation. In Pro-
+  ics and Phonology in Language Comprehension and Pro-                  ceedings of the eighth International Seminar on Speech
+  duction: Differences and Similarities.                                Production (ISSP’08), Strasbourg France, December.
+
+Louis Goldstein, Dani Byrd, and Elliot Saltzman. 2006. The           Frank Rudzicz. 2009. Applying discretized articulatory
+  role of vocal tract gestural action units in understanding            knowledge to dysarthric speech. In Proceedings of
+  the evolution of phonology. In M.A. Arib, editor, Action              the 2009 IEEE International Conference on Acoustics,
+  to Language via the Mirror Neuron System, pages 215–                  Speech, and Signal Processing (ICASSP09), Taipei, Tai-
+  249. Cambridge University Press, Cambridge, UK.                       wan, April.
+
+Frank H. Guenther and Joseph S. Perkell. 2004. A neu-                Hiroaki Sakoe and Seibi Chiba. 1978. Dynamic program-
+   ral model of speech production and its application to                ming algorithm optimization for spoken word recognition.
+   studies of the role of auditory feedback in speech. In               IEEE Transactions on Acoustics, Speech, and Signal Pro-
+   Ben Maassen, Raymond Kent, Herman Peters, Pascal Van                 cessing, ASSP-26, February.
+   Lieshout, and Wouter Hulstijn, editors, Speech Motor
+   Control in Normal and Disordered Speech, chapter 4,               Elliot L. Saltzman and Kevin G. Munhall. 1989. A dynam-
+   pages 29–49. Oxford University Press, Oxford.                        ical approach to gestural patterning in speech production.
+                                                                        Ecological Psychology, 1(4):333–382.
+William J. Hardcastle and Nigel Hewlett, editors. 1999.
+  Coarticulation – Theory, Data, and Techniques. Cam-                Elliot M. Saltzman, 1986. Task dynamic co-ordination of the
+  bridge University Press.                                              speech articulators: a preliminary model, pages 129–144.
+                                                                        Springer-Verlag.
+Mark Hasegawa-Johnson and Margaret Fleck. 2007. Inter-
+  national Speech Lexicon Project.                                   Tomoki Toda, Alan W. Black, and Keiichi Tokuda. 2008.
+                                                                       Statistical mapping between articulatory movements and
+John Hogden and Patrick Valdez. 2001. A stochastic                     acoustic spectrum using a Gaussian mixture model.
+   articulatory-to-acoustic mapping as a basis for speech              Speech Communication, 50(3):215–227, March.
+   recognition. In Proceedings of the 18th IEEE Instrumen-
+                                                                     Alan Wrench. 1999. The MOCHA-TIMIT articulatory
+   tation and Measurement Technology Conference, 2001.
+                                                                       database, November.
+   IMTC 2001, volume 2, pages 1105–1110 vol.2.
+                                                                     Yana Yunusova, Jordan R. Green, and Antje Mefferd. 2009.
+Katrin Kirchhoff. 1999. Robust Speech Recognition Us-                  Accuracy Assessment for AG500, Electromagnetic Artic-
+  ing Articulatory Information. Ph.D. thesis, University of            ulograph. Journal of Speech, Language, and Hearing Re-
+  Bielefeld, Germany, July.                                            search, 52:547–555, April.
+Alvin M. Liberman and Ignatius G. Mattingly. 1985. The               Victor Zue, Stephanie Seneff, and James Glass. 1989.
+  motor theory of speech perception revised. Cognition,                 Speech Database Development: TIMIT and Beyond. In
+  21:1–36.                                                              Proceedings of ESCA Tutorial and Research Workshop on
+                                                                        Speech Input/Output Assessment and Speech Databases
+Konstantin Markov, Jianwu Dang, and Satoshi Nakamura.                   (SIOA-1989), volume 2, pages 35–40, Noordwijkerhout,
+  2006. Integration of articulatory and spectrum features               The Netherlands.
+  based on the hybrid HMM/BN modeling framework.
+  Speech Communication, 48(2):161–175, February.
+
+Kevin Patrick Murphy. 1998. Switching Kalman Filters.
+  Technical report.
+
+
+                                                                68
+

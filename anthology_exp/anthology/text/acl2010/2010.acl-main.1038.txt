@@ -1,0 +1,586 @@
+                 Conditional Random Fields for Word Hyphenation
+
+                 Nikolaos Trogkanis                                       Charles Elkan
+          Computer Science and Engineering                      Computer Science and Engineering
+          University of California, San Diego                   University of California, San Diego
+           La Jolla, California 92093-0404                       La Jolla, California 92093-0404
+              tronikos@gmail.com                                    elkan@cs.ucsd.edu
+
+
+                      Abstract                                 system, for example, syllable boundaries are an
+                                                               input to the neural network in addition to letter
+    Finding allowable places in words to insert                identities (Sejnowski and Rosenberg, 1988). Of
+    hyphens is an important practical prob-                    course, orthographic syllabification is not a fun-
+    lem. The algorithm that is used most of-                   damental scientific problem in linguistics. Nev-
+    ten nowadays has remained essentially un-                  ertheless, it is a difficult engineering task that is
+    changed for 25 years. This method is the                   worth studying for both practical and intellectual
+    TEX hyphenation algorithm of Knuth and                     reasons.
+    Liang. We present here a hyphenation                          The goal in performing hyphenation is to pre-
+    method that is clearly more accurate. The                  dict a sequence of 0/1 values as a function of a se-
+    new method is an application of condi-                     quence of input characters. This sequential predic-
+    tional random fields. We create new train-                 tion task is significantly different from a standard
+    ing sets for English and Dutch from the                    (non-sequential) supervised learning task. There
+    CELEX European lexical resource, and                       are at least three important differences that make
+    achieve error rates for English of less than               sequence prediction difficult. First, the set of all
+    0.1% for correctly allowed hyphens, and                    possible sequences of labels is an exponentially
+    less than 0.01% for Dutch. Experiments                     large set of possible outputs. Second, different in-
+    show that both the Knuth/Liang method                      puts have different lengths, so it is not obvious
+    and a leading current commercial alterna-                  how to represent every input by a vector of the
+    tive have error rates several times higher                 same fixed length, as is almost universal in su-
+    for both languages.                                        pervised learning. Third and most important, too
+                                                               much information is lost if we learn a traditional
+1   Introduction
+                                                               classifier that makes a prediction for each letter
+The task that we investigate is learning to split              separately. Even if the traditional classifier is a
+words into parts that are conventionally agreed to             function of the whole input sequence, this remains
+be individual written units. In many languages, it             true. In order to achieve high accuracy, correla-
+is acceptable to separate these units with hyphens,            tions between neighboring predicted labels must
+but it is not acceptable to split words arbitrarily.           be taken into account.
+Another way of stating the task is that we want to                Learning to predict a sequence of output labels,
+learn to predict for each letter in a word whether or          given a sequence of input data items, is an instance
+not it is permissible for the letter to be followed by         of a structured learning problem. In general, struc-
+a hyphen. This means that we tag each letter with              tured learning means learning to predict outputs
+either 1, for hyphen allowed following this letter,            that have internal structure. This structure can
+or 0, for hyphen not allowed after this letter.                be modeled; to achieve high predictive accuracy,
+   The hyphenation task is also called ortho-                  when there are dependencies between parts of an
+graphic syllabification (Bartlett et al., 2008). It is         output, it must be modeled. Research on struc-
+an important issue in real-world text processing,              tured learning has been highly successful, with
+as described further in Section 2 below. It is also            sequence classification as its most important and
+useful as a preprocessing step to improve letter-to-           successful subfield, and with conditional random
+phoneme conversion, and more generally for text-               fields (CRFs) as the most influential approach to
+to-speech conversion. In the well-known NETtalk                learning sequence classifiers. In the present paper,
+
+
+                                                         366
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 366–374,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+we show that CRFs can achieve extremely good                  95.65% for English. Moreover, (Bartlett et al.,
+performance on the hyphenation task.                          2008) do not address the issue that false positive
+                                                              hyphens are worse mistakes than false negative hy-
+2   History of automated hyphenation                          phens, which we address below. Also, they report
+                                                              that training on 14,000 examples requires about an
+The earliest software for automatic hyphenation               hour, compared to 6.2 minutes for our method on
+was implemented for RCA 301 computers, and                    65,828 words. Perhaps more important for large-
+used by the Palm Beach Post-Tribune and Los An-               scale publishing applications, our system is about
+geles Times newspapers in 1962. These were two                six times faster at syllabifying new text. The speed
+different systems. The Florida system had a dic-              comparison is fair because the computer we use is
+tionary of 30,000 words; words not in the dictio-             slightly slower than the one they used.
+nary were hyphenated after the third, fifth, or sev-
+enth letter, because the authors observed that this              Methods inspired by nonstatistical natural lan-
+was correct for many words. The California sys-               guage processing research have also been pro-
+tem (Friedlander, 1968) used a collection of rules            posed for the hyphenation task, in particular
+based on the rules stated in a version of Webster’s           (Bouma, 2003; Tsalidis et al., 2004; Woestenburg,
+dictionary. The earliest hyphenation software for             2006; Haralambous, 2006). However, the methods
+a language other than English may have been a                 for Dutch presented in (Bouma, 2003) were found
+rule-based program for Finnish first used in 1964             to have worse performance than TEX. Moreover,
+(Jarvi, 2009).                                                our experimental results below show that the com-
+                                                              mercial software of (Woestenburg, 2006) allows
+   The first formal description of an algorithm for
+                                                              hyphens incorrectly almost three times more often
+hyphenation was in a patent application submit-
+                                                              than TEX.
+ted in 1964 (Damerau, 1964). Other early pub-
+lications include (Ocker, 1971; Huyser, 1976).                   In general, a dictionary based approach has zero
+The hyphenation algorithm that is by far the most             errors for words in the dictionary, but fails to work
+widely used now is due to Liang (Liang, 1983).                for words not included in it. A rule-based ap-
+Although this method is well-known now as the                 proach requires an expert to define manually the
+one used in TEX and its derivatives, the first ver-           rules and exceptions for each language, which is
+sion of TEX used a different, simpler method.                 laborious work. Furthermore, for languages such
+Liang’s method was used also in troff and                     as English where hyphenation does not system-
+groff, which were the main original competitors               atically follow general rules, such an approach
+of TEX, and is part of many contemporary software             does not have good results. A pattern-learning ap-
+products, supposedly including Microsoft Word.                proach, like that of TEX, infers patterns from a
+Any major improvement over Liang’s method is                  training list of hyphenated words, and then uses
+therefore of considerable practical and commer-               these patterns to hyphenate text. Although useful
+cial importance.                                              patterns are learned automatically, both the TEX
+   Over the years, various machine learning meth-             learning algorithm and the learned patterns must
+ods have been applied to the hyphenation task.                be hand-tuned to perform well (Liang, 1983).
+However, none have achieved high accuracy. One                   Liang’s method is implemented in a program
+paper that presents three different learning meth-            named PATGEN, which takes as input a training
+ods is (van den Bosch et al., 1995). The lowest               set of hyphenated words, and outputs a collection
+per-letter test error rate reported is about 2%. Neu-         of interacting hyphenation patterns. The standard
+ral networks have been used, but also without great           pattern collections are named hyphen.tex for
+success. For example, the authors of (Kristensen              American English, ukhyphen.tex for British
+and Langmyhr, 2001) found that the TEX method                 English, and nehyph96.tex for Dutch. The
+is a better choice for hyphenating Norwegian.                 precise details of how different versions of TEX
+   The highest accuracy achieved until now for the            and LATEX use these pattern collections to do hy-
+hyphenation task is by (Bartlett et al., 2008), who           phenation in practice are unclear. At a minimum,
+use a large-margin structured learning approach.              current variants of TEX improve hyphenation ac-
+Our work is similar, but was done fully indepen-              curacy by disallowing hyphens in the first and last
+dently. The accuracy we achieve is slightly higher:           two or three letters of every word, regardless of
+word-level accuracy of 96.33% compared to their               what the PATGEN patterns recommend.
+
+
+                                                        367
+
+
+   Despite the success of Liang’s method, incor-                  The software we use as an implementation of
+rect hyphenations remain an issue with TEX and                 conditional random fields is named CRF++ (Kudo,
+its current variants and competitors. For instance,            2007). This implementation offers fast training
+incorrect hyphenations are common in the Wall                  since it uses L-BFGS (Nocedal and Wright, 1999),
+Street Journal, which has the highest circulation              a state-of-the-art quasi-Newton method for large
+of any newspaper in the U.S. An example is the                 optimization problems. We adopt the default pa-
+hyphenation of the word “sudden” in this extract:              rameter settings of CRF++, so no development set
+                                                               or tuning set is needed in our work.
+                                                                  We define indicator functions fj that depend on
+                                                               substrings of the input word, and on whether or
+                                                               not a hyphen is legal after the current and/or the
+                                                               previous letter. The substrings are of length 2 to
+                                                               5, covering up to 4 letters to the left and right of
+It is the case that most hyphenation mistakes in the           the current letter. From all possible indicator func-
+Wall Street Journal and other media are for proper             tions we use only those that involve a substring
+nouns such as “Netflix” that do not appear in stan-            that occurs at least once in the training data.
+dard dictionaries, or in compound words such as                   As an example,            consider the word
+“sudden-acceleration” above.                                   hy-phen-ate. For this word x̄ = hyphenate
+                                                               and ȳ = 010001000. Suppose i = 3 so p is the
+3     Conditional random fields                                current letter. Then exactly two functions fj that
+A linear-chain conditional random field (Lafferty              depend on substrings of length 2 have value 1:
+et al., 2001) is a way to use a log-linear model               I(yi−1 = 1 and yi = 0 and x2 x3 = yp) = 1,
+for the sequence prediction task. We use the bar
+                                                               I(yi−1 = 1 and yi = 0 and x3 x4 = ph) = 1.
+notation for sequences, so x̄ means a sequence of
+variable length. Specifically, let x̄ be a sequence            All other similar functions have value 0:
+of n letters and let ȳ be a corresponding sequence
+of n tags. Define the log-linear model                         I(yi−1 = 1 and yi = 1 and x2 x3 = yp) = 0,
+                                                               I(yi−1 = 1 and yi = 0 and x2 x3 = yq) = 0,
+                     1         X
+    p(ȳ|x̄; w) =          exp   wj Fj (x̄, ȳ).
+                  Z(x̄, w)     j
+                                                               and so on. There are similar indicator functions for
+                                                               substrings up to length 5. In total, 2,916,942 dif-
+The index j ranges over a large set of feature-                ferent indicator functions involve a substring that
+functions. Each such function Fj is a sum along                appears at least once in the English dataset.
+the output sequence for i = 1 to i = n:                           One finding of our work is that it is prefer-
+                         n
+                         X                                     able to use a large number of low-level features,
+         Fj (x̄, ȳ) =         fj (yi−1 , yi , x̄, i)          that is patterns of specific letters, rather than a
+                         i=1                                   smaller number of higher-level features such as
+where each function fj is a 0/1 indicator function             consonant-vowel patterns. This finding is consis-
+that picks out specific values for neighboring tags            tent with an emerging general lesson about many
+yi−1 and yi and a particular substring of x̄. The              natural language processing tasks: the best perfor-
+denominator Z(x̄, w) is a normalizing constant:                mance is achieved with models that are discrimi-
+                     X              X                          native, that are trained on as large a dataset as pos-
+       Z(x̄, w) =             exp       wj Fj (x̄, ȳ)         sible, and that have a very large number of param-
+                         ȳ         j                          eters but are regularized (Halevy et al., 2009).
+where the outer sum is over all possible labelings                When evaluating the performance of a hyphen-
+ȳ of the input sequence x̄. Training a CRF means              ation algorithm, one should not just count how
+finding a weight vector w that gives the best pos-             many words are hyphenated in exactly the same
+sible predictions                                              way as in a reference dictionary. One should also
+                                                               measure separately how many legal hyphens are
+             ȳ ∗ = arg max p(ȳ|x̄; w)                        actually predicted, versus how many predicted hy-
+                               ȳ
+                                                               phens are in fact not legal. Errors of the sec-
+for each training example x̄.                                  ond type are false positives. For any hyphenation
+
+
+                                                         368
+
+
+method, a false positive hyphen is a more serious             isolation can be a complete solution for the hy-
+mistake than a false negative hyphen, i.e. a hyphen           phenation task.1
+allowed by the lexicon that the method fails to                  We exclude the few words that have two or more
+identify. The standard Viterbi algorithm for mak-             different hyphenations from the dataset. Finally,
+ing predictions from a trained CRF is not tuned to            we obtain 65,828 spellings. These have 550,290
+minimize false positives. To address this difficulty,         letters and 111,228 hyphens, so the average is 8.36
+we use the forward-backward algorithm (Sha and                letters and 1.69 hyphens per word. Informal in-
+Pereira, 2003; Culotta and McCallum, 2004) to es-             spection suggests that the 65,828 spellings contain
+timate separately for each position the probability           no mistakes. However, about 1000 words follow
+of a hyphen at that position. Then, we only allow a           British as opposed to American spelling.
+hyphen if this probability is over a high threshold              The Dutch dataset of 293,681 words is created
+such as 0.9.                                                  following the same procedure as for the English
+   Each hyphenation corresponds to one path                   dataset, except that all entries from CELEX that
+through a graph that defines all 2k−1 hyphenations            are compound words containing dashes are dis-
+that are possible for a word of length k. The over-           carded instead of being split into parts, since many
+all probability of a hyphen at any given location             of these are not in fact Dutch words.2
+is the sum of the weights of all paths that do have
+a hyphen at this position, divided by the sum of              5    Experimental design
+the weights of all paths. The forward-backward                We use ten-fold cross validation for the experi-
+algorithm uses the sum operator to compute the                ments. In order to measure accuracy, we com-
+weight of a set of paths, instead of the max op-              pute the confusion matrix for each method, and
+erator to compute the weight of a single highest-             from this we compute error rates. We report both
+weight path. In order to compute the weight of all            word-level and letter-level error rates. The word-
+paths that contain a hyphen at a specific location,           level error rate is the fraction of words on which
+weight 0 is assigned to all paths that do not have a          a method makes at least one mistake. The letter-
+hyphen at this location.                                      level error rate is the fraction of letters for which
+                                                              the method predicts incorrectly whether or not a
+4   Dataset creation                                          hyphen is legal after this letter. Table 1 explains
+                                                              the terminology that we use in presenting our re-
+We start with the lexicon for English published
+                                                              sults. Precision, recall, and F1 can be computed
+by the Dutch Centre for Lexical Information at
+                                                              easily from the reported confusion matrices.
+http://www.mpi.nl/world/celex. We
+                                                                 As an implementation of Liang’s method we
+download all English word forms with legal hy-
+                                                              use TEX Hyphenator in Java software available
+phenation points indicated by hyphens. These
+                                                              at http://texhyphj.sourceforge.net.
+include plurals of nouns, conjugated forms of
+                                                              We evaluate this algorithm on our entire English
+verbs, and compound words such as “off-line”.
+                                                              and Dutch datasets using the appropriate language
+We separate the components of compound words
+                                                              pattern files, and not allowing a hyphen to be
+and phrases, leading to 204,466 words, of which
+                                                              placed between the first lefthyphenmin and
+68,744 are unique. In order to eliminate abbrevia-
+                                                              last righthyphenmin letters of each word. For
+tions and proper names which may not be English,
+                                                                  1
+we remove all words that are not fully lower-case.                  The single word with more than two alternative
+In particular, we exclude words that contain capi-            hyphenations is “invalid” whose three hyphenations are
+                                                              in-va-lid in-val-id and in-valid.                      Interest-
+tal letters, apostrophes, and/or periods. This leaves         ingly, the Merriam–Webster online dictionary also gives
+66,001 words.                                                 three hyphenations for this word, but not the same ones:
+                                                              in-va-lid in-val-id invalid.                    The American
+   Among these words, 86 have two different hy-               Heritage dictionary agrees with Merriam-Webster. The dis-
+phenations, and one has three hyphenations. For               agreement illustrates that there is a certain irreducible ambi-
+most of the 86 words with alternative hyphen-                 guity or subjectivity concerning the correctness of hyphen-
+                                                              ations.
+ations, these alternatives exist because different                2
+                                                                    Our English and Dutch datasets are available for other
+meanings of the words have different pronuncia-               researchers and practitioners to use at http://www.cs.
+tions, and the different pronunciations have differ-          ucsd.edu/users/elkan/hyphenation. Previously
+                                                              a similar but smaller CELEX-based English dataset was cre-
+ent boundaries between syllables. This fact im-               ated by (van den Bosch et al., 1995), but that dataset is not
+plies that no algorithm that operates on words in             available online currently.
+
+
+                                                        369
+
+
+                      Abbr   Name                              Description
+                      TP     true positives                    #hyphens predicted correctly
+                      FP     false positives                   #hyphens predicted incorrectly
+                      TN     true negatives                    #hyphens correctly not predicted
+                      FN     false negatives                   #hyphens failed to be predicted
+                      owe    overall word-level errors         #words with at least one FP or FN
+                      swe    serious word-level errors         #words with at least one FP
+                      ower   overall word-level error rate     owe / (total #words)
+                      swer   serious word-level error rate     swe / (total #words)
+                      oler   overall letter-level error rate   (FP+FN) / (TP+TN+FP+FN)
+                      sler   serious letter-level error rate   FP / (TP+TN+FP+FN)
+
+Table 1: Alternative measures of accuracy. TP, TN, FP, and FN are computed by summing over the test
+sets of each fold of cross-validation.
+
+English the default values are 2 and 3 respectively.           6   Experimental results
+For Dutch the default values are both 2.
+                                                               In Table 2 and Table 3 we report the performance
+   The hyphenation patterns used by TeXHyphen-                 of the different methods on the English and Dutch
+ator, which are those currently used by essentially            datasets respectively. Figure 1 shows how the er-
+all variants of TEX, may not be optimal for our                ror rate is affected by increasing the CRF proba-
+new English and Dutch datasets. Therefore, we                  bility threshold for each language.
+also do experiments with the PATGEN tool (Liang                   Figure 1 shows confidence intervals for the er-
+and Breitenlohner, 2008). These are learning ex-               ror rates. These are computed as follows. For a
+periments so we also use ten-fold cross validation             single Bernoulli trial the mean is p and the vari-
+in the same way as with CRF++. Specifically, we                ance is p(1 − p). If N such trials are taken, then
+create a pattern file from 90% of the dataset us-              the observed success rate f = S/N is a random
+ing PATGEN, and then hyphenate the remaining                   variable with mean p and variance p(1 − p)/N .
+10% of the dataset using Liang’s algorithm and the             For large N , the distribution of the random vari-
+learned pattern file.                                          able f approaches the normal distribution. Hence
+   The PATGEN tool has many user-settable pa-                  we can derive a confidence interval for p using the
+rameters. As is the case with many machine learn-              formula
+ing methods, no strong guidance is available for
+                                                                                     f −p
+choosing values for these parameters. For En-                       P r[−z ≤ p                ≤ z] = c
+glish we use the parameters reported in (Liang,                                    p(1 − p)/N
+1983). For Dutch we use the parameters reported                where for a 95% confidence interval, i.e. for c =
+in (Tutelaers, 1999). Preliminary informal exper-              0.95, we set z = 1.96. All differences between
+iments found that these parameters work better                 rows in Table 2 are significant, with one exception:
+than alternatives. We also disallow hyphens in the             the serious error rates for PATGEN and TALO are
+first two letters of every word, and the last three            not statistically significantly different. A similar
+letters for English, or last two for Dutch.                    conclusion applies to Table 3.
+   We also evaluate the TALO commercial soft-                     For the English language, the CRF using the
+ware (Woestenburg, 2006). We know of one                       Viterbi path has overall error rate of 0.84%, com-
+other commercial hyphenation application, which                pared to 6.81% for the TEX algorithm using Amer-
+is named Dashes.3 Unfortunately we do not have                 ican English patterns, which is eight times worse.
+access to it for evaluation. We also cannot do a               However, the serious error rate for the CRF is less
+precise comparison with the method of (Bartlett et             good: 0.41% compared to 0.24%. This weak-
+al., 2008). We do know that their training set was             ness is remedied by predicting that a hyphen is al-
+also derived from CELEX, and their maximum                     lowable only if it has high probability. Figure 1
+reported accuracy is slightly lower. Specifically,             shows that the CRF can use a probability thresh-
+for English our word-level accuracy (“ower”) is                old up to 0.99, and still have lower overall error
+96.33% while their best (“WA”) is 95.65%.                      rate than the TEX algorithm. Fixing the probabil-
+                                                               ity threshold at 0.99, the CRF serious error rate
+  3
+    http://www.circlenoetics.com/dashes.                       is 0.04% (224 false positives) compared to 0.24%
+aspx                                                           (1343 false positives) for the TEX algorithm.
+
+
+                                                         370
+
+
+           8
+                                   English                             0.9
+                                                                                                 Dutch
+           7                                                           0.8
+           6                                                           0.7
+                    PATGEN                                             0.6
+           5        TeX
+% oler
+
+
+                                                                       0.5
+           4        TALO                                               0.4
+           3        CRF                                                0.3
+           2                                                           0.2
+           1                                                           0.1
+         0.8                                                          0.35
+         0.7                                                          0.30
+         0.6                                                          0.25
+         0.5                                                          0.20
+% sler
+
+
+
+
+         0.4
+         0.3                                                          0.15
+         0.2                                                          0.10
+         0.1                                                          0.05
+         0.0                                                          0.00
+           0.90 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99             0.90 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99
+                           Probability threshold                                          Probability threshold
+  Figure 1: Total letter-level error rate and serious letter-level error rate for different values of threshold for
+  the CRF. The left subfigures are for the English dataset, while the right ones are for the Dutch dataset.
+  The TALO and PATGEN lines are almost identical in the bottom left subfigure.
+     Method                        TP           FP      TN         FN       owe         swe % ower % swer % oler % sler
+     Place no hyphen                0            0   439062     111228    57541           0  87.41   0.00 20.21   0.00
+     TEX (hyphen.tex)           75093         1343   437719      36135    30337        1311  46.09   1.99  6.81   0.24
+     TEX (ukhyphen.tex)         70307        13872   425190      40921    31337       11794  47.60  17.92  9.96   2.52
+     TALO                      104266         3970   435092       6962     7213        3766  10.96   5.72  1.99   0.72
+     PATGEN                     74397         3934   435128      36831    32348        3803  49.14   5.78  7.41   0.71
+     CRF                       108859         2253   436809       2369     2413        2080   3.67   3.16  0.84   0.41
+     CRF (threshold = 0.99)     83021          224   438838      28207    22992         221  34.93   0.34  5.17   0.04
+
+                                       Table 2: Performance on the English dataset.
+     Method                        TP          FP        TN        FN        owe       swe % ower % swer % oler % sler
+     Place no hyphen                0           0    2438913    742965    287484         0  97.89   0.00 23.35   0.00
+     TEX (nehyph96.tex)        722789        5580    2433333     20176     20730      5476   7.06   1.86  0.81   0.18
+     TALO                      727145        3638    2435275     15820     16346      3596   5.57   1.22  0.61   0.11
+     PATGEN                    730720        9660    2429253     12245     20318      9609   6.92   3.27  0.69   0.30
+     CRF                       741796        1230    2437683      1169      1443      1207   0.49   0.41  0.08   0.04
+     CRF (threshold = 0.99)    719710         149    2438764     23255     22067       146   7.51   0.05  0.74   0.00
+
+                                        Table 3: Performance on the Dutch dataset.
+     Method                        TP          FP         TN        FN          owe     swe % ower % swer % oler % sler
+     PATGEN                     70357        6763      432299     40871       35013    6389  53.19   9.71  8.66   1.23
+     CRF                       104487        6518      432544      6741        6527    5842   9.92   8.87  2.41   1.18
+     CRF (threshold = 0.99)     75651         654      438408     35577       27620     625  41.96   0.95  6.58   0.12
+
+              Table 4: Performance on the English dataset (10-fold cross validation dividing by stem).
+     Method                        TP           FP       TN        FN       owe         swe % ower % swer % oler % sler
+     PATGEN                    727306        13204   2425709     15659    25363       13030   8.64   4.44  0.91   0.41
+     CRF                       740331         2670   2436243      2634     3066        2630   1.04   0.90  0.17   0.08
+     CRF (threshold = 0.99)    716596          383   2438530     26369    24934         373   8.49   0.13  0.84   0.01
+
+              Table 5: Performance on the Dutch dataset (10-fold cross validation dividing by stem).
+           Method                     TP       FP      TN       FN      owe     swe   % ower   % swer     % oler   % sler
+           TEX                      2711       43    21433     1420    1325      43    33.13     1.08      5.71     0.17
+           PATGEN                   2590      113    21363     1541    1466     113    36.65     2.83      6.46     0.44
+           CRF                      4129        2    21474        2       2       2     0.05     0.05      0.02     0.01
+           CRF (threshold = 0.9)    4065        0    21476       66      63       0     1.58     0.00      0.26     0.00
+
+                           Table 6: Performance on the 4000 most frequent English words.
+
+
+                                                                 371
+
+
+   For the English language, TALO yields overall               (Sojka and Sevecek, 1995), we obtain overall er-
+error rate 1.99% with serious error rate 0.72%, so             ror rate of 6.05% and serious error rate of 0.85%.
+the standard CRF using the Viterbi path is better              It is possible that the specific patterns used in TEX
+on both measures. The dominance of the CRF                     implementations today have been tuned by hand
+method can be increased further by using a prob-               to be better than anything the PATGEN software is
+ability threshold. Figure 1 shows that the CRF                 capable of.
+can use a probability threshold up to 0.94, and
+still have lower overall error rate than TALO. Us-             7       Additional experiments
+ing this threshold, the CRF serious error rate is              This section presents empirical results following
+0.12% (657 false positives) compared to 0.72%                  two experimental designs that are less standard,
+(3970 false positives) for TALO.                               but that may be more appropriate for the hyphen-
+   For the Dutch language, the standard CRF us-                ation task.
+ing the Viterbi path has overall error rate 0.08%,                First, the experimental design used above has
+compared to 0.81% for the TEX algorithm. The                   an issue shared by many CELEX-based tagging
+serious error rate for the CRF is 0.04% while for              or transduction evaluations: words are randomly
+TEX it is 0.18%. Figure 1 shows that any probabil-             divided into training and test sets without be-
+ity threshold for the CRF of 0.99 or below yields              ing grouped by stem. This means that a method
+lower error rates than the TEX algorithm. Using                can get credit for hyphenating “accents” correctly,
+the threshold 0.99, the CRF has serious error rate             when “accent” appears in the training data. There-
+only 0.005%.                                                   fore, we do further experiments where the folds
+   For the Dutch language, the TALO method has                 for evaluation are divided by stem, and not by
+overall error rate 0.61%. The serious error rate               word; that is, all versions of a base form of a
+for TALO is 0.11%. The CRF dominance can                       word appear in the same fold. Stemming uses
+again be increased via a high probability thresh-              the English and Dutch versions of the Porter stem-
+old. Figure 1 shows that this threshold can range              mer (Porter, 1980).4 The 65,828 English words in
+up to 0.98, and still give lower overall error rate            our dictionary produce 27,100 unique stems, while
+than TALO. Using the 0.98 threshold, the CRF                   the 293,681 Dutch words produce 169,693 unique
+has serious error rate 0.006% (206 false positives);           stems. The results of these experiments are shown
+in comparison the serious error rate of TALO is                in Tables 4 and 5.
+0.11% (3638 false positives).                                     The main evaluation in the previous section is
+   For both languages, PATGEN has higher serious               based on a list of unique words, which means that
+letter-level and word-level error rates than TEX us-           in the results each word is equally weighted. Be-
+ing the existing pattern files. This is expected since         cause cross validation is applied, errors are always
+the pattern collections included in TEX distribu-              measured on testing subsets that are disjoint from
+tions have been tuned over the years to minimize               the corresponding training subsets. Hence, the
+objectionable errors. The difference is especially             accuracy achieved can be interpreted as the per-
+pronounced for American English, for which the                 formance expected when hyphenating unknown
+standard pattern collection has been manually im-              words, i.e. rare future words.
+proved over more than two decades by many peo-                    However, in real documents common words
+ple (Beeton, 2002). Initially, Liang optimized this            appear repeatedly. Therefore, the second less-
+pattern collection extensively by upweighting the              standard experimental design for which we report
+most common words and by iteratively adding                    results restricts attention to the most common En-
+exception words found by testing the algorithm                 glish words. Specifically, we consider the top
+against a large dictionary from an unknown pub-                4000 words that make up about three quarters of
+lisher (Liang, 1983).                                          all word appearances in the American National
+                                                               Corpus, which consists of 18,300,430 words from
+   One can tune PATGEN to yield either better
+                                                               written texts of all genres.5 From the 4,471 most
+overall error rate, or better serious error rate, but
+                                                                   4
+not both simultaneously, compared to the TEX al-                     Available at http://snowball.tartarus.org/.
+gorithm using the existing pattern files for both              A preferable alternative might be to use the information about
+                                                               the lemmas of words available directly in CELEX.
+languages. For the English dataset, if we use                      5
+                                                                     Available at americannationalcorpus.org/
+Liang’s parameters for PATGEN as reported in                   SecondRelease/data/ANC-written-count.txt
+
+
+                                                         372
+
+
+frequent words in this list, if we omit the words                       Features/   Training     Testing       Speed
+                                                             Method      Patterns    time (s)   time (s)   (ms/word)
+not in our dataset of 89,019 hyphenated English              CRF        2916942       372.67     25.386        0.386
+words from CELEX, we get 4,000 words. The                    TEX (us)       4447            -     2.749        0.042
+words that are omitted are proper names, contrac-            PATGEN         4488      33.402      2.889        0.044
+                                                             TALO               -           -     8.400        0.128
+tions, incomplete words containing apostrophes,
+and abbreviations such as DNA. These 4,000 most             Table 7: Timings for the English dataset (training
+frequent words make up 74.93% of the whole cor-             and testing on the whole dataset that consists of
+pus.                                                        65,828 words).
+   We evaluate the following methods on the 4000
+words: Liang’s method using the American pat-
+                                                            plication of CRFs, which are a major advance of
+terns file hyphen.tex, Liang’s method using
+                                                            recent years in machine learning. We hope that
+the patterns derived from PATGEN when trained
+                                                            the method proposed here is adopted in practice,
+on the whole English dataset, our CRF trained on
+                                                            since the number of serious errors that it makes
+the whole English dataset, and the same CRF with
+                                                            is about a sixfold improvement over what is cur-
+a probability threshold of 0.9. Results are shown
+                                                            rently in use. A second contribution of this pa-
+in Table 6. In summary, TEX and PATGEN make
+                                                            per is to provide training sets for hyphenation in
+serious errors on 43 and 113 of the 4000 words,
+                                                            English and Dutch, so other researchers can, we
+respectively. With a threshold of 0.9, the CRF ap-
+                                                            hope, soon invent even more accurate methods. A
+proach makes zero serious errors on these words.
+                                                            third contribution of our work is a demonstration
+8   Timings                                                 that current CRF methods can be used straightfor-
+                                                            wardly for an important application and outper-
+Table 7 shows the speed of the alternative meth-            form state-of-the-art commercial and open-source
+ods for the English dataset. The column “Fea-               software; we hope that this demonstration acceler-
+tures/Patterns” in the table reports the number of          ates the widespread use of CRFs.
+feature-functions used for the CRF, or the number
+of patterns used for the TEX algorithm. Overall,
+the CRF approach is about ten times slower than             References
+the TEX algorithm, but its performance is still ac-         Susan Bartlett, Grzegorz Kondrak, and Colin Cherry.
+ceptable on a standard personal computer. All ex-             2008. Automatic syllabification with structured
+periments use a machine having a Pentium 4 CPU                SVMs for letter-to-phoneme conversion. Proceed-
+at 3.20GHz and 2GB memory. Moreover, infor-                   ings of ACL-08: HLT, pages 568–576.
+mal experiments show that CRF training would be             Barbara Beeton. 2002. Hyphenation exception log.
+about eight times faster if we used CRFSGD rather             TUGboat, 23(3).
+than CRF++ (Bottou, 2008).
+   From a theoretical perspective, both methods             Léon Bottou. 2008. Stochastic gradient CRF software
+                                                               CRFSGD. Available at http://leon.bottou.
+have almost-constant time complexity per word if               org/projects/sgd.
+they are implemented using appropriate data struc-
+tures. In TEX, hyphenation patterns are stored in           Gosse Bouma. 2003. Finite state methods for hyphen-
+a data structure that is a variant of a trie. The             ation. Natural Language Engineering, 9(1):5–20,
+                                                              March.
+CRF software uses other data structures and op-
+timizations that allow a word to be hyphenated in           Aron Culotta and Andrew McCallum. 2004. Confi-
+time that is almost independent of the number of              dence Estimation for Information Extraction. In Su-
+                                                              san Dumais, Daniel Marcu, and Salim Roukos, edi-
+feature-functions used.
+                                                              tors, HLT-NAACL 2004: Short Papers, pages 109–
+                                                              112, Boston, Massachusetts, USA, May. Associa-
+9   Conclusions                                               tion for Computational Linguistics.
+Finding allowable places in words to insert hy-             Fred J. Damerau. 1964. Automatic Hyphenation
+phens is a real-world problem that is still not               Scheme. U.S. patent 3537076 filed June 17, 1964,
+fully solved in practice. The main contribu-                  issued October 1970.
+tion of this paper is a hyphenation method that             Gordon D. Friedlander. 1968. Automation comes to
+is clearly more accurate than the currently used              the printing and publishing industry. IEEE Spec-
+Knuth/Liang method. The new method is an ap-                  trum, 5:48–62, April.
+
+
+                                                      373
+
+
+Alon Halevy, Peter Norvig, and Fernando Pereira.                Christos Tsalidis, Giorgos Orphanos, Anna Iordanidou,
+  2009. The Unreasonable Effectiveness of Data.                   and Aristides Vagelatos. 2004. Proofing Tools
+  IEEE Intelligent Systems, 24(2):8–12.                           Technology at Neurosoft S.A. ArXiv Computer Sci-
+                                                                  ence e-prints, (cs/0408059), August.
+Yannis Haralambous. 2006. New hyphenation tech-
+  niques in Ω2 . TUGboat, 27:98–103.                            P.T.H. Tutelaers, 1999. Afbreken in TEX, hoe werkt dat
+                                                                   nou? Available at ftp://ftp.tue.nl/pub/
+Steven L. Huyser. 1976. AUTO-MA-TIC WORD DI-                       tex/afbreken/.
+   VI-SION. SIGDOC Asterisk Journal of Computer
+   Documentation, 3(5):9–10.                                    Antal van den Bosch, Ton Weijters, Jaap Van Den
+                                                                  Herik, and Walter Daelemans. 1995. The profit
+Timo Jarvi. 2009. Computerized Typesetting and                    of learning exceptions. In Proceedings of the 5th
+  Other New Applications in a Publishing House. In                Belgian-Dutch Conference on Machine Learning
+  History of Nordic Computing 2, pages 230–237.                   (BENELEARN), pages 118–126.
+  Springer.
+                                                                Jaap C. Woestenburg, 2006.     *TALO’s Lan-
+Terje Kristensen and Dag Langmyhr. 2001. Two                       guage Technology, November.   Available at
+  regimes of computer hyphenation–a comparison.                    http://www.talo.nl/talo/download/
+  In Proceedings of the International Joint Confer-                documents/Language_Book.pdf.
+  ence on Neural Networks (IJCNN), volume 2, pages
+  1532–1535.
+Taku Kudo, 2007.        CRF++: Yet Another CRF
+  Toolkit. Version 0.5 available at http://crfpp.
+  sourceforge.net/.
+John Lafferty, Andrew McCallum, and Fernando
+  Pereira. 2001. Conditional random fields: Prob-
+  abilistic models for segmenting and labeling se-
+  quence data. In Proceedings of the 18th Interna-
+  tional Conference on Machine Learning (ICML),
+  pages 282–289.
+Franklin M. Liang and Peter Breitenlohner, 2008. PAT-
+  tern GENeration Program for the TEX82 Hyphen-
+  ator. Electronic documentation of PATGEN pro-
+  gram version 2.3 from web2c distribution on CTAN,
+  retrieved 2008.
+Franklin M. Liang. 1983. Word Hy-phen-a-tion by
+  Com-put-er. Ph.D. thesis, Stanford University.
+Jorge Nocedal and Stephen J. Wright. 1999. Limited
+   memory BFGS. In Numerical Optimization, pages
+   222–247. Springer.
+Wolfgang A. Ocker. 1971. A program to hyphenate
+ English words. IEEE Transactions on Engineering,
+ Writing and Speech, 14(2):53–59, June.
+Martin Porter. 1980. An algorithm for suffix stripping.
+ Program, 14(3):130–137.
+Terrence J. Sejnowski and Charles R. Rosenberg, 1988.
+  NETtalk: A parallel network that learns to read
+  aloud, pages 661–672. MIT Press, Cambridge, MA,
+  USA.
+Fei Sha and Fernando Pereira. 2003. Shallow pars-
+  ing with conditional random fields. Proceedings of
+  the 2003 Conference of the North American Chapter
+  of the Association for Computational Linguistics on
+  Human Language Technology-Volume 1, pages 134–
+  141.
+Petr Sojka and Pavel Sevecek. 1995. Hyphenation in
+  TEX–Quo Vadis? TUGboat, 16(3):280–289.
+
+
+                                                          374
+

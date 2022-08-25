@@ -1,0 +1,588 @@
+                       Letter-Phoneme Alignment: An Exploration
+
+                          Sittichai Jiampojamarn and Grzegorz Kondrak
+                                  Department of Computing Science
+                                        University of Alberta
+                                   Edmonton, AB, T6G 2E8, Canada
+                                {sj,kondrak}@cs.ualberta.ca
+
+
+                      Abstract                                 by a letter-phoneme alignment algorithm before
+    Letter-phoneme alignment is usually gen-                   a prediction model can be trained. The quality
+    erated by a straightforward application of                 of the alignment affects the accuracy of L2P con-
+    the EM algorithm. We explore several al-                   version. Letter-phoneme alignment is closely re-
+    ternative alignment methods that employ                    lated to transliteration alignment (Pervouchine et
+    phonetics, integer programming, and sets                   al., 2009), which involves graphemes representing
+    of constraints, and propose a novel ap-                    different writing scripts. Letter-phoneme align-
+    proach of refining the EM alignment by                     ment may also be considered as a task in itself; for
+    aggregation of best alignments. We per-                    example, in the alignment of speech transcription
+    form both intrinsic and extrinsic evalua-                  with text in spoken corpora.
+    tion of the assortment of methods. We                         Most previous L2P approaches induce the align-
+    show that our proposed EM-Aggregation                      ment between letters and phonemes with the ex-
+    algorithm leads to the improvement of the                  pectation maximization (EM) algorithm. In this
+    state of the art in letter-to-phoneme con-                 paper, we propose a number of alternative align-
+    version on several different data sets.                    ment methods, and compare them to the EM-
+                                                               based algorithms using both intrinsic and extrin-
+1   Introduction                                               sic evaluations. The intrinsic evaluation is con-
+Letter-to-phoneme (L2P) conversion (also called                ducted by comparing the generated alignments to
+grapheme-to-phoneme conversion) is the task of                 a manually-constructed gold standard. The extrin-
+predicting the pronunciation of a word given its               sic evaluation uses two different generation tech-
+orthographic form by converting a sequence of                  niques to perform letter-to-phoneme conversion
+letters into a sequence of phonemes. The L2P                   on several different data sets. We discuss the ad-
+task plays a crucial role in speech synthesis sys-             vantages and disadvantages of various methods,
+tems (Schroeter et al., 2002), and is an important             and show that better alignments tend to improve
+part of other applications, including spelling cor-            the accuracy of the L2P systems regardless of the
+rection (Toutanova and Moore, 2001) and speech-                actual technique. In particular, one of our pro-
+to-speech machine translation (Engelbrecht and                 posed methods advances the state of the art in L2P
+Schultz, 2005). Many data-driven techniques have               conversion. We also examine the relationship be-
+been proposed for letter-to-phoneme conversion                 tween alignment entropy and alignment quality.
+systems, including neural networks (Sejnowski                     This paper is organized as follows. In Sec-
+and Rosenberg, 1987), decision trees (Black et al.,            tion 2, we enumerate the assumptions that the
+1998), pronunciation by analogy (Marchand and                  alignment methods commonly adopt. In Section 3,
+Damper, 2000), Hidden Markov Models (Taylor,                   we review previous work that employs the EM ap-
+2005), and constraint satisfaction (Bosch and Can-             proach. In Sections 4, 5 and 6, we describe alter-
+isius, 2006).                                                  native approaches based on phonetics, manually-
+   Letter-phoneme alignment is an important step               constructed constraints, and Integer Programming,
+in the L2P task. The training data usually consists            respectively. In Section 7, we propose an algo-
+of pairs of letter and phoneme sequences, which                rithm to refine the alignments produced by EM.
+are not aligned. Since there is no explicit infor-             Sections 8 and 9 are devoted to the intrinsic and
+mation indicating the relationships between indi-              extrinsic evaluation of various approaches. Sec-
+vidual letter and phonemes, these must be inferred             tion 10 concludes the paper.
+
+
+                                                         780
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 780–788,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2    Background                                               example, a double phoneme U would replace a se-
+                                                              quence of the phonemes j and u in Figure 1. This
+We define the letter-phoneme alignment task as
+                                                              solution requires a manual extension of the set of
+the problem of inducing links between units that
+                                                              phonemes present in the data. By convention, we
+are related by pronunciation. Each link is an in-
+                                                              regard the models that include a restricted set of
+stance of a specific mapping between letters and
+                                                              1-2 mappings as 1-1 models.
+phonemes. The leftmost example alignment of the
+                                                                 Advanced L2P approaches, including the joint
+word accuse [@kjuz] below includes 1-1, 1-0, 1-
+                                                              n-gram models (Bisani and Ney, 2008) and the
+2, and 2-1 links. The letter e is considered to be
+                                                              joint discriminative approach (Jiampojamarn et
+linked to special null phoneme.
+                                                              al., 2007) eliminate the one-to-one constraint en-
+                                                              tirely, allowing for linking of multiple letters to
+                                                              multiple phonemes. We refer to such models as
+                                                              many-to-many (M-M) models.
+
+                                                              3 EM Alignment
+        Figure 1: Two alignments of accuse.
+                                                              Early EM-based alignment methods (Daelemans
+  The following constraints on links are assumed              and Bosch, 1997; Black et al., 1998; Damper et
+by some or all alignment models:                              al., 2005) were generally pure 1-1 models. The
+                                                              1-1 alignment problem can be formulated as a dy-
+    • the monotonicity constraint prevents links              namic programming problem to find the maximum
+      from crossing each other;                               score of alignment, given a probability table of
+                                                              aligning letter and phoneme as a mapping func-
+    • the representation constraint requires each             tion. The dynamic programming recursion to find
+      phoneme to be linked to at least one letter,            the most likely alignment is the following:
+      thus precluding nulls on the letter side;
+                                                                                 
+    • the one-to-one constraint stipulates that each                              Ci−1,j−1 + δ(xi , yj )
+                                                                    Ci,j   = max   Ci−1,j + δ(xi , ǫ)         (1)
+      letter and phoneme may participate in at most
+                                                                                   Ci,j−1 + δ(ǫ, yj )
+                                                                                 
+      one link.
+
+These constraints increasingly reduce the search                 where δ(xi , ǫ) denotes a probability that a let-
+space and facilitate the training process for the             ter xi aligns with a null phoneme and δ(ǫ, yj ) de-
+L2P generation models.                                        notes a probability that a null letter aligns with a
+   We refer to an alignment model that assumes all            phoneme yj . In practice, the latter probability is
+three constraints as a pure one-to-one (1-1) model.           often set to zero in order to enforce the represen-
+By allowing only 1-1 and 1-0 links, the align-                tation constraint, which facilitates the subsequent
+ment task is thus greatly simplified. In the sim-             phoneme generation process. The probability ta-
+plest case, when the number of letters is equal to            ble δ(xi , yj ) can be initialized by a uniform dis-
+the number of phonemes, there is only one pos-                tribution and is iteratively re-computed (M-step)
+sible alignment that satisfies all three constraints.         from the most likely alignments found at each it-
+When there are more letters than phonemes, the                eration over the data set (E-step). The final align-
+search is reduced to identifying letters that must            ments are constructed after the probability table
+be linked to null phonemes (the process referred              converges.
+to as “epsilon scattering” by Black et al. (1998)).              M2M-aligner (Jiampojamarn et al., 2007) is a
+In some words, however, one letter clearly repre-             many-to-many (M-M) alignment algorithm based
+sents more than one phoneme; for example, u in                on EM that allows for mapping of multiple let-
+Figure 1. Moreover, a pure 1-1 approach cannot                ters to multiple phonemes. Algorithm 1 describes
+handle cases where the number of phonemes ex-                 the E-step of the many-to-many alignment algo-
+ceeds the number of letters. A typical solution to            rithm. γ represents partial counts collected over
+overcome this problems is to introduce so-called              all possible mappings between substrings of let-
+double phonemes by merging adjacent phonemes                  ters and phonemes. The maximum lengths of let-
+that could be represented as a single letter. For             ter and phoneme substrings are controlled by the
+
+
+                                                        781
+
+
+     Algorithm 1: Many-to-many alignment                                     4 Phonetic alignment
+      Input: x, y, maxX, maxY, γ
+      Output: γ                                                              The EM-based approaches to L2P alignment treat
+1     α := F ORWARD - M 2 M (x, y, maxX, maxY )                              both letters and phonemes as abstract symbols.
+2     β := BACKWARD- M 2 M (x, y, maxX, maxY )                               A completely different approach to L2P align-
+ 3    T = |x| + 1 , V = |y| + 1                                              ment is based on the phonetic similarity between
+ 4    if (αT,V = 0) then
+ 5        return                                                             phonemes. The key idea of the approach is to rep-
+ 6    for t = 1..T , v = 1..V do                                             resent each letter by a phoneme that is likely to be
+ 7        for i = 1..maxX st t − i ≥ 0 do                                    represented by the letter. The actual phonemes on
+                               α     δ(xt      ,ǫ)βt,v
+ 8            γ(xtt−i+1 , ǫ) + = t−i,v αt−i+1
+                                        T ,V                                 the phoneme side and the phonemes representing
+ 9         for i = 1..maxX st t − i ≥ 0 do                                   letters on the letter side can then be aligned on the
+10            for j = 1..maxY st v − j ≥ 0 do
+          t       v           αt−i,v−j δ(xtt−i+1 ,yv−j+1
+                                                   v
+                                                         )βt,v               basis of phonetic similarity between phonemes.
+11 γ(xt−i+1 , yv−j+1 )   +=                 αT ,V                            The main advantage of the phonetic alignment is
+                                                                             that it requires no training data, and so can be read-
+                                                                             ily be applied to languages for which no pronunci-
+maxX and maxY parameters. The forward prob-                                  ation lexicons are available.
+ability α is estimated by summing the probabilities                             The task of identifying the phoneme that is most
+from left to right, while the backward probabil-                             likely to be represented by a given letter may seem
+ity β is estimated in the opposite direction. The                            complex and highly language-dependent. For ex-
+F ORWARD - M 2 M procedure is similar to line 3 to                           ample, the letter a can represent no less than 12
+10 of Algorithm 1, except that it uses Equation 2                            different English vowels. In practice, however, ab-
+in line 8 and 3 in line 11. The BACKWARD- M 2 M                              solute precision is not necessary. Intuitively, the
+procedure is analogous to F ORWARD - M 2 M.                                  letters that had been chosen (often centuries ago)
+                                                                             to represent phonemes in any orthographic system
+                  αt,v + = δ(xtt−i+1 , ǫ)αt−i,v                  (2)         tend to be close to the prototype phoneme in the
+                                                                             original script. For example, the letter ‘o’ rep-
+                                                                             resented a mid-high rounded vowel in Classical
+              αt,v + = δ(xtt−i+1 , yv−j+1
+                                    v
+                                          )αt−i,v−j              (3)         Latin and is still generally used to represent simi-
+                                                                             lar vowels.
+   In M-step, the partial counts are normalized
+                                                                                The following simple heuristic works well for a
+by using a conditional distribution to create the
+                                                                             number of languages: treat every letter as if it were
+mapping probability table δ. The final many-to-
+                                                                             a symbol in the International Phonetic Alphabet
+many alignments are created by finding the most
+                                                                             (IPA). The set of symbols employed by the IPA in-
+likely paths using the Viterbi algorithm based on
+                                                                             cludes the 26 letters of the Latin alphabet, which
+the learned mapping probability table. The source
+                                                                             tend to correspond to the phonemes that they rep-
+code of M2M-aligner is publicly available.1
+                                                                             resent in the Latin script. For example, the IPA
+   Although the many-to-many approach tends to                               symbol [m] denotes a voiced bilabial nasal con-
+create relatively large models, it generates more                            sonant, which is the phoneme represented by the
+intuitive alignments and leads to improvement in                             letter m in most languages that utilize Latin script.
+the L2P accuracy (Jiampojamarn et al., 2007).
+                                                                                ALINE (Kondrak, 2000) performs phonetic
+However, since many links involve multiple let-
+                                                                             alignment of two strings of phonemes. It combines
+ters, it also introduces additional complexity in the
+                                                                             a dynamic programming alignment algorithm with
+phoneme prediction phase. One possible solution
+                                                                             an appropriate scoring scheme for computing pho-
+is to apply a letter segmentation algorithm at test
+                                                                             netic similarity on the basis of multivalued fea-
+time to cluster letters according to the alignments
+                                                                             tures. The example below shows the alignment of
+in the training data. This is problematic because
+                                                                             the word sheath to its phonetic transcription [SiT].
+of error propagation inherent in such a process.
+                                                                             ALINE correctly links the most similar pairs of
+A better solution is to combine segmentation and
+                                                                             phonemes (s:S, e:i, t:T).2
+decoding using a phrasal decoder (e.g. (Zens and
+Ney, 2004)).                                                                    2
+                                                                                  ALINE can also be applied to non-Latin scripts by re-
+                                                                             placing every grapheme with the IPA symbol that is phoneti-
+      1
+          http://code.google.com/p/m2m-aligner/                              cally closest to it.
+
+
+                                                                       782
+
+
+               s    h   e   a   t   h                          randomly choose one of them. Furthermore, we
+               |    |   |   |   |   |                          extend this idea also to many-to-many alignments.
+                S   -   i   -   T   -                          In addition to lists of phonemes for each letter (1-
+   Since ALINE is designed to align phonemes                   1 mappings), we also construct lists of many-to-
+with phonemes, it does not incorporate the repre-              many mappings, such as ee:i, sch:S, and ew:ju. In
+sentation constraint. In order to avoid the prob-              total, the English set contains 377 mappings, of
+lem of unaligned phonemes, we apply a post-                    which more than half are of the 2-1 type.
+processing algorithm, which also handles 1-2
+                                                               6 IP Alignment
+links. The algorithm first attempts to remove 0-1
+links by merging them with the adjacent 1-0 links.             The process of manually inducing allowable letter-
+If this is not possible, the algorithm scans a list of         phoneme mappings is time-consuming and in-
+valid 1-2 mappings, attempting to replace a pair of            volves a great deal of language-specific knowl-
+0-1 and 1-1 links with a single 1-2 link. If this also         edge. The Integer Programming (IP) framework
+fails, the entire entry is removed from the training           offers a way to induce similar mappings without a
+set. Such entries often represent unusual foreign-             human expert in the loop. The IP formulation aims
+origin words or outright annotation errors. The                at identifying the smallest set of letter-phoneme
+number of unaligned entries rarely exceeds 1% of               mappings that is sufficient to align all instances in
+the data.                                                      the data set.
+   The post-processing algorithm produces an                      Our IP formulation employs the three con-
+alignment that contains 1-0, 1-1, and 1-2 links.               straints enumerated in Section 2, except that the
+The list of valid 1-2 mappings must be prepared                one-to-one constraint is relaxed in order to identify
+manually. The length of such lists ranges from 1               a small set of 1-2 mappings. We specify two types
+for Spanish and German (x:[ks]) to 17 for English.             of binary variables that correspond to local align-
+This approach is more robust than the double-                  ment links and global letter-phoneme mappings,
+phoneme technique because the two phonemes are                 respectively. We distinguish three types of local
+clustered only if they can be linked to the corre-             variables, X, Y , and Z, which correspond to 1-0,
+sponding letter.                                               1-1, and 1-2 links, respectively. In order to min-
+                                                               imize the number of global mappings, we set the
+5   Constraint-based alignment                                 following objective that includes variables corre-
+                                                               sponding to 1-1 and 1-2 mappings:
+One of the advantages of the phonetic alignment                               X              X
+is its ability to rule out phonetically implausible               minimize :      G(l, p) +        G(l, p1 p2 ) (4)
+letter-phoneme links, such as o:p. We are in-                                  l,p            l,p1 ,p2
+terested in establishing whether a set of allow-
+                                                               We adopt a simplifying assumption that any let-
+able letter-phoneme mappings could be derived di-
+                                                               ter can be linked to a null phoneme, so no global
+rectly from the data without relying on phonetic
+                                                               variables corresponding to 1-0 mappings are nec-
+features.
+                                                               essary.
+   Black et al. (1998) report that constructing lists
+                                                                  In the lexicon entry k, let lik be the letter at po-
+of possible phonemes for each letter leads to L2P
+                                                               sition i, and pjk the phoneme at position j. In or-
+improvement. They produce the lists in a “semi-
+                                                               der to prevent the alignments from utilizing letter-
+automatic”, interactive manner. The lists constrain
+                                                               phoneme mappings which are not on the global
+the alignments performed by the EM algorithm
+                                                               list, we impose the following constraints:
+and lead to better-quality alignments.
+   We implement a similar interactive program                        ∀i,j,k Y (i, j, k) ≤ G(lik , pjk )            (5)
+that incrementally expands the lists of possible                     ∀i,j,k Z(i, j, k) ≤ G(lik , pjk p(j+1)k ) (6)
+phonemes for each letter by refining alignments
+constrained by those lists. However, instead of                For example, the local variable Y (i, j, k) is set if
+employing the EM algorithm, we induce align-                   lik is linked to pjk . A corresponding global vari-
+ments using the standard edit distance algorithm               able G(lik , pjk ) is set if the list of allowed letter-
+with substitution and deletion assigned the same               phoneme mappings includes the link (lik , pjk ).
+cost. In cases when there are multiple alternative             Activating the local variable implies activating the
+alignments that have the same edit distance, we                corresponding global variable, but not vice versa.
+
+
+                                                         783
+
+
+                                                              the exclusion of all others. We initialize the prob-
+                                                              ability of the minimal set with a uniform distribu-
+                                                              tion, and set it to zero for other mappings. We train
+                                                              the EM model in a similar fashion to the many-to-
+                                                              many alignment algorithm presented in Section 3,
+                                                              except that we limit the letter size to be one letter,
+                                                              and that any letter-phoneme mapping that is not in
+                                                              the minimal set is assigned zero count during the
+                                                              E-step. The final alignments are generated after
+Figure 2: A network of possible alignment links.
+                                                              the parameters converge.
+
+   We create a network of possible alignment links            7 Alignment by aggregation
+for each lexicon entry k, and assign a binary vari-           During our development experiments, we ob-
+able to each link in the network. Figure 2 shows an           served that the technique that combines IP with
+alignment network for the lexicon entry k: wriggle            EM described in the previous section generally
+[r I g @ L]. There are three 1-0 links (level), three         leads to alignment quality improvement in com-
+1-1 links (diagonal), and one 1-2 link (steep). The           parison with the IP alignment. Nevertheless, be-
+local variables that receive the value of 1 are the           cause EM is constrained not to introduce any new
+following: X(1,0,k), Y(2,1,k), Y(3,2,k), Y(4,3,k),            letter-phoneme mappings, many incorrect align-
+X(5,3,k), Z(6,5,k), and X(7,5,k). The correspond-             ments are still proposed. We hypothesized that in-
+ing global variables are: G(r,r), G(i,I), G(g,g), and         stead of pre-constraining EM, a post-processing of
+G(l,@L).                                                      EM’s output may lead to better results.
+   We create constraints to ensure that the link                 M2M-aligner has the ability to create precise
+variables receiving a value of 1 form a left-to-right         links involving more than one letter, such as ph:f.
+path through the alignment network, and that all              However, it also tends to create non-intuitive links
+other link variables receive a value of 0. We ac-             such as se:z for the word phrase [f r e z], where e
+complish this by requiring the sum of the links               is clearly a case of a “silent” letter. We propose
+entering each node to equal the sum of the links              an alternative EM-based alignment method that
+leaving each node.                                            instead utilizes a list of alternative one-to-many
+ ∀i,j,k    X(i, j, k) + Y (i, j, k) + Z(i, j, k) =            alignments created with M2M-aligner and aggre-
+                                                              gates 1-M links into M-M links in cases when
+           X(i + 1, j, k) + Y (i + 1, j + 1, k)               there is a disagreement between alignments within
+           +Z(i + 1, j + 2, k)                                the list. For example, if the list contains the two
+                                                              alignments shown in Figure 3, the algorithm cre-
+   We found that inducing the IP model with the               ates a single many-to-many alignment by merg-
+full set of variables gives too much freedom to the           ing the first pair of 1-1 and 1-0 links into a single
+IP program and leads to inferior results. Instead,            ph:f link. However, the two rightmost links are not
+we first run the full set of variables on a subset of         merged because there is no disagreement between
+the training data which includes only the lexicon             the two initial alignments. Therefore, the resulting
+entries in which the number of phonemes exceeds               alignment reinforces the ph:f mapping, but avoids
+the number of letters. This generates a small set             the questionable se:z link.
+of plausible 1-2 mappings. In the second pass, we
+run the model on the full data set, but we allow                 p h r a s e                p h r a s e
+only the 1-2 links that belong to the initial set of             | | | | | |                | | | | | |
+1-2 mappings induced in the first pass.                          f - r e z -                - f r e z -
+
+6.1 Combining IP with EM
+                                                                     Figure 3: Two alignments of phrase.
+The set of allowable letter-phoneme mappings can
+also be used as an input to the EM alignment algo-               In order to generate the list of best alignments,
+rithm. We call this approach IP-EM. After induc-              we use Algorithm 2, which is an adaptation of the
+ing the minimal set of letter-phoneme mappings,               standard Viterbi algorithm. Each cell Qt,v con-
+we constrain EM to use only those mappings with               tains a list of n-best scores that correspond to al-
+
+
+                                                        784
+
+
+     Algorithm 2: Extracting n-best alignments                   Alignment entropy is a measure of alignment
+      Input: x, y, δ                                          quality proposed by Pervouchine et al. (2009) in
+      Output: QT,V                                            the context of transliteration. The entropy indi-
+ 1    T = |x| + 1 , V = |y| + 1                               cates the uncertainty of mapping between letter
+ 2    for t = 1..T do
+ 3       Qt,v = ∅
+                                                              l and phoneme p resulting from the alignment:
+ 4       for v = 1..V do                                      We compute the alignment entropy for each of the
+ 5          for q ∈ Qt−1,v do                                 methods using the following formula:
+ 6             append q · δ(xt , ǫ) to Qt,v
+ 7          for j = 1..maxY st v − j ≥ 0 do
+               for q ∈ Qt−1,v−j do
+                                                                                 X
+ 8
+ 9
+                                      v
+                  append q · δ(xt , yv−j+1  ) to Qt,v
+                                                                        H=−             P (l, p) log P (l|p)    (7)
+10          sort Qt,v                                                             l,p
+11          Qt,v = Qt,v [1 : n]
+
+                                                                 Table 1 includes the results of the intrinsic eval-
+                                                              uation. (the two rightmost columns are discussed
+ternative alignments during the forward pass. In              in Section 9). The baseline BaseEM is an im-
+line 9, we consider all possible 1-M links between            plementation of the one-to-one alignment method
+                                    v
+letter xt and phoneme substring yv−j+1    . At the            of (Black et al., 1998) without the allowable list.
+end of the main loop, we keep at most n best align-           ALINE is the phonetic method described in Sec-
+ments in each Qt,v list.                                      tion 4. SeedMap is the hand-seeded method de-
+   Algorithm 2 yields n-best alignments in the                scribed in Section 5. M-M-EM is the M2M-
+QT,V list. However, in order to further restrict              aligner approach of Jiampojamarn et al. (2007).
+the set of high-quality alignments, we also dis-              1-M-EM is equivalent to M-M-EM but with the
+card the alignments with scores below threshold               restriction that each link contains exactly one let-
+R with respect to the best alignment score. Based             ter. IP-align is the alignment generated by the
+on the experiments with the development set, we               IP formulation from Section 6. IP-EM is the
+set R = 0.8 and n = 10.                                       method that combines IP with EM described in
+                                                              Section 6.1. EM-Aggr is our final many-to-many
+8       Intrinsic evaluation
+                                                              alignment method described in Section 7. Oracle
+For the intrinsic evaluation, we compared the gen-            corresponds to the gold-standard alignments from
+erated alignments to gold standard alignments ex-             Combilex.
+tracted from the the core vocabulary of the Com-                 Overall, the M-M models obtain lower preci-
+bilex data set (Richmond et al., 2009). Combilex              sion but higher recall and F-score than 1-1 models,
+is a high quality pronunciation lexicon with ex-              which is to be expected as the gold standard is de-
+plicit expert manual alignments. We used a sub-               fined in terms of M-M links. ALINE produces the
+set of the lexicon composed of the core vocabu-               most accurate alignments among the 1-1 methods,
+lary containing 18,145 word-phoneme pairs. The                with the precision and recall values that are very
+alignments contain 550 mappings, which include                close to the theoretical upper bounds. Its preci-
+complex 4-1 and 2-3 types.                                    sion is particularly impressive: on average, only
+   Each alignment approach creates alignments                 one link in a thousand is not consistent with the
+from unaligned word-phoneme pairs in an un-                   gold standard. In terms of word accuracy, 98.97%
+supervised fashion. We distinguish between the                words have no incorrect links. Out of 18,145
+1-1 and M-M approaches. We report the align-                  words, only 112 words contain incorrect links, and
+ment quality in terms of precision, recall and F-             further 75 words could not be aligned. The rank-
+score. Since the gold standard includes many links            ing of the 1-1 methods is quite clear: ALINE fol-
+that involve multiple letters, the theoretical up-            lowed by IP-EM, 1-M-EM, IP-align, and BaseEM.
+per bound for recall achieved by a one-to-one ap-             Among the M-M methods, EM-Aggr has slightly
+proach is 90.02%. However, it is possible to obtain           better precision than M-M-EM, but its recall is
+the perfect precision because we count as correct             much worse. This is probably caused by the ag-
+all 1-1 links that are consistent with the M-M links          gregation strategy causing EM-Aggr to “lose” a
+in the gold standard. The F-score corresponding               significant number of correct links. In general, the
+to perfect precision and the upper-bound recall is            entropy measure does not mirror the quality of the
+94.75%.                                                       alignment.
+
+
+                                                        785
+
+
+              Aligner      Precision    Recall    F1 score        Entropy     L2P 1-1    L2P M-M
+              BaseEM         96.54      82.84      89.17           0.794       50.00       65.38
+              ALINE          99.90      89.54      94.44           0.672       54.85       68.74
+              1-M-EM         99.04      89.15      93.84           0.636       53.91       69.13
+              IP-align       98.30      88.49      93.14           0.706       52.66       68.25
+              IP-EM          99.31      89.40      94.09           0.651       53.86       68.91
+              M-M-EM         96.54      97.13      96.83           0.655        —          68.52
+              EM-Aggr        96.67      93.39      95.00           0.635        —          69.35
+              SeedMap        97.88      97.44      97.66           0.634        —          68.69
+              Oracle         100.0      100.0      100.0           0.640        —          69.35
+
+      Table 1: Alignment quality, entropy, and L2P conversion accuracy on the Combilex data set.
+
+                     Aligner     Celex-En     CMUDict           NETtalk     OALD      Brulex
+                     BaseEM       75.35        60.03             54.80      67.23     81.33
+                     ALINE        81.50        66.46             54.90      72.12     89.37
+                     1-M-EM       80.12        66.66             55.00      71.11     88.97
+                     IP-align     78.88        62.34             53.10      70.46     83.72
+                     IP-EM        80.95        67.19             54.70      71.24     87.81
+
+                Table 2: L2P word accuracy using the TiMBL-based generation system.
+
+
+9   Extrinsic evaluation                                      to our two test L2P systems. We observe that al-
+                                                              though better alignment quality does not always
+In order to investigate the relationship between              translate into better L2P accuracy, there is never-
+the alignment quality and L2P performance, we                 theless a strong correlation between the two, espe-
+feed the alignments to two different L2P systems.             cially for the weaker phoneme generation system.
+The first one is a classification-based learning sys-         Interestingly, EM-Aggr matches the L2P accuracy
+tem employing TiMBL (Daelemans et al., 2009),                 obtained with the gold standard alignments. How-
+which can utilize either 1-1 or 1-M alignments.               ever, there is no reason to claim that the gold stan-
+The second system is the state-of-the-art online              dard alignments are optimal for the L2P genera-
+discriminative training for letter-to-phoneme con-            tion task, so that result should not be considered as
+version (Jiampojamarn et al., 2008), which ac-                an upper bound. Finally, we note that alignment
+cepts both 1-1 and M-M types of alignment. Ji-                entropy seems to match the L2P accuracy better
+ampojamarn et al. (2008) show that the online dis-            than it matches alignment quality.
+criminative training system outperforms a num-                   Tables 2 and 3 show the L2P results on sev-
+ber of competitive approaches, including joint n-             eral evaluation sets: English Celex, CMUDict,
+grams (Demberg et al., 2007), constraint satisfac-            NETTalk, OALD, and French Brulex. The train-
+tion inference (Bosch and Canisius, 2006), pro-               ing sizes range from 19K to 106K words. We fol-
+nunciation by analogy (Marchand and Damper,                   low exactly the same data splits as in Bisani and
+2006), and decision trees (Black et al., 1998). The           Ney (2008).
+decoder module uses standard Viterbi for the 1-1                 The TiMBL L2P generation method (Table 2)
+case, and a phrasal decoder (Zens and Ney, 2004)              is applicable only to the 1-1 alignment models.
+for the M-M case. We report the L2P performance               ALINE produces the highest accuracy on four out
+in terms of word accuracy, which rewards only                 of six datasets (including Combilex). The perfor-
+the completely correct output phoneme sequences.              mance of IP-EM is comparable to 1-M-EM, but
+The data set is randomly split into 90% for training          not consistently better. IP-align does not seem to
+and 10% for testing. For all experiments, we hold             measure up to the other algorithms.
+out 5% of our training data to determine when to                 The discriminative approach (Table 3) is flexi-
+stop the online training process.                             ble enough to utilize all kinds of alignments. How-
+   Table 1 includes the results on the Combilex               ever, the M-M models perform clearly better than
+data set. The two rightmost columns correspond                1-1 models. The only exception is NetTalk, which
+
+
+                                                        786
+
+
+                  Aligner          Celex-En     CMUDict            NETTalk      OALD      Brulex
+                  BaseEM            85.66        71.49              68.60       80.76     88.41
+                  ALINE             87.96        75.05              69.52       81.57     94.56
+                  1-M-EM            88.08        75.11              70.78       81.78     94.54
+                  IP-EM             88.00        75.09              70.10       81.76     94.96
+                  M-M-EM            88.54        75.41              70.18       82.43     95.03
+                  EM-Aggr           89.11        75.52              71.10       83.32     95.07
+                  joint n-gram      88.58        75.47              69.00       82.51     93.75
+
+                   Table 3: L2P word accuracy using the online discriminative system.
+
+
+                                                               alignment is recommended for languages with lit-
+                                                               tle or no training data. The constraint-based ap-
+                                                               proach achieves excellent accuracy at the cost
+                                                               of manual construction of seed mappings. The
+                                                               IP alignment requires no linguistic expertise and
+                                                               guarantees a minimal set of letter-phoneme map-
+                                                               pings. The alignment by aggregation advances
+                                                               the state-of-the-art results in L2P conversion. We
+                                                               thoroughly evaluated the resulting alignments on
+                                                               several data sets by using them as input to two dif-
+                                                               ferent L2P generation systems. Finally, we em-
+Figure 4: L2P word accuracy vs. alignment en-                  ployed an independently constructed lexicon to
+tropy.                                                         demonstrate the close relationship between align-
+                                                               ment quality and L2P conversion accuracy.
+                                                                  One open question that we would like to investi-
+can be attributed to the fact that NetTalk already             gate in the future is whether L2P conversion accu-
+includes double-phonemes in its original formu-                racy could be improved by treating letter-phoneme
+lation. In general, the 1-M-EM method achieves                 alignment links as latent variables, instead of com-
+the best results among the 1-1 alignment methods,              mitting to a single best alignment.
+Overall, EM-Aggr achieves the best word accuracy
+in comparison to other alignment methods includ-               Acknowledgments
+ing the joint n-gram results, which are taken di-
+rectly from the original paper of Bisani and Ney               This research was supported by the Alberta In-
+(2008). Except the Brulex and CMUDict data                     genuity, Informatics Circle of Research Excel-
+sets, the differences between EM-Aggr and M-M-                 lence (iCORE), and Natural Science of Engineer-
+EM are statistically significant according to Mc-              ing Research Council of Canada (NSERC).
+Nemar’s test at 90% confidence level.
+   Figure 4 contains a plot of alignment entropy               References
+values vs. L2P word accuracy. Each point rep-
+                                                               Maximilian Bisani and Hermann Ney. 2008. Joint-
+resent an application of a particular alignment
+                                                                sequence models for grapheme-to-phoneme conver-
+method to a different data sets. It appears that                sion. Speech Communication, 50(5):434–451.
+there is only weak correlation between alignment
+entropy and L2P accuracy. So far, we have been                 Alan W. Black, Kevin Lenzo, and Vincent Pagel. 1998.
+                                                                 Issues in building general letter to sound rules. In
+unable to find either direct or indirect evidence that           The Third ESCA Workshop in Speech Synthesis,
+alignment entropy is a reliable measure of letter-               pages 77–80.
+phoneme alignment quality.
+                                                               Antal Van Den Bosch and Sander Canisius. 2006.
+                                                                 Improved morpho-phonological sequence process-
+10   Conclusion                                                  ing with constraint satisfaction inference. Proceed-
+                                                                 ings of the Eighth Meeting of the ACL Special Inter-
+We investigated several new methods for gener-                   est Group in Computational Phonology, SIGPHON
+ating letter-phoneme alignments. The phonetic                    ’06, pages 41–49.
+
+
+                                                         787
+
+
+Walter Daelemans and Antal Van Den Bosch. 1997.                    Natural Language Processing of the AFNLP, pages
+  Language-independent data-oriented grapheme-to-                  136–144, Suntec, Singapore, August. Association
+  phoneme conversion. In Progress in Speech Synthe-                for Computational Linguistics.
+  sis, pages 77–89. New York, USA.
+                                                                 Korin Richmond, Robert A. J. Clark, and Sue Fitt.
+Walter Daelemans, Jakub Zavrel, Ko van der Sloot, and              2009. Robust LTS rules with the Combilex speech
+  Antal van den Bosch. 2009. TiMBL: Tilburg Mem-                   technology lexicon. In Proceedings od Interspeech,
+  ory Based Learner, version 6.2, Reference Guide.                 pages 1295–1298.
+  ILK Research Group Technical Report Series no.
+  09-01.                                                         Juergen Schroeter, Alistair Conkie, Ann Syrdal, Mark
+                                                                   Beutnagel, Matthias Jilka, Volker Strom, Yeon-Jun
+Robert I. Damper, Yannick Marchand, John DS.                       Kim, Hong-Goo Kang, and David Kapilow. 2002.
+  Marsters, and Alexander I. Bazin. 2005. Align-                   A perspective on the next challenges for TTS re-
+  ing text and phonemes for speech technology appli-               search. In IEEE 2002 Workshop on Speech Synthe-
+  cations using an EM-like algorithm. International                sis.
+  Journal of Speech Technology, 8(2):147–160.
+                                                                 Terrence J. Sejnowski and Charles R. Rosenberg.
+Vera Demberg, Helmut Schmid, and Gregor M öhler.                  1987. Parallel networks that learn to pronounce En-
+  2007. Phonological constraints and morphologi-                   glish text. In Complex Systems, pages 1:145–168.
+  cal preprocessing for grapheme-to-phoneme conver-
+  sion. In Proceedings of the 45th Annual Meeting of             Paul Taylor. 2005. Hidden Markov Models for
+  the Association of Computational Linguistics, pages              grapheme to phoneme conversion. In Proceedings
+  96–103, Prague, Czech Republic.                                  of the 9th European Conference on Speech Commu-
+                                                                   nication and Technology.
+Herman Engelbrecht and Tanja Schultz. 2005. Rapid
+  development of an afrikaans-english speech-to-                 Kristina Toutanova and Robert C. Moore. 2001. Pro-
+  speech translator. In International Workshop of Spo-             nunciation modeling for improved spelling correc-
+  ken Language Translation (IWSLT), Pittsburgh, PA,                tion. In ACL ’02: Proceedings of the 40th Annual
+  USA.                                                             Meeting on Association for Computational Linguis-
+                                                                   tics, pages 144–151, Morristown, NJ, USA.
+Sittichai Jiampojamarn, Grzegorz Kondrak, and Tarek
+   Sherif. 2007. Applying many-to-many alignments                Richard Zens and Hermann Ney. 2004. Improvements
+   and hidden markov models to letter-to-phoneme                   in phrase-based statistical machine translation. In
+   conversion. In Human Language Technologies                      HLT-NAACL 2004: Main Proceedings, pages 257–
+   2007: The Conference of the North American Chap-                264, Boston, Massachusetts, USA.
+   ter of the Association for Computational Linguistics;
+   Proceedings of the Main Conference, pages 372–
+   379, Rochester, New York, USA.
+Sittichai Jiampojamarn, Colin Cherry, and Grzegorz
+   Kondrak. 2008. Joint processing and discriminative
+   training for letter-to-phoneme conversion. In Pro-
+   ceedings of ACL-08: HLT, pages 905–913, Colum-
+   bus, Ohio, June. Association for Computational Lin-
+   guistics.
+Grzegorz Kondrak. 2000. A new algorithm for the
+  alignment of phonetic sequences. In Proceedings of
+  NAACL 2000: 1st Meeting of the North American
+  Chapter of the Association for Computational Lin-
+  guistics, pages 288–295.
+Yannick Marchand and Robert I. Damper. 2000. A
+  multistrategy approach to improving pronunciation
+  by analogy. Computational Linguistics, 26(2):195–
+  219.
+Yannick Marchand and Robert I. Damper. 2006. Can
+  syllabification improve pronunciation by analogy of
+  English? Natural Language Engineering, 13(1):1–
+  24.
+Vladimir Pervouchine, Haizhou Li, and Bo Lin. 2009.
+  Transliteration alignment. In Proceedings of the
+  Joint Conference of the 47th Annual Meeting of the
+  ACL and the 4th International Joint Conference on
+
+
+                                                           788
+

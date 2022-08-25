@@ -1,0 +1,795 @@
+    A Bayesian Method for Robust Estimation of Distributional Similarities
+                         Jun’ichi Kazama Stijn De Saeger Kow Kuroda
+                                 Masaki Murata† Kentaro Torisawa
+                           Language Infrastructure Group, MASTAR Project
+               National Institute of Information and Communications Technology (NICT)
+                     3-5 Hikaridai, Seika-cho, Soraku-gun, Kyoto, 619-0289 Japan
+                   {kazama, stijn, kuroda, torisawa}@nict.go.jp
+                       †Department of Information and Knowledge Engineering
+                      Faculty/Graduate School of Engineering, Tottori University
+                            4-101 Koyama-Minami, Tottori, 680-8550 Japan∗
+                                  murata@ike.tottori-u.ac.jp
+
+                          Abstract                                   In general, most semantic similarity measures
+                                                                   have the following form:
+     Existing word similarity measures are not
+                                                                            sim(w1 , w2 ) = g(v(w1 ), v(w2 )),        (1)
+     robust to data sparseness since they rely
+     only on the point estimation of words’                        where v(wi ) is a vector that represents the con-
+     context proﬁles obtained from a limited                       texts in which wi appears, which we call a context
+     amount of data. This paper proposes a                         proﬁle of wi . The function g is a function on these
+     Bayesian method for robust distributional                     context proﬁles that is expected to produce good
+     word similarities. The method uses a dis-                     similarities. Each dimension of the vector corre-
+     tribution of context proﬁles obtained by                      sponds to a context, fk , which is typically a neigh-
+     Bayesian estimation and takes the expec-                      boring word or a word having dependency rela-
+     tation of a base similarity measure under                     tions with wi in a corpus. Its value, vk (wi ), is typ-
+     that distribution. When the context pro-                      ically a co-occurrence frequency c(wi , fk ), a con-
+     ﬁles are multinomial distributions, the pri-                  ditional probability p(fk |wi ), or point-wise mu-
+     ors are Dirichlet, and the base measure is                    tual information (PMI) between wi and fk , which
+     the Bhattacharyya coefﬁcient, we can de-                      are all calculated from a corpus. For g, various
+     rive an analytical form that allows efﬁcient                  works have used the cosine, the Jaccard coefﬁ-
+     calculation. For the task of word similar-                    cient, or the Jensen-Shannon divergence is uti-
+     ity estimation using a large amount of Web                    lized, to name only a few measures.
+     data in Japanese, we show that the pro-                          Previous studies have focused on how to de-
+     posed measure gives better accuracies than                    vise good contexts and a good function g for se-
+     other well-known similarity measures.                         mantic similarities. On the other hand, our ap-
+                                                                   proach in this paper is to estimate context proﬁles
+1    Introduction                                                  (v(wi )) robustly and thus to estimate the similarity
+                                                                   robustly. The problem here is that v(wi ) is com-
+The semantic similarity of words is a long-
+                                                                   puted from a corpus of limited size, and thus in-
+standing topic in computational linguistics be-
+                                                                   evitably contains uncertainty and sparseness. The
+cause it is theoretically intriguing and has many
+                                                                   guiding intuition behind our method is as follows.
+applications in the ﬁeld. Many researchers have
+                                                                   All other things being equal, the similarity with
+conducted studies based on the distributional hy-
+                                                                   a more frequent word should be larger, since it
+pothesis (Harris, 1954), which states that words
+                                                                   would be more reliable. For example, if p(fk |w1 )
+that occur in the same contexts tend to have similar
+                                                                   and p(fk |w2 ) for two given words w1 and w2 are
+meanings. A number of semantic similarity mea-
+                                                                   equal, but w1 is more frequent, we would expect
+sures have been proposed based on this hypothesis
+                                                                   that sim(w0 , w1 ) > sim(w0 , w2 ).
+(Hindle, 1990; Grefenstette, 1994; Dagan et al.,
+                                                                      In the NLP ﬁeld, data sparseness has been rec-
+1994; Dagan et al., 1995; Lin, 1998; Dagan et al.,
+                                                                   ognized as a serious problem and tackled in the
+1999).
+                                                                   context of language modeling and supervised ma-
+     ∗
+         The work was done while the author was at NICT.           chine learning. However, to our knowledge, there
+
+
+                                                             247
+            Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 247–256,
+                     Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+has been no study that seriously dealt with data                 The rest of the paper is organized as follows. In
+sparseness in the context of semantic similarity              Section 2, we brieﬂy introduce the Bayesian esti-
+calculation. The data sparseness problem is usu-              mation and the Bhattacharyya coefﬁcient. Section
+ally solved by smoothing, regularization, margin              3 proposes our new Bayesian Bhattacharyya coef-
+maximization and so on (Chen and Goodman,                     ﬁcient for robust similarity calculation. Section 4
+1998; Chen and Rosenfeld, 2000; Cortes and Vap-               mentions some implementation issues and the so-
+nik, 1995). Recently, the Bayesian approach has               lutions. Then, Section 5 reports the experimental
+emerged and achieved promising results with a                 results.
+clearer formulation (Teh, 2006; Mochihashi et al.,
+2009).                                                        2 Background
+   In this paper, we apply the Bayesian framework             2.1 Bayesian estimation with Dirichlet prior
+to the calculation of distributional similarity. The
+                                                              Assume that we estimate a probabilistic model for
+method is straightforward: Instead of using the
+                                                              the observed data D, p(D|φ), which is parame-
+point estimation of v(wi ), we ﬁrst estimate the
+                                                              terized with parameters φ. In the maximum like-
+distribution of the context proﬁle, p(v(wi )), by
+                                                              lihood estimation (MLE), we ﬁnd the point esti-
+Bayesian estimation and then take the expectation
+                                                              mation φ∗ = argmaxφ p(D|φ). For example, we
+of the original similarity under this distribution as
+                                                              estimate p(fk |wi ) as follows with MLE:
+follows:                                                                                            X
+                                                                        p(fk |wi ) = c(wi , fk )/       c(wi , fk ).   (3)
+                                                                                                    k
+     simb (w1 , w2 )                              (2)
+                                                              On the other hand, the objective of the Bayesian
+        = E[sim(w1 , w2 )]{p(v(w1 )),p(v(w2 ))}
+                                                              estimation is to ﬁnd the distribution of φ given
+        = E[g(v(w1 ), v(w2 ))]{p(v(w1 )),p(v(w2 ))} .         the observed data D, i.e., p(φ|D), and use it in
+                                                              later processes. Using Bayes’ rule, this can also
+The uncertainty due to data sparseness is repre-
+                                                              be viewed as:
+sented by p(v(wi )), and taking the expectation en-
+                                                                                     p(D|φ)pprior (φ)
+ables us to take this into account. The Bayesian                         p(φ|D) =                     .                (4)
+                                                                                          p(D)
+estimation usually gives diverging distributions for
+infrequent observations and thus decreases the ex-            pprior (φ) is a prior distribution that represents the
+pectation value as expected.                                  plausibility of each φ based on the prior knowl-
+   The Bayesian estimation and the expectation                edge. In this paper, we consider the∑case where
+calculation in Eq. 2 are generally difﬁcult and               φ is a multinomial distribution, i.e., k φk = 1,
+usually require computationally expensive proce-              that models the process of choosing one out of K
+dures. Since our motivation for this research is to           choices. Estimating a conditional probability dis-
+calculate good semantic similarities for a large set          tribution φk = p(fk |wi ) as a context proﬁle for
+of words (e.g., one million nouns) and apply them             each wi falls into this case. In this paper, we also
+to a wide range of NLP tasks, such costs must be              assume that the prior is the Dirichlet distribution,
+minimized.                                                    Dir(α). The Dirichlet distribution is deﬁned as
+   Our technical contribution in this paper is to             follows.
+                                                                                 P           K
+show that in the case where the context proﬁles are                            Γ( K αk ) Y αk −1
+                                                                    Dir(φ|α) = QK k=1           φk .                   (5)
+multinomial distributions, the priors are Dirich-                                k=1 Γ(αk ) k=1
+
+let, and the base similarity measure is the Bhat-             Γ(.) is the Gamma function. The Dirichlet distri-
+tacharyya coefﬁcient (Bhattacharyya, 1943), we                bution is parametrized by hyperparameters αk (>
+can derive an analytical form for Eq. 2, that en-             0).
+ables efﬁcient calculation (with some implemen-                  It is known that p(φ|D) is also a Dirichlet dis-
+tation tricks).                                               tribution for this simplest case, and it can be ana-
+   In experiments, we estimate semantic similari-             lytically calculated as follows.
+ties using a large amount of Web data in Japanese
+and show that the proposed measure gives bet-                       p(φ|D) = Dir(φ|{αk + c(k)}),                       (6)
+ter word similarities than a non-Bayesian Bhat-               where c(k) is the frequency of choice k in data D.
+tacharyya coefﬁcient or other well-known similar-             For example, c(k) = c(wi , fk ) in the estimation
+ity measures such as Jensen-Shannon divergence                of p(fk |wi ). This is very simple: we just need to
+and the cosine with PMI weights.                              add the observed counts to the hyperparameters.
+
+
+                                                        248
+
+
+2.2 Bhattacharyya coefﬁcient
+                                                                                     ′     ′         K     ′          ′
+When the context proﬁles are probability distribu-                               Γ(α0 )Γ(β0 )       X   Γ(αk + 12 )Γ(βk + 12 )
+                                                                         =      ′          ′                    ′     ′        ,   (7)
+tions, we usually utilize the measures on probabil-                          Γ(α0 + 21 )Γ(β0 + 21 ) k=1     Γ(αk )Γ(βk )
+ity distributions such as the Jensen-Shannon (JS)                                 ′    ∑ ′               ′   ∑ ′
+                                                                         where α0 = k αk and β0 = k βk . Note that
+divergence to calculate similarities (Dagan et al.,                                                    ′
+                                                                         with the Dirichlet prior, αk = αk + c(w1 , fk ) and
+1994; Dagan et al., 1997). The JS divergence is                            ′
+                                                                         βk = βk + c(w2 , fk ), where αk and βk are the
+deﬁned as follows.
+                                                                         hyperparameters of the priors of w1 and w2 , re-
+                                                                         spectively.
+    JS(p1 ||p2 ) =
+                     1
+                       (KL(p1 ||pavg ) + KL(p2 ||pavg )),
+                                                                             To put it all together, we can obtain a new
+                     2                                                   Bayesian similarity measure on words, which can
+                                                                         be calculated only from the hyperparameters for
+where pavg = p1 +p 2
+                     2
+                       is a point-wise average of p1
+                                                                         the Dirichlet prior, α and β, and the observed
+and p2 and KL(.) is the Kullback-Leibler diver-
+                                                                         counts c(wi , fk ). It is written as follows.
+gence. Although we found that the JS divergence
+is a good measure, it is difﬁcult to derive an ef-
+                                                                             BCb (w1 , w2 ) =                                      (8)
+ﬁcient calculation of Eq. 2, even in the Dirichlet
+                                                                                 Γ(α0 + a0 )Γ(β0 + b0 )
+prior case.1                                                                                                  ×
+                                                                             Γ(α0 + a0 + 12 )Γ(β0 + b0 + 12 )
+   In this study, we employ the Bhattacharyya co-                            K
+                                                                             X Γ(αk + c(w1 , fk ) + 21 )Γ(βk + c(w2 , fk ) + 12 )
+efﬁcient (Bhattacharyya, 1943) (BC for short),                                                                                    ,
+                                                                                   Γ(αk + c(w1 , fk ))Γ(βk + c(w2 , fk ))
+which is deﬁned as follows:                                                  k=1
+                                                                                               ∑
+                                                                         where
+                                                                         ∑         a0      =      k c(w1 , fk ) and b0      =
+                                K                                           k c(w2 , fk ).   We call this new measure the
+                                X √                                      Bayesian Bhattacharyya coefﬁcient (BCb for
+               BC(p1 , p2 ) =          p1k × p2k .
+                                k=1                                      short). For simplicity, we assume αk = βk = α in
+                                                                         this paper.
+The BC is also a similarity measure on probabil-                            We can see that BCb actually encodes our guid-
+ity distributions and is suitable for our purposes as                    ing intuition. Consider four words, w0 , w1 , w2 ,
+we describe in the next section. Although BC has                         and w4 , for which we have c(w0 , f1 ) = 10,
+not been explored well in the literature on distribu-                    c(w1 , f1 ) = 2, c(w2 , f1 ) = 10, and c(w3 , f1 ) =
+tional word similarities, it is also a good similarity                   20. They have counts only for the ﬁrst dimen-
+measure as the experiments show.                                         sion, i.e., they have the same context proﬁle:
+                                                                         p(f1 |wi ) = 1.0, when we employ MLE. When
+3       Method
+                                                                         K = 10, 000 and αk = 1.0, the Bayesian similar-
+In this section, we show that if our base similarity                     ity between these words is calculated as
+measure is BC and the distributions under which
+we take the expectation are Dirichlet distributions,                                   BCb (w0 , w1 ) = 0.785368
+then Eq. 2 also has an analytical form, allowing                                       BCb (w0 , w2 ) = 0.785421
+efﬁcient calculation.                                                                  BCb (w0 , w3 ) = 0.785463
+   Here, we calculate the following value given
+two Dirichlet distributions:                                                We can see that similarities are different ac-
+                                                                         cording to the number of observations, as ex-
+    BCb (p1 , p2 ) = E[BC(p1 , p2 )]{Dir(p1 |α′ ),Dir(p2 |β ′ )}         pected. Note that the non-Bayesian BC will re-
+      ZZ
+                      ′         ′                                        turn the same value, 1.0, for all cases. Note
+    =     Dir(p1 |α )Dir(p2 |β )BC(p1 , p2 )dp1 dp2 .
+                                                                         also that BCb (w0 , w0 ) = 0.78542 if we use Eq.
+        △×△
+                                                                         8, meaning that the self-similarity might not be
+After several derivation steps (see Appendix A),                         the maximum. This is conceptually strange, al-
+we obtain the following analytical solution for the                      though not a serious problem since we hardly use
+above:                                                                   sim(wi , wi ) in practice. If we want to ﬁx this,
+    1
+                                                                         we can use the special deﬁnition: BCb (wi , wi ) ≡
+    A naive but general way might be to draw samples of
+v(wi ) from p(v(wi )) and approximate the expectation using              1. This is equivalent to using simb (wi , wi ) =
+these samples. However, such a method will be slow.                      E[sim(wi , wi )]{p(v(wi ))} = 1 only for this case.
+
+
+                                                                   249
+
+
+4       Implementation Issues                                   c(w1 , fk ) > 0 and c(w2 , fk ) = 0 (and vice versa),
+                                                                we update the output variable just by adding (C).
+Although we have derived the analytical form
+                                                                If c(w1 , fk ) > 0 and c(w2 , fk ) > 0, we update
+(Eq. 8), there are several problems in implement-
+                                                                the output value using (B), (D) and one additional
+ing robust and efﬁcient calculations.
+                                                                exp(.) operation. With this implementation, we
+   First, the Gamma function in Eq. 8 overﬂows
+                                                                can make the computation of BCb practically as
+when the argument is larger than 170. In such
+                                                                fast as using other measures.
+cases, a commonly used way is to work in the log-
+arithmic space. In this study, we utilize the “log              5 Experiments
+Gamma” function: lnΓ(x), which returns the log-
+arithm of the Gamma function directly without the               5.1 Evaluation setting
+overﬂow problem.2
+                                                                We evaluated our method in the calculation of sim-
+   Second, the calculation of the log Gamma func-
+                                                                ilarities between nouns in Japanese.
+tion is heavier than operations such as simple mul-
+                                                                   Because human evaluation of word similari-
+tiplication, which is used in existing measures.
+                                                                ties is very difﬁcult and costly, we conducted au-
+In fact, the log Gamma function is implemented
+                                                                tomatic evaluation in the set expansion setting,
+using an iterative algorithm such as the Lanczos
+                                                                following previous studies such as Pantel et al.
+method. In addition, according to Eq. 8, it seems
+                                                                (2009).
+that we have to sum up the values for all k, be-
+                                                                   Given a word set, which is expected to con-
+cause even if c(wi , fk ) is zero the value inside the
+                                                                tain similar words, we assume that a good simi-
+summation will not be zero. In the existing mea-
+                                                                larity measure should output, for each word in the
+sures, it is often the case that we only need to sum
+                                                                set, the other words in the set as similar words.
+up for k where c(wi , fk ) > 0. Because c(wi , fk )
+                                                                For given word sets, we can construct input-and-
+is usually sparse, that technique speeds up the cal-
+                                                                answers pairs, where the answers for each word
+culation of the existing measures drastically and
+                                                                are the other words in the set the word appears in.
+makes it practical.
+   In this study, the above problem is solved by                   We output a ranked list of 500 similar words
+pre-computing the required log Gamma values, as-                for each word using a given similarity measure
+suming that we calculate similarities for a large               and checked whether they are included in the an-
+set of words, and pre-computing default values for              swers. This setting could be seen as document re-
+cases where c(wi , fk ) = 0. The following values               trieval, and we can use an evaluation measure such
+are pre-computed once at the start-up time.                     as the mean of the precision at top T (MP@T ) or
+                                                                the mean average precision (MAP). For each input
+For each word:                                                  word, P@T (precision at top T ) and AP (average
+(A) lnΓ(α0 + a0 ) − lnΓ(α0 + a0 + 12 )                          precision) are deﬁned as follows.
+                                                                                        T
+(B) lnΓ(αk +c(wi , fk ))−lnΓ(αk +c(wi , fk )+ 12 )                                   1 X
+                                                                         P@T    =          δ(wi ∈ ans),
+     for all k where c(wi , fk ) > 0                                                 T i=1
+                                                                                        N
+                                                                                     1 X
+(C) − exp(2(lnΓ(αk + 12 ) − lnΓ(αk )))) +                                  AP   =
+                                                                                     R i=1
+                                                                                           δ(wi ∈ ans)P@i.
+    exp(lnΓ(αk + c(wi , fk )) − lnΓ(αk +
+    c(wi , fk ) + 12 ) + lnΓ(αk + 12 ) − lnΓ(αk ))
+                                                                δ(wi ∈ ans) returns 1 if the output word wi is
+    for all k where c(wi , fk ) > 0;
+                                                                in the answers, and 0 otherwise. N is the number
+For each k:                                                     of outputs and R is the number of the answers.
+(D): exp(2(lnΓ(αk + 12 )).                                      MP@T and MAP are the averages of these values
+                                                                over all input words.
+  In the calculation of BCb (w1 , w2 ), we ﬁrst as-
+sume that all c(wi , fk ) = 0 and set the output                5.2 Collecting context proﬁles
+variable to the default value. Then, we iterate
+over the sparse vectors c(w1 , fk ) and c(w2 , fk ). If         Dependency relations are used as context proﬁles
+    2
+                                                                as in Kazama and Torisawa (2008) and Kazama et
+    We used the GNU            Scientiﬁc Library (GSL)
+(www.gnu.org/software/gsl/),    which implements this           al. (2009). From a large corpus of Japanese Web
+function.                                                       documents (Shinzato et al., 2008) (100 million
+
+
+                                                          250
+
+
+documents), where each sentence has a depen-                      “B” is for the validation of the parameter
+dency parse, we extracted noun-verb and noun-                     tuning.
+noun dependencies with relation types and then
+calculated their frequencies in the corpus. If a             Set “C”: Closed sets Murata et al. (2004) con-
+noun, n, depends on a word, w, with a relation,                   structed a dataset that contains several closed
+r, we collect a dependency pair, (n, 〈w, r〉). That                word sets such as the names of countries,
+is, a context fk , is 〈w, r〉 here.                                rivers, sumo wrestlers, etc. We used all of
+   For noun-verb dependencies, postpositions                      the 45 sets that are marked as “complete” in
+in Japanese represent relation types.          For                the data, containing 12,827 unique words in
+example, we extract a dependency relation                         total.
+(ワイン, 〈 買う, を 〉) from the sentence below,                       Note that we do not deal with ambiguities in the
+where a postposition “を (wo)” is used to mark                construction of these sets as well as in the calcu-
+the verb object.                                             lation of similarities. That is, a word can be con-
+                                                             tained in several sets, and the answers for such a
+ワイン (wine) を (wo) 買う (buy) (≈ buy a wine)                    word is the union of the words in the sets it belongs
+   Note that we leave various auxiliary verb suf-            to (excluding the word itself).
+ﬁxes, such as “れる (reru),” which is for passiviza-              In addition, note that the words in these test sets
+tion, as a part of w, since these greatly change the         are different from those of our one-million-word
+type of n in the dependent position.                         vocabulary. We ﬁltered out the words that are not
+   As for noun-noun dependencies, we considered              included in our vocabulary and removed the sets
+expressions of type “n1 の n2 ” (≈ “n2 of n1 ”) as            with size less than 2 after the ﬁltering.
+dependencies (n1 , 〈n2 , の 〉).                                  Set “A” contained 3,740 words that are actually
+   We extracted about 470 million unique depen-              evaluated, with about 115 answers on average, and
+dencies from the corpus, containing 31 million               “B” contained 3,657 words with about 65 answers
+unique nouns (including compound nouns as de-                on average. Set “C” contained 8,853 words with
+termined by our ﬁlters) and 22 million unique con-           about 1,700 answers on average.
+texts, fk . We sorted the nouns according to the             5.4 Compared similarity measures
+number of unique co-occurring contexts and the
+contexts according to the number of unique co-               We compared our Bayesian Bhattacharyya simi-
+occurring nouns, and then we selected the top one            larity measure, BCb , with the following similarity
+million nouns and 100,000 contexts. We used only             measures.
+260 million dependency pairs that contained both
+                                                             JS Jensen-Shannon divergence between p(fk |w1 )
+the selected nouns and the selected contexts.
+                                                                 and p(fk |w2 ) (Dagan et al., 1994; Dagan et
+5.3 Test sets                                                    al., 1999).
+
+We prepared three test sets as follows.                      PMI-cos The cosine of the context proﬁle vec-
+                                                                tors, where the k-th dimension is the point-
+Set “A” and “B”: Thesaurus siblings We                          wise mutual information (PMI) between
+     considered that words having a common                      wi and fk deﬁned as: P M I(wi , fk ) =
+                                                                      p(wi ,fk )
+     hypernym (i.e., siblings) in a manually                    log p(w            (Pantel and Lin, 2002; Pantel
+                                                                         i )p(fk )
+     constructed thesaurus could constitute a                   et al., 2009).   3
+     similar word set. We extracted such sets
+     from a Japanese dictionary, EDR (V3.0)                  Cls-JS Kazama et al. (2009) proposed using
+     (CRL, 2002), which contains concept hier-                    the Jensen-Shannon divergence between hid-
+     archies and the mapping between words and                    den class distributions, p(c|w1 ) and p(c|w2 ),
+     concepts. The dictionary contains 304,884                    which are obtained by using an EM-based
+     nouns. In all, 6,703 noun sibling sets were                  clustering of dependency
+                                                                                        ∑ relations with a
+     extracted with the average set size of 45.96.                model p(wi , fk ) =       c p(wi |c)p(fk |c)p(c)
+     We randomly chose 200 sets each for sets                     (Kazama and Torisawa, 2008). In order to
+     “A” and “B.” Set “A” is a development set to                3
+                                                                   We did not use the discounting of the PMI values de-
+     tune the value of the hyperparameters and               scribed in Pantel and Lin (2002).
+
+
+                                                       251
+
+
+      alleviate the effect of local minima of the EM                         Table 1: Performance on siblings (Set A).
+      clustering, they proposed averaging the simi-                                                                MP
+                                                                          Measure          MAP
+      larities by several different clustering results,                                             @1      @5       @10       @20
+      which can be obtained by using different ini-                       JS               0.0299 0.197 0.122 0.0990           0.0792
+      tial parameters. In this study, we combined                         PMI-cos          0.0332 0.195 0.124 0.0993           0.0798
+      two clustering results (denoted as “s1+s2” in                       Cls-JS (s1)      0.0319 0.195 0.122 0.0988           0.0796
+                                                                          Cls-JS (s2)      0.0295 0.198 0.122 0.0981           0.0786
+      the results), each of which (“s1” and “s2”)                         Cls-JS (s1+s2) 0.0333 0.206 0.129 0.103              0.0841
+      has 2,000 hidden classes.4 We included this                         BC               0.0334 0.211 0.131 0.106            0.0854
+      method since clustering can be regarded as                          BCb (0.0002)     0.0345 0.223 0.138 0.109            0.0873
+                                                                          BCb (0.0016)     0.0356 0.242 0.148 0.119            0.0955
+      another way of treating data sparseness.                            BCb (0.0032)     0.0325 0.223 0.137 0.111            0.0895
+                                                                          BCa (0.0016) 0.0337 0.212 0.133 0.107                0.0863
+BC The Bhattacharyya coefﬁcient (Bhat-                                    BCa (0.0362) 0.0345 0.221 0.136 0.110                0.0890
+   tacharyya, 1943) between p(fk |w1 ) and                                BCa (0.1)        0.0324 0.214 0.128 0.101            0.0825
+                                                                                    without log(c(wi , fk )) + 1 modiﬁcation
+   p(fk |w2 ). This is the baseline for BCb .                             JS               0.0294 0.197 0.116 0.0912           0.0712
+                                                                          PMI-cos          0.0342 0.197 0.125 0.0987           0.0793
+BCa The Bhattacharyya coefﬁcient with absolute                            BC               0.0296 0.201 0.118 0.0915           0.0721
+   discounting. In calculating p(fk |wi ), we sub-
+   tract the discounting value, α, from c(wi , fk )                         As for BCb , we assumed that all of the hyper-
+   and equally distribute the residual probabil-                         parameters had the same value, i.e., αk = α. It
+   ity mass to the contexts whose frequency is                           is apparent that an excessively large α is not ap-
+   zero. This is included as an example of naive                         propriate because it means ignoring observations.
+   smoothing methods.                                                    Therefore, α must be tuned. The discounting value
+                                                                         of BCa is also tuned.
+   Since it is very costly to calculate the sim-
+ilarities with all of the other words (one mil-                          5.5 Results
+lion in our case), we used the following approx-
+imation method that exploits the sparseness of                           Table 1 shows the results for Set A. The MAP and
+c(wi , fk ). Similar methods were used in Pantel                         the MPs at the top 1, 5, 10, and 20 are shown for
+and Lin (2002), Kazama et al. (2009), and Pan-                           each similarity measure. As for BCb and BCa , the
+tel et al. (2009) as well. For a given word, wi ,                        results for the tuned and several other values for α
+we sort the contexts in descending order accord-                         are shown. Figure 1 shows the parameter tuning
+ing to c(wi , fk ) and retrieve the top-L contexts.5                     for BCb with MAP as the y-axis (results for BCa
+For each selected context, we sort the words in de-                      are shown as well). Figure 2 shows the same re-
+scending order according to c(wi , fk ) and retrieve                     sults with MPs as the y-axis. The MAP and MPs
+the top-M words (L = M = 1600).6 We merge                                showed a correlation here. From these results, we
+all of the words above as candidate words and cal-                       can see that BCb surely improves upon BC, with
+culate the similarity only for the candidate words.                      6.6% improvement in MAP and 14.7% improve-
+Finally, the top 500 similar words are output.                           ment in MP@1 when α = 0.0016. BCb achieved
+   Note also that we used modiﬁed counts,                                the best performance among the compared mea-
+log(c(wi , fk )) + 1, instead of raw counts,                             sures with this setting. The absolute discounting,
+c(wi , fk ), with the intention of alleviating the ef-                   BCa , improved upon BC as well, but the improve-
+fect of strangely frequent dependencies, which can                       ment was smaller than with BCb . Table 1 also
+be found in the Web data. In preliminary ex-                             shows the results for the case where we did not
+periments, we observed that this modiﬁcation im-                         use the log-modiﬁed counts. We can see that this
+proves the quality of the top 500 similar words as                       modiﬁcation gives improvements (though slight or
+reported in Terada et al. (2004) and Kazama et al.                       unclear for PMI-cos).
+(2009).                                                                     Because tuning hyperparameters involves the
+    4                                                                    possibility of overﬁtting, its robustness should be
+      In the case of EM clustering, the number of unique con-
+texts, fk , was also set to one million instead of 100,000, fol-         assessed. We checked whether the tuned α with
+lowing Kazama et al. (2009).                                             Set A works well for Set B. The results are shown
+    5
+      It is possible that the number of contexts with non-zero           in Table 2. We can see that the best α (= 0.0016)
+counts is less than L. In that case, all of the contexts with
+non-zero counts are used.                                                found for Set A works well for Set B as well. That
+    6
+      Sorting is performed only once in the initialization step.         is, the tuning of α as above is not unrealistic in
+
+
+                                                                   252
+
+
+          0.036                                                           Table 2: Performance on siblings (Set B).
+          0.034                                                                                                  MP
+          0.032
+                                                                      Measure            MAP
+                                                                                                   @1      @5         @10       @20
+           0.03
+                                                                      JS               0.0265    0.208   0.116    0.0855      0.0627
+    MAP
+
+
+          0.028
+                                                                      PMI-cos          0.0283    0.203   0.116    0.0871      0.0660
+          0.026
+                                                                      Cls-JS (s1+s2)   0.0274    0.194   0.115    0.0859      0.0643
+          0.024                                                       BC               0.0295    0.223   0.124    0.0922      0.0693
+          0.022                     Bayes                             BCb (0.0002)     0.0301    0.225   0.128    0.0958      0.0718
+                      Absolute Discounting                            BCb (0.0016)     0.0313    0.246   0.135     0.103      0.0758
+           0.02
+              1e-06 1e-05 0.0001 0.001 0.01       0.1    1            BCb (0.0032)     0.0279    0.228   0.127    0.0938      0.0698
+                              α (log-scale)                           BCa (0.0016)     0.0297    0.223   0.125    0.0934      0.0700
+                                                                      BCa (0.0362)     0.0298    0.223   0.125    0.0934      0.0705
+Figure 1: Tuning of α (MAP). The dashed hori-                         BCa (0.01)       0.0300    0.224   0.126    0.0949      0.0710
+zontal line indicates the score of BC.
+          0.26
+          0.24
+                                                                        Table 3: Performance on closed-sets (Set C).
+          0.22                                                                                               MP
+           0.2                                                        Measure          MAP
+          0.18                                                                                   @1       @5      @10       @20
+          0.16
+    MP
+
+
+
+
+          0.14                                                        JS              0.127 0.607 0.582 0.566               0.544
+          0.12   MP@1                                                 PMI-cos         0.124 0.531 0.519 0.508               0.493
+           0.1   MP@5                                                 Cls-JS (s1)     0.125 0.589 0.566 0.548               0.525
+                MP@10
+          0.08 MP@20                                                  Cls-JS (s2)     0.137 0.608 0.592 0.576               0.554
+          0.06 MP@30                                                  Cls-JS (s1+s2) 0.152 0.638 0.617 0.603                0.583
+                MP@40
+          0.04                                                        BC              0.131 0.602 0.579 0.565               0.545
+             1e-06    1e-05      0.0001       0.001     0.01
+                              α (log-scale)
+                                                                      BCb (0.0004)    0.133 0.636 0.605 0.587               0.563
+                                                                      BCb (0.0008)    0.131 0.647 0.615 0.594               0.568
+            Figure 2: Tuning of α (MP).                               BCb (0.0016)    0.126 0.644 0.615 0.593               0.564
+                                                                      BCb (0.0032)    0.107 0.573 0.556 0.529               0.496
+practice because it seems that we can tune it ro-                                 L = M = 3200 and N = 2000
+bustly using a small subset of the vocabulary as                      JS              0.165 0.605 0.580 0.564               0.543
+shown by this experiment.                                             PMI-cos         0.165 0.530 0.517 0.507               0.492
+                                                                      Cls-JS (s1+s2) 0.209 0.639 0.618 0.603                0.584
+   Next, we evaluated the measures on Set C, i.e.,                    BC              0.168 0.600 0.577 0.562               0.542
+the closed set data. The results are shown in Ta-                     BCb (0.0004)    0.170 0.635 0.604 0.586               0.562
+                                                                      BCb (0.0008)    0.168 0.647 0.615 0.594               0.568
+ble 3. For this set, we observed a tendency that                      BCb (0.0016)    0.161 0.644 0.615 0.593               0.564
+is different from Sets A and B. Cls-JS showed a                       BCb (0.0032)    0.140 0.573 0.556 0.529               0.496
+particularly good performance. BCb surely im-
+proves upon BC. For example, the improvement                         for our method requires just an hour with a single
+was 7.5% for MP@1. However, the improvement                          core.
+in MAP was slight, and MAP did not correlate
+well with MPs, unlike in the case of Sets A and                      6 Discussion
+B.
+                                                                     We should note that the improvement by using our
+   We thought one possible reason is that the num-
+                                                                     method is just “on average,” as in many other NLP
+ber of outputs, 500, for each word was not large
+                                                                     tasks, and observing clear qualitative change is rel-
+enough to assess MAP values correctly because
+                                                                     atively difﬁcult, for example, by just showing ex-
+the average number of answers is 1,700 for this
+                                                                     amples of similar word lists here. Comparing the
+dataset. In fact, we could output more than 500
+                                                                     results of BCb and BC, Table 4 lists the numbers
+words if we ignored the cost of storage. Therefore,
+                                                                     of improved, unchanged, and degraded words in
+we also included the results for the case where
+                                                                     terms of MP@20 for each evaluation set. As can
+L = M = 3600 and N = 2, 000. Even with
+                                                                     be seen, there are a number of degraded words, al-
+this setting, however, MAP did not correlate well
+                                                                     though they are fewer than the improved words.
+with MPs.
+                                                                     Next, Figure 3 shows the averaged differences of
+   Although Cls-JS showed very good perfor-
+                                                                     MP@20 in each 40,000 word-ID range.7 We can
+mance for Set C, note that the EM clustering
+                                                                     observe that the advantage of BCb is lessened es-
+is very time-consuming (Kazama and Torisawa,
+                                                                         7
+2008), and it took about one week with 24 CPU                              Word IDs are assigned in ascending order when we chose
+                                                                     the top one million words as described in Section 5.2, and
+cores to get one clustering result in our computing                  they roughly correlate with frequencies. So, frequent words
+environment. On the other hand, the preparation                      tend to have low-IDs.
+
+
+                                                               253
+
+
+Table 4: The numbers of improved, unchanged,                                                                                                  Table 5: Statistics on IDs. (A): Avg. ID of an-
+and degraded words in terms of MP@20 for each                                                                                                 swers. (B): Avg. ID of system outputs. (C): Avg.
+evaluation set.                                                                                                                               ID of correct system outputs.
+                                      # improved                            # unchanged                           # degraded                                         Set A                          Set C
+                      Set A                                      755                       2,585                            400                          (A)        238,483                     255,248
+                      Set B                                      643                       2,610                            404
+                      Set C                                    3,153                       3,962                          1,738                                     (B)           (C)           (B)          (C)
+                                                                                                                                               Cls-JS (s1+s2)   282,098   176,706           273,768      232,796
+                                                                                                                                               JS               183,054   11,3442           211,671      201,214
+Avg. Diff. of MP@20
+
+
+
+
+                                                                                    Avg. Diff. of MP@20
+                           0.06                                                                            0.06
+                           0.05                                                                            0.05
+                                                                                                                                               BC               162,758    98,433           193,508      189,345
+                           0.04                                                                            0.04                                BCb (0.0016)      55,915    54,786            90,472      127,877
+                           0.03                                                                            0.03
+                           0.02                                                                            0.02                                BC/BCb              2.91       1.80             2.14         1.48
+                           0.01                                                                            0.01
+                              0                                                                               0
+                          -0.01                                                                           -0.01
+                                  0                 500000                  1e+06                                 0        500000    1e+06    and other well-known similarity measures. As
+                                            ID range                                                                      ID range
+                                                                                                                                              a smoothing method, it also outperformed a
+                                         Avg. Diff. of MP@20
+
+
+
+
+                                                                 0.08
+                                                                 0.07
+                                                                 0.06
+                                                                                                                                              naive absolute discounting. Of course, we can-
+                                                                 0.05
+                                                                 0.04                                                                         not say that the proposed method is better than
+                                                                 0.03
+                                                                 0.02                                                                         any other sophisticated smoothing method at this
+                                                                 0.01
+                                                                    0
+                                                                -0.01
+                                                                                                                                              point. However, as noted above, there has
+                                                                        0       500000                            1e+06                       been no serious attempt to assess the effect of
+                                                                                ID range
+                                                                                                                                              smoothing in the context of word similarity cal-
+Figure 3: Averaged Differences of MP@20 be-                                                                                                   culation. Recent studies have pointed out that
+tween BCb (0.0016) and BC within each 40,000                                                                                                  the Bayesian framework derives state-of-the-art
+ID range (Left: Set A. Right: Set B. Bottom: Set                                                                                              smoothing methods such as Kneser-Ney smooth-
+C).                                                                                                                                           ing as a special case (Teh, 2006; Mochihashi et
+pecially for low-ID words (as expected) with on-                                                                                              al., 2009). Consequently, it is reasonable to re-
+average degradation.8 The improvement is “on av-                                                                                              sort to the Bayesian framework. Conceptually,
+erage” in this sense as well.                                                                                                                 our method is equivalent to modifying p(fk |wi )
+                                                                                                                                                             {                                  }
+   One might suspect that the answer words tended                                                                                                               Γ(α0 +a0 )Γ(αk +c(wi ,fk )+ 12 ) 2
+                                                                                                                                              as p(fk |wi ) = Γ(α +a + 1 )Γ(α +c(w ,f ))           and
+to be low-ID words, and the proposed method is                                                                                                                       0    0   2         k       i    k
+
+simply biased towards low-ID words because of                                                                                                 taking the Bhattacharyya coefﬁcient. However,
+its nature. Then, the observed improvement is a                                                                                               the implication of this form has not yet been in-
+trivial consequence. Table 5 lists some interest-                                                                                             vestigated, and so we leave it for future research.
+ing statistics about the IDs. We can see that BCb                                                                                                Our method is the simplest one as a Bayesian
+surely outputs more low-ID words than BC, and                                                                                                 method. We did not employ any numerical opti-
+BC more than Cls-JS and JS.9 However, the av-                                                                                                 mization or sampling iterations, as in a more com-
+erage ID of the outputs of BC is already lower                                                                                                plete use of the Bayesian framework (Teh, 2006;
+than the average ID of the answer words. There-                                                                                               Mochihashi et al., 2009). Instead, we used the ob-
+fore, even if BCb preferred lower-ID words than                                                                                               tained analytical form directly with the assump-
+BC, it should not have the effect of improving                                                                                                tion that αk = α and α can be tuned directly by
+the accuracy. That is, the improvement by BCb                                                                                                 using a simple grid search with a small subset of
+is not superﬁcial. From BC/BCb , we can also see                                                                                              the vocabulary as the development set. If substan-
+that the IDs of the correct outputs did not become                                                                                            tial additional costs are allowed, we can ﬁne-tune
+smaller compared to the IDs of the system outputs.                                                                                            each αk using more complete Bayesian methods.
+Clearly, we need more analysis on what caused                                                                                                 We also leave this for future research.
+the improvement by the proposed method and how                                                                                                   In terms of calculation procedure, BCb has the
+that affects the efﬁcacy in real applications of sim-                                                                                         same form as other similarity measures, which is
+ilarity measures.                                                                                                                             basically the same as the inner product of sparse
+   The proposed Bayesian similarity measure out-                                                                                              vectors. Thus, it can be as fast as other similar-
+performed the baseline Bhattacharyya coefﬁcient                                                                                               ity measures with some effort as we described in
+                      8                                                                                                                       Section 4 when our aim is to calculate similarities
+     This suggests the use of different αs depending on ID
+ranges (e.g., smaller α for low-ID words) in practice.                                                                                        between words in a ﬁxed large vocabulary. For ex-
+   9
+     The outputs of Cls-JS are well-balanced in the ID space.                                                                                 ample, BCb took about 100 hours to calculate the
+
+
+                                                                                                                                        254
+
+
+top 500 similar nouns for all of the one million                        estimation and takes the expectation of a base sim-
+nouns (using 16 CPU cores), while JS took about                         ilarity measure under that distribution. We showed
+57 hours. We think this is an acceptable additional                     that, in the case where the context proﬁles are
+cost.                                                                   multinomial distributions, the priors are Dirichlet,
+   The limitation of our method is that it can-                         and the base measure is the Bhattacharyya coefﬁ-
+not be used efﬁciently with similarity measures                         cient, we can derive an analytical form, permitting
+other than the Bhattacharyya coefﬁcient, although                       efﬁcient calculation. Experimental results show
+that choice seems good as shown in the experi-                          that the proposed measure gives better word simi-
+ments. For example, it seems difﬁcult to use the                        larities than a non-Bayesian Bhattacharyya coefﬁ-
+Jensen-Shannon divergence as the base similar-                          cient, other well-known similarity measures such
+ity because the analytical form cannot be derived.                      as Jensen-Shannon divergence and the cosine with
+One way we are considering to give more ﬂexi-                           PMI weights, and the Bhattacharyya coefﬁcient
+bility to our method is to adjust αk depending on                       with absolute discounting.
+external knowledge such as the importance of a
+context (e.g., PMIs). In another direction, we will                     Appendix A
+be able∑ to use a “weighted” Bhattacharyya coefﬁ-                       Here, we give the analytical form for the general-
+                                 √
+cient: k µ(w1 , fk )µ(w2 , fk ) p1k × p2k , where                       ized case (BCbd ) in Section 6. Recall the following
+the weights, µ(wi , fk ), do not depend on pik , as                     relation, which is used to derive the normalization
+the base similarity measure. The analytical form                        factor of the Dirichlet distribution:
+                                                                                Z Y                                  Q                   ′
+for it will be a weighted version of BCb .                                                        ′
+                                                                                                 α −1                     Γ(αk )      ′
+   BCb can also be generalized to the case where                                             φk k         dφ =           k
+                                                                                                                            ′    = Z(α )−1 .                                          (10)
+                                        ∑                                       △ k                                      Γ(α0 )
+the base similarity is BC d (p1 , p2 ) = Kk=1 p1k ×
+                                               d
+                                                                        Then, BCbd (w1 , w2 )
+pd2k , where d > 0. The Bayesian analytical form
+                                                                                ZZ                                                            X
+becomes as follows.                                                                                           ′                          ′
+                                                                            =            Dir(φ1 |α )Dir(φ2 |β )                                       φd1k φd2k dφ1 dφ2
+                           Γ(α0 + a0 )Γ(β0 + b0 )                               △×△                                                               k
+    BCbd (w1 , w2 ) =                                ×
+                        Γ(α0 + a0 + d)Γ(β0 + b0 + d)                                     ′            ′
+                                                                            = Z(α )Z(β ) ×
+    K
+    X Γ(αk + c(w1 , fk ) + d)Γ(βk + c(w2 , fk ) + d)                        ZZ Y ′ Y ′            X d d
+                                                     .                             α −1     βm −1
+         Γ(αk + c(w1 , fk ))Γ(βk + c(w2 , fk ))                                   φ1ll     φ2m     φ1k φ2k dφ1 dφ2 .
+    k=1                                                                              l                    m                          k
+                                                                            △×△
+                                                                            |                                        {z                                                  }
+ See Appendix A for the derivation. However, we                                                                          A
+
+restricted ourselves to the case of d = 21 in this                      Using Eq. 10, A in the above can be calculated as
+study.                                                                  follows:
+   Finally, note that our BCb is different from                                                       2                        3
+                                                                            Z Y           ′            X d Z α′ +d−1 Y α′ −1
+the Bhattacharyya distance measure on Dirichlet                         =           φ2m
+                                                                                         βm −1
+                                                                                                      4 φ2k φ1kk      φ1ll dφ1 5 dφ2
+distributions of the following form described in                            △
+                                                                                m                         k              △                            l̸=k
+Rauber et al. (2008) in its motivation and analyti-                         Z Y                     "                            ′                    Q              ′    #
+                                                                                     βm
+                                                                                             ′
+                                                                                                 −1
+                                                                                                     X                   Γ(αk + d)                        l̸=k   Γ(αl )
+cal form:                                                               =           φ2m                           φd2k                            ′                               dφ2
+                                                                                m                         k
+                                                                                                                                         Γ(α0 + d)
+                                                                            △
+
+       p                                                                                 ′                Q                  ′       Z
+          ′    ′         Q       ′   ′                                      X Γ(αk + d)                             Γ(αl )                        ′
+                                                                                                                                              β +d−1
+                                                                                                                                                                 Y        β
+                                                                                                                                                                              ′
+                                                                                                                                                                                  −1
+      Γ(α0 )Γ(β0 )           Γ((α + β )/2)                              =
+                                                                                                           l̸=k
+                                                                                                                                             φ2kk                         m
+                                                                                                                                                                        φ2m            dφ2
+ qQ         qQ          × k1 PK k ′ k ′ .                  (9)                                        ′
+                                                                                                 Γ(α0 + d)
+        ′           ′    Γ( 2 k (αk + βk ))                                 k                                                                                    m̸=k
+                                                                                                                                 △
+   k Γ(αk )    k Γ(βk )
+                                                                                         ′                Q                  ′                ′             Q                     ′
+                                                                            X Γ(αk + d)                    l̸=k     Γ(αl ) Γ(βk + d)                             m̸=k    Γ(βm )
+Empirical and theoretical comparisons with this                         =                             ′                                                      ′
+                                                                                   Γ(α0 + d)            Γ(β0 + d)
+measure also form one of the future directions.10                           k
+                                                                             Q     Q    ′′        ′          ′
+                                                                             Γ(αl ) Γ(βm )   X Γ(αk + d) Γ(βk + d)
+                                                                        =    ′        ′             ′          ′   .
+7 Conclusion                                                              Γ(α0 + d)Γ(β0 + d) k   Γ(αk )    Γ(βk )
+
+We proposed a Bayesian method for robust distri-                        This will give:
+butional word similarities. Our method uses a dis-                      BCbd (w1 , w2 ) =
+tribution of context proﬁles obtained by Bayesian                                        ′    ′       K     ′        ′
+                                                                                     Γ(α0 )Γ(β0 )    X   Γ(αk + d)Γ(βk + d)
+  10
+      Our preliminary experiments show that calculating sim-                                 ′′                 ′    ′      .
+ilarity using Eq. 9 for the Dirichlet distributions obtained by                   Γ(α0 + d)Γ(β0 + d) k=1    Γ(αk )Γ(βk )
+Eq. 6 does not produce meaningful similarity (i.e., the accu-
+racy is very low).
+
+
+                                                                  255
+
+
+References                                                       Daichi Mochihashi, Takeshi Yamada, and Naonori
+                                                                   Ueda. 2009. Bayesian unsupervised word segmen-
+A. Bhattacharyya. 1943. On a measure of divergence                 tation with nested Pitman-Yor language modeling.
+  between two statistical populations deﬁned by their              In Proceedings of ACL-IJCNLP 2009, pages 100–
+  probability distributions. Bull. Calcutta Math. Soc.,            108.
+  49:214–224.
+                                                                 Masaki Murata, Qing Ma, Tamotsu Shirado, and Hi-
+Stanley F. Chen and Joshua Goodman. 1998. An em-                  toshi Isahara. 2004. Database for evaluating ex-
+   pirical study of smoothing techniques for language             tracted terms and tool for visualizing the terms. In
+   modeling. TR-10-98, Computer Science Group,                    Proceedings of LREC 2004 Workshop: Computa-
+   Harvard University.                                            tional and Computer-Assisted Terminology, pages
+Stanley F. Chen and Ronald Rosenfeld. 2000. A                     6–9.
+   survey of smoothing techniques for ME models.                 Patrick Pantel and Dekang Lin. 2002. Discovering
+   IEEE Transactions on Speech and Audio Process-                  word senses from text. In Proceedings of the eighth
+   ing, 8(1):37–50.                                                ACM SIGKDD international conference on Knowl-
+Corinna Cortes and Vladimir Vapnik. 1995. Support                  edge discovery and data mining, pages 613–619.
+  vector networks. Machine Learning, 20:273–297.                 Patrick Pantel, Eric Crestan, Arkady Borkovsky, Ana-
+CRL. 2002. EDR electronic dictionary version 2.0                   Maria Popescu, and Vishnu Vyas. 2009. Web-scale
+  technical guide. Communications Research Labo-                   distributional similarity and entity set expansion. In
+  ratory (CRL).                                                    Proceedings of EMNLP 2009, pages 938–947.
+
+Ido Dagan, Fernando Pereira, and Lillian Lee. 1994.              T. W. Rauber, T. Braun, and K. Berns. 2008. Proba-
+   Similarity-based estimation of word cooccurrence                 bilistic distance measures of the Dirichlet and Beta
+   probabilities. In Proceedings of ACL 94.                         distributions. Pattern Recognition, 41:637–645.
+
+Ido Dagan, Shaul Marcus, and Shaul Markovitch.                   Keiji Shinzato, Tomohide Shibata, Daisuke Kawahara,
+   1995. Contextual word similarity and estimation                 Chikara Hashimoto, and Sadao Kurohashi. 2008.
+   from sparse data. Computer, Speech and Language,                Tsubaki: An open search engine infrastructure for
+   9:123–152.                                                      developing new information access. In Proceedings
+                                                                   of IJCNLP 2008.
+Ido Dagan, Lillian Lee, and Fernando Pereira. 1997.
+   Similarity-based methods for word sense disam-                Yee Whye Teh. 2006. A hierarchical Bayesian lan-
+   biguation. In Proceedings of ACL 97.                            guage model based on Pitman-Yor processes. In
+                                                                   Proceedings of COLING-ACL 2006, pages 985–992.
+Ido Dagan, Lillian Lee, and Fernando Pereira. 1999.
+   Similarity-based models of word cooccurrence                  Akira Terada, Minoru Yoshida, and Hiroshi Nakagawa.
+   probabilities. Machine Learning, 34(1-3):43–69.                 2004. A tool for constructing a synonym dictionary
+                                                                   using context information. In IPSJ SIG Technical
+Gregory Grefenstette. 1994. Explorations In Auto-                  Report (in Japanese), pages 87–94.
+  matic Thesaurus Discovery. Kluwer Academic Pub-
+  lishers.
+Zellig Harris. 1954. Distributional structure. Word,
+  pages 146–142.
+Donald Hindle. 1990. Noun classiﬁcation from
+  predicate-argument structures. In Proceedings of
+  ACL-90, pages 268–275.
+Jun’ichi Kazama and Kentaro Torisawa. 2008. In-
+  ducing gazetteers for named entity recognition by
+  large-scale clustering of dependency relations. In
+  Proceedings of ACL-08: HLT.
+Jun’ichi Kazama, Stijn De Saeger, Kentaro Torisawa,
+  and Masaki Murata. 2009. Generating a large-scale
+  analogy list using a probabilistic clustering based on
+  noun-verb dependency proﬁles. In Proceedings of
+  15th Annual Meeting of The Association for Natural
+  Language Processing (in Japanese).
+Dekang Lin. 1998. Automatic retrieval and clustering
+  of similar words. In Proceedings of COLING/ACL-
+  98, pages 768–774.
+
+
+                                                           256
+

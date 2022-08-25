@@ -1,0 +1,544 @@
+                        Learning to Follow Navigational Directions
+
+                                 Adam Vogel and Dan Jurafsky
+                                 Department of Computer Science
+                                       Stanford University
+                             {acvogel,jurafsky}@stanford.edu
+
+
+
+                      Abstract
+
+    We present a system that learns to fol-
+    low navigational natural language direc-
+    tions. Where traditional models learn
+    from linguistic annotation or word distri-
+    butions, our approach is grounded in the
+    world, learning by apprenticeship from
+                                                                 1. go vertically down until you’re underneath eh
+    routes through a map paired with English
+                                                                    diamond mine
+    descriptions. Lacking an explicit align-
+                                                                 2. then eh go right until you’re
+    ment between the text and the reference
+                                                                 3. you’re between springbok and highest view-
+    path makes it difficult to determine what
+                                                                    point
+    portions of the language describe which
+    aspects of the route. We learn this corre-
+                                                               Figure 1: A path appears on the instruction giver’s
+    spondence with a reinforcement learning
+                                                               map, who describes it to the instruction follower.
+    algorithm, using the deviation of the route
+    we follow from the intended path as a re-
+    ward signal. We demonstrate that our sys-                  grounded interaction with the world. This draws
+    tem successfully grounds the meaning of                    on the intuition that children learn to use spatial
+    spatial terms like above and south into ge-                language through a mixture of observing adult lan-
+    ometric properties of paths.                               guage usage and situated interaction in the world,
+                                                               usually without explicit definitions (Tanz, 1980).
+1   Introduction
+                                                                  Our system learns to follow navigational direc-
+Spatial language usage is a vital component for                tions in a route following task. We evaluate our
+physically grounded language understanding sys-                approach on the HCRC Map Task corpus (Ander-
+tems. Spoken language interfaces to robotic assis-             son et al., 1991), a collection of spoken dialogs
+tants (Wei et al., 2009) and Geographic Informa-               describing paths to take through a map. In this
+tion Systems (Wang et al., 2004) must cope with                setting, two participants, the instruction giver and
+the inherent ambiguity in spatial descriptions.                instruction follower, each have a map composed
+   The semantics of imperative and spatial lan-                of named landmarks. Furthermore, the instruc-
+guage is heavily dependent on the physical set-                tion giver has a route drawn on her map, and it
+ting it is situated in, motivating automated learn-            is her task to describe the path to the instruction
+ing approaches to acquiring meaning. Tradi-                    follower, who cannot see the reference path. Our
+tional accounts of learning typically rely on lin-             system learns to interpret these navigational direc-
+guistic annotation (Zettlemoyer and Collins, 2009)             tions, without access to explicit linguistic annota-
+or word distributions (Curran, 2003). In con-                  tion.
+trast, we present an apprenticeship learning sys-                 We frame direction following as an apprentice-
+tem which learns to imitate human instruction fol-             ship learning problem and solve it with a rein-
+lowing, without linguistic annotation. Solved us-              forcement learning algorithm, extending previous
+ing a reinforcement learning algorithm, our sys-               work on interpreting instructions by Branavan et
+tem acquires the meaning of spatial words through              al. (2009). Our task is to learn a policy, or mapping
+
+
+                                                         806
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 806–814,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+from world state to action, which most closely fol-
+lows the reference route. Our state space com-
+bines world and linguistic features, representing
+both our current position on the map and the com-
+municative content of the utterances we are inter-
+preting. During training we have access to the ref-
+erence path, which allows us to measure the util-
+ity, or reward, for each step of interpretation. Us-
+ing this reward signal as a form of supervision, we
+learn a policy to maximize the expected reward on
+unseen examples.
+
+2   Related Work
+                                                              Figure 2: The instruction giver and instruction fol-
+Levit and Roy (2007) developed a spatial seman-               lower face each other, and cannot see each others
+tics for the Map Task corpus. They represent                  maps.
+instructions as Navigational Information Units,
+which decompose the meaning of an instruction
+into orthogonal constituents such as the reference            encoded syntactically, and Fillmore (1997) studies
+object, the type of movement, and quantitative as-            spatial terms as a subset of deictic language, which
+pect. For example, they represent the meaning of              depends heavily on non-linguistic context. Levin-
+“move two inches toward the house” as a reference             son (2003) conducted a cross-linguistic semantic
+object (the house), a path descriptor (towards), and          typology of spatial systems. Levinson categorizes
+a quantitative aspect (two inches). These represen-           the frames of reference, or spatial coordinate sys-
+tations are then combined to form a path through              tems1 , into
+the map. However, they do not learn these rep-
+                                                                1. Egocentric: Speaker/hearer centered frame
+resentations from text, leaving natural language
+                                                                   of reference. Ex: “the ball to your left”.
+processing as an open problem. The semantics
+in our paper is simpler, eschewing quantitative as-             2. Allocentric: Speaker independent. Ex: “the
+pects and path descriptors, and instead focusing                   road to the north of the house”
+on reference objects and frames of reference. This
+simplifies the learning task, without sacrificing the            Levinson further classifies allocentric frames of
+core of their representation.                                 reference into absolute, which includes the cardi-
+   Learning to follow instructions by interacting             nal directions, and intrinsic, which refers to a fea-
+with the world was recently introduced by Brana-              tured side of an object, such as “the front of the
+van et al. (2009), who developed a system which               car”. Our spatial feature representation follows
+learns to follow Windows Help guides. Our re-                 this egocentric/allocentric distinction. The intrin-
+inforcement learning formulation follows closely              sic frame of reference occurs rarely in the Map
+from their work. Their approach can incorpo-                  Task corpus and is ignored, as speakers tend not
+rate expert supervision into the reward function              to mention features of the landmarks beyond their
+in a similar manner to this paper, but is also able           names.
+to learn effectively from environment feedback                   Regier (1996) studied the learning of spatial
+alone. The Map Task corpus is free form conversa-             language from static 2-D diagrams, learning to
+tional English, whereas the Windows instructions              distinguish between terms with a connectionist
+are written by a professional. In the Map Task cor-           model. He focused on the meaning of individual
+pus we only observe expert route following behav-             terms, pairing a diagram with a given word. In
+ior, but are not told how portions of the text cor-           contrast, we learn from whole texts paired with a
+respond to parts of the path, leading to a difficult              1
+                                                                    Not all languages exhibit all frames of reference. Terms
+learning problem.                                             for ‘up’ and ‘down’ are exhibited in most all languages, while
+   The semantics of spatial language has been                 ‘left’ and ‘right’ are absent in some. Gravity breaks the sym-
+                                                              metry between ‘up’ and ‘down’ but no such physical distinc-
+studied for some time in the linguistics literature.          tion exists for ‘left’ and ‘right’, which contributes to the dif-
+Talmy (1983) classifies the way spatial meaning is            ficulty children have learning them.
+
+
+                                                        807
+
+
+path, which requires learning the correspondence
+between text and world. We use similar geometric
+features as Regier, capturing the allocentric frame
+of reference.
+   Spatial semantics have also been explored in
+physically grounded systems. Kuipers (2000) de-
+veloped the Spatial Semantic Hierarchy, a knowl-
+edge representation formalism for representing
+different levels of granularity in spatial knowl-
+edge. It combines sensory, metrical, and topolog-
+ical information in a single framework. Kuipers               Figure 3: Sample state transition. Both actions get
+et al. demonstrate its effectiveness on a physical            credit for visiting the great rock after the indian
+robot, but did not address the learning problem.              country. Action a1 also gets credit for passing the
+   More generally, apprenticeship learning is well            great rock on the correct side.
+studied in the reinforcement learning literature,
+where the goal is to mimic the behavior of an ex-             4       Reinforcement Learning Formulation
+pert in some decision making domain. Notable ex-
+amples include (Abbeel and Ng, 2004), who train               We frame the direction following task as a sequen-
+a helicopter controller from pilot demonstration.             tial decision making problem. We interpret ut-
+                                                              terances in order, where our interpretation is ex-
+                                                              pressed by moving on the map. Our goal is to
+3   The Map Task Corpus                                       construct a series of moves in the map which most
+                                                              closely matches the expert path.
+The HCRC Map Task Corpus (Anderson et al.,
+                                                                 We define intermediate steps in our interpreta-
+1991) is a set of dialogs between an instruction
+                                                              tion as states in a set S, and interpretive steps as
+giver and an instruction follower. Each participant
+                                                              actions drawn from a set A. To measure the fi-
+has a map with small named landmarks. Addition-
+                                                              delity of our path with respect to the expert, we
+ally, the instruction giver has a path drawn on her
+                                                              define a reward function R : S × A → R+ which
+map, and must communicate this path to the in-
+                                                              measures the utility of choosing a particular action
+struction follower in natural language. Figure 1
+                                                              in a particular state. Executing action a in state s
+shows a portion of the instruction giver’s map and
+                                                              carries us to a new state s0 , and we denote this tran-
+a sample of the instruction giver language which
+                                                              sition function by s0 = T (s, a). All transitions are
+describes part of the path.
+                                                              deterministic in this paper.2
+   The Map Task Corpus consists of 128 dialogs,                  For training we are given a set of dialogs D.
+together with 16 different maps. The speech has               Each dialog d ∈ D is segmented into utter-
+been transcribed and segmented into utterances,               ances (u1 , . . . , um ) and is paired with a map,
+based on the length of pauses. We restrict our                which is composed of a set of named landmarks
+attention to just the utterances of the instruction           (l1 , . . . , ln ).
+giver, ignoring the instruction follower. This is to
+reduce redundancy and noise in the data - the in-             4.1      State
+struction follower rarely introduces new informa-             The states of our decision making problem com-
+tion, instead asking for clarification or giving con-         bine both our position in the dialog d and the path
+firmation. The landmarks on the instruction fol-              we have taken so far on the map. A state s ∈ S is
+lower map sometimes differ in location from the               composed of s = (ui , l, c), where l is the named
+instruction giver’s. We ignore this caveat, giving            landmark we are located next to and c is a cardinal
+the system access to the instruction giver’s land-            direction drawn from {North, South, East, West}
+marks, without the reference path.                            which determines which side of l we are on.
+   Our task is to build an automated instruction              Lastly, ui is the utterance in d we are currently
+follower. Whereas the original participants could             interpreting.
+speak freely, our system does not have the ability                2
+                                                                   Our learning algorithm is not dependent on a determin-
+to query the instruction giver and must instead rely          istic transition function and can be applied to domains with
+only on the previously recorded dialogs.                      stochastic transitions, such as robot locomotion.
+
+
+                                                        808
+
+
+4.2   Action                                                        landmark.
+An action a ∈ A is composed of a named land-                           Our reward function is a linear combination of
+mark l, the target of the action, together with a                   these features.
+cardinal direction c which determines which side                    4.5   Policy
+to pass l on. Additionally, a can be the null action,
+                                                                    We formally define an interpretive strategy as a
+with l = l0 and c = c0 . In this case, we interpret
+                                                                    policy π : S → A, a mapping from states to ac-
+an utterance without moving on the map. A target
+                                                                    tions. Our goal is to find a policy π which max-
+l together with a cardinal direction c determine a
+                                                                    imizes the expected reward Eπ [R(s, π(s))]. The
+point on the map, which is a fixed distance from l
+                                                                    expected reward of following policy π from state
+in the direction of c.
+                                                                    s is referred to as the value of s, expressed as
+   We make the assumption that at most one in-
+struction occurs in a given utterance. This does not                               V π (s) = Eπ [R(s, π(s))]          (1)
+always hold true - the instruction giver sometimes
+chains commands together in a single utterance.                     When comparing the utilities of executing an ac-
+                                                                    tion a in a state s, it is useful to define a function
+4.3   Transition
+                                                                       Qπ (s, a) = R(s, a) + V π (T (s, a))
+Executing action a =      (l0 , c0 )
+                                   in state s = (ui , l, c)                        = R(s, a) + Qπ (T (s, a), π(s))    (2)
+leads us to a new state s0 = T (s, a). This tran-
+sition moves us to the next utterance to interpret,                 which measures the utility of executing a, and fol-
+and moves our location to the target of the action.                 lowing the policy π for the remainder. A given Q
+If a is the null action, s = (ui+1 , l, c), otherwise               function implicitly defines a policy π by
+s0 = (ui+1 , l0 , c0 ). Figure 3 displays the state tran-
+                                                                                    π(s) = max Q(s, a).               (3)
+sitions two different actions.                                                                a
+   To form a path through the map, we connect                          Basic reinforcement learning methods treat
+these state waypoints with a path planner3 based                    states as atomic entities, in essence estimating V π
+on A∗ , where the landmarks are obstacles. In a                     as a table. However, at test time we are following
+physical system, this would be replaced with a                      new directions for a map we haven’t previously
+robot motion planner.                                               seen. Thus, we represent state/action pairs with a
+                                                                    feature vector φ(s, a) ∈ RK . We then represent
+4.4   Reward
+                                                                    the Q function as a linear combination of the fea-
+We define a reward function R(s, a) which mea-                      tures,
+sures the utility of executing action a in state s.                                Q(s, a) = θT φ(s, a)              (4)
+We wish to construct a route which follows the
+                                                                    and learn weights θ which most closely approxi-
+expert path as closely as possible. We consider a
+                                                                    mate the true expected reward.
+proposed route P close to the expert path Pe if P
+visits landmarks in the same order as Pe , and also                 4.6   Features
+passes them on the correct side.                                    Our features φ(s, a) are a mixture of world and
+   For a given transition s = (ui , l, c), a = (l0 , c0 ),          linguistic information. The linguistic information
+we have a binary feature indicating if the expert                   in our feature representation includes the instruc-
+path moves from l to l0 . In Figure 3, both a1 and                  tion giver utterance and the names of landmarks
+a2 visit the next landmark in the correct order.                    on the map. Additionally, we furnish our algo-
+   To measure if an action is to the correct side of                rithm with a list of English spatial terms, shown
+a landmark, we have another binary feature indi-                    in Table 1. Our feature set includes approximately
+cating if Pe passes l0 on side c. In Figure 3, only                 200 features. Learning exactly which words in-
+a1 passes l0 on the correct side.                                   fluence decision making is difficult; reinforcement
+   In addition, we have a feature which counts the                  learning algorithms have problems with the large,
+number of words in ui which also occur in the                       sparse feature vectors common in natural language
+name of l0 . This encourages us to choose poli-                     processing.
+cies which interpret language relevant to a given                       For a given state s = (u, l, c) and action a =
+  3
+    We used the Java Path Planning Library, available at            (l , c0 ), our feature vector φ(s, a) is composed of
+                                                                      0
+
+http://www.cs.cmu.edu/˜ggordon/PathPlan/.                           the following:
+
+
+                                                              809
+
+
+    above, below, under, underneath, over, bottom,               Input: Dialog set D
+    top, up, down, left, right, north, south, east, west,                  Reward function R
+    on                                                                     Feature function φ
+                                                                           Transition function T
+        Table 1: The list of given spatial terms.                          Learning rate αt
+                                                                 Output: Feature weights θ
+     • Coherence: The number of words w ∈ u that               1 Initialize θ to small random values
+       occur in the name of l0                                 2 until θ converges do
+                                                               3      foreach Dialog d ∈ D do
+     • Landmark Locality: Binary feature indicat-              4          Initialize s0 = (l1 , u1 , ∅),
+       ing if l0 is the closest landmark to l                             a0 ∼ Pr(a0 |s0 ; θ)
+                                                               5          for t = 0; st non-terminal; t++ do
+     • Direction Locality: Binary feature indicat-             6               Act: st+1 = T (st , at )
+       ing if cardinal direction c0 is the side of l0          7               Decide: at+1 ∼ Pr(at+1 |st+1 ; θ)
+       closest to (l, c)                                       8               Update:
+                                                               9               ∆ ← R(st , at ) + θT φ(st+1 , at+1 )
+     • Null Action: Binary feature indicating if l0 =         10                       − θT φ(st , at )
+       NULL                                                   11               θ ← θ + αt φ(st , at )∆
+     • Allocentric Spatial: Binary feature which              12          end
+       conjoins the side c we pass the landmark on            13      end
+       with each spatial term w ∈ u. This allows us           14 end
+       to capture that the word above tends to indi-          15 return θ
+       cate passing to the north of the landmark.               Algorithm 1: The SARSA learning algorithm.
+
+     • Egocentric Spatial: Binary feature which                   tually higher in value. We utilize Boltzmann ex-
+       conjoins the cardinal direction we move in                 ploration, for which
+       with each spatial term w ∈ u. For instance, if
+       (l, c) is above (l0 , c0 ), the direction from our                               exp( τ1 θT φ(st , at ))
+                                                                      Pr(at |st ; θ) = P         1 T           0
+                                                                                                                     (5)
+       current position is south. We conjoin this di-                                   a0 exp( τ θ φ(st , a ))
+       rection with each spatial term, giving binary
+       features such as “the word down appears in                 The parameter τ is referred to as the tempera-
+       the utterance and we move to the south”.                   ture, with a higher temperature causing more ex-
+                                                                  ploration, and a lower temperature causing more
+5     Approximate Dynamic Programming                             exploitation. In our experiments τ = 2.
+                                                                     Acting with this exploration policy, we iterate
+Given this feature representation, our problem is                 through the training dialogs, updating our fea-
+to find a parameter vector θ ∈ RK for which                       ture weights θ as we go. The update step looks
+Q(s, a) = θT φ(s, a) most closely approximates                    at two successive state transitions. Suppose we
+E[R(s, a)]. To learn these weights θ we use                       are in state st , execute action at , receive reward
+SARSA (Sutton and Barto, 1998), an online learn-                  rt = R(st , at ), transition to state st+1 , and there
+ing algorithm similar to Q-learning (Watkins and                  choose action at+1 . The variables of interest are
+Dayan, 1992).                                                     (st , at , rt , st+1 , at+1 ), which motivates the name
+   Algorithm 1 details the learning algorithm,                    SARSA.
+which we follow here. We iterate over training                       Our current estimate of the Q function is
+documents d ∈ D. In a given state st , we act ac-                 Q(s, a) = θT φ(s, a). By the Bellman equation,
+cording to a probabilistic policy defined in terms                for the true Q function
+of the Q function. After every transition we up-
+date θ, which changes how we act in subsequent                       Q(st , at ) = R(st , at ) + max
+                                                                                                  0
+                                                                                                     Q(st+1 , a0 )   (6)
+                                                                                                  a
+steps.
+                                                                  After each action, we want to move θ to minimize
+   Exploration is a key issue in any RL algorithm.
+                                                                  the temporal difference,
+If we act greedily with respect to our current Q
+function, we might never visit states which are ac-                   R(st , at ) + Q(st+1 , at+1 ) − Q(st , at )    (7)
+
+
+                                                            810
+
+
+                              Map 4g                                                            Map 10g
+
+
+Figure 4: Sample output from the SARSA policy. The dashed black line is the reference path and the
+solid red line is the path the system follows.
+
+
+For each feature φi (st , at ), we change θi propor-                    6.1   Evaluation
+tional to this temporal difference, tempered by a
+learning rate αt . We update θ according to                             We evaluate how closely the path P generated by
+                                                                        our system follows the expert path Pe . We mea-
+    θ = θ+αt φ(st , at )(R(st , at )                                    sure this with respect to two metrics: the order
+             + θT φ(st+1 , at+1 ) − θT φ(st , at ))        (8)          in which we visit landmarks and the side we pass
+                                                                        them on.
+   Here αt is the learning rate, which decays over
+                           10                                              To determine the order Pe visits landmarks we
+time4 . In our case, αt = 10+t , which was tuned on
+                                                                        compute the minimum distance from Pe to each
+the training set. We determine convergence of the
+                                                                        landmark, and threshold it at a fixed value.
+algorithm by examining the magnitude of updates
+to θ. We stop the algorithm when                                           To score path P , we compare the order it visits
+                                                                        landmarks to the expert path. A transition l → l0
+                   ||θt+1 − θt ||∞ <                      (9)          which occurs in P counts as correct if the same
+6       Experimental Design                                             transition occurs in Pe . Let |P | be the number
+                                                                        of landmark transitions in a path P , and N the
+We evaluate our system on the Map Task corpus,                          number of correct transitions in P . We define the
+splitting the corpus into 96 training dialogs and 32                    order precision as N/|P |, and the order recall as
+test dialogs. The whole corpus consists of approx-                      N/|Pe |.
+imately 105,000 word tokens. The maps seen at                              We also evaluate how well we are at passing
+test time do not occur in the training set, but some                    landmarks on the correct side. We calculate the
+of the human participants are present in both.                          distance of Pe to each side of the landmark, con-
+    4                                          P
+     To guarantee convergence, we require t αt = ∞ and                  sidering the path to visit a side of the landmark
+P     2
+   t αt < ∞. Intuitively, the sum diverging guarantees we               if the distance is below a threshold. This means
+can still learn arbitrarily far into the future, and the sum of
+squares converging guarantees that our updates will converge            that a path might be considered to visit multiple
+at some point.                                                          sides of a landmark, although in practice it is usu-
+
+
+                                                                  811
+
+
+Figure 5: This figure shows the relative weights of spatial features organized by spatial word. The top
+row shows the weights of allocentric (landmark-centered) features. For example, the top left figure shows
+that when the word above occurs, our policy prefers to go to the north of the target landmark. The bottom
+row shows the weights of egocentric (absolute) spatial features. The bottom left figure shows that given
+the word above, our policy prefers to move in a southerly cardinal direction.
+
+
+ally one. If C is the number of landmarks we pass                            Visit Order             Side
+                                                                          P       R      F1    P      R      F1
+on the correct side, define the side precision as             Baseline   28.4 37.2 32.2       46.1   60.3   52.2
+C/|P |, and the side recall as C/|Pe |.                         PG       31.1 43.9 36.4       49.5   69.9   57.9
+                                                              SARSA      45.7 51.0 48.2       58.0   64.7   61.2
+
+                                                             Table 2: Experimental results. Visit order shows
+6.2   Comparison Systems                                     how well we follow the order in which the answer
+                                                             path visits landmarks. ‘Side’ shows how success-
+The baseline policy simply visits the closest land-          fully we pass on the correct side of landmarks.
+mark at each step, taking the side of the landmark
+which is closest. It pays no attention to the direc-         7   Results
+tion language.
+                                                             Table 2 details the quantitative performance of the
+   We also compare against the policy gradient
+                                                             different algorithms. Both SARSA and the policy
+learning algorithm of Branavan et al. (2009). They
+                                                             gradient method outperform the baseline, but still
+parametrize a probabilistic policy Pr(s|a; θ) as a
+                                                             fall significantly short of expert performance. The
+log-linear model, in a similar fashion to our explo-
+                                                             baseline policy performs surprisingly well, espe-
+ration policy. During training, the learning algo-
+                                                             cially at selecting the correct side to visit a land-
+rithm adjusts the weights θ according to the gradi-
+                                                             mark.
+ent of the value function defined by this distribu-
+                                                                The disparity between learning approaches and
+tion.
+                                                             gold standard performance can be attributed to
+   Reinforcement learning algorithms can be clas-            several factors. The language in this corpus is con-
+sified into value based and policy based. Value              versational, frequently ungrammatical, and con-
+methods estimate a value function V for each                 tains troublesome aspects of dialog such as con-
+state, then act greedily with respect to it. Pol-            versational repairs and repetition. Secondly, our
+icy learning algorithms directly search through              action and feature space are relatively primitive,
+the space of policies. SARSA is a value based                and don’t capture the full range of spatial expres-
+method, and the policy gradient algorithm is pol-            sion. Path descriptors, such as the difference be-
+icy based.                                                   tween around and past are absent, and our feature
+
+
+                                                       812
+
+
+representation is relatively simple.                          9   Conclusion
+   The SARSA learning algorithm accrues more
+                                                              We presented a reinforcement learning system
+reward than the policy gradient algorithm. Like
+                                                              which learns to interpret natural language direc-
+most gradient based optimization methods, policy
+                                                              tions. Critically, our approach uses no semantic
+gradient algorithms oftentimes get stuck in local
+                                                              annotation, instead learning directly from human
+maxima, and are sensitive to the initial conditions.
+                                                              demonstration. It successfully acquires a subset
+Furthermore, as the size of the feature vector K in-
+                                                              of spatial semantics, using reinforcement learning
+creases, the space becomes even more difficult to
+                                                              to derive the correspondence between instruction
+search. There are no guarantees that SARSA has
+                                                              language and features of paths. While our results
+reached the best policy under our feature space,
+                                                              are still preliminary, we believe our model repre-
+and this is difficult to determine empirically. Thus,
+                                                              sents a significant advance in learning natural lan-
+some accuracy might be gained by considering
+                                                              guage meaning, drawing its supervision from hu-
+different RL algorithms.
+                                                              man demonstration rather than word distributions
+8   Discussion                                                or hand-labeled semantic tags. Framing language
+                                                              acquisition as apprenticeship learning is a fruitful
+Examining the feature weights θ sheds some light              research direction which has the potential to con-
+on our performance. Figure 5 shows the relative               nect the symbolic, linguistic domain to the non-
+strength of weights for several spatial terms. Re-            symbolic, sensory aspects of cognition.
+call that the two main classes of spatial features in
+φ are egocentric (what direction we move in) and              Acknowledgments
+allocentric (on which side we pass a landmark),
+                                                              This research was partially supported by the Na-
+combined with each spatial word.
+                                                              tional Science Foundation via a Graduate Re-
+    Allocentric terms such as above and below tend
+                                                              search Fellowship to the first author and award
+to be interpreted as going to the north and south
+                                                              IIS-0811974 to the second author and by the Air
+of landmarks, respectively. Interestingly, our sys-
+                                                              Force Research Laboratory (AFRL), under prime
+tem tends to move in the opposite cardinal direc-
+                                                              contract no. FA8750-09-C-0181. Thanks to
+tion, i.e. the agent moves south in the egocen-
+                                                              Michael Levit and Deb Roy for providing digital
+tric frame of reference. This suggests that people
+                                                              representations of the maps and a subset of the cor-
+use above when we are already above a landmark.
+                                                              pus annotated with their spatial representation.
+South slightly favors passing on the south side of
+landmarks, and has a heavy tendency to move in
+a southerly direction. This suggests that south is            References
+used more frequently in an egocentric reference
+                                                              Pieter Abbeel and Andrew Y. Ng. 2004. Apprentice-
+frame.                                                           ship learning via inverse reinforcement learning. In
+    Our system has difficulty learning the meaning               Proceedings of the Twenty-first International Con-
+of right. Right is often used as a conversational                ference on Machine Learning. ACM Press.
+filler, and also for dialog alignment, such as                A. Anderson, M. Bader, E. Bard, E. Boyle, G. Do-
+                                                                herty, S. Garrod, S. Isard, J. Kowtko, J. Mcallister,
+     “right okay right go vertically up then                    J. Miller, C. Sotillo, H. Thompson, and R. Weinert.
+     between the springboks and the highest                     1991. The HCRC map task corpus. Language and
+     viewpoint.”                                                Speech, 34, pages 351–366.
+Furthermore, right can be used in both an egocen-             S.R.K. Branavan, Harr Chen, Luke Zettlemoyer, and
+tric or allocentric reference frame. Compare                    Regina Barzilay. 2009. Reinforcement learning for
+                                                                mapping instructions to actions. In ACL-IJCNLP
+     “go to the uh right of the mine”                           ’09.
+
+which utilizes an allocentric frame, with                     James Richard Curran. 2003. From Distributional to
+                                                                Semantic Similarity. Ph.D. thesis, University of Ed-
+     “right then go eh uh to your right hori-                   inburgh.
+     zontally”
+                                                              Charles Fillmore. 1997. Lectures on Deixis. Stanford:
+which uses an egocentric frame of reference. It                 CSLI Publications.
+is difficult to distinguish between these meanings            Benjamin Kuipers. 2000. The spatial semantic hierar-
+without syntactic features.                                     chy. Artificial Intelligence, 119(1-2):191–233.
+
+
+                                                        813
+
+
+Stephen Levinson. 2003. Space In Language And
+   Cognition: Explorations In Cognitive Diversity.
+   Cambridge University Press.
+Michael Levit and Deb Roy. 2007. Interpretation
+  of spatial language in a map navigation task. In
+  IEEE Transactions on Systems, Man, and Cybernet-
+  ics, Part B, 37(3), pages 667–679.
+Terry Regier. 1996. The Human Semantic Potential:
+  Spatial Language and Constrained Connectionism.
+  The MIT Press.
+Richard S. Sutton and Andrew G. Barto. 1998. Rein-
+  forcement Learning: An Introduction. MIT Press.
+
+Leonard Talmy. 1983. How language structures space.
+  In Spatial Orientation: Theory, Research, and Ap-
+  plication.
+
+Christine Tanz. 1980. Studies in the acquisition of de-
+  ictic terms. Cambridge University Press.
+Hongmei Wang, Alan M. Maceachren, and Guoray
+  Cai. 2004. Design of human-GIS dialogue for com-
+  munication of vague spatial concepts. In GIScience.
+C. J. C. H. Watkins and P. Dayan. 1992. Q-learning.
+   Machine Learning, pages 8:279–292.
+Yuan Wei, Emma Brunskill, Thomas Kollar, and
+  Nicholas Roy. 2009. Where to go: interpreting nat-
+  ural directions using global inference. In ICRA’09:
+  Proceedings of the 2009 IEEE international con-
+  ference on Robotics and Automation, pages 3761–
+  3767, Piscataway, NJ, USA. IEEE Press.
+Luke S. Zettlemoyer and Michael Collins. 2009.
+  Learning context-dependent mappings from sen-
+  tences to logical form. In ACL-IJCNLP ’09, pages
+  976–984.
+
+
+
+
+                                                          814
+

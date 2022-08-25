@@ -1,0 +1,396 @@
+                    Automatically generating annotator rationales
+                         to improve sentiment classification
+
+                     Ainur Yessenalina     Yejin Choi Claire Cardie
+          Department of Computer Science, Cornell University, Ithaca NY, 14853 USA
+                   {ainur, ychoi, cardie}@cs.cornell.edu
+
+
+
+                     Abstract                                   In this paper, we explore a number of methods
+                                                             to automatically generate rationales for document-
+    One of the central challenges in sentiment-              level sentiment classification. In particular, we in-
+    based text categorization is that not ev-                vestigate the use of off-the-shelf sentiment analy-
+    ery portion of a document is equally in-                 sis components and lexicons for this purpose. Our
+    formative for inferring the overall senti-               approaches for generating annotator rationales can
+    ment of the document. Previous research                  be viewed as mostly unsupervised in that we do not
+    has shown that enriching the sentiment la-               require manually annotated rationales for training.
+    bels with human annotators’ “rationales”                    Rather unexpectedly, our empirical results show
+    can produce substantial improvements in                  that automatically generated rationales (91.78%)
+    categorization performance (Zaidan et al.,               are just as good as human rationales (91.61%) for
+    2007). We explore methods to auto-                       document-level sentiment classification of movie
+    matically generate annotator rationales for              reviews. In addition, complementing the hu-
+    document-level sentiment classification.                 man annotator rationales with automatic rationales
+    Rather unexpectedly, we find the automat-                boosts the performance even further for this do-
+    ically generated rationales just as helpful              main, achieving 92.5% accuracy. We further eval-
+    as human rationales.                                     uate our rationale-generation approaches on prod-
+                                                             uct review data for which human rationales are not
+1   Introduction                                             available: here we find that even randomly gener-
+One of the central challenges in sentiment-based             ated rationales can improve the classification accu-
+text categorization is that not every portion of             racy although rationales generated from sentiment
+a given document is equally informative for in-              resources are not as effective as for movie reviews.
+ferring its overall sentiment (e.g., Pang and Lee               The rest of the paper is organized as follows.
+(2004)). Zaidan et al. (2007) address this prob-             We first briefly summarize the SVM-based learn-
+lem by asking human annotators to mark (at least             ing approach of Zaidan et al. (2007) that allows the
+some of) the relevant text spans that support each           incorporation of rationales (Section 2). We next
+document-level sentiment decision. The text spans            introduce three methods for the automatic gener-
+of these “rationales” are then used to construct ad-         ation of rationales (Section 3). The experimental
+ditional training examples that can guide the learn-         results are presented in Section 4, followed by re-
+ing algorithm toward better categorization models.           lated work (Section 5) and conclusions (Section
+   But could we perhaps enjoy the performance                6).
+gains of rationale-enhanced learning models with-
+                                                             2   Contrastive Learning with SVMs
+out any additional human effort whatsoever (be-
+yond the document-level sentiment label)? We hy-             Zaidan et al. (2007) first introduced the notion of
+pothesize that in the area of sentiment analysis,            annotator rationales — text spans highlighted by
+where there has been a great deal of recent re-              human annotators as support or evidence for each
+search attention given to various aspects of the task        document-level sentiment decision. These ratio-
+(Pang and Lee, 2008), this might be possible: us-            nales, of course, are only useful if the sentiment
+ing existing resources for sentiment analysis, we            categorization algorithm can be extended to ex-
+might be able to construct annotator rationales au-          ploit the rationales effectively. With this in mind,
+tomatically.                                                 Zaidan et al. (2007) propose the following con-
+
+
+                                                       336
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 336–341,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+trastive learning extension to the standard SVM               3   Automatically Generating Rationales
+learning algorithm.
+   Let x~ i be movie review i, and let {~rij } be the         Our goal in the current work, is to generate anno-
+set of annotator rationales that support the posi-            tator rationales automatically. For this, we rely on
+tive or negative sentiment decision for x  ~ i . For each     the following two assumptions:
+such rationale ~rij in the set, construct a contrastive       (1) Regions marked as annotator rationales are
+training example ~vij , by removing the text span                 more subjective than unmarked regions.
+associated with the rationale ~rij from the original
+review ~xi . Intuitively, the contrastive example ~vij        (2) The sentiment of each annotator rationale co-
+should not be as informative to the learning algo-                incides with the document-level sentiment.
+rithm as the original review ~xi , since one of the
+supporting regions identified by the human anno-              Note that assumption 1 was not observed in the
+tator has been deleted. That is, the correct learned          Zaidan et al. (2007) work: annotators were asked
+model should be less confident of its classifica-             only to mark a few rationales, leaving other (also
+tion of a contrastive example vs. the corresponding           subjective) rationale sections unmarked.
+original example, and the classification boundary                And at first glance, assumption (2) might seem
+of the model should be modified accordingly.                  too obvious. But it is important to include as there
+   Zaidan et al. (2007) formulate exactly this intu-          can be subjective regions with seemingly conflict-
+ition as SVM constraints as follows:                          ing sentiment in the same document (Pang et al.,
+                                                              2002). For instance, an author for a movie re-
+     (∀i, j) : yi (w~
+                   ~ xi − w~
+                          ~ vij ) ≥ µ(1 − ξij )               view might express a positive sentiment toward
+where yi ∈ {−1, +1} is the negative/positive sen-             the movie, while also discussing a negative sen-
+timent label of document i, w~ is the weight vector,          timent toward one of the fictional characters ap-
+µ ≥ 0 controls the size of the margin between the             pearing in the movie. This implies that not all sub-
+original examples and the contrastive examples,               jective regions will be relevant for the document-
+and ξij are the associated slack variables. After             level sentiment classification — rather only those
+some re-writing of the equations, the resulting ob-           regions whose polarity matches that of the docu-
+jective function and constraints for the SVM are as           ment should be considered.
+follows:                                                         In order to extract regions that satisfy the above
+       1            X                  X                      assumptions, we first look for subjective regions
+           ~ 2+C
+         ||w||         ξi + Ccontrast       ξij (1)           in each document, then filter out those regions that
+       2             i                   ij
+                                                              exhibit a sentiment value (i.e., polarity) that con-
+subject to constraints:                                       flicts with polarity of the document. Assumption
+       (∀i) :       ~ ·x
+                 yi w  ~ i ≥ 1 − ξi ,     ξi ≥ 0              2 is important as there can be subjective regions
+                                                              with seemingly conflicting sentiment in the same
+     (∀i, j) :      ~ · ~xij ≥ 1 − ξij
+                 yi w                      ξij ≥ 0            document (Pang et al., 2002).
+where ξi and ξij are the slack variables for x    ~i             Because our ultimate goal is to reduce human
+(the original examples) and ~xij (~xij are named as           annotation effort as much as possible, we do not
+                                         x
+                                         ~ −~v
+pseudo examples and defined as ~xij = i µ ij ), re-           employ supervised learning methods to directly
+spectively. Intuitively, the pseudo examples (~xij )          learn to identify good rationales from human-
+represent the difference between the original ex-             annotated rationales. Instead, we opt for methods
+amples (~xi ) and the contrastive examples (~vij ),           that make use of only the document-level senti-
+weighted by a parameter µ. C and Ccontrast are                ment and off-the-shelf utilities that were trained
+parameters to control the trade-offs between train-           for slightly different sentiment classification tasks
+ing errors and margins for the original examples x~i          using a corpus from a different domain and of a
+and pseudo examples ~xij respectively. As noted in            different genre. Although such utilities might not
+Zaidan et al. (2007), Ccontrast values are generally          be optimal for our task, we hoped that these ba-
+smaller than C for noisy rationales.                          sic resources from the research community would
+   In the work described below, we similarly em-              constitute an adequate source of sentiment infor-
+ploy Zaidan et al.’s (2007) contrastive learning              mation for our purposes.
+method to incorporate rationales for document-                   We next describe three methods for the auto-
+level sentiment categorization.                               matic acquisition of rationales.
+
+
+                                                        337
+
+
+3.1 Contextual Polarity Classification                                 relevant contextual information. We retain as ra-
+The first approach employs OpinionFinder (Wil-                         tionales only those sentences whose polarity co-
+son et al., 2005a), an off-the-shelf opinion anal-                     incides with the document-level polarity as deter-
+ysis utility.1 In particular, OpinionFinder identi-                    mined via the voting scheme of Section 3.1.
+fies phrases expressing positive or negative opin-
+                                                                       3.3      Random Selection
+ions. Because OpinionFinder models the task as
+a word-based classification problem rather than a                      Finally, we generate annotator rationales ran-
+sequence tagging task, most of the identified opin-                    domly, selecting 25% of the sentences from each
+ion phrases consist of a single word. In general,                      document4 and treating each as a separate ratio-
+such short text spans cannot fully incorporate the                     nale.
+contextual information relevant to the detection of
+                                                                       3.4      Comparison of Automatic vs.
+subjective language (Wilson et al., 2005a). There-
+                                                                                Human-annotated Rationales
+fore, we conjecture that good rationales should ex-
+tend beyond short phrases.2 For simplicity, we                         Before evaluating the performance of the au-
+choose to extend OpinionFinder phrases to sen-                         tomatically generated rationales, we summarize
+tence boundaries.                                                      in Table 1 the differences between automatic
+   In addition, to be consistent with our second op-                   vs. human-generated rationales. All computa-
+erating assumption, we keep only those sentences                       tions were performed on the same movie review
+whose polarity coincides with the document-level                       dataset of Pang and Lee (2004) used in Zaidan et
+polarity. In sentences where OpinionFinder marks                       al. (2007). Note, that the Zaidan et al. (2007) an-
+multiple opinion words with opposite polarities                        notation guidelines did not insist that annotators
+we perform a simple voting — if words with pos-                        mark all rationales, only that some were marked
+itive (or negative) polarity dominate, then we con-                    for each document. Nevertheless, we report pre-
+sider the entire sentence as positive (or negative).                   cision, recall, and F-score based on overlap with
+We ignore sentences with a tie. Each selected sen-                     the human-annotated rationales of Zaidan et al.
+tence is considered as a separate rationale.                           (2007), so as to demonstrate the degree to which
+                                                                       the proposed approaches align with human intu-
+3.2 Polarity Lexicons                                                  ition. Overlap measures were also employed by
+Unfortunately, domain shift as well as task mis-                       Zaidan et al. (2007).
+match could be a problem with any opinion util-                           As shown in Table 1, the annotator rationales
+ity based on supervised learning.3 Therefore, we                       found by OpinionFinder (F-score 49.5%) and the
+next consider an approach that does not rely on su-                    PolarityLexicon approach (F-score 52.6%) match
+pervised learning techniques but instead explores                      the human rationales much better than those found
+the use of a manually constructed polarity lexicon.                    by random selection (F-score 27.3%).
+In particular, we use the lexicon constructed for                         As expected, OpinionFinder’s positive ratio-
+Wilson et al. (2005b), which contains about 8000                       nales match the human rationales at a significantly
+words. Each entry is assigned one of three polarity                    lower level (F-score 31.9%) than negative ratio-
+values: positive, negative, neutral. We construct                      nales (59.5%). This is due to the fact that Opinion-
+rationales from the polarity lexicon for every in-                     Finder is trained on a dataset biased toward nega-
+stance of positive and negative words in the lexi-                     tive sentiment (see Section 3.1 - 3.2). In contrast,
+con that appear in the training corpus.                                all other approaches show a balanced performance
+   As in the OpinionFinder rationales, we extend                       for positive and negative rationales vs. human ra-
+the words found by the PolarityLexicon approach                        tionales.
+to sentence boundaries to incorporate potentially
+   1
+                                                                       4       Experiments
+       Available at www.cs.pitt.edu/mpqa/opinionfinderrelease/.
+     2
+       This conjecture is indirectly confirmed by the fact that        For our contrastive learning experiments we use
+human-annotated rationales are rarely a single word.
+     3
+       It is worthwhile to note that OpinionFinder is trained on a
+                                                                       SV M light (Joachims, 1999). We evaluate the use-
+newswire corpus whose prevailing sentiment is known to be              fulness of automatically generated rationales on
+negative (Wiebe et al., 2005). Furthermore, OpinionFinder
+                                                                           4
+is trained for a task (word-level sentiment classification) that           We chose the value of 25% to match the percentage of
+is different from marking annotator rationales (sequence tag-          sentences per document, on average, that contain human-
+ging or text segmentation).                                            annotated rationales in our dataset (24.7%).
+
+
+                                                                 338
+
+
+                           % of sentences            Precision                    Recall                 F-Score
+         Method                  selected     A LL     P OS N EG           A LL    P OS    N EG   A LL     P OS N EG
+         O PINION F INDER          22.8%      54.9     56.1       54.6     45.1   22.3     65.3   49.5    31.9    59.5
+         P OLARITY L EXICON        38.7%      45.2     42.7       48.5     63.0   71.8     55.0   52.6    53.5    51.6
+         R ANDOM                   25.0%      28.9     26.0       31.8     25.9   24.9     26.7   27.3    25.5    29.0
+
+                      Table 1: Comparison of Automatic vs. Human-annotated Rationales.
+
+
+five different datasets. The first is the movie re-                      Method                                      Accuracy
+view data of Pang and Lee (2004), which was                              N O R ATIONALES                              88.56
+manually annotated with rationales by Zaidan et                          H UMAN R                                    91.61•
+al. (2007)5 ; the remaining are four product re-                         H UMAN R@ SENTENCE                          91.33• †
+view datasets from Blitzer et al. (2007).6 Only                          O PINION F INDER                            91.78• †
+the movie review dataset contains human annota-                          P OLARITY L EXICON                          91.39• †
+tor rationales. We replicate the same feature set                        R ANDOM                                     90.00∗
+and experimental set-up as in Zaidan et al. (2007)                       O PINION F INDER +H UMAN R@ SENTENCE        92.50• 4
+to facilitate comparison with their work.7                           Table 2: Experimental results for the movie
+   The contrastive learning method introduced in                     review data.
+Zaidan et al. (2007) requires three parameters: (C,
+                                                                     – The numbers marked with • (or ∗ ) are statistically
+µ, Ccontrast ). To set the parameters, we use a grid                 significantly better than N O R ATIONALES according to a
+search with step 0.1 for the range of values of each                 paired t-test with p < 0.001 (or p < 0.01).
+parameter around the point (1,1,1). In total, we try                 – The numbers marked with 4 are statistically significantly
+                                                                     better than H UMAN R according to a paired t-test with
+around 3000 different parameter triplets for each                    p < 0.01.
+type of rationales.                                                  – The numbers marked with † are not statistically signifi-
+                                                                     cantly worse than H UMAN R according to a paired t-test with
+4.1 Experiments with the Movie Review Data                           p > 0.1.
+
+We follow Zaidan et al. (2007) for the training/test
+data splits. The top half of Table 2 shows the                       choice.
+performance of a system trained with no anno-                           Among the approaches that make use of only
+tator rationales vs. two variations of human an-                     automatic rationales (bottom half of Table 2), the
+notator rationales. H UMAN R treats each rationale                   best is O PINION F INDER, reaching 91.78% accu-
+in the same way as Zaidan et al. (2007). H U -                       racy. This result is slightly better than results
+MAN R@S ENTENCE extends the human annotator                          exploiting human rationales (91.33-91.61%), al-
+rationales to sentence boundaries, and then treats                   though the difference is not statistically signifi-
+each such sentence as a separate rationale. As                       cant. This result demonstrates that automatically
+shown in Table 2, we get almost the same per-                        generated rationales are just as good as human
+formance from these two variations (91.33% and                       rationales in improving document-level sentiment
+91.61%).8 This result demonstrates that locking                      classification. Similarly strong results are ob-
+rationales to sentence boundaries was a reasonable                   tained from the P OLARITY L EXICON as well.
+   5
+       Available at http://www.cs.jhu.edu/∼ozaidan/rationales/.         Rather unexpectedly, R ANDOM also achieves
+   6
+       http://www.cs.jhu.edu/∼mdredze/datasets/sentiment/.           statistically significant improvement over N O R A -
+     7
+       We use binary unigram features corresponding to the un-       TIONALES (90.0% vs. 88.56%). However, notice
+stemmed words or punctuation marks with count greater or
+equal to 4 in the full 2000 documents, then we normalize the
+                                                                     that the performance of R ANDOM is statistically
+examples to the unit length. When computing the pseudo ex-           significantly lower than those based on human ra-
+                  ~
+                  x −~v
+amples ~xij = i µ ij we first compute (x~i − ~vij ) using the        tionales (91.33-91.61%).
+binary representation. As a result, features (unigrams) that            In our experiments so far, we observed that
+appeared in both vectors will be zeroed out in the resulting
+vector. We then normalize the resulting vector to a unit vec-        some of the automatic rationales are just as
+tor.                                                                 good as human rationales in improving the
+     8
+       The performance of H UMAN R reported by Zaidan et al.         document-level sentiment classification. Could
+(2007) is 92.2% which lies between the performance we get
+(91.61%) and the oracle accuracy we get if we knew the best          we perhaps achieve an even better result if we
+parameters for the test set (92.67%).                                combine the automatic rationales with human
+
+
+                                                              339
+
+
+rationales? The answer is yes! The accuracy                                 Method            Books DVDs Videos Kitchen
+of     O PINION F INDER +H UMAN R@ SENTENCE                                 N O R ATIONALES    80.20 80.95 82.40 87.40
+reaches 92.50%, which is statistically signifi-                             O PINION F INDER   81.65∗ 82.35∗ 84.00∗ 88.40
+cantly better than H UMAN R (91.61%). In other                              P OLARITY L EXICON 82.75• 82.85• 84.55• 87.90
+words, not only can our automatically generated                             R ANDOM            82.05• 82.10• 84.15• 88.00
+rationales replace human rationales, but they can
+                                                                        Table 3: Experimental results for subset of
+also improve upon human rationales when they                            Product Review data
+are available.
+                                                                        – The numbers marked with • (or ∗ ) are statistically
+4.2 Experiments with the Product Reviews                                significantly better than N O R ATIONALES according to a
+                                                                        paired t-test with p < 0.05 (or p < 0.08).
+We next evaluate our approaches on datasets for
+which human annotator rationales do not exist.
+For this, we use some of the product review data                        Notice that, although O PINION F INDER misses
+from Blitzer et al. (2007): reviews for Books,                          some human rationales, it avoids the inclusion of
+DVDs, Videos and Kitchen appliances. Each                               “impossible to hate”, which contains only negative
+dataset contains 1000 positive and 1000 negative                        terms and is likely to be confusing for the con-
+reviews. The reviews, however, are substantially                        trastive learner.
+shorter than those in the movie review dataset:
+the average number of sentences in each review                          5     Related Work
+is 9.20/9.13/8.12/6.37 respectively vs. 30.86 for
+the movie reviews. We perform 10-fold cross-                            In broad terms, constructing annotator rationales
+validation, where 8 folds are used for training, 1                      automatically and using them to formulate con-
+fold for tuning parameters, and 1 fold for testing.                     trastive examples can be viewed as learning with
+   Table 3 shows the results. Rationale-based                           prior knowledge (e.g., Schapire et al. (2002), Wu
+methods perform statistically significantly bet-                        and Srihari (2004)). In our task, the prior knowl-
+ter than N O R ATIONALES for all but the Kitchen                        edge corresponds to our operating assumptions
+dataset. An interesting trend in product re-                            given in Section 3. Those assumptions can be
+view datasets is that R ANDOM rationales are just                       loosely connected to recognizing and exploiting
+as good as other more sophisticated rationales.                         discourse structure (e.g., Pang and Lee (2004),
+We suspect that this is because product reviews                         Taboada et al. (2009)). Our automatically gener-
+are generally shorter and more focused than the                         ated rationales can be potentially combined with
+movie reviews, thereby any randomly selected                            other learning frameworks that can exploit anno-
+sentence is likely to be a good rationale. Quantita-                    tator rationales, such as Zaidan and Eisner (2008).
+tively, subjective sentences in the product reviews
+                                                                        6     Conclusions
+amount to 78% (McDonald et al., 2007), while
+subjective sentences in the movie review dataset                        In this paper, we explore methods to automatically
+are only about 25% (Mao and Lebanon, 2006).                             generate annotator rationales for document-level
+                                                                        sentiment classification. Our study is motivated
+4.3 Examples of Annotator Rationales
+                                                                        by the desire to retain the performance gains of
+In this section, we examine an example to com-                          rationale-enhanced learning models while elimi-
+pare the automatically generated rationales (using                      nating the need for additional human annotation
+O PINION F INDER ) with human annotator ratio-                          effort. By employing existing resources for sen-
+nales for the movie review data. In the following                       timent analysis, we can create automatic annota-
+positive document snippet, automatic rationales                         tor rationales that are as good as human annotator
+are underlined, while human-annotated ratio-                            rationales in improving document-level sentiment
+nales are in bold face.                                                 classification.
+   ...But a little niceness goes a long way these days, and
+there’s no denying the entertainment value of that thing                Acknowledgments
+you do!      It’s just about impossible to hate. It’s an                We thank anonymous reviewers for their comments. This
+inoffensive, enjoyable piece of nostalgia that is sure to leave         work was supported in part by National Science Founda-
+                                                                        tion Grants BCS-0904822, BCS-0624277, IIS-0535099 and
+audiences smiling and humming, if not singing, “that thing              by the Department of Homeland Security under ONR Grant
+you do!” –quite possibly for days...                                    N0014-07-1-0152.
+
+
+                                                                  340
+
+
+References                                                              Methods in Natural Language Processing, pages 347–
+                                                                        354, Morristown, NJ, USA. Association for Computa-
+John Blitzer, Mark Dredze, and Fernando Pereira. 2007. Bi-              tional Linguistics.
+   ographies, bollywood, boom-boxes and blenders: Domain
+   adaptation for sentiment classification. In Proceedings of         Xiaoyun Wu and Rohini Srihari. 2004. Incorporating
+   the 45th Annual Meeting of the Association of Computa-                prior knowledge with weighted margin support vector ma-
+   tional Linguistics, pages 440–447, Prague, Czech Repub-               chines. In KDD ’04: Proceedings of the tenth ACM
+   lic, June. Association for Computational Linguistics.                 SIGKDD international conference on Knowledge discov-
+                                                                         ery and data mining, pages 326–333, New York, NY,
+Thorsten Joachims. 1999. Making large-scale support vector               USA. ACM.
+  machine learning practical. pages 169–184.
+                                                                      Omar F. Zaidan and Jason Eisner. 2008. Modeling anno-
+Yi Mao and Guy Lebanon. 2006. Sequential models for sen-                tators: a generative approach to learning from annotator
+   timent prediction. In Proceedings of the ICML Workshop:              rationales. In EMNLP ’08: Proceedings of the Confer-
+   Learning in Structured Output Spaces Open Problems in                ence on Empirical Methods in Natural Language Process-
+   Statistical Relational Learning Statistical Network Analy-           ing, pages 31–40, Morristown, NJ, USA. Association for
+   sis: Models, Issues and New Directions.                              Computational Linguistics.
+Ryan McDonald, Kerry Hannan, Tyler Neylon, Mike Wells,                Omar F. Zaidan, Jason Eisner, and Christine Piatko. 2007.
+  and Jeff Reynar. 2007. Structured models for fine-to-                 Using “annotator rationales” to improve machine learning
+  coarse sentiment analysis. In Proceedings of the 45th                 for text categorization. In NAACL HLT 2007; Proceedings
+  Annual Meeting of the Association of Computational Lin-               of the Main Conference, pages 260–267, April.
+  guistics, pages 432–439, Prague, Czech Republic, June.
+  Association for Computational Linguistics.
+
+Bo Pang and Lillian Lee. 2004. A sentimental education:
+  sentiment analysis using subjectivity summarization based
+  on minimum cuts. In ACL ’04: Proceedings of the 42nd
+  Annual Meeting on Association for Computational Lin-
+  guistics, page 271, Morristown, NJ, USA. Association for
+  Computational Linguistics.
+
+Bo Pang and Lillian Lee. 2008. Opinion mining and senti-
+  ment analysis. Found. Trends Inf. Retr., 2(1-2):1–135.
+
+Bo Pang, Lillian Lee, and Shivakumar Vaithyanathan. 2002.
+  Thumbs up?: sentiment classification using machine
+  learning techniques. In EMNLP ’02: Proceedings of the
+  ACL-02 conference on Empirical methods in natural lan-
+  guage processing, pages 79–86, Morristown, NJ, USA.
+  Association for Computational Linguistics.
+
+Robert E. Schapire, Marie Rochery, Mazin G. Rahim, and
+  Narendra Gupta. 2002. Incorporating prior knowledge
+  into boosting. In ICML ’02: Proceedings of the Nine-
+  teenth International Conference on Machine Learning,
+  pages 538–545, San Francisco, CA, USA. Morgan Kauf-
+  mann Publishers Inc.
+
+Maite Taboada, Julian Brooke, and Manfred Stede. 2009.
+  Genre-based paragraph classification for sentiment anal-
+  ysis. In Proceedings of the SIGDIAL 2009 Conference,
+  pages 62–70, London, UK, September. Association for
+  Computational Linguistics.
+
+Janyce Wiebe, Theresa Wilson, and Claire Cardie. 2005.
+   Annotating expressions of opinions and emotions in lan-
+   guage. Language Resources and Evaluation, 1(2):0.
+
+Theresa Wilson, Paul Hoffmann, Swapna Somasundaran, Ja-
+  son Kessler, Janyce Wiebe, Yejin Choi, Claire Cardie,
+  Ellen Riloff, and Siddharth Patwardhan. 2005a. Opinion-
+  finder: a system for subjectivity analysis. In Proceedings
+  of HLT/EMNLP on Interactive Demonstrations, pages 34–
+  35, Morristown, NJ, USA. Association for Computational
+  Linguistics.
+
+Theresa Wilson, Janyce Wiebe, and Paul Hoffmann. 2005b.
+  Recognizing contextual polarity in phrase-level sentiment
+  analysis. In HLT-EMNLP ’05: Proceedings of the con-
+  ference on Human Language Technology and Empirical
+
+
+                                                                341
+

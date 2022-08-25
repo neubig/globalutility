@@ -1,0 +1,715 @@
+          Dynamic Programming for Linear-Time Incremental Parsing
+
+                    Liang Huang                                             Kenji Sagae
+           USC Information Sciences Institute                  USC Institute for Creative Technologies
+            4676 Admiralty Way, Suite 1001                                 13274 Fiji Way
+              Marina del Rey, CA 90292                              Marina del Rey, CA 90292
+                 lhuang@isi.edu                                      sagae@ict.usc.edu
+
+
+
+                       Abstract                                that runs in (almost) linear-time, yet searches over
+                                                               a huge space with dynamic programming?
+    Incremental parsing techniques such as                        Theoretically, the answer is negative, as Lee
+    shift-reduce have gained popularity thanks                 (2002) shows that context-free parsing can be used
+    to their efficiency, but there remains a                   to compute matrix multiplication, where sub-cubic
+    major problem: the search is greedy and                    algorithms are largely impractical.
+    only explores a tiny fraction of the whole                    We instead propose a dynamic programming al-
+    space (even with beam search) as op-                       ogorithm for shift-reduce parsing which runs in
+    posed to dynamic programming. We show                      polynomial time in theory, but linear-time (with
+    that, surprisingly, dynamic programming                    beam search) in practice. The key idea is to merge
+    is in fact possible for many shift-reduce                  equivalent stacks according to feature functions,
+    parsers, by merging “equivalent” stacks                    inspired by Earley parsing (Earley, 1970; Stolcke,
+    based on feature values. Empirically, our                  1995) and generalized LR parsing (Tomita, 1991).
+    algorithm yields up to a five-fold speedup                 However, our formalism is more flexible and our
+    over a state-of-the-art shift-reduce depen-                algorithm more practical. Specifically, we make
+    dency parser with no loss in accuracy. Bet-                the following contributions:
+    ter search also leads to better learning, and
+    our final parser outperforms all previously                   • theoretically, we show that for a large class
+    reported dependency parsers for English                         of modern shift-reduce parsers, dynamic pro-
+    and Chinese, yet is much faster.                                gramming is in fact possible and runs in poly-
+                                                                    nomial time as long as the feature functions
+1   Introduction                                                    are bounded and monotonic (which almost al-
+                                                                    ways holds in practice);
+In terms of search strategy, most parsing al-
+gorithms in current use for data-driven parsing                   • practically, dynamic programming is up to
+can be divided into two broad categories: dy-                       five times faster (with the same accuracy) as
+namic programming which includes the domi-                          conventional beam-search on top of a state-
+nant CKY algorithm, and greedy search which in-                     of-the-art shift-reduce dependency parser;
+cludes most incremental parsing methods such as
+                                                                  • as a by-product, dynamic programming can
+shift-reduce.1 Both have pros and cons: the for-
+                                                                    output a forest encoding exponentially many
+mer performs an exact search (in cubic time) over
+                                                                    trees, out of which we can draw better and
+an exponentially large space, while the latter is
+                                                                    longer k-best lists than beam search can;
+much faster (in linear-time) and is psycholinguis-
+tically motivated (Frazier and Rayner, 1982), but                 • finally, better and faster search also leads to
+its greedy nature may suffer from severe search er-                 better and faster learning. Our final parser
+rors, as it only explores a tiny fraction of the whole              achieves the best (unlabeled) accuracies that
+space even with a beam.                                             we are aware of in both English and Chi-
+   Can we combine the advantages of both ap-                        nese among dependency parsers trained on
+proaches, that is, construct an incremental parser                  the Penn Treebanks. Being linear-time, it is
+   1
+     McDonald et al. (2005b) is a notable exception: the MST        also much faster than most other parsers,
+algorithm is exact search but not dynamic programming.              even with a pure Python implementation.
+
+
+                                                           1077
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1077–1086,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+input:      w0 . . . wn−1                                                          input: “I saw Al with Joe”
+                                                                step   action           stack             queue
+axiom       0 : h0, ǫi: 0
+                                                                  0       -                                 I ...
+                     ℓ : hj, Si : c                               1      sh          I                    saw ...
+    sh                                       j<n                  2      sh          I     saw             Al ...
+            ℓ + 1 : hj + 1, S|wj i : c + ξ                        3     rex     Ix saw                     Al ...
+                                                                  4      sh     Ix saw      Al            with ...
+                 ℓ : hj, S|s1 |s0 i : c                          5a     rey     Ix sawy Al                with ...
+rex                                                              5b      sh     Ix saw      Al    with    Joe
+            ℓ + 1 : hj, S|s1 xs0 i : c + λ
+                                                            Figure 2: A trace of vanilla shift-reduce. After
+                 ℓ : hj, S|s1 |s0 i : c
+rey                                                         step (4), the parser branches off into (5a) or (5b).
+            ℓ + 1 : hj, S|s1 ys0 i : c + ρ
+
+goal        2n − 1 : hn, s0 i: c                            queue head position (current word q0 is wj ). At
+                                                            each step, we choose one of the three actions:
+where ℓ is the step, c is the cost, and the shift cost ξ
+and reduce costs λ and ρ are:                                  1. sh: move the head of queue, wj , onto stack S
+                                                                  as a singleton tree;
+               ξ = w · fsh (j, S)                    (1)
+                                                               2. rex: combine the top two trees on the stack,
+              λ = w · frex (j, S|s1 |s0 )            (2)
+                                                                  s0 and s1 , and replace them with tree s1 xs0 .
+              ρ = w · frey (j, S|s1 |s0 )            (3)
+                                                               3. rey: combine the top two trees on the stack,
+                                                                  s0 and s1 , and replace them with tree s1 ys0 .
+Figure 1: Deductive system of vanilla shift-reduce.
+                                                            Note that the shorthand notation txt′ denotes a
+                                                            new tree by “attaching tree t′ as the leftmost child
+   For convenience of presentation and experimen-           of the root of tree t”. This procedure can be sum-
+tation, we will focus on shift-reduce parsing for           marized as a deductive system in Figure 1. States
+dependency structures in the remainder of this pa-          are organized according to step ℓ, which denotes
+per, though our formalism and algorithm can also            the number of actions accumulated. The parser
+be applied to phrase-structure parsing.                     runs in linear-time as there are exactly 2n−1 steps
+                                                            for a sentence of n words.
+2        Shift-Reduce Parsing                                  As an example, consider the sentence “I saw Al
+2.1 Vanilla Shift-Reduce                                    with Joe” in Figure 2. At step (4), we face a shift-
+                                                            reduce conflict: either combine “saw” and “Al” in
+Shift-reduce parsing performs a left-to-right scan          a rey action (5a), or shift “with” (5b). To resolve
+of the input sentence, and at each step, choose one         this conflict, there is a cost c associated with each
+of the two actions: either shift the current word           state so that we can pick the best one (or few, with
+onto the stack, or reduce the top two (or more)             a beam) at each step. Costs are accumulated in
+items at the end of the stack (Aho and Ullman,              each step: as shown in Figure 1, actions sh, rex,
+1972). To adapt it to dependency parsing, we split          and rey have their respective costs ξ, λ, and ρ,
+the reduce action into two cases, rex and rey, de-          which are dot-products of the weights w and fea-
+pending on which one of the two items becomes               tures extracted from the state and the action.
+the head after reduction. This procedure is known
+as “arc-standard” (Nivre, 2004), and has been en-           2.2 Features
+gineered to achieve state-of-the-art parsing accu-          We view features as “abstractions” or (partial) ob-
+racy in Huang et al. (2009), which is also the ref-         servations of the current state, which is an im-
+erence parser in our experiments.2                          portant intuition for the development of dynamic
+   More formally, we describe a parser configura-           programming in Section 3. Feature templates
+tion by a state hj, Si where S is a stack of trees          are functions that draw information from the fea-
+s0 , s1 , ... where s0 is the top tree, and j is the        ture window (see Tab. 1(b)), consisting of the
+     2
+                                                            top few trees on the stack and the first few
+    There is another popular variant, “arc-eager” (Nivre,
+2004; Zhang and Clark, 2008), which is more complicated     words on the queue. For example, one such fea-
+and less similar to the classical shift-reduce algorithm.   ture templatef100 = s0 .w ◦ q0 .t is a conjunction
+
+
+                                                        1078
+
+
+of two atomic features s0 .w and q0 .t, capturing                  (a)         Features Templates f (j, S)             qi = wj+i
+                                                                   (1)         s0 .w         s0 .t      s0 .w ◦ s0 .t
+the root word of the top tree s0 on the stack, and                             s1 .w         s1 .t      s1 .w ◦ s1 .t
+the part-of-speech tag of the current head word q0                             q0 .w        q0 .t       q0 .w ◦ q0 .t
+on the queue. See Tab. 1(a) for the list of feature                (2)         s0 .w ◦ s1 .w            s0 .t ◦ s1 .t
+                                                                               s0 .t ◦ q0 .t            s0 .w ◦ s0 .t ◦ s1 .t
+templates used in the full model. Feature templates                            s0 .t ◦ s1 .w ◦ s1 .t    s0 .w ◦ s1 .w ◦ s1 .t
+are instantiated for a specific state. For example, at                         s0 .w ◦ s0 .t ◦ s1 .w    s0 .w ◦ s0 .t ◦ s1 ◦ s1 .t
+step (4) in Fig. 2, the above template f100 will gen-              (3)         s0 .t ◦ q0 .t ◦ q1 .t    s1 .t ◦ s0 .t ◦ q0 .t
+                                                                               s0 .w ◦ q0 .t ◦ q1 .t    s1 .t ◦ s0 .w ◦ q0 .t
+erate a feature instance                                           (4)         s1 .t ◦ s1 .lc.t ◦ s0 .t s1 .t ◦ s1 .rc.t ◦ s0 .t
+                                                                               s1 .t ◦ s0 .t ◦ s0 .rc.t s1 .t ◦ s1 .lc.t ◦ s0
+             (s0 .w = Al) ◦ (q0 .t = IN).                                      s1 .t ◦ s1 .rc.t ◦ s0 .w s1 .t ◦ s0 .w ◦ s0 .lc.t
+                                                                   (5)         s2 .t ◦ s1 .t ◦ s0 .t
+More formally, we denote f to be the feature func-
+tion, such that f (j, S) returns a vector of feature              (b)                                   ← stack                  queue →
+                                                                ... s2                  s1                   s0                   q0 q1 ...
+instances for state hj, Si. To decide which action
+is the best for the current state, we perform a three-
+                                                                         ...     s1 .lc ... s1 .rc     s0 .lc ... s0 .rc
+way classification based on f (j, S), and to do so,
+we further conjoin these feature instances with the                               ...         ...        ...         ...
+action, producing action-conjoined instances like
+                                                                     (c)          Kernel features for DP
+                                                                                  e
+                                                                                  f (j, S) = (j, f2 (s2 ), f1 (s1 ), f0 (s0 ))
+    (s0 .w = Al) ◦ (q0 .t = IN) ◦ (action = sh).
+                                                                   f2 (s2 )       s2 .t
+We denote fsh (j, S), frex (j, S), and frey (j, S) to              f1 (s1 )       s1 .w s1 .t s1 .lc.t             s1 .rc.t
+                                                                   f0 (s0 )       s0 .w s0 .t s0 .lc.t             s0 .rc.t
+be the conjoined feature instances, whose dot-                         j          q0 .w q0 .t        q1 .t
+products with the weight vector decide the best ac-
+tion (see Eqs. (1-3) in Fig. 1).                                Table 1: (a) feature templates used in this work,
+                                                                adapted from Huang et al. (2009). x.w and x.t de-
+2.3 Beam Search and Early Update                                notes the root word and POS tag of tree (or word)
+To improve on strictly greedy search, shift-reduce              x. and x.lc and x.rc denote x’s left- and rightmost
+parsing is often enhanced with beam search                      child. (b) feature window. (c) kernel features.
+(Zhang and Clark, 2008), where b states develop
+in parallel. At each step we extend the states in               (i.e., same step) if they have the same feature
+the current beam by applying one of the three ac-               values, because they will have the same costs as
+tions, and then choose the best b resulting states              shown in the deductive system in Figure 1. Thus
+for the next step. Our dynamic programming algo-                we can define two states hj, Si and hj ′ , S ′ i to be
+rithm also runs on top of beam search in practice.              equivalent, notated hj, Si ∼ hj ′ , S ′ i, iff.
+   To train the model, we use the averaged percep-
+tron algorithm (Collins, 2002). Following Collins                               j = j′       and f (j, S) = f (j ′ , S ′ ).              (4)
+and Roark (2004) we also use the “early-update”                 Note that j = j ′ is also needed because the
+strategy, where an update happens whenever the                  queue head position j determines which word to
+gold-standard action-sequence falls off the beam,               shift next. In practice, however, a small subset of
+with the rest of the sequence neglected.3 The intu-             atomic features will be enough to determine the
+ition behind this strategy is that later mistakes are           whole feature vector, which we call kernel fea-
+often caused by previous ones, and are irrelevant               tures ef (j, S), defined as the smallest set of atomic
+when the parser is on the wrong track. Dynamic                  templates such that
+programming turns out to be a great fit for early
+updating (see Section 4.3 for details).                                    e
+                                                                           f (j, S) = e
+                                                                                      f (j ′ , S ′ ) ⇒ hj, Si ∼ hj ′ , S ′ i.
+
+3    Dynamic Programming (DP)                                   For example, the full list of 28 feature templates
+                                                                in Table 1(a) can be determined by just 12 atomic
+3.1 Merging Equivalent States                                   features in Table 1(c), which just look at the root
+The key observation for dynamic programming                     words and tags of the top two trees on stack, as
+is to merge “equivalent states” in the same beam                well as the tags of their left- and rightmost chil-
+   3
+     As a special case, for the deterministic mode (b=1), up-   dren, plus the root tag of the third tree s2 , and fi-
+dates always co-occur with the first mistake made.              nally the word and tag of the queue head q0 and the
+
+
+                                                            1079
+
+
+  state form        ℓ : hi, j, sd ...s0 i: (c, v, π)            ℓ: step; c, v: prefix and inside costs; π: predictor states
+
+ equivalence                 ℓ : hi, j, sd ...s0 i ∼ ℓ : hi, j, s′d ...s′0 i         iff. e
+                                                                                          f (j, sd ...s0 ) = e
+                                                                                                             f (j, s′d ...s′0 )
+   ordering                     ℓ : : (c, v, ) ≺ ℓ : : (c′ , v ′ , ) iff. c < c′ or (c = c′ and v < v ′ ).
+  axiom (p0 )                                                    0 : h0, 0, ǫi: (0, 0, ∅)
+                                                                 state p:
+                                                         ℓ : h , j, sd ...s0 i: (c, , )
+      sh                                                                                                       j<n
+                                       ℓ + 1 : hj, j + 1, sd−1 ...s0 , wj i : (c + ξ, 0, {p})
+
+                                       state p:                                         state q:
+                                 : hk, i, s′d ...s′0 i: (c′ , v ′ , π ′ )        ℓ : hi, j, sd ...s0 i: ( , v, π)
+     rex                                                                                                                  p∈π
+                                ℓ + 1 : hk, j, s′d ...s′1 , s′0 s0 i : (c′ + v + δ, v ′ + v + δ, π ′ )
+                                                                  x
+
+
+
+     goal                                            2n − 1 : h0, n, sd ...s0 i: (c, c, {p0 })
+
+where ξ = w · fsh (j, sd ...s0 ), and δ = ξ ′ + λ, with ξ ′ = w · fsh (i, s′d ...s′0 ) and λ = w · frex (j, sd ...s0 ).
+
+Figure 3: Deductive system for shift-reduce parsing with dynamic programming. The predictor state set π
+is an implicit graph-structured stack (Tomita, 1988) while the prefix cost c is inspired by Stolcke (1995).
+The rey case is similar, replacing s′0 xs0 with s′0 ys0 , and λ with ρ = w · frey (j, sd ...s0 ). Irrelevant
+information in a deduction step is marked as an underscore ( ) which means “can match anything”.
+
+
+tag of the next word q1 . Since the queue is static                         parsing in the first place, and why dynamic pro-
+information to the parser (unlike the stack, which                          gramming seems hard here.
+changes dynamically), we can use j to replace fea-                             To solve this problem we borrow the idea
+tures from the queue. So in general we write                                of “graph-structured stack” (GSS) from Tomita
+                                                                            (1991). Basically, each state p carries with it a set
+           e
+           f (j, S) = (j, fd (sd ), . . . , f0 (s0 ))                       π(p) of predictor states, each of which can be
+                                                                            combined with p in a reduction step. In a shift step,
+if the feature window looks at top d + 1 trees                              if state p generates state q (we say “p predicts q”
+on stack, and where fi (si ) extracts kernel features                       in Earley (1970) terms), then p is added onto π(q).
+from tree si (0 ≤ i ≤ d). For example, for the full                         When two equivalent shifted states get merged,
+model in Table 1(a) we have                                                 their predictor states get combined. In a reduction
+                                                                            step, state q tries to combine with every predictor
+       e
+       f (j, S) = (j, f2 (s2 ), f1 (s1 ), f0 (s0 )),           (5)          state p ∈ π(q), and the resulting state r inherits
+                                                                            the predictor states set from p, i.e., π(r) = π(p).
+where d = 2, f2 (x) = x.t, and f1 (x) = f0 (x) =                            Interestingly, when two equivalent reduced states
+(x.w, x.t, x.lc.t, x.rc.t) (see Table 1(c)).                                get merged, we can prove (by induction) that their
+                                                                            predictor states are identical (proof omitted).
+3.2 Graph-Structured Stack and Deduction
+                                                                               Figure 3 shows the new deductive system with
+Now that we have the kernel feature functions, it                           dynamic programming and GSS. A new state has
+is intuitive that we might only need to remember                            the form
+the relevant bits of information from only the last                                            ℓ : hi, j, sd ...s0 i
+(d + 1) trees on stack instead of the whole stack,
+                                                                            where [i..j] is the span of the top tree s0 , and
+because they provide all the relevant information
+                                                                            sd ..s1 are merely “left-contexts”. It can be com-
+for the features, and thus determine the costs. For
+                                                                            bined with some predictor state p spanning [k..i]
+shift, this suffices as the stack grows on the right;
+but for reduce actions the stack shrinks, and in or-                                           ℓ′ : hk, i, s′d ...s′0 i
+der still to maintain d + 1 trees, we have to know
+something about the history. This is exactly why                            to form a larger state spanning [k..j], with the
+we needed the full stack for vanilla shift-reduce                           resulting top tree being either s1 xs0 or s1 ys0 .
+
+
+                                                                  1080
+
+
+This style resembles CKY and Earley parsers. In                  3.4 Beam Search based on Prefix Cost
+fact, the chart in Earley and other agenda-based                 Though the DP algorithm runs in polynomial-
+parsers is indeed a GSS when viewed left-to-right.               time, in practice the complexity is still too high,
+In these parsers, when a state is popped up from                 esp. with a rich feature set like the one in Ta-
+the agenda, it looks for possible sibling states                 ble 1. So we apply the same beam search idea
+that can combine with it; GSS, however, explicitly               from Sec. 2.3, where each step can accommodate
+maintains these predictor states so that the newly-              only the best b states. To decide the ordering of
+popped state does not need to look them up.4                     states in each beam we borrow the concept of pre-
+3.3 Correctness and Polynomial Complexity                        fix cost from Stolcke (1995), originally developed
+                                                                 for weighted Earley parsing. As shown in Fig. 3,
+We state the main theoretical result with the proof              the prefix cost c is the total cost of the best action
+omitted due to space constraints:                                sequence from the initial state to the end of state p,
+Theorem 1. The deductive system is optimal and                   i.e., it includes both the inside cost v (for Viterbi
+runs in worst-case polynomial time as long as the                inside derivation), and the cost of the (best) path
+kernel feature function satisfies two properties:                leading towards the beginning of state p. We say
+                                                                 that a state p with prefix cost c is better than a state
+   • bounded: ef (j, S) = (j, fd (sd ), . . . , f0 (s0 ))
+                                                                 p′ with prefix cost c′ , notated p ≺ p′ in Fig. 3, if
+     for some constant d, and each |ft (x)| also
+                                                                 c < c′ . We can also prove (by contradiction) that
+     bounded by a constant for all possible tree x.
+                                                                 optimizing for prefix cost implies optimal inside
+   • monotonic: ft (x) = ft (y) ⇒ ft+1 (x) =                     cost (Nederhof, 2003, Sec. 4). 5
+     ft+1 (y), for all t and all possible trees x, y.               As shown in Fig. 3, when a state q with costs
+                                                                 (c, v) is combined with a predictor state p with
+   Intuitively, boundedness means features can                   costs (c′ , v ′ ), the resulting state r will have costs
+only look at a local window and can only extract
+bounded information on each tree, which is always                               (c′ + v + δ, v ′ + v + δ),
+the case in practice since we can not have infinite              where the inside cost is intuitively the combined
+models. Monotonicity, on the other hand, says that               inside costs plus an additional combo cost δ from
+features drawn from trees farther away from the                  the combination, while the resulting prefix cost
+top should not be more refined than from those                   c′ + v + δ is the sum of the prefix cost of the pre-
+closer to the top. This is also natural, since the in-           dictor state q, the inside cost of the current state p,
+formation most relevant to the current decision is               and the combo cost. Note the prefix cost of q is ir-
+always around the stack top. For example, the ker-               relevant. The combo cost δ = ξ ′ + λ consists of
+nel feature function in Eq. 5 is bounded and mono-               shift cost ξ ′ of p and reduction cost λ of q.
+tonic, since f2 is less refined than f1 and f0 .                    The cost in the non-DP shift-reduce algorithm
+   These two requirements are related to grammar                 (Fig. 1) is indeed a prefix cost, and the DP algo-
+refinement by annotation (Johnson, 1998), where                  rithm subsumes the non-DP one as a special case
+annotations must be bounded and monotonic: for                   where no two states are equivalent.
+example, one cannot refine a grammar by only
+remembering the grandparent but not the parent                   3.5 Example: Edge-Factored Model
+symbol. The difference here is that the annotations              As a concrete example, Figure 4 simulates an
+are not vertical ((grand-)parent), but rather hori-              edge-factored model (Eisner, 1996; McDonald et
+zontal (left context). For instance, a context-free              al., 2005a) using shift-reduce with dynamic pro-
+rule A → B C would become D A → D B B C                          gramming, which is similar to bilexical PCFG
+for some D if there exists a rule E → αDAβ.                      parsing using CKY (Eisner and Satta, 1999). Here
+This resembles the reduce step in Fig. 3.                        the kernel feature function is
+   The very high-level idea of the proof is that
+boundedness is crucial for polynomial-time, while                              e
+                                                                               f (j, S) = (j, h(s1 ), h(s0 ))
+monotonicity is used for the optimal substructure                    5
+                                                                       Note that using inside cost v for ordering would be a
+property required by the correctness of DP.                      bad idea, as it will always prefer shorter derivations like in
+                                                                 best-first parsing. As in A* search, we need some estimate
+   4
+     In this sense, GSS (Tomita, 1988) is really not a new in-   of “outside cost” to predict which states are more promising,
+vention: an efficient implementation of Earley (1970) should     and the prefix cost includes an exact cost for the left outside
+already have it implicitly, similar to what we have in Fig. 3.   context, but no right outside context.
+
+
+                                                             1081
+
+
+                            ℓ : h , h i : (c, )                         quality; in Sec. 4.3 we will retrain the model with
+                                                                        DP and compare it against training with non-DP.
+                                ...j
+    sh                                         j<n
+                       ℓ + 1 : hh, ji : (c, 0)
+                                                                        4.1 Speed Comparisons
+                  ′′    ′         ′   ′            ′
+              : hh , h i : (c , v )          ℓ : hh , h i : ( , v)      To compare parsing speed between DP and non-
+                                                                        DP, we run each parser on the development set,
+                    k...i                          i...j
+ rex                                                                    varying the beam width b from 2 to 16 (DP) or 64
+             ℓ + 1 : hh′′ ,              ′          ′
+                                 h i : (c + v + λ, v + v + λ)
+                                                                        (non-DP). Fig. 5a shows the relationship between
+                              h′ i...j                                  search quality (as measured by the average model
+                                                                        score per sentence, higher the better) and speed
+                        k...i                                           (average parsing time per sentence), where DP
+                  where rex cost λ = w · frex (h′ , h)                  with a beam width of b=16 achieves the same
+                                                                        search quality with non-DP at b=64, while being 5
+Figure 4: Example of shift-reduce with dynamic                          times faster. Fig. 5b shows a similar comparison
+programming: simulating an edge-factored model.                         for dependency accuracy. We also test with an
+GSS is implicit here, and rey case omitted.                             edge-factored model (Sec. 3.5) using feature tem-
+                                                                        plates (1)-(3) in Tab. 1, which is a subset of those
+where h(x) returns the head word index of tree x,                       in McDonald et al. (2005b). As expected, this dif-
+because all features in this model are based on the                     ference becomes more pronounced (8 times faster
+head and modifier indices in a dependency link.                         in Fig. 5c), since the less expressive feature set
+This function is obviously bounded and mono-                            makes more states “equivalent” and mergeable in
+tonic in our definitions. The theoretical complexity                    DP. Fig. 5d shows the (almost linear) correlation
+of this algorithm is O(n7 ) because in a reduction                      between dependency accuracy and search quality,
+step we have three span indices and three head in-                      confirming that better search yields better parsing.
+dices, plus a step index ℓ. By contrast, the naı̈ve
+CKY algorithm for this model is O(n5 ) which can                        4.2 Search Space, Forest, and Oracles
+be improved to O(n3 ) (Eisner, 1996).6 The higher                       DP achieves better search quality because it ex-
+complexity of our algorithm is due to two factors:                      pores an exponentially large search space rather
+first, we have to maintain both h and h′ in one                         than only b trees allowed by the beam (see Fig. 6a).
+state, because the current shift-reduce model can                       As a by-product, DP can output a forest encoding
+not draw features across different states (unlike                       these exponentially many trees, out of which we
+CKY); and more importantly, we group states by                          can draw longer and better (in terms of oracle) k-
+step ℓ in order to achieve incrementality and lin-                      best lists than those in the beam (see Fig. 6b). The
+ear runtime with beam search that is not (easily)                       forest itself has an oracle of 98.15 (as if k → ∞),
+possible with CKY or MST.                                               computed à la Huang (2008, Sec. 4.1). These can-
+                                                                        didate sets may be used for reranking (Charniak
+4        Experiments                                                    and Johnson, 2005; Huang, 2008).8
+We first reimplemented the reference shift-reduce                       4.3 Perceptron Training and Early Updates
+parser of Huang et al. (2009) in Python (hence-
+                                                                        Another interesting advantage of DP over non-DP
+forth “non-DP”), and then extended it to do dy-
+                                                                        is the faster training with perceptron, even when
+namic programing (henceforth “DP”). We evalu-
+                                                                        both parsers use the same beam width. This is due
+ate their performances on the standard Penn Tree-
+                                                                        to the use of early updates (see Sec. 2.3), which
+bank (PTB) English dependency parsing task7 us-
+                                                                        happen much more often with DP, because a gold-
+ing the standard split: secs 02-21 for training, 22
+                                                                        standard state p is often merged with an equivalent
+for development, and 23 for testing. Both DP and
+                                                                        (but incorrect) state that has a higher model score,
+non-DP parsers use the same feature templates in
+                                                                        which triggers update immediately. By contrast, in
+Table 1. For Secs. 4.1-4.2, we use a baseline model
+                                                                        non-DP beam search, states such as p might still
+trained with non-DP for both DP and non-DP, so
+that we can do a side-by-side comparison of search                          8
+                                                                              DP’s k-best lists are extracted from the forest using the
+                                                                        algorithm of Huang and Chiang (2005), rather than those in
+    6
+        Or O(n2 ) with MST, but including non-projective trees.         the final beam as in the non-DP case, because many deriva-
+    7
+        Using the head rules of Yamada and Matsumoto (2003).            tions have been merged during dynamic programming.
+
+
+                                                                     1082
+
+
+                                       2394                                                                                93.1
+                                                           b=16                       b=64                                                  b=16                     b=64
+                                       2391                                                                                 93
+
+
+
+
+                                                                                                   dependency accuracy
+                                       2388                                                                                92.9
+avg. model score
+
+
+
+
+                                       2385                                                                                92.8
+                                       2382                                                                                92.7
+                                       2379                                                                                92.6
+                                       2376                                                                                92.5
+                                       2373                                                                                92.4
+                                                                           DP                                                                                   DP
+                                       2370                            non-DP                                              92.3                             non-DP
+                                                                                                                           92.2
+                                                0   0.05 0.1 0.15 0.2 0.25 0.3 0.35                                               0   0.05 0.1 0.15 0.2 0.25 0.3 0.35
+                                       (a) search quality vs. time (full model)                                           (b) parsing accuracy vs. time (full model)
+
+                                       2335              b=16                                                              93.5
+                                                                                  b=64                                       93
+                                       2330
+                                                                                                   dependency accuracy
+                                       2325                                                                                92.5
+avg. model score
+
+
+
+
+                                       2320                                                                                  92
+                                                                                                                           91.5
+                                       2315
+                                                                                                                             91
+                                       2310
+                                                                                                                           90.5
+                                       2305                                                                                  90                   full, DP
+                                       2300                                                                                                 full, non-DP
+                                                                                                                           89.5          edge-factor, DP
+                                                                           DP
+                                       2295                            non-DP                                                89      edge-factor, non-DP
+                                       2290                                                                                88.5
+                                                0   0.05 0.1 0.15 0.2 0.25 0.3 0.35                                           2280 2300 2320 2340 2360 2380 2400
+    (c) search quality vs. time (edge-factored model)                                                                    (d) correlation b/w parsing (y) and search (x)
+
+Figure 5: Speed comparisons between DP and non-DP, with beam size b ranging 2∼16 for DP and 2∼64
+for non-DP. Speed is measured by avg. parsing time (secs) per sentence on x axis. With the same level
+of search quality or parsing accuracy, DP (at b=16) is ∼4.8 times faster than non-DP (at b=64) with the
+full model in plots (a)-(b), or ∼8 times faster with the simplified edge-factored model in plot (c). Plot (d)
+shows the (roughly linear) correlation between parsing accuracy and search quality (avg. model score).
+
+
+                                         12
+                                       10                                                                                 99
+                                                      DP forest
+            number of trees explored
+
+
+
+
+                                         10         non-DP (16)
+                                       10                                                                                 98
+                                                                                               oracle precision
+
+
+
+
+                                            8
+                                       10                                                                                 97
+                                            6
+                                       10                                                                                 96
+                                            4
+                                       10                                                                                 95
+                                       10
+                                            2                                                                                              DP forest (98.15)
+                                                                                                                          94              DP k-best in forest
+                                       10
+                                            0                                                                                         non-DP k-best in beam
+                                                                                                                          93
+                                                0   10     20     30   40   50   60   70                                       14 8    16          32                64
+                                                            sentence length
+                                                                                                                                                        k
+                                            (a) sizes of search spaces                                                            (b) oracle precision on dev
+
+Figure 6: DP searches over a forest of exponentially many trees, which also produces better and longer
+k-best lists with higher oracles, while non-DP only explores b trees allowed in the beam (b = 16 here).
+
+
+                                                                                             1083
+
+
+                                                                             it     update early% time     update early% time
+accuracy on dev (each round)   93.5                17
+                                                     th
+                                                                             1      31943 98.9 22          31189 87.7 29
+                                93                         th                5      20236 98.3 38          19027 70.3 47
+                                                          18
+                               92.5                                          17      8683 97.1 48           7434 49.5 60
+                                92                                           25      5715 97.2 51           4676 41.2 65
+                               91.5                                          Table 2: Perceptron iterations with DP (left) and
+                                91                                           non-DP (right). Early updates happen much more
+                                                        DP
+                                                    non-DP                   often with DP due to equivalent state merging,
+                               90.5
+                                                                             which leads to faster training (time in minutes).
+                                      0   4   8    12     16    20   24
+                                                  hours                                            word   L     time    comp.
+                                                                                 McDonald 05b      90.2   Ja    0.12    O(n2 )
+Figure 7: Learning curves (showing precision on
+                                                                                 McDonald 05a      90.9   Ja    0.15    O(n3 )
+dev) of perceptron training for 25 iterations (b=8).
+                                                                                   Koo 08 base     92.0   −       −     O(n4 )
+DP takes 18 hours, peaking at the 17th iteration
+                                                                                 Zhang 08 single   91.4   C     0.11    O(n)‡
+(93.27%) with 12 hours, while non-DP takes 23
+                                                                                    this work      92.1   Py    0.04     O(n)
+hours, peaking at the 18th (93.04%) with 16 hours.                                † Charniak 00    92.5   C     0.49    O(n5 )
+                                                                                    † Petrov 07    92.4   Ja    0.21    O(n3 )
+                                                                                 Zhang 08 combo    92.1   C       −     O(n2 )‡
+survive in the beam throughout, even though it is                                Koo 08 semisup    93.2   −       −     O(n4 )
+no longer possible to rank the best in the beam.
+   The higher frequency of early updates results                             Table 3: Final test results on English (PTB). Our
+in faster iterations of perceptron training. Table 2                         parser (in pure Python) has the highest accuracy
+shows the percentage of early updates and the time                           among dependency parsers trained on the Tree-
+per iteration during training. While the number of                           bank, and is also much faster than major parsers.
+                                                                             † converted from constituency trees. C=C/C++,
+updates is roughly comparable between DP and
+non-DP, the rate of early updates is much higher                             Py=Python, Ja=Java. Time is in seconds per sen-
+with DP, and the time per iteration is consequently                          tence. Search spaces: ‡ linear; others exponential.
+shorter. Figure 7 shows that training with DP is
+about 1.2 times faster than non-DP, and achieves                             (on a 3.2GHz Xeon CPU). Best-performing con-
++0.2% higher accuracy on the dev set (93.27%).                               stituency parsers like Charniak (2000) and Berke-
+   Besides training with gold POS tags, we also                              ley (Petrov and Klein, 2007) do outperform our
+trained on noisy tags, since they are closer to the                          parser, since they consider more information dur-
+test setting (automatic tags on sec 23). In that                             ing parsing, but they are at least 5 times slower.
+case, we tag the dev and test sets using an auto-                            Figure 8 shows the parse time in seconds for each
+matic POS tagger (at 97.2% accuracy), and tag                                test sentence. The observed time complexity of our
+the training set using four-way jackknifing sim-                             DP parser is in fact linear compared to the super-
+ilar to Collins (2000), which contributes another                            linear complexity of Charniak, MST (McDonald
++0.1% improvement in accuracy on the test set.                               et al., 2005b), and Berkeley parsers. Additional
+Faster training also enables us to incorporate more                          techniques such as semi-supervised learning (Koo
+features, where we found more lookahead features                             et al., 2008) and parser combination (Zhang and
+(q2 ) results in another +0.3% improvement.                                  Clark, 2008) do achieve accuracies equal to or
+                                                                             higher than ours, but their results are not directly
+4.4 Final Results on English and Chinese
+                                                                             comparable to ours since they have access to ex-
+Table 3 presents the final test results of our DP                            tra information like unlabeled data. Our technique
+parser on the Penn English Treebank, compared                                is orthogonal to theirs, and combining these tech-
+with other state-of-the-art parsers. Our parser                              niques could potentially lead to even better results.
+achieves the highest (unlabeled) dependency ac-                                 We also test our final parser on the Penn Chi-
+curacy among dependency parsers trained on the                               nese Treebank (CTB5). Following the set-up of
+Treebank, and is also much faster than most other                            Duan et al. (2007) and Zhang and Clark (2008), we
+parsers even with a pure Python implementation                               split CTB5 into training (secs 001-815 and 1001-
+
+
+                                                                          1084
+
+
+                            1.4                                          that it is not restricted to LR (a special case of
+                                                         Cha             shift-reduce), and thus does not require building an
+                            1.2                         Berk
+    parsing time (secs)
+                                                        MST              LR table, which is impractical for modern gram-
+                             1
+                                                         DP              mars with a large number of rules or features. In
+                            0.8
+                                                                         contrast, we employ the ideas behind GSS more
+                            0.6                                          flexibly to merge states based on features values,
+                            0.4                                          which can be viewed as constructing an implicit
+                            0.2                                          LR table on-the-fly. Second, unlike previous the-
+                             0
+                                                                         oretical results about cubic-time complexity, we
+                                  0 10 20 30 40 50 60 70                 achieved linear-time performance by smart beam
+                                      sentence length                    search with prefix cost inspired by Stolcke (1995),
+                                                                         allowing for state-of-the-art data-driven parsing.
+Figure 8: Scatter plot of parsing time against sen-
+                                                                            To the best of our knowledge, our work is the
+tence length, comparing with Charniak, Berkeley,
+                                                                         first linear-time incremental parser that performs
+and the O(n2 ) MST parsers.
+                                                                         dynamic programming. The parser of Roark and
+                                     word    non-root    root   compl.   Hollingshead (2009) is also almost linear time, but
+  Duan 07                            83.88    84.36     73.70    32.70   they achieved this by discarding parts of the CKY
+ Zhang 08†                           84.33    84.69     76.73    32.79   chart, and thus do achieve incrementality.
+ this work                           85.20    85.52     78.32    33.72
+                                                                         6 Conclusion
+Table 4: Final test results on Chinese (CTB5).
+† The transition parser in Zhang and Clark (2008).                       We have presented a dynamic programming al-
+                                                                         gorithm for shift-reduce parsing, which runs in
+                                                                         linear-time in practice with beam search. This
+1136), development (secs 886-931 and 1148-                               framework is general and applicable to a large-
+1151), and test (secs 816-885 and 1137-1147) sets,                       class of shift-reduce parsers, as long as the feature
+assume gold-standard POS-tags for the input, and                         functions satisfy boundedness and monotonicity.
+use the head rules of Zhang and Clark (2008). Ta-                        Empirical results on a state-the-art dependency
+ble 4 summarizes the final test results, where our                       parser confirm the advantage of DP in many as-
+work performs the best in all four types of (unla-                       pects: faster speed, larger search space, higher ora-
+beled) accuracies: word, non-root, root, and com-                        cles, and better and faster learning. Our final parser
+plete match (all excluding punctuations). 9,10                           outperforms all previously reported dependency
+                                                                         parsers trained on the Penn Treebanks for both
+5                         Related Work                                   English and Chinese, and is much faster in speed
+This work was inspired in part by Generalized LR                         (even with a Python implementation). For future
+parsing (Tomita, 1991) and the graph-structured                          work we plan to extend it to constituency parsing.
+stack (GSS). Tomita uses GSS for exhaustive LR
+                                                                         Acknowledgments
+parsing, where the GSS is equivalent to a dy-
+namic programming chart in chart parsing (see                            We thank David Chiang, Yoav Goldberg, Jonathan
+Footnote 4). In fact, Tomita’s GLR is an in-                             Graehl, Kevin Knight, and Roger Levy for help-
+stance of techniques for tabular simulation of non-                      ful discussions and the three anonymous review-
+deterministic pushdown automata based on deduc-                          ers for comments. Mark-Jan Nederhof inspired the
+tive systems (Lang, 1974), which allow for cubic-                        use of prefix cost. Yue Zhang helped with Chinese
+time exhaustive shift-reduce parsing with context-                       datasets, and Wenbin Jiang with feature sets. This
+free grammars (Billot and Lang, 1989).                                   work is supported in part by DARPA GALE Con-
+   Our work advances this line of research in two                        tract No. HR0011-06-C-0022 under subcontract to
+aspects. First, ours is more general than GLR in                         BBN Technologies, and by the U.S. Army Re-
+    9
+      Duan et al. (2007) and Zhang and Clark (2008) did not              search, Development, and Engineering Command
+report word accuracies, but those can be recovered given non-            (RDECOM). Statements and opinions expressed
+root and root ones, and the number of non-punctuation words.             do not necessarily reflect the position or the policy
+   10
+      Parser combination in Zhang and Clark (2008) achieves
+a higher word accuracy of 85.77%, but again, it is not directly          of the United States Government, and no official
+comparable to our work.                                                  endorsement should be inferred.
+
+
+                                                                     1085
+
+
+References                                                Mark Johnson. 1998. PCFG models of linguis-
+                                                           tic tree representations. Computational Linguistics,
+Alfred V. Aho and Jeffrey D. Ullman. 1972. The             24:613–632.
+  Theory of Parsing, Translation, and Compiling, vol-
+  ume I: Parsing of Series in Automatic Computation.      Terry Koo, Xavier Carreras, and Michael Collins.
+  Prentice Hall, Englewood Cliffs, New Jersey.              2008. Simple semi-supervised dependency parsing.
+                                                            In Proceedings of ACL.
+S. Billot and B. Lang. 1989. The structure of shared
+   forests in ambiguous parsing. In Proceedings of the    B. Lang. 1974. Deterministic techniques for efficient
+   27th ACL, pages 143–151.                                  non-deterministic parsers. In Automata, Languages
+                                                             and Programming, 2nd Colloquium, volume 14 of
+Eugene Charniak and Mark Johnson. 2005. Coarse-              Lecture Notes in Computer Science, pages 255–269,
+  to-fine-grained n-best parsing and discriminative          Saarbrücken. Springer-Verlag.
+  reranking. In Proceedings of the 43rd ACL, Ann Ar-
+  bor, MI.                                                Lillian Lee. 2002. Fast context-free grammar parsing
+                                                             requires fast Boolean matrix multiplication. Journal
+Eugene Charniak.       2000.   A maximum-entropy-            of the ACM, 49(1):1–15.
+  inspired parser. In Proceedings of NAACL.
+                                                          Ryan McDonald, Koby Crammer, and Fernando
+Michael Collins and Brian Roark. 2004. Incremental          Pereira. 2005a. Online large-margin training of de-
+  parsing with the perceptron algorithm. In Proceed-        pendency parsers. In Proceedings of the 43rd ACL.
+  ings of ACL.                                            Ryan McDonald, Fernando Pereira, Kiril Ribarov, and
+                                                            Jan Hajič. 2005b. Non-projective dependency pars-
+Michael Collins. 2000. Discriminative reranking for
+                                                            ing using spanning tree algorithms. In Proc. of HLT-
+  natural language parsing. In Proceedings of ICML,
+                                                            EMNLP.
+  pages 175–182.
+                                                          Mark-Jan Nederhof. 2003. Weighted deductive pars-
+Michael Collins. 2002. Discriminative training meth-       ing and Knuth’s algorithm. Computational Linguis-
+  ods for hidden markov models: Theory and experi-         tics, pages 135–143.
+  ments with perceptron algorithms. In Proceedings
+  of EMNLP.                                               Joakim Nivre. 2004. Incrementality in deterministic
+                                                            dependency parsing. In Incremental Parsing: Bring-
+Xiangyu Duan, Jun Zhao, and Bo Xu. 2007. Proba-             ing Engineering and Cognition Together. Workshop
+  bilistic models for action-based chinese dependency       at ACL-2004, Barcelona.
+  parsing. In Proceedings of ECML/PKDD.
+                                                          Slav Petrov and Dan Klein. 2007. Improved inference
+Jay Earley. 1970. An efficient context-free parsing al-      for unlexicalized parsing. In Proceedings of HLT-
+   gorithm. Communications of the ACM, 13(2):94–             NAACL.
+   102.
+                                                          Brian Roark and Kristy Hollingshead. 2009. Linear
+Jason Eisner and Giorgio Satta. 1999. Efficient pars-       complexity context-free parsing pipelines via chart
+   ing for bilexical context-free grammars and head-        constraints. In Proceedings of HLT-NAACL.
+   automaton grammars. In Proceedings of ACL.
+                                                          Andreas Stolcke. 1995. An efficient probabilis-
+Jason Eisner. 1996. Three new probabilistic models          tic context-free parsing algorithm that computes
+   for dependency parsing: An exploration. In Pro-          prefix probabilities. Computational Linguistics,
+   ceedings of COLING.                                      21(2):165–201.
+                                                          Masaru Tomita. 1988. Graph-structured stack and nat-
+Lyn Frazier and Keith Rayner. 1982. Making and cor-
+                                                           ural language parsing. In Proceedings of the 26th
+  recting errors during sentence comprehension: Eye
+                                                           annual meeting on Association for Computational
+  movements in the analysis of structurally ambigu-
+                                                           Linguistics, pages 249–257, Morristown, NJ, USA.
+  ous sentences. Cognitive Psychology, 14(2):178 –
+                                                           Association for Computational Linguistics.
+  210.
+                                                          Masaru Tomita, editor. 1991. Generalized LR Parsing.
+Liang Huang and David Chiang. 2005. Better k-best          Kluwer Academic Publishers.
+  Parsing. In Proceedings of the Ninth International
+  Workshop on Parsing Technologies (IWPT-2005).           H. Yamada and Y. Matsumoto. 2003. Statistical de-
+                                                            pendency analysis with support vector machines. In
+Liang Huang, Wenbin Jiang, and Qun Liu. 2009.               Proceedings of IWPT.
+  Bilingually-constrained (monolingual) shift-reduce
+  parsing. In Proceedings of EMNLP.                       Yue Zhang and Stephen Clark. 2008. A tale of
+                                                            two parsers: investigating and combining graph-
+Liang Huang. 2008. Forest reranking: Discriminative         based and transition-based dependency parsing us-
+  parsing with non-local features. In Proceedings of        ing beam-search. In Proceedings of EMNLP.
+  the ACL: HLT, Columbus, OH, June.
+
+
+                                                      1086
+

@@ -1,0 +1,793 @@
+                  Compositional Matrix-Space Models of Language
+
+                 Sebastian Rudolph                                     Eugenie Giesbrecht
+           Karlsruhe Institute of Technology                    FZI Forschungszentrum Informatik
+                 Karlsruhe, Germany                                    Karlsuhe, Germany
+                  rudolph@kit.edu                                     giesbrecht@fzi.de
+
+
+
+                      Abstract                                 on the way to model language (Widdows, 2008).
+                                                               An emerging area of research receiving more and
+    We propose CMSMs, a novel type of                          more attention among the advocates of distribu-
+    generic compositional models for syntac-                   tional models addresses the methods, algorithms,
+    tic and semantic aspects of natural lan-                   and evaluation strategies for representing compo-
+    guage, based on matrix multiplication. We                  sitional aspects of language within a VSM frame-
+    argue for the structural and cognitive plau-               work. This requires novel modeling paradigms,
+    sibility of this model and show that it is                 as most VSMs have been predominantly used
+    able to cover and combine various com-                     for meaning representation of single words and
+    mon compositional NLP approaches rang-                     the key problem of common bag-of-words-based
+    ing from statistical word space models to                  VSMs is that word order information and thereby
+    symbolic grammar formalisms.                               the structure of the language is lost.
+                                                                  There are approaches under way to work out
+1   Introduction                                               a combined framework for meaning representa-
+In computational linguistics and information re-               tion using both the advantages of symbolic and
+trieval, Vector Space Models (Salton et al., 1975)             distributional methods. Clark and Pulman (2007)
+and its variations – such as Word Space Models                 suggest a conceptual model which unites sym-
+(Schütze, 1993), Hyperspace Analogue to Lan-                   bolic and distributional representations by means
+guage (Lund and Burgess, 1996), or Latent Se-                  of traversing the parse tree of a sentence and ap-
+mantic Analysis (Deerwester et al., 1990) – have               plying a tensor product for combining vectors of
+become a mainstream paradigm for text represen-                the meanings of words with the vectors of their
+tation. Vector Space Models (VSMs) have been                   roles. The model is further elaborated by Clark et
+empirically justified by results from cognitive sci-           al. (2008).
+ence (Gärdenfors, 2000). They embody the distri-                  To overcome the aforementioned difficulties
+butional hypothesis of meaning (Firth, 1957), ac-              with VSMs and work towards a tight integra-
+cording to which the meaning of words is defined               tion of symbolic and distributional approaches,
+by contexts in which they (co-)occur. Depending                we propose a Compositional Matrix-Space Model
+on the specific model employed, these contexts                 (CMSM) which employs matrices instead of vec-
+can be either local (the co-occurring words), or               tors and makes use of matrix multiplication as the
+global (a sentence or a paragraph or the whole doc-            one and only composition operation.
+ument). Indeed, VSMs proved to perform well in a                  The paper is structured as follows: We start by
+number of tasks requiring computation of seman-                providing the necessary basic notions in linear al-
+tic relatedness between words, such as synonymy                gebra in Section 2. In Section 3, we give a for-
+identification (Landauer and Dumais, 1997), auto-              mal account of the concept of compositionality,
+matic thesaurus construction (Grefenstette, 1994),             introduce our model, and argue for the plausibil-
+semantic priming, and word sense disambiguation                ity of CMSMs in the light of structural and cogni-
+(Padó and Lapata, 2007).                                       tive considerations. Section 4 shows how common
+   Until recently, little attention has been paid              VSM approaches to compositionality can be cap-
+to the task of modeling more complex concep-                   tured by CMSMs while Section 5 illustrates the
+tual structures with such models, which consti-                capabilities of our model to likewise cover sym-
+tutes a crucial barrier for semantic vector models             bolic approaches. In Section 6, we demonstrate
+
+
+                                                         907
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 907–916,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+how several CMSMs can be combined into one                                                          type of functions, so-called linear mappings, hav-
+model. We provide an overview of related work                                                       ing vectors as in- and output. More precisely, an
+in Section 7 before we conclude and point out av-                                                   n × m matrix M applied to an m-dimensional vec-
+enues for further research in Section 8.                                                            tor v yields an n-dimensional vector v0 (written:
+                                                                                                    vM = v0 ) according to
+2     Preliminaries
+                                                                                                                             m
+                                                                                                                             X
+In this section, we recap some aspects of linear                                                                  v0 (i) =         v( j) · M(i, j)
+algebra to the extent needed for our considerations                                                                          j=1
+about CMSMs. For a more thorough treatise we
+refer the reader to a linear algebra textbook (such                                                    Linear mappings can be concatenated, giving
+as Strang (1993)).                                                                                  rise to the notion of standard matrix multiplica-
+                                                                                                    tion: we write M1 M2 to denote the matrix that
+Vectors. Given a natural number n, an n-                                                            corresponds to the linear mapping defined by ap-
+dimensional vector v over the reals can be seen                                                     plying first M1 and then M2 . Formally, the matrix
+as a list (or tuple) containing n real numbers                                                      product of the n × l matrix M1 and the l × m matrix
+r1 , . . . , rn ∈ R, written v = (r1 r2 · · · rn ).                                                 M2 is an n × m matrix M = M1 M2 defined by
+Vectors will be denoted by lowercase bold font
+letters and we will use the notation v(i) to refer                                                                        l
+                                                                                                                          X
+to the ith entry of vector v. As usual, we write                                                              M(i, j) =         M1 (i, k) · M2 (k, j)
+Rn to denote the set of all n-dimensional vectors                                                                         k=1
+
+with real entries. Vectors can be added entry-                                                        Note that the matrix product is associative (i.e.,
+wise, i.e., (r1 · · · rn ) + (r10 · · · rn0 ) = (r1 +                                               (M1 M2 )M3 = M1 (M2 M3 ) always holds, thus
+r10 · · · rn +rn0 ). Likewise, the entry-wise prod-                                                 parentheses can be omitted) but not commutative
+uct (also known as Hadamard product) is defined                                                     (M1 M2 = M2 M1 does not hold in general, i.e., the
+by (r1 · · · rn ) (r10 · · · rn0 ) = (r1 ·r10 · · · rn ·rn0 ).                                      order matters).
+Matrices. Given two real numbers n, m, an n×m                                                       Permutations. Given a natural number n, a per-
+matrix over the reals is an array of real numbers                                                   mutation on {1 . . . n} is a bijection (i.e., a map-
+with n rows and m columns. We will use capital                                                      ping that is one-to-one and onto) Φ : {1 . . . n} →
+letters to denote matrices and, given a matrix M                                                    {1 . . . n}. A permutation can be seen as a “reorder-
+we will write M(i, j) to refer to the entry in the ith                                              ing scheme” on a list with n elements: the element
+row and the jth column:                                                                             at position i will get the new position Φ(i) in the
+                                                                                                    reordered list. Likewise, a permutation can be ap-
+      
+       M(1, 1) M(1, 2) · · · M(1, j) · · · M(1, m) 
+                                                                                                   plied to a vector resulting in a rearrangement of
+                                                            ..                               the entries. We write Φn to denote the permutation
+            M(2, 1) M(2, 2)                                   .
+                                                                                                    corresponding to the n-fold application of Φ and
+                                                                        
+                              ..                                 ..
+                                                                       
+                               .                                  .                                 Φ−1 to denote the permutation that “undoes” Φ.
+                                                                         
+M = 
+                                                                              
+                                                                  .
+                 
+                 
+                                                                  ..                                   Given a permutation Φ, the corresponding per-
+                                                                                
+                  M(i, 1)                    M(i, j)                          
+                               ..                                  ..                               mutation matrix MΦ is defined by
+                                                                                 
+                                .                                   .
+                                                                                   
+                                                                                     
+                                                                                          
+                            M(n, 1) M(1, 2) · · · · · · · · · M(n, m)                                                         (
+                                                                                                                                   1 if Φ( j) = i,
+                                                                                                               MΦ (i, j) =
+                                                                                                                                   0 otherwise.
+The set of all n × m matrices with real num-
+ber entries is denoted by Rn×m . Obviously, m-                                                         Then, obviously permuting a vector according
+dimensional vectors can be seen as 1 × m matri-                                                     to Φ can be expressed in terms of matrix multipli-
+ces. A matrix can be transposed by exchanging                                                       cation as well as we obtain for any vector v ∈ Rn :
+columns and rows: given the n × m matrix M, its
+transposed version M T is a m × n matrix defined                                                                          Φ(v) = vMΦ
+by M T (i, j) = M( j, i).
+                                                                                                      Likewise, iterated application (Φn ) and the in-
+Linear Mappings. Beyond being merely array-                                                         verses Φ−n carry over naturally to the correspond-
+like data structures, matrices correspond to certain                                                ing notions in matrices.
+
+
+                                                                                              908
+
+
+3         Compositionality and Matrices                                                     3.1   Algebraic Plausibility –
+                                                                                                  Structural Operation Properties
+The underlying principle of compositional seman-
+                                                                                            Most linear-algebra-based operations that have
+tics is that the meaning of a sentence (or a word
+                                                                                            been proposed to model composition in language
+phrase) can be derived from the meaning of its
+                                                                                            models are associative and commutative. Thereby,
+constituent tokens by applying a composition op-
+                                                                                            they realize a multiset (or bag-of-words) seman-
+eration. More formally, the underlying idea can
+                                                                                            tics that makes them insensitive to structural dif-
+be described as follows: given a mapping [[ · ]] :
+                                                                                            ferences of phrases conveyed through word order.
+Σ → S from a set of tokens (words) Σ into some
+semantical space S (the elements of which we will                                              While associativity seems somewhat acceptable
+simply call “meanings”), we find a semantic com-                                            and could be defended by pointing to the stream-
+position operation ./: S∗ → S mapping sequences                                             like, sequential nature of language, commutativity
+of meanings to meanings such that the meaning of                                            seems way less justifiable, arguably.
+a sequence of tokens σ1 σ2 . . . σn can be obtained                                            As mentioned before, matrix multiplication is
+by applying ./ to the sequence [[σ1 ]][[σ2 ]] . . . [[σn ]].                                associative but non-commutative, whence we pro-
+This situation qualifies [[ · ]] as a homomorphism                                          pose it as more adequate for modeling composi-
+between (Σ∗ , ·) and (S, ./) and can be displayed as                                        tional semantics of language.
+follows:
+                                                                                            3.2   Neurological Plausibility –
+                                     concatenation ·                                              Progression of Mental States
+                                                                 () '
+    σ1              σ2              ···    σn               σ1 σ2 . . . σn                  From a very abstract and simplified perspective,
+                                                                                            CMSMs can also be justified neurologically.
+                                                                                               Suppose the mental state of a person at one spe-
+         [[ · ]]          [[ · ]]                [[ · ]]                    [[ · ]]
+                                                                                            cific moment in time can be encoded by a vector v
+                                                                                        of numerical values; one might, e.g., think of the
+[[σ1 ]]            [[σ2 ]] · · · [[σn ]]                   [[σ15 6 σ2 . . . σn ]]           level of excitation of neurons. Then, an external
+                                                                                            stimulus or signal, such as a perceived word, will
+                                     composition ./                                         result in a change of the mental state. Thus, the
+                                                                                            external stimulus can be seen as a function being
+                                                                                            applied to v yielding as result the vector v0 that
+   A great variety of linguistic models are sub-                                            corresponds to the persons mental state after re-
+sumed by this general idea ranging from purely                                              ceiving the signal. Therefore, it seems sensible to
+symbolic approaches (like type systems and cate-                                            associate with every signal (in our case: token σ) a
+gorial grammars) to rather statistical models (like                                         respective function (a linear mapping, represented
+vector space and word space models). At the first                                           by a matrix M = [[σ]] that maps mental states to
+glance, the underlying encodings of word seman-                                             mental states (i.e. vectors v to vectors v0 = vM).
+tics as well as the composition operations differ                                              Consequently, the subsequent reception of in-
+significantly. However, we argue that a great vari-                                         puts σ, σ0 associated to matrices M and M 0
+ety of them can be incorporated – and even freely                                           will transform a mental vector v into the vector
+inter-combined – into a unified model where the                                             (vM)M 0 which by associativity equals v(MM 0 ).
+semantics of simple tokens and complex phrases                                              Therefore, MM 0 represents the mental state tran-
+is expressed by matrices and the composition op-                                            sition triggered by the signal sequence σσ0 . Nat-
+eration is standard matrix multiplication.                                                  urally, this consideration carries over to sequences
+   More precisely, in Compositional Marix-Space                                             of arbitrary length. This way, abstracting from
+Models, we have S = Rn×n , i.e. the semantical                                              specific initial mental state vectors, our semantic
+space consists of quadratic matrices, and the com-                                          space S can be seen as a function space of mental
+position operator ./ coincides with matrix multi-                                           transformations represented by matrices, whereby
+plication as introduced in Section 2. In the follow-                                        matrix multiplication realizes subsequent execu-
+ing, we will provide diverse arguments illustrating                                         tion of those transformations triggered by the in-
+that CMSMs are intuitive and natural.                                                       put token sequence.
+
+
+                                                                                      909
+
+
+3.3      Psychological Plausibility –                                    This kind of composition operation is subsumed
+         Operations on Working Memory                                  by CMSMs; suppose in the original model, a token
+A structurally very similar argument can be pro-                       σ gets assigned the vector vσ , then by defining
+vided on another cognitive explanatory level.
+                                                                                                                         1 ···               0        0
+                                                                                                                                                           
+There have been extensive studies about human
+                                                                                                                      .. . .                       ..    
+                                                                                                                       .     .                      .      
+language processing justifying the hypothesis of                                              ψ+ (vσ ) =                                                   
+                                                                                                                         0                    1       0           
+a working memory (Baddeley, 2003). The men-
+                                                                                                                                                                 
+                                                                                                                            vσ                        1
+tal state vector can be seen as representation of a
+person’s working memory which gets transformed                         (mapping n-dimensional vectors to (n + 1) × (n + 1)
+by external input. Note that matrices can per-                         matrices), we obtain for a phrase w = σ1 . . . σk
+form standard memory operations such as storing,
+deleting, copying etc. For instance, the matrix                          + (ψ+ (vσ1 ) . . . ψ+ (vσk )) = vσ1 + . . . + vσk = vw .
+                                                                        ψ−1
+Mcopy(k,l) defined by
+                                                                       Proof. By induction on k. For k = 1, we have
+                        1 if i = j , l or i = k, j = l,
+                      (
+  Mcopy(k,l) (i, j) =                                                  vw = vσ = ψ−1
+                                                                                  + (ψ+ (vσ1 )). For k > 1, we have
+                        0 otherwise.
+                                                                                  + (ψ+ (vσ1 ) . . . ψ+ (vσk −1 )ψ+ (vσk ))
+                                                                                 ψ−1
+applied to a vector v, will copy its kth entry to the                  =         ψ−1
+                                                                                  + (ψ+ (ψ+ (ψ+ (vσ1 ) . . . ψ+ (vσk −1 )))ψ+ (vσk ))
+                                                                                          −1
+lth position. This mechanism of storage and inser-
+                                                                       i.h.
+                                                                       =         ψ−1
+                                                                                         Pk−1
+tion can, e.g., be used to simulate simple forms of                               + (ψ+ ( i=1 vσi )ψ+ (vσk ))
+anaphora resolution.                                                           
+                                                                                                     1.       ···        0                   0.   1. · · · 0
+                                                                                                                                                    
+                                                                                                                                                                         0. 
+                                                                                                                                                                                
+                                                                               
+                                                                                                      ..       ..                             ..   .. . . .       .. 
+                                                                                                                  .
+                                                                       = ψ−1
+                                                                                 
+4       CMSMs Encode Vector Space Models                                  + 
+                                                                                   
+                                                                                   P 0
+                                                                                                                                                                          
+                                                                                                                    Pk−11                    0  0             1    0
+                                                                                                                                                         
+                                                                                               k−1
+                                                                                               i=1 vσi (1)· · ·       i=1 vσi (n)            1 vσk (1)· · · vσk (n) 1
+In VSMs numerous vector operations have been
+                                                                                                 1.         ···        0            0. 
+                                                                                                                                          
+used to model composition (Widdows, 2008),                                          
+                                                                                                  ..         ..                      ..  X
+                                                                                                                                                             k
+                                                                                                                .
+                                                                       = ψ+  0                                                          =
+                                                                          −1          
+some of the more advanced ones being related to                                                                                                                 vσi
+                                                                                                                  Pk 1              0
+quantum mechanics. We show how these com-                                                                                                                             q.e.d.2
+                                                                                         P
+                                                                                             k                                                              i=1
+                                                                                                 v
+                                                                                             i=1 i  σ    (1)· · ·   i=1 vσi (n)     1
+mon composition operators can be modeled by
+CMSMs.1 Given a vector composition operation                           4.2         Component-wise Multiplication
+./: Rn ×Rn → Rn , we provide a surjective function
+                 0   0                                                 On the other hand, the Hadamard product (also
+ψ./ : Rn → Rn ×n that translates the vector rep-
+                                                                       called entry-wise product, denoted by ) has been
+resentation into a matrix representation in a way
+                                                                       proposed as an alternative way of semantically
+such that for all v1 , . . . vk ∈ Rn holds
+                                                                       composing token vectors.
+        v1 ./ . . . ./ vk = ψ−1
+                             ./ (ψ./ (v1 ) . . . ψ./ (vk ))
+                                                                          By using a different encoding into matrices,
+                                                                       CMSMs can simulate this type of composition op-
+where ψ./ (vi )ψ./ (v j ) denotes matrix multiplication                eration as well. By letting
+of the matrices assigned to vi and v j .
+                                                                                              vσ (1)    0    ···                                                      0
+                                                                                                                                                                            
+                                                                                                                                                                             
+4.1      Vector Addition                                                                        0    v   (2)
+                                                                                                          σ
+                                                                                                                                                                               
+                                                                               ψ (vσ ) =  .                ..                                                                  ,
+                                                                                                                                                                                
+As a simple basic model for semantic composi-                                                     ..            .                                         0                       
+tion, vector addition has been proposed. Thereby,                                                                                                                                     
+                                                                                                     0   ···     0                                         vσ (n)
+tokens σ get assigned (usually high-dimensional)
+vectors vσ and to obtain a representation of the                       we obtain an n × n matrix representation for which
+meaning of a phrase or a sentence w = σ1 . . . σk ,                    ψ−1 (ψ (vσ1 ) . . . ψ (vσk )) = vσ1 . . . vσk = vw .
+the vector sum of the vectors associated to the con-
+stituent tokens is calculated: vw = ki=1 vσi .                         4.3         Holographic Reduced Representations
+                                    P
+
+    1
+     In our investigations we will focus on VSM composi-               Holographic reduced representations as intro-
+tion operations which preserve the format (i.e. which yield a          duced by Plate (1995) can be seen as a refinement
+vector of the same dimensionality), as our notion of composi-
+                                                                          2
+tionality requires models that allow for iterated composition.              The proofs for the respective correspondences for and
+In particular, this rules out dot product and tensor product.          ~ as well as the permutation-based approach in the following
+However the convolution product can be seen as a condensed             sections are structurally analog, hence, we will omit them for
+version of the tensor product.                                         space reasons.
+
+
+                                                                 910
+
+
+of convolution products with the benefit of pre-                          we have
+serving dimensionality: given two vectors v1 , v2 ∈
+Rn , their circular convolution product v1 ~ v2 is                                                                   0
+                                                                                                                         
+                                                                                                                  ..   
+again an n-dimensional vector v3 defined by
+                                                                                                          MΦk−m    .     
+                                                                                      Mw,m   =                            ,
+                                                                                                                  0          
+                                                                                                                                  
+                n−1
+                X                                                                                            vw,m    1
+v3 (i + 1) =           v1 (k + 1) · v2 ((i − k        mod n) + 1)
+                k=0
+                                                                          whence ψ−1  − m−1 ψ (v ) . . . ψ (v ) = v
+                                                                                  Φ (MΦ )    Φ  σ1        Φ  σk     w,m .
+for 0 ≤ i ≤ n−1. Now let ψ~ (v) be the n×n matrix
+M with
+
+         M(i, j) = v(( j − i             mod n) + 1).                     5     CMSMs Encode Symbolic Approaches
+
+In the 3-dimensional case, this would result in                           Now we will elaborate on symbolic approaches to
+                                                                          language, i.e., discrete grammar formalisms, and
+                                              
+                           v(1) v(2) v(3)                           show how they can conveniently be embedded into
+ ψ~ (v(1) v(2) v(3)) =  v(3) v(1) v(2)                            CMSMs. This might come as a surprise, as the ap-
+                                              
+                            
+                              v(2) v(3) v(1)
+                                                                         parent likeness of CMSMs to vector-space models
+                                                                          may suggest incompatibility to discrete settings.
+Then, it can be readily checked that
+                                                                          5.1    Group Theory
+ψ−1
+ ~ (ψ~ (vσ1 ) . . . ψ~ (vσk )) = vσ1 ~ . . . ~ vσk = vw .
+                                                                          Group theory and grammar formalisms based on
+4.4   Permutation-based Approaches                                        groups and pre-groups play an important role
+                                                                          in computational linguistics (Dymetman, 1998;
+Sahlgren et al. (2008) use permutations on vec-
+                                                                          Lambek, 1958). From the perspective of our com-
+tors to account for word order. In this approach,
+                                                                          positionality framework, those approaches employ
+given a token σm occurring in a sentence w =
+                                                                          a group (or pre-group) (G, ·) as semantical space S
+σ1 . . . σk with predefined “uncontextualized” vec-
+                                                                          where the group operation (often written as multi-
+tors vσ1 . . . vσk , we compute the contextualized
+                                                                          plication) is used as composition operation ./.
+vector vw,m for σm by
+                                                                             According Cayley’s Theorem (Cayley, 1854),
+       vw,m = Φ1−m (vσ1 ) + . . . + Φk−m (vσk ),                          every group G is isomorphic to a permutation
+                                                                          group on some set S . Hence, assuming finite-
+which can be equivalently transformed into                                ness of G and consequently S , we can encode
+                                                                          group-based grammar formalisms into CMSMs in
+  Φ1−m vσ1 + Φ(. . . + Φ(vσk−1 + (Φ(vσk ))) . . .) .                      a straightforward way by using permutation matri-
+                                                  
+                                                                          ces of size |S | × |S |.
+Note that the approach is still token-centered, i.e.,
+a vector representation of a token is endowed with                        5.2    Regular Languages
+contextual representations of surrounding tokens.
+                                                                          Regular languages constitute a basic type of lan-
+Nevertheless, this setting can be transferred to a
+                                                                          guages characterized by a symbolic formalism.
+CMSM setting by recording the position of the fo-
+                                                                          We will show how to select the assignment [[ · ]]
+cused token as an additional parameter. Now, by
+                                                                          for a CMSM such that the matrix associated to a
+assigning every vσ the matrix
+                                                                          token sequence exhibits whether this sequence be-
+                              
+                                                 0
+                                                                         longs to a given regular language, that is if it is
+                                              ..   
+                                                                          accepted by a given finite state automaton. As
+                                     MΦ        .     
+               ψΦ (vσ ) =                            
+                                                                          usual (cf. e.g., Hopcroft and Ullman (1979)) we
+                                                 0          
+                                                                          define a nondeterministic finite automaton A =
+                                                           
+                                        vσ       1
+                                                                          (Q, Σ, ∆, QI , QF ) with Q = {q0 , . . . , qn−1 } being the
+we observe that for                                                       set of states, Σ the input alphabet, ∆ ⊆ Q×Σ×Q the
+                                                                          transition relation, and QI and QF being the sets of
+       Mw,m := (MΦ− )m−1 ψΦ (vσ1 ) . . . ψΦ (vσk )                        initial and final states, respectively.
+
+
+                                                                    911
+
+
+ Then we assign to every token σ ∈ Σ the n × n                                                        Then L(M) contains exactly all palindromes from
+matrix [[σ]] = M with                                                                                 {a, b, c}∗ , i.e., the words d1 d2 . . . dn−1 dn for which
+                                                                                                      d1 d2 . . . dn−1 dn = dn dn−1 . . . d2 d1 .
+                     1 if (qi , σ, q j ) ∈ ∆,
+                   (
+         M(i, j) =                                                                                    Example 2 We define M = h [[ · ]], ACi with
+                     0 otherwise.
+                                                                                                                                                                                 
+Hence essentially, the matrix M encodes all state                                                                                                        1 0 0 0 0         0
+                                                                                                                                                           0 0 0 0 0       0
+transitions which can be caused by the input σ.
+                                                                                                         Σ = {a, b, c}                    [[a]] = 00 00 00 02 00          0
+                                                                                                                                                             
+Likewise, for a word w = σ1 . . . σk ∈ Σ∗ , the                                                                                                                            0
+matrix Mw := [[σ1 ]] . . . [[σk ]] will encode all state                                                                                                        0 0 0 0 1   0
+transitions mediated by w. Finally, if we define                                                                                               0 0 0 0 0                   1
+                                                                                                                0 1 0 0 0 0                0 0 0 0 0                 0
+vectors vI and vF by                                                                                              0 1 0 0 0 0                0 0 1 0 0               0
+                                                                                                      [[b]] = 0 0 0 1 0 0 [[c]] = 00 00 10 01 00
+                                                                                                                    0 0 0 0 0 0                                       0
+           1 if qi ∈ QI ,                 1 if qi ∈ QF ,
+         (                              (
+                                                                                                                                                                              0
+vI (i) =                      vF (i) =
+                                                                                                                                                 
+           0 otherwise,                   0 otherwise,                                                                  0 0 0 0 2 0                0 0 0 0 1           0
+                                                                                                                0    0   0    0   0    1              0    0   0    0    0    2
+then we find that w is accepted by A exactly if
+                                                                                                       AC = { h(1 0 0 0 0 0), (0 0 1 0 0 0), 1i,
+vI Mw vTF ≥ 1.                                                                                                      h(0 0 0 1 1 0), (0 0 0 1 −1 0), 0i,
+                                                                                                                    h(0 0 0 0 1 1), (0 0 0 0 1 −1), 0i,
+5.3     The General Case: Matrix Grammars                                                                           h(0 0 0 1 1 0), (0 0 0 −1 0 1), 0i}
+Motivated by the above findings, we now define a                                                       Then L(M) is the (non-context-free) language
+general notion of matrix grammars as follows:                                                         {am bm cm | m > 0}.
+Definition 1 Let Σ be an alphabet. A matrix                                                             The following properties of matrix grammars
+grammar M of degree n is defined as the pair                                                          and matricible language are straightforward.
+h [[ · ]], ACi where [[ · ]] is a mapping from Σ to n×n
+matrices and AC = {hv01 , v1 , r1 i, . . . , hv0m , vm , rm i}                                        Proposition 2 All languages characterized by a
+with v01 , v1 , . . . , v0m , vm ∈ Rn and r1 , . . . , rm ∈ R                                         set of linear equations on the letter counts are ma-
+is a finite set of acceptance conditions. The lan-                                                    tricible.
+guage generated by M (denoted by L(M)) con-                                                           Proof. Suppose Σ = {a1 , . . . an }. Given a word w,
+tains a token sequence σ1 . . . σk ∈ Σ∗ exactly if                                                    let xi denote the number of occurrences of ai in w.
+v0i [[σ1 ]] . . . [[σk ]]vTi ≥ ri for all i ∈ {1, . . . , m}. We                                      A linear equation on the letter counts has the form
+will call a language L matricible if L = L(M) for
+                                                                                                        k1 x1 + . . . + kn xn = k                    k, k1 , . . . , kn ∈ R
+                                                                                                                                                                              
+some matrix grammar M.
+  Then, the following proposition is a direct con-                                                       Now define [[ai ]] = ψ+ (ei ), where ei is the ith
+sequence from the preceding section.                                                                  unit vector, i.e. it contains a 1 at he ith position and
+Proposition 1 Regular languages are matricible.                                                       0 in all other positions. Then, it is easy to see that
+  However, as demonstrated by the subsequent                                                          w will be mapped to M = ψ+ (x1 · · · xn ). Due
+examples, also many non-regular and even non-                                                         to the fact that en+1 M = (x1 · · · xn 1) we can
+context-free languages are matricible, hinting at                                                     enforce the above linear equation by defining the
+the expressivity of our grammar model.                                                                acceptance conditions
+Example 1 We define Mh [[ · ]], ACi with                                                                    AC = { hen+1 , (k1 . . . kn − k), 0i,
+                                                      
+                                                       3 0 0       0
+                                                                                   
+                                                                                                                h−en+1 , (k1 . . . kn − k), 0i}.
+                                                         0 1 0     0              
+    Σ = {a, b, c}                    [[a]] =                                                                                                                     q.e.d.
+                                                           0 0 3   0                  
+                                                                                           
+                                                              0 0 0   1                               Proposition 3 The intersection of two matricible
+                                                                       
+              3 0 0 0                       3 0 0            0                            languages is again a matricible language.
+                0 1 0 0 
+                                  [[c]] =  0 1 0              0
+                                                                           
+ [[b]] =                                                                 
+                                                                                                      Proof. This is a direct consequence of the con-
+                  0 1 3 0                   0 2 3          0         
+                     1 0 0 1
+                                                     
+                                                              2 0 0   1
+                                                                                                    siderations in Section 6 together with the observa-
+                                                                                                      tion, that the new set of acceptance conditions is
+      AC = { h(0 0 1 1), (1 −1 0 0), 0i,                                                              trivially obtained from the old ones with adapted
+             h(0 0 1 1), (−1 1 0 0), 0i}                                                              dimensionalities.                             q.e.d.
+
+
+                                                                                                912
+
+
+  Note that the fact that the language {am bm cm |                                h1 , . . . , hm is a solution to the given Post Corre-
+m > 0} is matricible, as demonstrated in Ex-                                      spondence Problem. Consequently, the question
+ample 2 is a straightforward consequence of the                                   whether such a solution exists is equivalent to
+Propositions 1, 2, and 3, since the language in                                   the question whether the language L(M) is non-
+question can be described as the intersection of                                  empty.                                           q.e.d.
+the regular language a+ b+ c+ with the language
+                                                                                     These results demonstrate that matrix grammars
+characterized by the equations xa − xb = 0 and
+                                                                                  cover a wide range of formal languages. Never-
+xb − xc = 0. We proceed by giving another ac-
+                                                                                  theless some important questions remain open and
+count of the expressivity of matrix grammars by
+                                                                                  need to be clarified next:
+showing undecidability of the emptiness problem.
+                                                                                  Are all context-free languages matricible? We
+Proposition 4 The problem whether there is a                                      conjecture that this is not the case.3 Note that this
+word which is accepted by a given matrix gram-                                    question is directly related to the question whether
+mar is undecidable.                                                               Lambek calculus can be modeled by matrix gram-
+Proof. The undecidable Post correspondence                                        mars.
+problem (Post, 1946) is described as follows:                                     Are matricible languages closed under concatena-
+given two lists of words u1 , . . . , un and v1 , . . . , vn                      tion? That is: given two arbitrary matricible lan-
+over some alphabet Σ0 , is there a sequence of num-                               guages L1 , L2 , is the language L = {w1 w2 | w1 ∈
+bers h1 , . . . , hm (1 ≤ h j ≤ n) such that uh1 . . . uhm =                      L1 , w2 ∈ L2 } again matricible? Being a property
+vh1 . . . vhm ?                                                                   common to all language types from the Chomsky
+   We now reduce this problem to the emptiness                                    hierarchy, answering this question is surprisingly
+problem of a matrix grammar. W.l.o.g., let Σ0 =                                   non-trivial for matrix grammars.
+{a1 , . . . , ak }. We define a bijection # from Σ0∗ to N                            In case of a negative answer to one of the above
+by                                                                                questions it might be worthwhile to introduce an
+                                                                                  extended notion of context grammars to accom-
+                                     l
+                                     X                                            modate those desirable properties. For example,
+          #(an1 an2 . . . anl ) =          (ni − 1) · k(l−i)                      allowing for some nondeterminism by associating
+                                     i=1
+                                                                                  several matrices to one token would ensure closure
+Note that this is indeed a bijection and that for                                 under concatenation.
+w1 , w2 ∈ Σ0∗ , we have                                                           How do the theoretical properties of matrix gram-
+                                                                                  mars depend on the underlying algebraic struc-
+             #(w1 w2 ) = #(w1 ) · k|w2 | + #(w2 ).                                ture? Remember that we considered matrices con-
+                                                                                  taining real numbers as entries. In general, ma-
+Now, we define M as follows:                                                      trices can be defined on top of any mathemati-
+                                  |ui |                                         cal structure that is (at least) a semiring (Golan,
+                                  k          0     0 
+                                                                                  1992). Examples for semirings are the natural
+ Σ = {b1 , . . . bn } [[bi ]] =  0           k|vi | 0 
+                                                        
+                                                                                numbers, boolean algebras, or polynomials with
+                                       #(ui ) #(vi ) 1
+                                                                                  natural number coefficients. Therefore, it would
+                                                                                  be interesting to investigate the influence of the
+         AC = { h(0 0 1), (1 − 1 0), 0i,
+                                                                                  choice of the underlying semiring on the prop-
+                h(0 0 1), (−1 1 0), 0i}
+                                                                                  erties of the matrix grammars – possibly non-
+Using the above fact about # and a simple induc-                                  standard structures turn out to be more appropri-
+tion on m, we find that                                                           ate for capturing certain compositional language
+                                |uh ...uhm |                                    properties.
+                                k 1                    0          0
+  [[ah1 ]] . . . [[ahm ]] =          0            k|vh1...vhm | 0
+                                                                       
+                                                                                  6       Combination of Different Approaches
+                                   #(uh1 . . .uhm ) #(vh1 . . .vhm ) 1
+                                                                       
+                                                                                  Another central advantage of the proposed matrix-
+Evaluating the two acceptance conditions, we                                      based models for word meaning is that several
+find them satisfied exactly if #(uh1 . . . uhm ) =                                matrix models can be easily combined into one.
+#(vh1 . . . vhm ). Since # is a bijection, this is the                                3
+                                                                                      For instance, we have not been able to find a matrix
+case if and only if uh1 . . . uhm = vh1 . . . vhm . There-                        grammar that recognizes the language of all well-formed
+fore M accepts bh1 . . . bhm exactly if the sequence                              parenthesis expressions.
+
+
+                                                                            913
+
+
+Again assume a sequence w = σ1 . . . σk of                                                                          with a number of addition and multiplication op-
+tokens with associated matrices [[σ1 ]], . . . , [[σk ]]                                                            erations for vector combination on a sentence sim-
+according to one specific model and matrices                                                                        ilarity task proposed by Kintsch (2001). Widdows
+([σ1 ]), . . . , ([σk ]) according to another.                                                                      (2008) proposes a number of more advanced vec-
+   Then we can combine the two models into one                                                                      tor operations well-known from quantum mechan-
+{[ · ]} by assigning to σi the matrix                                                                               ics, such as tensor product and convolution, to
+                                                                                                                  model composition in vector spaces. He shows
+                                                             00  ···                                          the ability of VSMs to reflect the relational and
+                                                             ..     ..
+                                                                       
+                                                                                                                    phrasal meanings on a simplified analogy task.
+                                          [[σi ]]             .        .
+                                                                         
+                                                                                                                    Giesbrecht (2009) evaluates four vector compo-
+                                                                        
+                                                       0         0 
+        {[σi ]} = 
+                              
+                                          0 ··· 0
+                                                                                                                 sition operations (+, , tensor product, convolu-
+                                                                           
+                                          ..   ..                                                                   tion) on the task of identifying multi-word units.
+                                                  .
+                                                                             
+                                   
+                                         .             ([σi ])                  
+                                                                                                                  The evaluation results of the three studies are not
+                                          0          0                                                              conclusive in terms of which vector operation per-
+                                                                                                                    forms best; the different outcomes might be at-
+By doing so, we obtain the correspondence                                                                           tributed to the underlying word space models; e.g.,
+                                                                                                                  the models of Widdows (2008) and Giesbrecht
+                                                                       0           ··· 0 
+                                                                                                                    (2009) feature dimensionality reduction while that
+                          
+                                                                    ..          ..          
+                               [[σ ]] . . . [[σ ]]                   .             .                          of Mitchell and Lapata (2008) does not. In the
+                                 1                k                                            
+                                                                       0               0                       light of these findings, our CMSMs provide the
+{[σ1 ]} . . . {[σk ]} = 
+                                   
+                                      0 · · ·      0
+                                                                                                    
+                                                                                                                 benefit of just one composition operation that is
+                                        .    .
+                                              .   . .                                                               able to mimic all the others as well as combina-
+                                                                                                        
+                                          .                        ([σ1 ]) . . . ([σk ]) 
+                                           
+                                              0       0
+                                                                                                                   tions thereof.
+
+In other words, the semantic compositions belong-                                                                   8   Conclusion and Future Work
+ing to two CMSMs can be executed “in parallel.”
+                                                                                                                    We have introduced a generic model for compo-
+Mark that by providing non-zero entries for the up-
+                                                                                                                    sitionality in language where matrices are associ-
+per right and lower left matrix part, information
+                                                                                                                    ated with tokens and the matrix representation of a
+exchange between the two models can be easily
+                                                                                                                    token sequence is obtained by iterated matrix mul-
+realized.
+                                                                                                                    tiplication. We have given algebraic, neurological,
+                                                                                                                    and psychological plausibility indications in favor
+7    Related Work
+                                                                                                                    of this choice. We have shown that the proposed
+We are not the first to suggest an extension of                                                                     model is expressive enough to cover and combine
+classical VSMs to matrices. Distributional mod-                                                                     a variety of distributional and symbolic aspects of
+els based on matrices or even higher-dimensional                                                                    natural language. This nourishes the hope that ma-
+arrays have been proposed in information retrieval                                                                  trix models can serve as a kind of lingua franca for
+(Gao et al., 2004; Antonellis and Gallopoulos,                                                                      compositional models.
+2006). However, to the best of our knowledge, the                                                                      This having said, some crucial questions remain
+approach of realizing compositionality via matrix                                                                   before CMSMs can be applied in practice:
+multiplication seems to be entirely original.                                                                       How to acquire CMSMs for large token sets and
+   Among the early attempts to provide more com-                                                                    specific purposes? We have shown the value
+pelling combinatory functions to capture word or-                                                                   and expressivity of CMSMs by providing care-
+der information and the non-commutativity of lin-                                                                   fully hand-crafted encodings. In practical cases,
+guistic compositional operation in VSMs is the                                                                      however, the number of token-to-matrix assign-
+work of Kintsch (2001) who is using a more so-                                                                      ments will be too large for this manual approach.
+phisticated addition function to model predicate-                                                                   Therefore, methods to (semi-)automatically ac-
+argument structures in VSMs.                                                                                        quire those assignments from available data are re-
+   Mitchell and Lapata (2008) formulate seman-                                                                      quired. To this end, machine learning techniques
+tic composition as a function m = f (w1 , w2 , R, K)                                                                need to be investigated with respect to their ap-
+where R is a relation between w1 and w2 and K                                                                       plicability to this task. Presumably, hybrid ap-
+is additional knowledge. They evaluate the model                                                                    proaches have to be considered, where parts of
+
+
+                                                                                                              914
+
+
+ the matrix representation are learned whereas oth-         [Cayley1854] Arthur Cayley. 1854. On the theory of
+ ers are stipulated in advance guided by external              groups as depending on the symbolic equation θn =
+                                                               1. Philos. Magazine, 7:40–47.
+ sources (such as lexical information).
+    In this setting, data sparsity may be overcome          [Clark and Pulman2007] Stephen Clark and Stephen
+ through tensor methods: given a set T of tokens                Pulman. 2007. Combining symbolic and distribu-
+ together with the matrix assignment [[]] : T →                 tional models of meaning. In Proceedings of the
+ Rn×n , this datastructure can be conceived as a 3-             AAAI Spring Symposium on Quantum Interaction,
+                                                                Stanford, CA, 2007, pages 52–55.
+ dimensional array (also known as tensor) of size
+ n×n×|T | wherein the single token-matrices can be          [Clark et al.2008] Stephen Clark, Bob Coecke, and
+ found as slices. Then tensor decomposition tech-               Mehrnoosh Sadrzadeh. 2008. A compositional dis-
+ niques can be applied in order to find a compact               tributional model of meaning. In Proceedings of
+                                                                the Second Symposium on Quantum Interaction (QI-
+ representation, reduce noise, and cluster together             2008), pages 133–140.
+ similar tokens (Tucker, 1966; Rendle et al., 2009).
+ First evaluation results employing this approach to        [Deerwester et al.1990] Scott Deerwester, Susan T. Du-
+ the task of free associations are reported by Gies-           mais, George W. Furnas, Thomas K. Landauer, and
+ brecht (2010).                                                Richard Harshman. 1990. Indexing by latent se-
+                                                               mantic analysis. Journal of the American Society
+ How does linearity limit the applicability of                 for Information Science, 41:391–407.
+ CMSMs? In Section 3, we justified our model by
+ taking the perspective of tokens being functions           [Dymetman1998] Marc Dymetman. 1998. Group the-
+ which realize mental state transitions. Yet, us-              ory and computational linguistics. J. of Logic, Lang.
+                                                               and Inf., 7(4):461–497.
+ ing matrices to represent those functions restricts
+ them to linear mappings. Although this restric-            [Firth1957] John R. Firth. 1957. A synopsis of linguis-
+ tion brings about benefits in terms of computabil-             tic theory 1930-55. Studies in linguistic analysis,
+ ity and theoretical accessibility, the limitations in-         pages 1–32.
+ troduced by this assumption need to be investi-
+                                                            [Gao et al.2004] Kai Gao, Yongcheng Wang, and Zhiqi
+ gated. Clearly, certain linguistic effects (like a-           Wang. 2004. An efficient relevant evaluation model
+ posteriori disambiguation) cannot be modeled via              in information retrieval and its application. In CIT
+ linear mappings. Instead, we might need some                  ’04: Proceedings of the The Fourth International
+ in-between application of simple nonlinear func-              Conference on Computer and Information Technol-
+                                                               ogy, pages 845–850. IEEE Computer Society.
+ tions in the spirit of quantum-collapsing of a "su-
+ perposed" mental state (such as the winner takes           [Gärdenfors2000] Peter Gärdenfors. 2000. Concep-
+ it all, survival of the top-k vector entries, and so          tual Spaces: The Geometry of Thought. MIT Press,
+ forth). Thus, another avenue of further research is           Cambridge, MA, USA.
+ to generalize from the linear approach.
+                                                            [Giesbrecht2009] Eugenie Giesbrecht. 2009. In search
+                                                                of semantic compositionality in vector spaces. In
+ Acknowledgements                                               Sebastian Rudolph, Frithjof Dau, and Sergei O.
+                                                                Kuznetsov, editors, ICCS, volume 5662 of Lec-
+ This work was supported by the German Research                 ture Notes in Computer Science, pages 173–184.
+ Foundation (DFG) under the Multipla project                    Springer.
+ (grant 38457858) as well as by the German Fed-
+ eral Ministry of Economics (BMWi) under the                [Giesbrecht2010] Eugenie Giesbrecht. 2010. Towards
+                                                                a matrix-based distributional model of meaning. In
+ project Theseus (number 01MQ07019).                            Proceedings of Human Language Technologies: The
+                                                                2010 Annual Conference of the North American
+                                                                Chapter of the Association for Computational Lin-
+ References                                                     guistics, Student Research Workshop. ACL.
+
+[Antonellis and Gallopoulos2006] Ioannis Antonellis         [Golan1992] Jonathan S. Golan. 1992. The theory of
+   and Efstratios Gallopoulos. 2006. Exploring                 semirings with applications in mathematics and the-
+   term-document matrices from matrix models in text           oretical computer science. Addison-Wesley Long-
+   mining. CoRR, abs/cs/0602076.                               man Ltd.
+
+[Baddeley2003] Alan D. Baddeley. 2003. Working              [Grefenstette1994] Gregory Grefenstette. 1994. Ex-
+   memory and language: An overview. Journal of                plorations in Automatic Thesaurus Discovery.
+   Communication Disorder, 36:198–208.                         Springer.
+
+
+                                                          915
+
+
+[Hopcroft and Ullman1979] John E. Hopcroft and Jef-         [Strang1993] Gilbert Strang. 1993. Introduction to
+   frey D. Ullman. 1979. Introduction to Automata               Linear Algebra. Wellesley-Cambridge Press.
+   Theory, Languages and Computation. Addison-
+   Wesley.                                                  [Tucker1966] Ledyard R. Tucker. 1966. Some math-
+                                                               ematical notes on three-mode factor analysis. Psy-
+[Kintsch2001] Walter Kintsch. 2001.        Predication.        chometrika, 31(3).
+    Cognitive Science, 25:173–202.
+                                                            [Widdows2008] Dominic Widdows. 2008. Semantic
+[Lambek1958] Joachim Lambek. 1958. The mathe-                  vector products: some initial investigations. In Pro-
+   matics of sentence structure. The American Math-            ceedings of the Second AAAI Symposium on Quan-
+   ematical Monthly, 65(3):154–170.                            tum Interaction.
+
+[Landauer and Dumais1997] Thomas K. Landauer and
+   Susan T. Dumais. 1997. Solution to Plato’s prob-
+   lem: The latent semantic analysis theory of acqui-
+   sition, induction and representation of knowledge.
+   Psychological Review, (104).
+
+[Lund and Burgess1996] Kevin Lund and Curt Burgess.
+   1996. Producing high-dimensional semantic spaces
+   from lexical co-occurrence. Behavior Research
+   Methods, Instrumentation, and Computers, 28:203–
+   208.
+
+[Mitchell and Lapata2008] Jeff Mitchell and Mirella
+   Lapata. 2008. Vector-based models of seman-
+   tic composition. In Proceedings of ACL-08: HLT,
+   pages 236–244. ACL.
+
+[Padó and Lapata2007] Sebastian Padó and Mirella La-
+    pata. 2007. Dependency-based construction of se-
+    mantic space models. Computational Linguistics,
+    33(2):161–199.
+
+[Plate1995] Tony Plate. 1995. Holographic reduced
+    representations. IEEE Transactions on Neural Net-
+    works, 6(3):623–641.
+
+[Post1946] Emil L. Post. 1946. A variant of a recur-
+    sively unsolvable problem. Bulletin of the American
+    Mathematical Society, 52:264–268.
+
+[Rendle et al.2009] Steffen Rendle, Leandro Balby
+   Marinho, Alexandros Nanopoulos, and Lars
+   Schmidt-Thieme. 2009. Learning optimal ranking
+   with tensor factorization for tag recommendation.
+   In John F. Elder IV, Françoise Fogelman-Soulié,
+   Peter A. Flach, and Mohammed Javeed Zaki,
+   editors, KDD, pages 727–736. ACM.
+
+[Sahlgren et al.2008] Magnus Sahlgren, Anders Holst,
+    and Pentti Kanerva. 2008. Permutations as a means
+    to encode order in word space. In Proc. CogSci’08,
+    pages 1300–1305.
+
+[Salton et al.1975] Gerard Salton, Anita Wong, and
+    Chung-Shu Yang. 1975. A vector space model for
+    automatic indexing. Commun. ACM, 18(11):613–
+    620.
+
+[Schütze1993] Hinrich Schütze. 1993. Word space.
+    In Lee C. Giles, Stephen J. Hanson, and Jack D.
+    Cowan, editors, Advances in Neural Information
+    Processing Systems 5, pages 895–902. Morgan-
+    Kaufmann.
+
+
+                                                          916
+

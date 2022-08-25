@@ -1,0 +1,743 @@
+      Learning Arguments and Supertypes of Semantic Relations using
+                          Recursive Patterns
+                                  Zornitsa Kozareva and Eduard Hovy
+                                   USC Information Sciences Institute
+                                          4676 Admiralty Way
+                                    Marina del Rey, CA 90292-6695
+                                    {kozareva,hovy}@isi.edu
+
+
+                      Abstract                                (Katz and Lin, 2003) and MT (Mt et al., 1988),
+    A challenging problem in open informa-                    require a slightly different form of knowledge, de-
+    tion extraction and text mining is the learn-             rived from many more relations. This knowledge
+    ing of the selectional restrictions of se-                is usually used to support inference and is ex-
+    mantic relations. We propose a mini-                      pressed as selectional restrictions (Wilks, 1975)
+    mally supervised bootstrapping algorithm                  (namely, the types of arguments that may fill a
+    that uses a single seed and a recursive                   given relation, such as person live-in city and air-
+    lexico-syntactic pattern to learn the ar-                 line fly-to location). Selectional restrictions con-
+    guments and the supertypes of a diverse                   strain the possible fillers of a relation, and hence
+    set of semantic relations from the Web.                   the possible contexts in which the patterns ex-
+    We evaluate the performance of our algo-                  pressing that relation can participate in, thereby
+    rithm on multiple semantic relations ex-                  enabling sense disambiguation of both the fillers
+    pressed using “verb”, “noun”, and “verb                   and the expression itself.
+    prep” lexico-syntactic patterns. Human-                      To acquire this knowledge two common ap-
+    based evaluation shows that the accuracy                  proaches are employed: clustering and patterns.
+    of the harvested information is about 90%.                While clustering has the advantage of being fully
+    We also compare our results with existing                 unsupervised, it may or may not produce the types
+    knowledge base to outline the similarities                and granularity desired by a user. In contrast
+    and differences of the granularity and di-                pattern-based approaches are more precise, but
+    versity of the harvested knowledge.                       they typically require a handful to dozens of seeds
+                                                              and lexico-syntactic patterns to initiate the learn-
+1   Introduction                                              ing process. In a closed domain these approaches
+Building and maintaining knowledge-rich re-                   are both very promising, but when tackling an un-
+sources is of great importance to information ex-             bounded number of relations they are unrealistic.
+traction, question answering, and textual entail-             The quality of clustering decreases as the domain
+ment. Given the endless amount of data we have at             becomes more continuously varied and diverse,
+our disposal, many efforts have focused on mining             and it has proven difficult to create collections of
+knowledge from structured or unstructured text,               effective patterns and high-yield seeds manually.
+including ground facts (Etzioni et al., 2005), se-               In addition, the output of most harvesting sys-
+mantic lexicons (Thelen and Riloff, 2002), ency-              tems is a flat list of lexical semantic expressions
+clopedic knowledge (Suchanek et al., 2007), and               such as “New York is-a city” and “virus causes
+concept lists (Katz et al., 2003). Researchers have           flu”. However, using this knowledge in inference
+also successfully harvested relations between en-             requires it to be formulated appropriately and or-
+tities, such as is-a (Hearst, 1992; Pasca, 2004) and          ganized in a semantic repository. (Pennacchiotti
+part-of (Girju et al., 2003). The kinds of knowl-             and Pantel, 2006) proposed an algorithm for au-
+edge learned are generally of two kinds: ground               tomatically ontologizing semantic relations into
+instance facts (New York is-a city, Rome is the cap-          WordNet. However, despite its high precision en-
+ital of Italy) and general relational types (city is-a        tries, WordNet’s limited coverage makes it impos-
+location, engines are part-of cars).                          sible for relations whose arguments are not present
+    A variety of NLP tasks involving inference or             in WordNet to be incorporated. One would like a
+entailment (Zanzotto et al., 2006), including QA              procedure that dynamically organizes and extends
+
+
+                                                        1482
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1482–1491,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+its semantic repository in order to be able to ac-     has proven a difficult task to manually find ef-
+commodate all newly-harvested information, and         fectively different variations and alternative pat-
+thereby become a global semantic repository.           terns for each relation. In contrast, when re-
+   Given these considerations, we address in this      search focuses on any relation, as in TextRun-
+paper the following question: How can the selec-       ner (Yates et al., 2007), there is no standardized
+tional restrictions of semantic relations be learned   manner for re-using the pattern learned. TextRun-
+automatically from the Web with minimal effort us-     ner scans sentences to obtain relation-independent
+ing lexico-syntactic recursive patterns?               lexico-syntactic patterns to extract triples of the
+   The contributions of the paper are as follows:      form (John, fly to, Prague). The middle string de-
+    • A novel representation of semantic relations     notes some (unspecified) semantic relation while
+      using recursive lexico-syntactic patterns.       the first and third denote the learned arguments of
+    • An automatic procedure to learn the se-          this relation. But TextRunner does not seek spe-
+      lectional restrictions (arguments and super-     cific semantic relations, and does not re-use the
+      types) of semantic relations from Web data.      patterns it harvests with different arguments in or-
+                                                       der to extend their yields.
+    • An exhaustive human-based evaluation of the        Clearly, it is important to be able to specify both
+      harvested knowledge.                             the actual semantic relation sought and use its tex-
+    • A comparison of the results with some large      tual expression(s) in a controlled manner for max-
+      existing knowledge bases.                        imal benefit.
+   The rest of the paper is organized as follows. In      The objective of our research is to combine the
+the next section, we review related work. Section      strengths of the two approaches, and, in addition,
+3 addresses the representation of semantic rela-       to provide even richer information by automati-
+tions using recursive patterns. Section 4 describes    cally mapping each harvested argument to its su-
+the bootstrapping mechanism that learns the selec-     pertype(s) (i.e., its semantic concepts). For in-
+tional restrictions of the relations. Section 5 de-    stance, given the relation destination and the pat-
+scribes data collection. Section 6 discusses the ob-   tern X flies to Y, automatically determining that
+tained results. Finally, we conclude in Section 7.     John, Prague) and (John, conference) are two
+                                                       valid filler instance pairs, that (RyanAir, Prague)
+2    Related Work                                      is another, as well as that person and airline are
+A substantial body of work has been done in at-        supertypes of the first argument and city and event
+tempts to harvest bits of semantic information, in-    of the second. This information provides the se-
+cluding: semantic lexicons (Riloff and Shepherd,       lectional restrictions of the given semantic rela-
+1997), concept lists (Lin and Pantel, 2002), is-       tion, indicating that living things like people can
+a relations (Hearst, 1992; Etzioni et al., 2005;       fly to cities and events, while non-living things like
+Pasca, 2004; Kozareva et al., 2008), part-of re-       airlines fly mainly to cities. This is a significant
+lations (Girju et al., 2003), and others. Knowl-       improvement over systems that output a flat list
+edge has been harvested with varying success both      of lexical semantic knowledge (Thelen and Riloff,
+from structured text such as Wikipedia’s infoboxes     2002; Yates et al., 2007; Suchanek et al., 2007).
+(Suchanek et al., 2007) or unstructured text such         Knowing the sectional restrictions of a semantic
+as the Web (Pennacchiotti and Pantel, 2006; Yates      relation supports inference in many applications,
+et al., 2007). A variety of techniques have been       for example enabling more accurate information
+employed, including clustering (Lin and Pantel,        extraction. (Igo and Riloff, 2009) report that pat-
+2002), co-occurrence statistics (Roark and Char-       terns like “attack on hNPi” can learn undesirable
+niak, 1998), syntactic dependencies (Pantel and        words due to idiomatic expressions and parsing er-
+Ravichandran, 2004), and lexico-syntactic pat-         rors. Over time this becomes problematic for the
+terns (Riloff and Jones, 1999; Fleischman and          bootstrapping process and leads to significant de-
+Hovy, 2002; Thelen and Riloff, 2002).                  terioration in performance. (Thelen and Riloff,
+   When research focuses on a particular relation,     2002) address this problem by learning multiple
+careful attention is paid to the pattern(s) that ex-   semantic categories simultaneously, relying on the
+press it in various ways (as in most of the work       often unrealistic assumption that a word cannot
+above, notably (Riloff and Jones, 1999)). But it       belong to more than one semantic category. How-
+
+
+                                                   1483
+
+
+ever, if we have at our disposal a repository of se-      anchored pattern (DAP) that has two anchor seed
+mantic relations with their selectional restrictions,     positions “htypei such as hseedi and *”, plus one
+the problem addressed in (Igo and Riloff, 2009)           open position for the terms to be learned. Learned
+can be alleviated.                                        terms can then be replaced into the seed position
+    In order to obtain selectional restriction classes,   automatically, creating a recursive procedure that
+(Pennacchiotti and Pantel, 2006) made an attempt          is reportedly much more accurate and has much
+to ontologize the harvested arguments of is-a,            higher final yield. (Kozareva et al., 2008; Hovy et
+part-of, and cause relations. They mapped each            al., 2009) have successfully applied DAP for the
+argument of the relation into WordNet and identi-         learning of hyponyms and hypernyms of is-a rela-
+fied the senses for which the relation holds. Un-         tions and report improvements over (Etzioni et al.,
+fortunately, despite its very high precision en-          2005) and (Pasca, 2004).
+tries, WordNet is known to have limited cover-
+                                                             Surprisingly, this work was limited to the se-
+age, which makes it impossible for algorithms to
+                                                          mantic relation is-a. No other study has described
+map the content of a relation whose arguments
+                                                          the use or effect of recursive patterns for differ-
+are not present in WordNet. To surmount this
+                                                          ent semantic relations. Therefore, going beyond
+limitation, we do not use WordNet, but employ
+                                                          (Kozareva et al., 2008; Hovy et al., 2009), we here
+a different method of obtaining superclasses of a
+                                                          introduce recursive patterns other than DAP that
+filler term: the inverse doubly-anchored patterns
+                                                          use only one seed to harvest the arguments and su-
+DAP−1 (Hovy et al., 2009), which, given two ar-
+                                                          pertypes of a wide variety of relations.
+guments, harvests its supertypes from the source
+corpus. (Hovy et al., 2009) show that DAP−1 is               (Banko and Etzioni, 2008) show that seman-
+reliable and it enriches WordNet with additional          tic relations can be expressed using a handful
+hyponyms and hypernyms.                                   of relation-independent lexico-syntactic patterns.
+                                                          Practically, we can turn any of these patterns into
+3   Recursive Patterns                                    recursive form by giving as input only one of the
+                                                          arguments and leaving the other one as an open
+A singly-anchored pattern contains one example
+                                                          slot, allowing the learned arguments to replace the
+of the seed term (the anchor) and one open posi-
+                                                          initial seed argument directly. For example, for
+tion for the term to be learned. Most researchers
+                                                          the relation “fly to”, the following recursive pat-
+use singly-anchored patterns to harvest semantic
+                                                          terns can be built: “* and hseedi fly to *”, “hseedi
+relations. Unfortunately, these patterns run out of
+                                                          and * fly to *”, “* fly to hseedi and *”, “* fly to *
+steam very quickly. To surmount this obstacle, a
+                                                          and hseedi”, “hseedi fly to *” or “* fly to hseedi”,
+handful of seeds is generally used, and helps to
+                                                          where hseedi is an example like John or Ryanair,
+guarantee diversity in the extraction of new lexico-
+                                                          and (∗) indicates the position on which the ar-
+syntactic patterns (Riloff and Jones, 1999; Snow et
+                                                          guments are learned. Conjunctions like and, or
+al., 2005; Etzioni et al., 2005).
+                                                          are useful because they express list constructions
+   Some algorithms require ten seeds (Riloff and
+                                                          and extract arguments similar to the seed. Poten-
+Jones, 1999; Igo and Riloff, 2009), while others
+                                                          tially, one can explore all recursive pattern varia-
+use a variation of 5, 10, to even 25 seeds (Taluk-
+                                                          tions when learning a relation and compare their
+dar et al., 2008). Seeds may be chosen at ran-
+                                                          yield, however this study is beyond the scope of
+dom (Davidov et al., 2007; Kozareva et al., 2008),
+                                                          this paper.
+by picking the most frequent terms of the desired
+class (Igo and Riloff, 2009), or by asking humans            We are particularly interested in the usage of re-
+(Pantel et al., 2009). As (Pantel et al., 2009) show,     cursive patterns for the learning of semantic re-
+picking seeds that yield high numbers of differ-          lations not only because it is a novel method,
+ent terms is difficult. Thus, when dealing with           but also because recursive patterns of the DAP
+unbounded sets of relations (Banko and Etzioni,           fashion are known to: (1) learn concepts with
+2008), providing many seeds becomes unrealistic.          high precision compared to singly-anchored pat-
+   Interestingly, recent work reports a class of pat-     terns (Kozareva et al., 2008), (2) use only one
+terns that use only one seed to learn as much infor-      seed instance for the discovery of new previously
+mation with only one seed. (Kozareva et al., 2008;        unknown terms, and (3) harvest knowledge with
+Hovy et al., 2009) introduce the so-called doubly-        minimal supervision.
+
+
+                                                      1484
+
+
+4      Bootstrapping Recursive Patterns                                      Z∗ ”, where X ∗ and Z ∗ are the placeholders for the
+                                                                             arguments to be learned. The pattern is submit-
+4.1      Problem Formulation
+                                                                             ted to Yahoo! as a web query and all unique snip-
+The main goal of our research is:                                            pets matching the query are retrieved. The newly
+    Task Definition: Given a seed and a semantic relation ex-                learned and previously unexplored arguments on
+    pressed using a recursive lexico-syntactic pattern, learn in             the X ∗ position are used as seeds in the subse-
+    bootstrapping fashion the selectional restrictions (i.e., the            quent iteration. The arguments on the Z ∗ posi-
+    arguments and supertypes) of the semantic relation from
+    an unstructured corpus such as the Web.                                  tion are stored at each iteration, but never used
+                                                                             as seeds since the recursivity is created using the
+  Figure 1 shows an example of the task and the                              terms on X and Y . The bootstrapping process is
+types of information learned by our algorithm.                               implemented as an exhaustive breadth-first algo-
+                                                                             rithm which terminates when all arguments are ex-
+                                                      seed = John
+                    politicians
+                                                      relation = fly to      plored.
+                   artists people           flowers plant
+                                                         s
+                                           trees                                We noticed that despite the specific lexico-
+              Brian
+                      Kate                          party event              syntactic structure of the patterns, erroneous in-
+                                                                             formation can be acquired due to part-of-speech
+        animals bees         * and John fly to *
+                                                                city         tagging errors or flawed facts on the Web. The
+                                                   New York
+                                                                             challenge is to identify and separate the erroneous
+                Delta
+                   Alaska                                                    from the true arguments. We incorporate the har-
+                                             Italy countries
+              airlines                    France                             vested arguments on X and Y positions in a di-
+                 carriers
+                                                                             rected graph G = (V, E), where each vertex
+                                                                             v ∈ V is a candidate argument and each edge
+     Figure 1: Bootstrapping Recursive Patterns.                             (u, v) ∈ E indicates that the argument v is gener-
+                                                                             ated by the argument u. An edge has weight w cor-
+                                                                             responding to the number of times the pair (u, v)
+   Given a seed John and a semantic relation fly to
+expressed using the recursive pattern “* and John                                                               P A node u
+                                                                             is extracted fromPdifferent snippets.
+                                                                                                         w(u,v)+                   w(v,u)
+fly to *”, our algorithm learns the left side argu-                          is ranked by u= ∀(u,v)∈E       |V |−1
+                                                                                                                   ∀(v,u)∈E
+
+
+ments {Brian, Kate, bees, Delta, Alaska} and the                             which represents the weighted sum of the outgo-
+right side arguments {flowers, trees, party, New                             ing and incoming edges normalized by the total
+York, Italy, France}. For each argument, the algo-                           number of nodes in the graph. Intuitively, our con-
+rithm harvests supertypes such as {people, artists,                          fidence in a correct argument u increases when the
+politicians, airlines, city, countries, plants, event}                       argument (1) discovers and (2) is discovered by
+among others. The colored links between the right                            many different arguments.
+and left side concepts denote the selectional re-                               Similarly, to rank the arguments standing on
+strictions of the relation. For instance, people fly                         the Z position, we build a bipartite graph G0 =
+to events and countries, but never to trees or flow-                         (V 0 , E 0 ) that has two types of vertices. One set
+ers.                                                                         of vertices represents the arguments found on the
+4.2      System Architecture                                                 Y position in the recursive pattern. We will call
+                                                                             these Vy . The second set of vertices represents the
+We propose a minimally supervised bootstrap-                                 arguments learned on the Z position. We will call
+ping algorithm based on the framework adopted in                             these Vz . We create an edge e0 (u0 , v 0 ) ∈ E 0 be-
+(Kozareva et al., 2008; Hovy et al., 2009). The al-                          tween u0 ∈ Vy and v 0 ∈ Vz when the argument on
+gorithm has two phases: argument harvesting and                              the Z position represented by v 0 was harvested by
+supertype harvesting. The final output is a ranked                           the argument on the Y position represented by u0 .
+list of interlinked concepts which captures the se-                          The weight w0 of the edge indicates the number
+lectional restrictions of the relation.                                      of times an argument on the   PY position found Z.
+                                                                                                               0   0   0   w(u0 ,v 0 )
+4.2.1 Argument Harvesting                                                    Vertex v 0 is ranked as v 0 = ∀(u ,v|V)∈E
+                                                                                                                    0 |−1  . In
+In the argument extraction phase, the first boot-                            a very large corpus, like the Web, we assume that
+strapping iteration is initiated with a seed Y and a                         a correct argument Z is the one that is frequently
+recursive pattern “X∗ and Y verb+prep|verb|noun                              discovered by various arguments Y .
+
+
+                                                                          1485
+
+
+4.2.2    Supertype Harvesting                                             5     Semantic Relations
+In the supertype extraction phase, we take all                            So far, we have described the mechanism that
+<X,Y> argument pairs collected during the argu-                           learns from one seed and a recursive pattern the
+ment harvesting stage and instantiate them in the                         selectional restrictions of any semantic relation.
+inverse DAP−1 pattern “* such as X and Y”. The                            Now, we are interested in evaluating the per-
+query is sent to Yahoo! as a web query and all 1000                       formance of our algorithm. A natural question
+snippets matching the pattern are retrieved. For                          that arises is: “How many patterns are there?”.
+each <X,Y> pair, the terms on the (*) position are                        (Banko and Etzioni, 2008) found that 95% of the
+extracted and considered as candidate supertypes.                         semantic relations can be expressed using eight
+    To avoid the inclusion of erroneous supertypes,                       lexico-syntactic patterns. Space prevents us from
+again we build a bipartite graph G00 = (V 00 , E 00 ).                    describing all of them, therefore we focus on the
+The set of vertices Vsup represents the supertypes,                       three most frequent patterns which capture a large
+while the set of vertices Vp corresponds to the                           diversity of semantic relations. The relative fre-
+hX,Yi pair that produced the supertype. An edge                           quency of these patterns is 37.80% for “verbs”,
+e00 (u00 , v 00 ) ∈ E 00 , where u00 ∈ Vp and v 00 ∈ Vsup                 22.80% for “noun prep”, and 16.00% for “verb
+shows that the pair hX,Yi denoted as u00 harvested                        prep”.
+the supertype represented by v 00 .
+    For example, imagine that the argument X∗ =                           5.1     Data Collection
+Ryanair was harvested in the previous phase by                            Table 1 shows the lexico-syntactic pattern and the
+the recursive pattern “X∗ and EasyJet fly to Z∗ ”.                        initial seed we used to express each semantic rela-
+Then the pair hRyanair,EasyJeti forms a new Web                           tion. To collect data, we ran our knowledge har-
+query “* such as Ryanair and EasyJet” which                               vesting algorithm until complete exhaustion. For
+learns the supertypes “airlines” and “carriers”.                          each query submitted to Yahoo!, we retrieved the
+The bipartite graph has two vertices v100 and v200 for                    top 1000 web snippets and kept only the unique
+the supertypes “airlines” and “carriers”, one ver-                        ones. In total, we collected 30GB raw data which
+tex u003 for the argument pair hRyanair, EasyJeti,                        was part-of-speech tagged and used for the argu-
+and two edges e001 (u003 , v100 ) and 00 00 00
+                                    Pe2 (u3 , v1 ). A vertex              ment and supertype extraction. Table 1 shows the
+                                        00   00   00   w(u00 ,v 00 )      obtained results.
+v 00 ∈ Vsup is ranked by v 00 = ∀(u ,v|V)∈E
+                                         00 |−1    .
+Intuitively, a supertype which is discovered mul-                                 recursive pattern     seed     X arg   Z arg   #iter
+                                                                                 X and Y work for Z    Charlie    2949   3396     20
+tiple times by various argument pairs is ranked                                   X and Y fly to Z     EasyJet    772    1176     19
+highly.                                                                           X and Y go to Z       Rita     18406   27721    13
+                                                                                 X and Y work in Z      John      4142   4918     13
+    However, it might happen that a highly ranked                                X and Y work on Z      Mary      4126   5186      7
+                                                                                 X and Y work at Z      Scott     1084   1186     14
+supertype actually does not satisfy the selectional                               X and Y live in Z     Harry     8886   19698    15
+restrictions of the semantic relation. To avoid such                              X and Y live at Z    Donald     1102   1175     15
+                                                                                 X and Y live with Z    Peter     1344    834     11
+situations, we further instantiate each supertype                                 X and Y cause Z       virus    12790   52744    19
+concept in the original pattern1 . For example,                                  X and Y celebrate
+                                                                                   X and Y drink
+                                                                                                         Jim
+                                                                                                        Sam
+                                                                                                                  6033
+                                                                                                                  1810
+                                                                                                                           –
+                                                                                                                           –
+                                                                                                                                  12
+                                                                                                                                  13
+“aircompanies fly to *” and “carriers fly to *”. If                                X and Y dress        nice      1838     –       8
+                                                                                  X and Y person       scared     2984     –      17
+the candidate supertype produces many web hits
+for the query, then this suggests that the term is a                          Table 1: Total Number of Harvested Arguments.
+relevant supertype.
+    Unfortunately, to learn the supertypes of the Z                          An interesting characteristic of the recursive
+arguments, currently we have to form all possi-                           patterns is the speed of leaning which can be mea-
+ble combinations among the top 150 highly ranked                          sured in terms of the number of unique argu-
+concepts, because these arguments have not been                           ments acquired during each bootstrapping itera-
+learned through pairing. For each pair of Z argu-                         tion. Figure 2 shows the bootstrapping process for
+ments, we repeat the same procedure as described                          the “cause” and “dress” relations. Although both
+above.                                                                    relations differ in terms of the total number of it-
+   1
+                                                                          erations and harvested items, the overall behavior
+     Except for the “dress” and “person” relations, where
+the targeted arguments are adjectives, and the supertypes are             of the learning curves is similar. Learning starts
+nouns.                                                                    of very slowly and as bootstrapping progresses a
+
+
+                                                                       1486
+
+
+rapid growth is observed until a saturation point is                                                                                          6.1      Human-Based Argument Evaluation
+reached.
+                                                                                                                                              In this section, we discuss the results of the har-
+                  60000
+                                           X and Y Cause Z
+
+                                                                                              2000
+                                                                                                                 X and Y Dress
+                                                                                                                                              vested arguments. For each relation, we selected
+                  50000
+                                                                X
+                                                                Z
+                                                                                              1500
+                                                                                                                                     X        the top 200 highly ranked arguments. We hired
+                  40000
+ #Items Learned
+
+
+
+
+                                                                                                                                              two annotators to judge their correctness. We cre-
+
+
+
+
+                                                                             #Items Learned
+                  30000                                                                       1000
+
+                  20000                                                                                                                       ated detailed annotation guidelines that define the
+                                                                                               500
+                  10000
+                                                                                                                                              labels for the arguments of the relations, as shown
+                       0
+                           1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+                                           Iterations
+                                                                                                 0
+                                                                                                     1   2   3     4
+                                                                                                                   Iterations
+                                                                                                                             5   6   7    8
+                                                                                                                                              in Table 2. (Previously, for the same task, re-
+                                                                                                                                              searchers have not conducted such an exhaustive
+                      Figure 2: Items extracted in 10 iterations.                                                                             and detailed human-based evaluation.) The anno-
+                                                                                                                                              tation was conducted using the CAT system3 .
+   The speed of leaning is related to the connectiv-
+ity behavior of the arguments of the relation. In-                                                                                                     TYPE        LABEL          EXAMPLES
+                                                                                                                                                       Correct     Person         John, Mary
+tuitively, a densely connected graph takes shorter                                                                                                                 Role           mother, president
+                                                                                                                                                                   Group          team, Japanese
+time (i.e., fewer iterations) to be learned, as in the                                                                                                             Physical       yellow, shabby
+“work on” relation, while a weakly connected net-                                                                                                                  NonPhysical    ugly, thought
+                                                                                                                                                                   NonLiving      airplane
+work takes longer time to harvest the same amount                                                                                                                  Organization   IBM, parliament
+                                                                                                                                                                   Location       village, New York, in the house
+of information, as in the “work for” relation.                                                                                                                     Time           at 5 o’clock
+                                                                                                                                                                   Event          party, prom, earthquake
+                                                                                                                                                                   State          sick, anrgy
+6                     Results                                                                                                                                      Manner         live in happiness
+                                                                                                                                                                   Medium         work on Linux, Word
+                                                                                                                                                                   Fixed phrase   go to war
+In this section, we evaluate the results of our                                                                                                        Incorrect   Error          wrong part-of-speech tag
+knowledge harvesting algorithm. Initially, we de-                                                                                                                  Other          none of the above
+
+cided to conduct an automatic evaluation compar-
+ing our results to knowledge bases that have been                                                                                                                Table 2: Annotation Labels.
+extracted in a similar way (i.e., through pattern ap-
+plication over unstructured text). However, it is                                                                                                We allow multiple labels to be assigned to the
+not always possible to perform a complete com-                                                                                                same concept, because sometimes the concept can
+parison, because either researchers have not fully                                                                                            appear in different contexts that carry various con-
+explored the same relations we have studied, or for                                                                                           ceptual representations. Although the labels can
+those relations that overlap, the gold standard data                                                                                          be easily collapsed to judge correct and incorrect
+was not available.                                                                                                                            terms, the fine-grained annotation shown here pro-
+   The online demo of TextRunner2 (Yates et al.,                                                                                              vides a better overview of the information learned
+2007) actually allowed us to collect the arguments                                                                                            by our algorithm.
+for all our semantic relations. However, due to                                                                                                  We measured the inter-annotator agreement for
+Web based query limitations, TextRunner returns                                                                                               all labels and relations considering that a single
+only the first 1000 snippets. Since we do not have                                                                                            entry can be tagged with multiple labels. The
+the complete and ranked output of TextRunner,                                                                                                 Kappa score is around 0.80. This judgement is
+comparing results in terms of recall and precision                                                                                            good enough to warrant using these human judge-
+is impossible.                                                                                                                                ments to estimate the accuracy of the algorithm.
+   Turning instead to results obtained from struc-                                                                                            We compute Accuracy as the number of examples
+tured sources (which one expects to have high                                                                                                 tagged as Correct divided by the total number of
+correctness), we found that two of our relations                                                                                              examples.
+overlap with those of the freely available ontology
+                                                                                                                                                 Table 4 shows the obtained results. The over-
+Yago (Suchanek et al., 2007), which was harvested
+                                                                                                                                              all accuracy of the argument harvesting phase is
+from the Infoboxes tables in Wikipedia. In addi-
+                                                                                                                                              91%. The majority of the occurred errors are due
+tion, we also had two human annotators judge as
+                                                                                                                                              to part-of-speech tagging. Table 3 shows a sam-
+many results as we could afford, to obtain Preci-
+                                                                                                                                              ple of 10 randomly selected examples from the top
+sion. We conducted two evaluations, one for the
+                                                                                                                                              200 ranked and manually annotated arguments.
+arguments and one for the supertypes.
+                  2                                                                                                                              3
+                      http://www.cs.washington.edu/research/textrunner/                                                                              http://cat.ucsur.pitt.edu/default.aspx
+
+
+                                                                                                                                         1487
+
+
+   Relation          Arguments                                                     X WorkFor      A1    A2      WorkFor Z      A1    A2
+   (X) Dress:        stylish, comfortable, expensive, shabby, gorgeous               Person       148   152    Organization    111   110
+                     silver, clean, casual, Indian, black                             Role         5     7        Person        60    60
+   (X) Person:       honest, caring, happy, intelligent, gifted                      Group         12    14       Event         4     2
+                     friendly, responsible, mature, wise, outgoing                Organization     8     7         Time         4     5
+   (X) Cause:        pressure, stress, fire, bacteria, cholesterol                NonPhysical      22    23    NonPhysical      18    19
+                     flood, ice, cocaine, injuries, wars                             Other         5     5        Other         3     4
+   GoTo (Z):         school, bed, New York, the movies, the park, a bar               Acc.        .98   .98        Acc.        .99   .98
+                     the hospital, the church, the mall, the beach                  X Cause       A1    A2       Cause Z       A1    A2
+   LiveIn (Z):       peace, close proximity, harmony, Chicago, town               PhysicalObj      82    75    PhysicalObj      15    20
+                     New York, London, California, a house, Australia            NonPhysicalObj    69    66   NonPhysicalObj    89    91
+   WorkFor (Z):      a company, the local prison, a gangster, the show               Event         21    24       Event         72    72
+                     a boss, children, UNICEF, a living, Hispanics                    State        29    31        State        50    50
+                                                                                     Other         3     4        Other         5     4
+                                                                                      Acc.        .99   .98        Acc.        .98   .98
+   Table 3: Examples of Harvested Arguments.                                        X GoTo        A1    A2       GoTo Z        A1    A2
+                                                                                     Person       190   188      Location      163   155
+                                                                                      Role         4     4        Event         21    30
+                                                                                     Group         3     3        Person        11    13
+6.2      Comparison against Existing Resources                                    NonPhysical      1     3     NonPhysical      2     1
+                                                                                     Other         2     2        Other         3     1
+                                                                                      Acc.        .99   .99        Acc.        .99   .99
+In this section, we compare the performance of our
+                                                                                    X FlyTo       A1    A2       FlyTo Z       A1    A2
+approach with the semantic knowledge base Yago4                                      Person       140   139      Location      199   198
+                                                                                  Organization     54    57       Event         1     2
+that contains 2 million entities5 , 95% of which                                  NonPhysical      2     2        Person        0     0
+were manually confirmed to be correct. In this                                       Other         4     2        Other         0     0
+                                                                                      Acc.        .98   .99        Acc.         1     1
+study, we compare only the unique arguments of                                     X WorkOn       A1    A2      WorkOn Z       A1    A2
+the “live in” and “work at” relations. We provide                                    Person       173   172      Location      110   108
+                                                                                      Role         2     3     Organization     27    25
+Precision scores using the following measures:                                       Group         4     5       Manner         38    40
+                                                                                  Organization     6     6         Time         4     4
+                                                                                  NonPhysical      15    14    NonPhysical      18    21
+               #terms f ound in Y ago
+P rY ago =   #terms harvested by system                                               Error        1     1       Medium         8     8
+                                                                                     Other         1     1        Other         13    15
+P rHuman =       #terms judged correct by human                                       Acc.        .99   .99        Acc.        .94   .93
+                   #terms harvested by system
+                                                                                   X WorkIn       A1    A2      WorkIn Z       A1    A2
+N otInY ago = #terms judged correct by human but not in Y ago                        Person       117   118      Location      104   111
+                                                                                     Group         10    9     Organization     10    25
+                                                                                  Organization     3     3       Manner         39    40
+                                                                                     Fixed         3     1         Time         4     4
+   Table 5 shows the obtained results.                                            NonPhysical      55    59    NonPhysical      22    21
+   We carefully analyzed those arguments that                                         Error        12    10      Medium         8     8
+                                                                                     Other         0     0         Error        13    15
+were found by one of the systems but were miss-                                       Acc.        .94   .95        Acc.        .94   .93
+ing in the other. The recursive patterns learn infor-                              X WorkAt       A1    A2      WorkAt Z       A1    A2
+                                                                                     Person       193   192    Organization    189   190
+mation about non-famous entities like Peter and                                       Role         1     1       Manner         5     4
+                                                                                     Group         1     1         Time         3     3
+famous entities like Michael Jordan. In contrast,                                 Organization     0     0         Error        3     2
+Yago contains entries mostly about famous enti-                                      Other         5     6        Other         0     1
+                                                                                      Acc.        .98   .97        Acc.        .99   .99
+ties, because this is the predominant knowledge in                                  X LiveIn      A1    A2       LiveIn Z      A1    A2
+Wikipedia. For the “live in” relation, both repos-                                   Person       185   185      Location      182   186
+                                                                                      Role         3     4       Manner         6     8
+itories contain the same city and country names.                                     Group         9     8         Time         1     2
+                                                                                  NonPhysical      1     2        Fixed         5     2
+However, the recursive pattern learned arguments                                     Other         2     1        Other         6     2
+                                                                                      Acc.        .99   .99        Acc.        .97   .99
+like pain, effort which express a manner of living,
+                                                                                    X LiveAt      A1    A2      LiveAt Z       A1    A2
+and locations like slums, box. This information is                                   Person       196   195      Location      158   157
+                                                                                      Role         1     1        Person        5     7
+missing from Yago. Similarly for the “work at”                                    NonPhysical      0     1       Manner         1     2
+relation, both systems learned that people work                                      Other         3     3         Error        36    34
+                                                                                      Acc.        .99   .99        Acc.        .82   .83
+at universities. In addition, the recursive pattern                               X LiveWith      A1    A2     LiveWith Z      A1    A2
+learned a diversity of company names absent from                                     Person       188   187       Person       165   163
+                                                                                      Role         6     6       Animal         2     4
+Yago.                                                                                Group         2     2       Manner         15    15
+                                                                                  NonPhysical      2     3     NonPhysical      15    15
+   While it is expected that our algorithm finds                                     Other         2     2        Other         3     3
+many terms not contained in Yago—specifically,                                        Acc.        .99   .99        Acc.        .99   .99
+                                                                                    X Dress       A1    A2      X Person       A1    A2
+the information not deemed worthy of inclusion                                      Physical       72    59      Physical       8     2
+                                                                                  NonPhysical     120   136    NonPhysical     188   194
+in Wikipedia—we are interested in the relatively                                     Other         8     5        Other         4     4
+large number of terms contained in Yago but not                                       Acc         .96   .98        Acc.        .98   .98
+                                                                                    X Drink       A1    A2     X Celebrate     A1    A2
+found by our algorithm. To our knowledge, no                                         Living       165   174       Living       157   164
+                                                                                   NonLiving       8     2      NonLiving       42    35
+   4                                                                                  Error        27    24        Error        1     1
+       http://www.mpi-inf.mpg.de/yago-naga/yago/
+   5                                                                                  Acc         .87   .88        Acc.        .99   .99
+       Names of cities, people, organizations among others.
+                                                                                          Table 4: Harvested Arguments.
+                                                                          1488
+
+
+                                                     P rY ago             P rHuman           NotInYago          Relation             Arguments
+  X LiveIn                                      .19 (2863/14705)        .58 (5165)/8886        2302             (Supx ) Celebrate:   men, people, nations, angels, workers, children
+  LiveIn Z                                        .10 (495/4754)      .72 (14248)/19698       13753                                  countries, teams, parents, teachers
+  X WorkAt                                        .12(167/1399)          .88 (959)/1084         792             (Supx ) Dress:       colors, effects, color tones, activities, patterns
+  WorkAt Z                                          .3(15/525)          .95 (1128)/1186        1113                                  styles, materials, size, languages, aspects
+                                                                                                                (Supx ) FlyTo:       airlines, carriers, companies, giants, people
+                                                                                                                                     competitors, political figures, stars, celebs
+                                         Table 5: Comparison against Yago.                                      Cause (Supz ):       diseases, abnormalities, disasters, processes, isses
+                                                                                                                                     disorders, discomforts, emotions, defects, symptoms
+                                                                                                                WorkFor (Supz )      organizations, industries, people, markets, men
+                                                                                                                                     automakers, countries, departments, artists, media
+other automated harvesting algorithm has ever                                                                   GoTo (Supz ) :       countries, locations, cities, people, events
+                                                                                                                                     men, activities, games, organizations,
+been compared to Yago, and our results here form                                                                FlyTo (Supz )        places, countries, regions, airports, destinations
+                                                                                                                                     locations, cities, area, events
+a baseline that we aim to improve upon. And in
+the future, one can build an extensive knowledge
+harvesting system combining the wisdom of the                                                                     Table 6: Examples of Harvested Supertypes.
+crowd and Wikipedia.
+
+6.3                       Human-Based Supertype Evaluation                                                  top 10 highly ranked supertypes for six of our re-
+                                                                                                            lations.
+In this section, we discuss the results of harvest-
+ing the supertypes of the learned arguments. Fig-
+                                                                                                            7      Conclusion
+ure 3 shows the top 100 ranked supertypes for the
+“cause” and “work on” relations. The x-axis in-                                                             We propose a minimally supervised algorithm that
+dicates a supertype, the y-axis denotes the number                                                          uses only one seed example and a recursive lexico-
+of different argument pairs that lead to the discov-                                                        syntactic pattern to learn in bootstrapping fash-
+ery of the supertype.                                                                                       ion the selectional restrictions of a large class of
+                                                                                                            semantic relations. The principal contribution of
+                                         1000
+
+                                          900
+                                                                                   WorkOn
+                                                                                    Cause
+                                                                                                            the paper is to demonstrate that this kind of pat-
+                                                                                                            tern can be applied to almost any kind of se-
+      #Pairs Discovering the Supertype
+
+
+
+
+                                          800
+
+                                          700                                                               mantic relation, as long as it is expressible in
+                                          600
+                                                                                                            a concise surface pattern, and that the recursive
+                                          500
+
+                                          400
+                                                                                                            mechanism that allows each newly acquired term
+                                          300                                                               to restart harvesting automatically is a signifi-
+                                          200                                                               cant advance over patterns that require a handful
+                                          100
+
+                                            0
+                                                                                                            of seeds to initiate the learning process. It also
+                                                  10   20   30     40   50
+                                                                     Supertype
+                                                                              60   70   80   90   100
+                                                                                                            shows how one can combine free-form but undi-
+                                                                                                            rected pattern-learning approaches like TextRun-
+                                            Figure 3: Ranked Supertypes.                                    ner with more-controlled but effort-intensive ap-
+                                                                                                            proaches like commonly used.
+   The decline of the curve indicates that certain                                                             In our evaluation, we show that our algorithm is
+supertypes are preferred and shared among differ-                                                           capable of extracting high quality non-trivial in-
+ent argument pairs. It is interesting to note that the                                                      formation from unstructured text given very re-
+text on the Web prefers a small set of supertypes,                                                          stricted input (one seed). To measure the perfor-
+and to see what they are. These most-popular har-                                                           mance of our approach, we use various semantic
+vested types tend to be the more descriptive terms.                                                         relations expressed with three lexico-syntactic pat-
+The results indicate that one does not need an elab-                                                        terns. For two of the relations, we compare results
+orate supertype hierarchy to handle the selectional                                                         with the freely available ontology Yago, and con-
+restrictions of semantic relations.                                                                         duct a manual evaluation of the harvested terms.
+   Since our problem definition differs from avail-                                                            We will release the annotated and the harvested
+able related work, and WordNet does not contain                                                             data to the public to be used for comparison by
+all harvested arguments as shown in (Hovy et al.,                                                           other knowledge harvesting algorithms.
+2009), it is not possible to make a direct compar-                                                             The success of the proposed framework opens
+ison. Instead, we conduct a manual evaluation of                                                            many challenging directions. We plan to use the
+the most highly ranked supertypes which normally                                                            algorithm described in this paper to learn the se-
+are the top 20. The overall accuracy of the super-                                                          lectional restrictions of numerous other relations,
+types for all relations is 92%. Table 6 shows the                                                           in order to build a rich knowledge repository
+
+
+                                                                                                         1489
+
+
+that can support a variety of applications, includ-       Boris Katz, Jimmy Lin, Daniel Loreto, Wesley Hilde-
+ing textual entailment, information extraction, and         brandt, Matthew Bilotti, Sue Felshin, Aaron Fernan-
+                                                            des, Gregory Marton, and Federico Mora. 2003.
+question answering.
+                                                            Integrating web-based and corpus-based techniques
+                                                            for question answering. In Proceedings of the
+Acknowledgments                                             twelfth text retrieval conference (TREC), pages 426–
+                                                            435.
+This research was supported by DARPA contract
+number FA8750-09-C-3705.                                  Zornitsa Kozareva, Ellen Riloff, and Eduard Hovy.
+                                                            2008. Semantic class learning from the web with
+                                                            hyponym pattern linkage graphs. In Proceedings of
+                                                            ACL-08: HLT, pages 1048–1056.
+References
+                                                          Dekang Lin and Patrick Pantel. 2002. Concept dis-
+Michele Banko and Oren Etzioni. 2008. The tradeoffs         covery from text. In Proc. of the 19th international
+  between open and traditional relation extraction. In      conference on Computational linguistics, pages 1–7.
+  Proceedings of ACL-08: HLT, pages 28–36, June.
+                                                          Characteristics Of Mt, John Lehrberger, Laurent
+Dmitry Davidov, Ari Rappoport, and Moshel Koppel.           Bourbeau, Philadelphia John Benjamins, and Rita
+ 2007. Fully unsupervised discovery of concept-             Mccardell. 1988. Machine Translation: Linguistic
+ specific relationships by web mining. In Proc. of          Characteristics of Mt Systems and General Method-
+ the 45th Annual Meeting of the Association of Com-         ology of Evaluation. John Benjamins Publishing
+ putational Linguistics, pages 232–239, June.               Co(1988-03).
+Oren Etzioni, Michael Cafarella, Doug Downey, Ana-        Patrick Pantel and Deepak Ravichandran. 2004. Auto-
+  Maria Popescu, Tal Shaked, Stephen Soderland,             matically labeling semantic classes. In Proc. of Hu-
+  Daniel S. Weld, and Alexander Yates. 2005. Un-            man Language Technology Conference of the North
+  supervised named-entity extraction from the web:          American Chapter of the Association for Computa-
+  an experimental study.      Artificial Intelligence,      tional Linguistics, pages 321–328.
+  165(1):91–134, June.
+                                                          Patrick Pantel, Eric Crestan, Arkady Borkovsky, Ana-
+Michael Fleischman and Eduard Hovy. 2002. Fine              Maria Popescu, and Vishnu Vyas. 2009. Web-
+  grained classification of named entities. In Proceed-     scale distributional similarity and entity set expan-
+  ings of the 19th international conference on Compu-       sion. In Proceedings of the 2009 Conference on
+  tational linguistics, pages 1–7.                          Empirical Methods in Natural Language Process-
+                                                            ing, pages 938–947, August.
+Roxana Girju, Adriana Badulescu, and Dan Moldovan.
+  2003. Learning semantic constraints for the auto-       Marius Pasca. 2004. Acquisition of categorized named
+  matic discovery of part-whole relations. In Proc. of     entities for web search. In Proc. of the thirteenth
+  the 2003 Conference of the North American Chapter        ACM international conference on Information and
+  of the Association for Computational Linguistics on      knowledge management, pages 137–145.
+  Human Language Technology, pages 1–8.
+                                                          Marco Pennacchiotti and Patrick Pantel. 2006. On-
+                                                           tologizing semantic relations. In ACL-44: Proceed-
+Marti Hearst. 1992. Automatic acquisition of hy-
+                                                           ings of the 21st International Conference on Com-
+ ponyms from large text corpora. In Proc. of the
+                                                           putational Linguistics and the 44th annual meeting
+ 14th conference on Computational linguistics, pages
+                                                           of the Association for Computational Linguistics,
+ 539–545.
+                                                           pages 793–800.
+Eduard Hovy, Zornitsa Kozareva, and Ellen Riloff.         Ellen Riloff and Rosie Jones. 1999. Learning dic-
+  2009. Toward completeness in concept extraction            tionaries for information extraction by multi-level
+  and classification. In Proceedings of the 2009 Con-        bootstrapping. In AAAI ’99/IAAI ’99: Proceedings
+  ference on Empirical Methods in Natural Language           of the Sixteenth National Conference on Artificial in-
+  Processing, pages 948–957.                                 telligence.
+Sean Igo and Ellen Riloff. 2009. Corpus-based se-         Ellen Riloff and Jessica Shepherd. 1997. A Corpus-
+  mantic lexicon induction with web-based corrobora-         Based Approach for Building Semantic Lexicons.
+  tion. In Proceedings of the Workshop on Unsuper-           In Proc. of the Second Conference on Empirical
+  vised and Minimally Supervised Learning of Lexical         Methods in Natural Language Processing, pages
+  Semantics.                                                 117–124.
+Boris Katz and Jimmy Lin. 2003. Selectively using re-     Brian Roark and Eugene Charniak. 1998. Noun-
+  lations to improve precision in question answering.       phrase co-occurrence statistics for semiautomatic
+  In In Proceedings of the EACL-2003 Workshop on            semantic lexicon construction. In Proceedings of the
+  Natural Language Processing for Question Answer-          17th international conference on Computational lin-
+  ing, pages 43–50.                                         guistics, pages 1110–1116.
+
+
+                                                      1490
+
+
+Rion Snow, Daniel Jurafsky, and Andrew Y. Ng. 2005.
+  Learning syntactic patterns for automatic hypernym
+  discovery. In Advances in Neural Information Pro-
+  cessing Systems 17, pages 1297–1304. MIT Press.
+Fabian M. Suchanek, Gjergji Kasneci, and Gerhard
+  Weikum. 2007. Yago: a core of semantic knowl-
+  edge. In WWW ’07: Proceedings of the 16th inter-
+  national conference on World Wide Web, pages 697–
+  706.
+Partha Pratim Talukdar, Joseph Reisinger, Marius
+  Pasca, Deepak Ravichandran, Rahul Bhagat, and
+  Fernando Pereira. 2008. Weakly-supervised acqui-
+  sition of labeled class instances using graph random
+  walks. In Proceedings of the Conference on Em-
+  pirical Methods in Natural Language Processing,
+  EMNLP 2008, pages 582–590.
+Michael Thelen and Ellen Riloff. 2002. A Bootstrap-
+  ping Method for Learning Semantic Lexicons Using
+  Extraction Pattern Contexts. In Proc. of the 2002
+  Conference on Empirical Methods in Natural Lan-
+  guage Processing, pages 214–221.
+Yorick Wilks. 1975. A preferential pattern-seeking,
+  semantics for natural language inference. Artificial
+  Intelligence, 6(1):53–74.
+Alexander Yates, Michael Cafarella, Michele Banko,
+  Oren Etzioni, Matthew Broadhead, and Stephen
+  Soderland. 2007. Textrunner: open information ex-
+  traction on the web. In NAACL ’07: Proceedings of
+  Human Language Technologies: The Annual Con-
+  ference of the North American Chapter of the Asso-
+  ciation for Computational Linguistics: Demonstra-
+  tions on XX, pages 25–26.
+
+Fabio Massimo Zanzotto, Marco Pennacchiotti, and
+  Maria Teresa Pazienza. 2006. Discovering asym-
+  metric entailment relations between verbs using se-
+  lectional preferences. In ACL-44: Proceedings of
+  the 21st International Conference on Computational
+  Linguistics and the 44th annual meeting of the Asso-
+  ciation for Computational Linguistics, pages 849–
+  856.
+
+
+
+
+                                                     1491
+

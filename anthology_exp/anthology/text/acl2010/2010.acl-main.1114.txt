@@ -1,0 +1,636 @@
+                            Cross-Language Text Classification
+                        using Structural Correspondence Learning
+
+                                  Peter Prettenhofer and Benno Stein
+                            Bauhaus-Universität Weimar
+                             D-99421 Weimar, Germany
+               {peter.prettenhofer,benno.stein}@uni-weimar.de
+
+
+                      Abstract                                documents from T to S, or language-independent
+                                                              concept modeling by means of comparable cor-
+    We present a new approach to cross-                       pora. The mentioned approaches have their pros
+    language text classification that builds on               and cons, some of which are discussed below.
+    structural correspondence learning, a re-                    Here we propose a different approach to cross-
+    cently proposed theory for domain adap-                   language text classification which adopts ideas
+    tation. The approach uses unlabeled doc-                  from the field of multi-task learning (Ando and
+    uments, along with a simple word trans-                   Zhang, 2005a). Our approach builds upon struc-
+    lation oracle, in order to induce task-                   tural correspondence learning, SCL, a recently
+    specific, cross-lingual word correspon-                   proposed theory for domain adaptation in the
+    dences. We report on analyses that reveal                 field of natural language processing (Blitzer et al.,
+    quantitative insights about the use of un-                2006).
+    labeled data and the complexity of inter-                    Similar to SCL, our approach induces corre-
+    language correspondence modeling.                         spondences among the words from both languages
+    We conduct experiments in the field                       by means of a small number of so-called pivots. In
+    of cross-language sentiment classification,               our context a pivot is a pair of words, {wS , wT },
+    employing English as source language,                     from the source language S and the target lan-
+    and German, French, and Japanese as tar-                  guage T , which possess a similar semantics. Test-
+    get languages. The results are convincing;                ing the occurrence of wS or wT in a set of unla-
+    they demonstrate both the robustness and                  beled documents from S and T yields two equiv-
+    the competitiveness of the presented ideas.               alence classes across these languages: one class
+                                                              contains the documents where either wS or wT oc-
+1   Introduction                                              cur, the other class contains the documents where
+This paper deals with cross-language text classifi-           neither wS nor wT occur. Ideally, a pivot splits
+cation problems. The solution of such problems                the set of unlabeled documents with respect to the
+requires the transfer of classification knowledge             semantics that is associated with {wS , wT }. The
+between two languages. Stated precisely: We are               correlation between wS or wT and other words w,
+given a text classification task γ in a target lan-           w 6∈ {wS , wT } is modeled by a linear classifier,
+guage T for which no labeled documents are avail-             which then is used as a language-independent pre-
+able. γ may be a spam filtering task, a topic cate-           dictor for the two equivalence classes. As we will
+gorization task, or a sentiment classification task.          see, a small number of pivots can capture a suffi-
+In addition, we are given labeled documents for               ciently large part of the correspondences between
+the identical task in a different source language S.          S and T in order to (1) construct a cross-lingual
+   Such type of cross-language text classification            representation and (2) learn a classifier fST for the
+problems are addressed by constructing a clas-                task γ that operates on this representation. Several
+sifier fS with training documents written in S                advantages follow from our approach:
+and by applying fS to unlabeled documents writ-
+                                                                 • Task specificity. The approach exploits the
+ten in T . For the application of fS under lan-
+                                                                   words’ pragmatics since it considers—during
+guage T different approaches are current practice:
+                                                                   the pivot selection step—task-specific char-
+machine translation of unlabeled documents from
+                                                                   acteristics of language use.
+T to S, dictionary-based translation of unlabeled
+
+
+                                                        1118
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1118–1127,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                          language text classification and CLIR use linguis-
+                                                          tic resources such as bilingual dictionaries or par-
+    • Efficiency in terms of linguistic resources.        allel corpora to induce correspondences between
+      The approach uses unlabeled documents               two languages (Lavrenko et al., 2002; Olsson et
+      from both languages along with a small num-         al., 2005). Dumais et al. (1997) is considered as
+      ber (100 - 500) of translated words, instead        seminal work in CLIR: they propose a method
+      of employing a parallel corpus or an exten-         which induces semantic correspondences between
+      sive bilingual dictionary.                          two languages by performing latent semantic anal-
+    • Efficiency in terms of computing resources.         ysis, LSA, on a parallel corpus. Li and Taylor
+      The approach solves the classification prob-        (2007) improve upon this method by employing
+      lem directly, instead of resorting to a more        kernel canonical correlation analysis, CCA, in-
+      general and potentially much harder problem         stead of LSA. The major limitation of these ap-
+      such as machine translation. Note that the use      proaches is their computational complexity and,
+      of such technology is prohibited in certain sit-    in particular, the dependence on a parallel cor-
+      uations (market competitors) or restricted by       pus, which is hard to obtain—especially for less
+      environmental constraints (offline situations,      resource-rich languages. Gliozzo and Strappar-
+      high latency, bandwidth capacity).                  ava (2005) circumvent the dependence on a par-
+                                                          allel corpus by using so-called multilingual do-
+Contributions Our contributions to the outlined           main models, which can be acquired from com-
+field are threefold: First, the identification and uti-   parable corpora in an unsupervised manner. In
+lization of the theory of SCL to cross-language           (Gliozzo and Strapparava, 2006) they show for
+text classification, which has, to the best of our        particular tasks that their approach can achieve a
+knowledge, not been investigated before. Sec-             performance close to that of monolingual text clas-
+ond, the further development and adaptation of            sification.
+SCL towards a technology that is competitive with            Recent work in cross-language text classifica-
+the state-of-the-art in cross-language text classifi-     tion focuses on the use of automatic machine
+cation. Third, an in-depth analysis with respect          translation technology. Most of these methods in-
+to important hyperparameters such as the ratio            volve two steps: (1) translation of the documents
+of labeled and unlabeled documents, the number            into the source or the target language, and (2) di-
+of pivots, and the optimum dimensionality of the          mensionality reduction or semi-supervised learn-
+cross-lingual representation. In this connection we       ing to reduce the noise introduced by the ma-
+compile extensive corpora in the languages En-            chine translation. Methods which follow this two-
+glish, German, French, and Japanese, and for dif-         step approach include the EM-based approach by
+ferent sentiment classification tasks.                    Rigutini et al. (2005), the CCA approach by For-
+   The paper is organized as follows: Section 2           tuna and Shawe-Taylor (2005), the information
+surveys related work. Section 3 states the termi-         bottleneck approach by Ling et al. (2008), and the
+nology for cross-language text classification. Sec-       co-training approach by Wan (2009).
+tion 4 describes our main contribution, a new ap-
+                                                          Domain Adaptation Domain adaptation refers
+proach to cross-language text classification based
+                                                          to the problem of adapting a statistical classifier
+on structural correspondence learning. Section 5
+                                                          trained on data from one (or more) source domains
+presents experimental results in the context of
+                                                          (e.g., newswire texts) to a different target domain
+cross-language sentiment classification.
+                                                          (e.g., legal texts). In the basic domain adaptation
+2    Related Work                                         setting we are given labeled data from the source
+                                                          domain and unlabeled data from the target domain,
+Cross-Language Text Classification Bel et al.             and the goal is to train a classifier for the target
+(2003) belong to the first who explicitly consid-         domain. Beyond this setting one can further dis-
+ered the problem of cross-language text classi-           tinguish whether a small amount of labeled data
+fication. Their research, however, is predated            from the target domain is available (Daume, 2007;
+by work in cross-language information retrieval,          Finkel and Manning, 2009) or not (Blitzer et al.,
+CLIR, where similar problems are addressed                2006; Jiang and Zhai, 2007). The latter setting is
+(Oard, 1998). Traditional approaches to cross-            referred to as unsupervised domain adaptation.
+
+
+                                                      1119
+
+
+   Note that, cross-language text classification            L is a loss function that measures the quality
+can be cast as an unsupervised domain adapta-            of the classifier, λ is a non-negative regulariza-
+tion problem by considering each language as a           tion parameter that penalizes model complexity,
+separate domain. Blitzer et al. (2006) propose           and kwk2 = wT w. Different choices for L entail
+an effective algorithm for unsupervised domain           different classifier types; e.g., when choosing the
+adaptation, called structural correspondence learn-      hinge loss function for L one obtains the popular
+ing. First, SCL identifies features that general-        Support Vector Machine classifier (Zhang, 2004).
+ize across domains, which the authors call pivots.          Standard text classification distinguishes be-
+SCL then models the correlation between the piv-         tween labeled (training) documents and unlabeled
+ots and all other features by training linear clas-      (test) documents. Cross-language text classifica-
+sifiers on the unlabeled data from both domains.         tion poses an extra constraint in that training doc-
+This information is used to induce correspon-            uments and test documents are written in different
+dences among features from the different domains         languages. Here, the language of the training doc-
+and to learn a shared representation that is mean-       uments is referred to as source language S, and
+ingful across both domains. SCL is related to the        the language of the test documents is referred to as
+structural learning paradigm introduced by Ando          target language T . The vocabulary V divides into
+and Zhang (2005a). The basic idea of structural          VS and VT , called vocabulary of the source lan-
+learning is to constrain the hypothesis space of a       guage and vocabulary of the target language, with
+learning task by considering multiple different but      VS ∩ VT = ∅. I.e., documents from the training
+related tasks on the same input space. Ando and          set and the test set map on two non-overlapping
+Zhang (2005b) present a semi-supervised learning         regions of the feature space. Thus, a linear classi-
+method based on this paradigm, which generates           fier fS trained on DS associates non-zero weights
+related tasks from unlabeled data. Quattoni et al.       only with words from VS , which in turn means that
+(2007) apply structural learning to image classifi-      fS cannot be used to classify documents written
+cation in settings where little labeled data is given.   in T .
+                                                            One way to overcome this “feature barrier” is
+3   Cross-Language Text Classification                   to find a cross-lingual representation for docu-
+This section introduces basic models and termi-          ments written in S and T , which enables the trans-
+nology.                                                  fer of classification knowledge between the two
+   In standard text classification, a document d         languages. Intuitively, one can understand such
+is represented under the bag-of-words model as           a cross-lingual representation as a concept space
+|V |-dimensional feature vector x ∈ X, where V ,         that underlies both languages. In the following,
+the vocabulary, denotes an ordered set of words,         we will use θ to denote a map that associates the
+xi ∈ x denotes the normalized frequency of word          original |V |-dimensional representation of a doc-
+i in d, and X is an inner product space. DS              ument d written in S or T with its cross-lingual
+denotes the training set and comprises tuples of         representation. Once such a mapping is found the
+the form (x, y), which associate a feature vector        cross-language text classification problem reduces
+x ∈ X with a class label y ∈ Y . The goal is to          to a standard classification problem in the cross-
+find a classifier f : X → Y that predicts the la-        lingual space. Note that the existing methods for
+bels of new, previously unseen documents. With-          cross-language text classification can be character-
+out loss of generality we restrict ourselves to bi-      ized by the way θ is constructed. For instance,
+nary classification problems and linear classifiers,     cross-language latent semantic indexing (Dumais
+i.e., Y = {+1, -1} and f (x) = sign(wT x). w is a        et al., 1997) and cross-language explicit semantic
+weight vector that parameterizes the classifier, [·]T    analysis (Potthast et al., 2008) estimate θ using a
+denotes the matrix transpose. The computation of         parallel corpus. Other methods use linguistic re-
+w from DS is referred to as model estimation or          sources such as a bilingual dictionary to obtain θ
+training. A common choice for w is given by a            (Bel et al., 2003; Olsson et al., 2005).
+vector w∗ that minimizes the regularized training
+error:
+                   X                   λ
+  w∗ = argmin           L(y, wT x) + kwk2 (1)
+         w∈R  |V |                     2
+                (x,y)∈DS
+
+
+                                                     1120
+
+
+4    Cross-Language                                                                 Words in VS      Words in VT            Class
+                                                                                                                            label
+     Structural Correspondence Learning                                    x = (x1 , ...                      ... , x|V|)     y
+
+
+We now present a novel method for learning a                        DS
+map θ by exploiting relations from unlabeled doc-
+uments written in S and T . The proposed method,
+                                                                    DS,u
+which we call cross-language structural corre-
+spondence learning, CL-SCL, addresses the fol-             Du
+
+lowing learning setup (see also Figure 1):                          DT,u
+
+    • Given a set of labeled training documents DS
+      written in language S, the goal is to create a            term frequencies              Positive class label
+      text classifier for documents written in a dif-           No value                      Negative class label
+      ferent language T . We refer to this classifi-
+      cation task as the target task. An example for    Figure 1: The document sets underlying CL-SCL.
+      the target task is the determination of senti-    The subscripts S , T , and u designate “source lan-
+      ment polarity, either positive or negative, of    guage”, “target language”, and “unlabeled”.
+      book reviews written in German (T ) given a
+      set of training reviews written in English (S).   and (2) the words occur frequently in book reviews
+    • In addition to the labeled training docu-         from both languages. Note that the support of wS
+      ments DS we have access to unlabeled doc-         and wT can be determined from the unlabeled data
+      uments DS,u and DT ,u from both languages         Du . The confidence, however, can only be deter-
+      S and T . Let Du denote DS,u ∪ DT ,u .            mined for wS since the setting gives us access to
+                                                        labeled data from S only.
+    • Finally, we are given a budget of calls to a         We use the following heuristic to form an or-
+      word translation oracle (e.g., a domain ex-       dered set P of pivots: First, we choose a subset
+      pert) to map words in the source vocabu-          VP from the source vocabulary VS , |VP |  |VS |,
+      lary VS to their corresponding translations in    which contains those words with the highest mu-
+      the target vocabulary VT . For simplicity and     tual information with respect to the class label of
+      without loss of applicability we assume here      the target task in DS . Second, for each word
+      that the word translation oracle maps each        wS ∈ VP we find its translation in the target vo-
+      word in VS to exactly one word in VT .            cabulary VT by querying the translation oracle; we
+                                                        refer to the resulting set of word pairs as the can-
+   CL-SCL comprises three steps: In the first step,     didate pivots, P 0 :
+CL-SCL selects word pairs {wS , wT }, called piv-
+ots, where wS ∈ VS and wT ∈ VT . Pivots have to             P 0 = {{wS , TRANSLATE(wS )} | wS ∈ VP }
+satisfy the following conditions:
+                                                           We then enforce the support condition by elim-
+Confidence Both words, wS and wT , are predic-          inating in P 0 all candidate pivots {wS , wT } where
+    tive for the target task.                           the document frequency of wS in DS,u or of wT
+                                                        in DT ,u is smaller than some threshold φ:
+Support Both words, wS and wT , occur fre-
+    quently in DS,u and DT ,u respectively.                      P = CANDIDATE E LIMINATION(P 0 , φ)
+
+   The confidence condition ensures that, in the        Let m denote |P |, the number of pivots.
+second step of CL-SCL, only those correlations             In the second step, CL-SCL models the corre-
+are modeled that are useful for discriminative          lations between each pivot {wS , wT } ∈ P and all
+learning. The support condition, on the other           other words w ∈ V \ {wS , wT }. This is done by
+hand, ensures that these correlations can be es-        training linear classifiers that predict whether or
+timated accurately. Considering our sentiment           not wS or wT occur in a document, based on the
+classification example, the word pair {excellentS ,     other words. For this purpose a training set Dl is
+exzellentT } satisfies both conditions: (1) the         created for each pivot pl ∈ P :
+words are strong indicators of positive sentiment,          Dl = {(MASK(x, pl ), IN(x, pl )) | x ∈ Du }
+
+
+                                                    1121
+
+
+   MASK (x, pl ) is a function that returns a copy of      Algorithm 1 CL-SCL
+x where the components associated with the two                Input:        Labeled source data DS
+words in pl are set to zero—which is equivalent                             Unlabeled data Du = DS,u ∪ DT ,u
+to removing these words from the feature space.               Parameters: m, k, λ, and φ
+IN (x, pl ) returns +1 if one of the components of x          Output:     k × |V |-dimensional matrix θ
+associated with the words in pl is non-zero and -1
+otherwise. For each Dl a linear classifier, charac-           1. SELECT P IVOTS(DS , m)
+terized by the parameter vector wl , is trained by             VP = MUTUAL I NFORMATION(DS )
+minimizing Equation (1) on Dl . Note that each                 P 0 = {{wS , TRANSLATE(wS )} | wS ∈ VP }
+training set Dl contains documents from both lan-              P = CANDIDATE E LIMINATION(P 0 , φ)
+guages. Thus, for a pivot pl = {wS , wT } the vec-
+tor wl captures both the correlation between wS               2. TRAIN P IVOT P REDICTORS(Du , P )
+and VS \ {wS } and the correlation between wT                  for l = 1 to m do
+and VT \ {wT }.                                                    Dl = {(MASK(x, pl ), IN(x, pl )) | x ∈ Du }
+                                                                                                              2
+                                                                                       L(y, wT x)) + λ2 kwk
+                                                                                 P
+                                                                   wl = argmin
+  In the third step, CL-SCL identifies correlations                     w∈R|V | (x,y)∈Dl
+across pivots by computing the singular value de-              end for
+composition of the |V |×m-dimensional
+                                                                                      
+                                         parameter             W = w1       ...   wm
+                                 
+matrix W, W = w1 . . . wm :
+                                                              3. COMPUTE SVD(W, k)
+                     T                                         UΣVT = SVD(W)
+              UΣV        = SVD(W)
+                                                               θ = UT[1:k, 1:|V |]
+   Recall that W encodes the correlation structure
+between pivot and non-pivot words in the form                 output {θ}
+of multiple linear classifiers. Thus, the columns
+of U identify common substructures among these
+classifiers. Choosing the columns of U associated          to constrain the hypothesis space, i.e., the space of
+with the largest singular values yields those sub-         possible weight vectors, of the target task by con-
+structures that capture most of the correlation in         sidering multiple different but related prediction
+W. We define θ as those columns of U that are              tasks. In our context these auxiliary tasks are rep-
+associated with the k largest singular values:             resented by the pivot predictors, i.e., the columns
+                                                           of W. Each column vector wl can be considered
+                  θ = UT[1:k, 1:|V |]                      as a linear classifier which performs well in both
+                                                           languages. I.e., we regard the column space of W
+   Algorithm 1 summarizes the three steps of CL-           as an approximation to the subspace of bilingual
+SCL. At training and test time, we apply the pro-          classifiers. By computing SVD(W) one obtains
+jection θ to each input instance x. The vector v∗          a compact representation of this column space in
+that minimizes the regularized training error for          the form of an orthonormal basis θT .
+DS in the projected space is defined as follows:              The subspace is used to constrain the learning of
+                                                           the target task by restricting the weight vector w to
+                  X                           λ            lie in the subspace defined by θT . Following Ando
+ v∗ = argmin             L(y, vT θx) +          kvk2 (2)
+         v∈Rk (x,y)∈D                         2            and Zhang (2005a) and Quattoni et al. (2007) we
+                      S
+                                                           choose w for the target task to be w∗ = θT v∗ ,
+   The resulting classifier fST , which will operate       where v∗ is defined as follows:
+in the cross-lingual setting, is defined as follows:                         X                        λ    2
+                                                              v∗ = argmin         L(y, (θT v)T x) +     kvk (3)
+             fST (x) = sign(v      ∗T
+                                        θx)                         v∈Rk (x,y)∈D                      2
+                                                                                S
+
+
+
+                                                              Since (θT v)T = vT θ it follows that this view
+4.1   An Alternative View of CL-SCL
+                                                           of CL-SCL corresponds to the induction of a new
+An alternative view of cross-language structural           feature space given by Equation 2.
+correspondence learning is provided by the frame-
+work of structural learning (Ando and Zhang,
+2005a). The basic idea of structural learning is
+
+
+                                                       1122
+
+
+5     Experiments                                       MeCab is used for Japanese word segmentation.2
+We evaluate CL-SCL for the task of cross-               5.2    Implementation
+language sentiment classification using English         Throughout the experiments linear classifiers are
+as source language and German, French, and              employed; they are trained by minimizing Equa-
+Japanese as target languages. Special emphasis is       tion (1), using a stochastic gradient descent (SGD)
+put on corpus construction, determination of upper      algorithm. In particular, the learning rate schedule
+bounds and baselines, and a sensitivity analysis of     from PEGASOS is adopted (Shalev-Shwartz et al.,
+important hyperparameters. All data described in        2007), and the modified Huber loss, introduced by
+the following is publicly available from our project    Zhang (2004), is chosen as loss function L.3
+website.1                                                  SGD receives two hyperparameters as input: the
+5.1    Dataset and Preprocessing                        number of iterations T , and the regularization pa-
+                                                        rameter λ. In our experiments T is always set to
+We compiled a new dataset for cross-language
+                                                        106 , which is about the number of iterations re-
+sentiment classification by crawling product re-
+                                                        quired for SGD to converge. For the target task,
+views from Amazon.{de | fr | co.jp}. The crawled
+                                                        λ is determined by 3-fold cross-validation, testing
+part of the corpus contains more than 4 million
+                                                        for λ all values 10−i , i ∈ [0; 6]. For the pivot pre-
+reviews in the three languages German, French,
+                                                        diction task, λ is set to the small value of 10−5 , in
+and Japanese. The corpus is extended with En-
+                                                        order to favor model accuracy over generalizabil-
+glish product reviews provided by Blitzer et al.
+                                                        ity.
+(2007). Each review contains a category label,
+                                                           The computational bottleneck of CL-SCL is the
+a title, the review text, and a rating of 1-5 stars.
+                                                        SVD of the dense parameter matrix W. Here we
+Following Blitzer et al. (2007) a review with >3
+                                                        follow Blitzer et al. (2006) and set the negative
+(<3) stars is labeled as positive (negative); other
+                                                        values in W to zero, which yields a sparse repre-
+reviews are discarded. For each language the la-
+                                                        sentation. For the SVD computation the Lanczos
+beled reviews are grouped according to their cate-
+                                                        algorithm provided by SVDLIBC is employed.4
+gory label, whereas we restrict our experiments to
+                                                        We investigated an alternative approach to obtain
+three categories: books, dvds, and music.
+                                                        a sparse W by directly enforcing sparse pivot pre-
+   Since most of the crawled reviews are posi-
+                                                        dictors wl through L1-regularization (Tsuruoka et
+tive (80%), we decide to balance the number of
+                                                        al., 2009), but didn’t pursue this strategy due to
+positive and negative reviews. In this study, we
+                                                        unstable results. Since SGD is sensitive to fea-
+are interested in whether the cross-lingual repre-
+                                                        ture scaling the projection θx is post-processed as
+sentation induced by CL-SCL captures the differ-
+                                                        follows: (1) Each feature of the cross-lingual rep-
+ence between positive and negative reviews; by
+                                                        resentation is standardized to zero mean and unit
+balancing the reviews we ensure that the imbal-
+                                                        variance, where mean and variance are estimated
+ance does not affect the learned model. Balancing
+                                                        on DS ∪ Du . (2) The cross-lingual document rep-
+is achieved by deleting reviews from the major-
+ity class uniformly at random for each language-                 P are scaled by a constant α such that
+                                                        resentations
+                                                        |DS |−1 x∈DS kαθxk = 1.
+specific category. The resulting sets are split into
+                                                           We use Google Translate as word translation or-
+three disjoint, balanced sets, containing training
+                                                        acle, which returns a single translation for each
+documents, test documents, and unlabeled docu-
+                                                        query word.5 Though such a context free transla-
+ments; the respective set sizes are 2,000, 2,000,
+                                                        tion is suboptimum we do not sanitize the returned
+and 9,000-50,000. See Table 1 for details.
+                                                        words to demonstrate the robustness of CL-SCL
+   For each of the nine target-language-category-
+                                                        with respect to translation noise. To ensure the re-
+combinations a text classification task is created
+                                                        producibility of our results we cache all queries to
+by taking the training set of the product category in
+                                                        the translation oracle.
+S and the test set of the same product category in
+                                                           2
+T . A document d is described as normalized fea-           3
+                                                            http://mecab.sourceforge.net
+                                                            Our implementation is available at http://github.
+ture vector x under a unigram bag-of-words docu-        com/pprett/bolt
+ment representation. The morphological analyzer           4
+                                                            http://tedlab.mit.edu/˜dr/SVDLIBC/
+                                                          5
+  1
+                                                            http://translate.google.com
+    http://www.webis.de/research/corpora/
+webis-cls-10/
+
+
+
+                                                    1123
+
+
+                                Unlabeled data          Upper Bound                CL-MT                         CL-SCL
+       T         Category
+                                |DS,u | |DT ,u |          µ      σ               µ    σ          ∆             µ    σ         ∆
+                     books      50,000 50,000           83.79 (±0.20)         79.68 (±0.13)    4.11         79.50 (±0.33)   4.29
+  German             dvd        30,000 50,000           81.78 (±0.27)         77.92 (±0.25)    3.86         76.92 (±0.07)   4.86
+                     music      25,000 50,000           82.80 (±0.13)         77.22 (±0.23)    5.58         77.79 (±0.02)   5.00
+                     books      50,000 32,000           83.92 (±0.14)         80.76 (±0.34) 3.16            78.49 (±0.03)   5.43
+  French             dvd        30,000 9,000            83.40 (±0.28)         78.83 (±0.19) 4.57            78.80 (±0.01)   4.60
+                     music      25,000 16,000           86.09 (±0.13)         75.78 (±0.65) 10.31           77.92 (±0.03)   8.17
+                     books      50,000 50,000           79.39 (±0.27)         70.22 (±0.27) 9.17            73.09 (±0.07) 6.30
+ Japanese            dvd        30,000 50,000           81.56 (±0.28)         71.30 (±0.28) 10.26           71.07 (±0.02) 10.49
+                     music      25,000 50,000           82.33 (±0.13)         72.02 (±0.29) 10.31           75.11 (±0.06) 7.22
+
+Table 1: Cross-language sentiment classification results. For each task, the number of unlabeled docu-
+ments from S and T is given. Accuracy scores (mean µ and standard deviation σ of 10 repetitions of
+SGD) on the test set of the target language T are reported. ∆ gives the difference in accuracy to the
+upper bound. CL-SCL uses m = 450, k = 100, and φ = 30.
+
+
+5.3        Upper Bound and Baseline                                     the sentiment polarity of the translated test doc-
+To get an upper bound on the performance of                             uments. Note that the baseline CL-MT does not
+a cross-language method we first consider the                           make use of unlabeled documents.
+monolingual setting. For each target-language-                          5.4   Performance Results and Sensitivity
+category-combination a linear classifier is learned
+on the training set and tested on the test set. The                     Table 1 contrasts the classification performance of
+resulting accuracy scores are referred to as upper                      CL-SCL with the upper bound and with the base-
+bound; it informs us about the expected perfor-                         line. Observe that the upper bound does not ex-
+mance on the target task if training data in the tar-                   hibit a great variability across the three languages.
+get language is available.                                              The average accuracy is about 82%, which is con-
+   We chose a machine translation baseline                              sistent with prior work on monolingual sentiment
+to compare CL-SCL to another cross-language                             analysis (Pang et al., 2002; Blitzer et al., 2007).
+method. Statistical machine translation technol-                        The performance of CL-MT, however, differs con-
+ogy offers a straightforward solution to the prob-                      siderably between the two European languages
+lem of cross-language text classification and has                       and Japanese: for Japanese, the average difference
+been used in a number of cross-language senti-                          between the upper bound and CL-MT (9.9%) is
+ment classification studies (Hiroshi et al., 2004;                      about twice as much as for German and French
+Bautin et al., 2008; Wan, 2009). Our baseline                           (5.3%). This difference can be explained by the
+CL-MT works as follows: (1) learn a linear clas-                        fact that machine translation works better for Eu-
+sifier on the training data, and (2) translate the test                 ropean than for Asian languages such as Japanese.
+documents into the source language,6 (3) predict                           Recall that CL-SCL receives three hyperparam-
+                                                                        eters as input: the number of pivots m, the di-
+   6
+       Again we use Google Translate.                                   mensionality of the cross-lingual representation k,
+
+                                               English                                                German
+             Pivot
+                                 Semantics                Pragmatics                   Semantics                   Pragmatics
+ {beautifulS , schönT }     amazing, beauty, picture, pattern, poetry,        schöner (more beautiful), bilder (pictures),
+                             lovely           photographs, paintings           traurig (sad)              illustriert (illustrated)
+
+{boringS , langweiligT } plain, asleep,            characters, pages,          langatmig (lengthy),          charaktere (characters),
+                         dry, long                 story                       einfach (plain),              handlung (plot),
+                                                                               enttäuscht (disappointed)    seiten (pages)
+
+Table 2: Semantic and pragmatic correlations identified for the two pivots {beautifulS , schönT } and
+{boringS , langweiligT } in English and German book reviews.
+
+
+                                                                1124
+
+
+Figure 2: Influence of unlabeled data and hyperparameters on the performance of CL-SCL. The rows
+show the performance of CL-SCL as a function of (1) the ratio between labeled and unlabeled documents,
+(2) the number of pivots m, and (3) the dimensionality of the cross-lingual representation k.
+
+
+and the minimum support φ of a pivot in DS,u          which context contributes to meaning (pragmat-
+and DT ,u . For comparison purposes we use fixed      ics). Due to the use of task-specific, unlabeled
+values of m = 450, k = 100, and φ = 30.               data, relevant characteristics are captured by the
+The results show the competitiveness of CL-SCL        pivot classifiers. Table 2 exemplifies this with two
+compared to CL-MT. Although CL-MT outper-             pivots for German book reviews. The rows of the
+forms CL-SCL on most tasks for German and             table show those words which have the highest
+French, the difference in accuracy can be consid-     correlation with the pivots {beautifulS , schönT }
+ered as small (<1%); merely for French book and       and {boringS , langweiligT }. We can distinguish
+music reviews the difference is about 2%. For         between (1) correlations that reflect similar mean-
+Japanese, however, CL-SCL outperforms CL-MT           ing, such as “amazing”, “lovely”, or “plain”, and
+on most tasks with a difference in accuracy of        (2) correlations that reflect the pivot pragmatics
+about 3%. The results indicate that if the dif-       with respect to the task, such as “picture”, “po-
+ference between the upper bound and CL-MT is          etry”, or “pages”. Note in this connection that au-
+large, CL-SCL can circumvent the loss in accu-        thors of book reviews tend to use the word “beau-
+racy. Experiments with language-specific settings     tiful” to refer to illustrations or poetry. While the
+revealed that for Japanese a smaller number of piv-   first type of word correlations can be obtained by
+ots (150<m<250) performs significantly better.        methods that operate on parallel corpora, the sec-
+Thus, the reported results for Japanese can be con-   ond type of correlation requires an understanding
+sidered as pessimistic.                               of the task-specific language use.
+   Primarily responsible for the effectiveness of        In the following we discuss the sensitivity of
+CL-SCL is its task specificity, i.e., the ways in     each hyperparameter in isolation while keeping
+
+
+
+                                                  1125
+
+
+the others fixed at m = 450, k = 100, and φ = 30.       References
+The experiments are illustrated in Figure 2.            Rie-K. Ando and Tong Zhang. 2005a. A framework
+                                                          for learning predictive structures from multiple tasks
+Unlabeled Data The first row of Figure 2 shows            and unlabeled data. J. Mach. Learn. Res., 6:1817–
+the performance of CL-SCL as a function of the            1853.
+ratio of labeled and unlabeled documents. A ratio
+                                                        Rie-K. Ando and Tong Zhang. 2005b. A high-
+of 1 means that |DS,u | = |DT ,u | = 2,000, while
+                                                          performance semi-supervised learning method for
+a ratio of 25 corresponds to the setting of Table 1.      text chunking. In Proceedings of ACL-05, pages 1–
+As expected, an increase in unlabeled documents           9, Ann Arbor.
+results in an improved performance, however, we
+                                                        Mikhail Bautin, Lohit Vijayarenu, and Steven Skiena.
+observe a saturation at a ratio of 10 across all nine     2008. International sentiment analysis for news and
+tasks.                                                    blogs. In Proceedings of ICWSM-08, pages 19–26,
+                                                          Seattle.
+Number of Pivots The second row shows the in-
+fluence of the number of pivots m on the perfor-        Nuria Bel, Cornelis H. A. Koster, and Marta Villegas.
+                                                          2003. Cross-lingual text categorization. In Proceed-
+mance of CL-SCL. Compared to the size of the
+                                                          ings of ECDL-03, pages 126–139, Trondheim.
+vocabularies VS and VT , which is in 105 order
+of magnitude, the number of pivots is very small.       John Blitzer, Ryan McDonald, and Fernando Pereira.
+The plots show that even a small number of piv-           2006. Domain adaptation with structural corre-
+                                                          spondence learning. In Proceedings of EMNLP-06,
+ots captures a significant amount of the correspon-       pages 120–128, Sydney.
+dence between S and T .
+                                                        John Blitzer, Mark Dredze, and Fernando Pereira.
+Dimensionality of the Cross-Lingual Represen-             2007. Biographies, bollywood, boom-boxes and
+tation The third row shows the influence of the           blenders: Domain adaptation for sentiment classi-
+                                                          fication. In Proceedings of ACL-07, pages 440–447,
+dimensionality of the cross-lingual representation        Prague.
+k on the performance of CL-SCL. Obviously the
+SVD is crucial to the success of CL-SCL if m            Hal Daumé III. 2007. Frustratingly easy domain adap-
+is sufficiently large. Observe that the value of k        tation. In Proceedings of ACL-07, pages 256–263,
+                                                          Prague.
+is task-insensitive: a value of 75<k<150 works
+equally well across all tasks.                          Susan T. Dumais, Todd A. Letsche, Michael L.
+                                                          Littman, and Thomas K. Landauer. 1997. Auto-
+6   Conclusion                                            matic cross-language retrieval using latent semantic
+                                                          indexing. In AAAI Symposium on CrossLanguage
+The paper introduces a novel approach to cross-           Text and Speech Retrieval.
+language text classification, called cross-language     Jenny-R. Finkel and Christopher-D. Manning. 2009.
+structural correspondence learning. The approach           Hierarchical bayesian domain adaptation. In Pro-
+uses unlabeled documents along with a word                 ceedings of HLT/NAACL-09, pages 602–610, Boul-
+translation oracle to automatically induce task-           der.
+specific, cross-lingual correspondences. Our con-       Blaž Fortuna and John Shawe-Taylor. 2005. The use
+tributions include the adaptation of SCL for the          of machine translation tools for cross-lingual text
+problem of cross-language text classification and         mining. In Proceedings of the ICML Workshop on
+                                                          Learning with Multiple Views.
+a well-founded empirical analysis. The analy-
+sis covers performance and robustness issues in         Alfio Gliozzo and Carlo Strapparava. 2005. Cross lan-
+the context of cross-language sentiment classifica-       guage text categorization by acquiring multilingual
+                                                          domain models from comparable corpora. In Pro-
+tion with English as source language and German,
+                                                          ceedings of the ACL Workshop on Building and Us-
+French, and Japanese as target languages. The re-         ing Parallel Texts.
+sults show that CL-SCL is competitive with state-
+of-the-art machine translation technology while         Alfio Gliozzo and Carlo Strapparava. 2006. Exploit-
+                                                          ing comparable corpora and bilingual dictionaries
+requiring fewer resources.                                for cross-language text categorization. In Proceed-
+   Future work includes the extension of CL-SCL           ings of ACL-06, pages 553–560, Sydney.
+towards a general approach for cross-lingual adap-
+                                                        Kanayama Hiroshi, Nasukawa Tetsuya, and Watanabe
+tation of natural language processing technology.         Hideo. 2004. Deeper sentiment analysis using
+                                                          machine translation technology. In Proceedings of
+                                                          COLING-04, pages 494–500, Geneva.
+
+
+                                                    1126
+
+
+Jing Jiang and Chengxiang Zhai. 2007. A two-stage
+   approach to domain adaptation for statistical classi-
+   fiers. In Proceedings of CIKM-07, pages 401–410,
+   Lisbon.
+Victor Lavrenko, Martin Choquette, and W. Bruce
+  Croft. 2002. Cross-lingual relevance models. In
+  Proceedings of SIGIR-02, pages 175–182, Tampere.
+Yaoyong Li and John S. Taylor. 2007. Advanced
+  learning algorithms for cross-language patent re-
+  trieval and classification. Inf. Process. Manage.,
+  43(5):1183–1199.
+Xiao Ling, Gui-R. Xue, Wenyuan Dai, Yun Jiang,
+  Qiang Yang, and Yong Yu. 2008. Can chinese web
+  pages be classified with english data source? In Pro-
+  ceedings of WWW-08, pages 969–978, Beijing.
+Douglas W. Oard. 1998. A comparative study of query
+  and document translation for cross-language infor-
+  mation retrieval. In Proceedings of AMTA-98, pages
+  472–483, Langhorne.
+J. Scott Olsson, Douglas W. Oard, and Jan Hajič. 2005.
+   Cross-language text classification. In Proceedings
+   of SIGIR-05, pages 645–646, Salvador.
+Bo Pang, Lillian Lee, and Shivakumar Vaithyanathan.
+  2002. Thumbs up?: sentiment classification us-
+  ing machine learning techniques. In Proceedings of
+  EMNLP-02, pages 79–86, Philadelphia.
+Martin Potthast, Benno Stein, and Maik Anderka.
+ 2008. A wikipedia-based multilingual retrieval
+ model. In Proceedings of ECIR-08, pages 522–530,
+ Glasgow.
+Ariadna Quattoni, Michael Collins, and Trevor Darrell.
+  2007. Learning visual representations using images
+  with captions. In Proceedings of CVPR-07, pages
+  1–8, Minneapolis.
+Leonardo Rigutini, Marco Maggini, and Bing Liu.
+  2005. An em based training algorithm for cross-
+  language text categorization. In Proceedings of WI-
+  05, pages 529–535, Compiègne.
+Shai Shalev-Shwartz, Yoram Singer, and Nathan Sre-
+  bro. 2007. Pegasos: Primal estimated sub-gradient
+  solver for svm. In Proceedings of ICML-07, pages
+  807–814, Corvalis.
+Yoshimasa Tsuruoka, Jun’ichi Tsujii, and Sophia Ana-
+  niadou. 2009. Stochastic gradient descent training
+  for l1-regularized log-linear models with cumulative
+  penalty. In Proceedings of ACL/AFNLP-09, pages
+  477–485, Singapore.
+Xiaojun Wan.       2009.      Co-training for cross-
+  lingual sentiment classification. In Proceedings of
+  ACL/AFNLP-09, pages 235–243, Singapore.
+Tong Zhang. 2004. Solving large scale linear predic-
+  tion problems using stochastic gradient descent al-
+  gorithms. In Proceedings of ICML-04, pages 116–
+  124, Banff.
+
+
+
+                                                       1127
+

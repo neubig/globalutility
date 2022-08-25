@@ -1,0 +1,336 @@
+            Online Generation of Locality Sensitive Hash Signatures
+
+                Benjamin Van Durme                                        Ashwin Lall
+                      HLTCOE                                         College of Computing
+               Johns Hopkins University                          Georgia Institute of Technology
+              Baltimore, MD 21211 USA                               Atlanta, GA 30332 USA
+
+
+
+                    Abstract                                 approximation error, and with lower memory re-
+    Motivated by the recent interest in stream-              quirements than when using the standard offline
+    ing algorithms for processing large text                 technique.
+    collections, we revisit the work of                         We envision this method being used in conjunc-
+    Ravichandran et al. (2005) on using the                  tion with dynamic clustering algorithms, for a va-
+    Locality Sensitive Hash (LSH) method of                  riety of applications. For example, Petrovic et al.
+    Charikar (2002) to enable fast, approxi-                 (2010) made use of LSH signatures generated over
+    mate comparisons of vector cosine simi-                  individual tweets, for the purpose of first story de-
+    larity. For the common case of feature                   tection. Streaming LSH should allow for the clus-
+    updates being additive over a data stream,               tering of Twitter authors, based on the tweets they
+    we show that LSH signatures can be main-                 generate, with signatures continually updated over
+    tained online, without additional approxi-               the Twitter stream.
+    mation error, and with lower memory re-                  2   Locality Sensitive Hashing
+    quirements than when using the standard
+    offline technique.                                       We are concerned with computing the cosine sim-
+                                                             ilarity of feature vectors, defined for a pair of vec-
+1   Introduction
+                                                             tors ~u and ~v as the dot product normalized by their
+There has been a surge of interest in adapting re-           lengths:
+sults from the streaming algorithms community to
+                                                                                                      ~u · ~v
+problems in processing large text collections. The                   cosine−similarity(~u, ~v ) =              .
+                                                                                                     |~u||~v |
+term streaming refers to a model where data is
+made available sequentially, and it is assumed that             This similarity is the cosine of the angle be-
+resource limitations preclude storing the entirety           tween these high-dimensional vectors and attains
+of the data for offline (batch) processing. Statis-          a value of one (i.e., cos (0)) when the vectors are
+tics of interest are approximated via online, ran-           parallel and zero (i.e., cos (π/2)) when orthogo-
+domized algorithms. Examples of text applica-                nal.
+tions include: collecting approximate counts (Tal-              Building on the seminal work of Indyk and
+bot, 2009; Van Durme and Lall, 2009a), finding               Motwani (1998) on locality sensitive hashing
+top-n elements (Goyal et al., 2009), estimating              (LSH), Charikar (2002) presented an LSH that
+term co-occurrence (Li et al., 2008), adaptive lan-          maps high-dimensional vectors to a much smaller
+guage modeling (Levenberg and Osborne, 2009),                dimensional space while still preserving (cosine)
+and building top-k ranklists based on pointwise              similarity between vectors in the original space.
+mutual information (Van Durme and Lall, 2009b).              The LSH algorithm computes a succinct signature
+   Here we revisit the work of Ravichandran et al.           of the feature set of the words in a corpus by com-
+(2005) on building word similarity measures from             puting d independent dot products of each feature
+                                                                                                          P
+large text collections by using the Locality Sensi-          vector ~v with a random unit vector ~r, i.e., i vi ri ,
+tive Hash (LSH) method of Charikar (2002). For               and retaining the sign of the d resulting products.
+the common case of feature updates being addi-               Each entry of ~r is drawn from the distribution
+tive over a data stream (such as when tracking               N (0, 1), the normal distribution with zero mean
+lexical co-occurrence), we show that LSH signa-              and unit variance. Charikar’s algorithm makes use
+tures can be maintained online, without additional           of the fact (proved by Goemans and Williamson
+
+
+                                                       231
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 231–235,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+(1995) for an unrelated application) that the an-                    Algorithm 1 S TREAMING LSH A LGORITHM
+gle between any two vectors summarized in this                       Parameters:
+                                                                     m : size of pool
+fashion is proportional to the expected Hamming                      d : number of bits (size of resultant signature)
+distance of their signature vectors. Hence, we can                   s : a random seed
+retain length d bit-signatures in the place of high                  h1 , ..., hd : hash functions mapping hs, fi i to {0, . . . , m−1}
+                                                                     I NITIALIZATION :
+dimensional feature vectors, while preserving the
+                                                                       1: Initialize floating point array P [0, . . . , m − 1]
+ability to (quickly) approximate cosine similarity                     2: Initialize H, a hashtable mapping words to floating point
+in the original space.                                                     arrays of size d
+                                                                       3: for i := 0 . . . m − 1 do
+   Ravichandran et al. (2005) made use of this al-                     4:      P [i] := random sample from N (0, 1), using s as seed
+gorithm to reduce the computation in searching                       O NLINE :
+for similar nouns by first computing signatures for                    1: for each word w in the stream do
+each noun and then computing similarity over the                       2:      for each feature fi associated with w do
+                                                                       3:         for j := 1 . . . d do
+signatures rather than the original feature space.                     4:             H[w][j] := H[w][j] + P [hj (s, fi )]
+                                                                     S IGNATURE C OMPUTATION :
+3       Streaming Algorithm
+                                                                      1: for each w ∈ H do
+In this work, we focus on features that can be                        2:    for i := 1 . . . d do
+                                                                      3:       if H[w][i] > 0 then
+maintained additively, such as raw frequencies.1                      4:           S[w][i] := 1
+Our streaming algorithm for this problem makes                        5:       else
+use of the simple fact that the dot product of the                    6:           S[w][i] := 0
+feature vector with random vectors is a linear op-
+eration. This permits us to replace the vi · ri op-
+eration by vi individual additions of ri , once for                  maintains some state for each possible word that
+each time the feature is encountered in the stream                   it encounters (cf. Algorithm 1). In particular, the
+(where vi is the frequency of a feature and ri is the                state maintained for each word is a vector of float-
+randomly chosen Gaussian-distributed value asso-                     ing point numbers of length d. Each element of the
+ciated with this feature). The result of the final                   vector holds the (partial) dot product of the feature
+computation is identical to the dot products com-                    vector of the word with a random unit vector. Up-
+puted by the algorithm of Charikar (2002), but                       dating the state for a feature seen in the stream for
+the processing can now be done online. A simi-                       a given word simply involves incrementing each
+lar technique, for stable random projections, was                    position in the word’s vector by the random value
+independently discussed by Li et al. (2008).                         associated with the feature, accessed by hash func-
+                                                                     tions h1 through hd . At any point in the stream,
+   Since each feature may appear multiple times
+                                                                     the vector for each word can be processed (in time
+in the stream, we need a consistent way to retrieve
+                                                                     O(d)) to create a signature computed by checking
+the random values drawn from N (0, 1) associated
+                                                                     the sign of each component of its vector.
+with it. To avoid the expense of computing and
+storing these values explicitly, as is the norm, we                  3.1      Analysis
+propose the use of a precomputed pool of ran-
+dom values drawn from this distribution that we                      The update cost of the streaming algorithm, per
+can then hash into. Hashing into a fixed pool en-                    word in the stream, is O(df ), where d is the target
+sures that the same feature will consistently be as-                 signature size and f is the number of features asso-
+sociated with the same value drawn from N (0, 1).                    ciated with each word in the stream.2 This results
+This introduces some weak dependence in the ran-                     in an overall cost of O(ndf ) for the streaming al-
+dom vectors, but we will give some analysis show-                    gorithm, where n is the length of the stream. The
+ing that this should have very limited impact on                     memory footprint of our algorithm is O(n0 d+m),
+the cosine similarity computation, which we fur-                     where n0 is the number of distinct words in the
+ther support with experimental evidence (see Ta-                     stream and m is the size of the pool of normally
+ble 3).                                                              distributed values. In comparison, the original
+                                                                     LSH algorithm computes signatures at a cost of
+   Our algorithm traverses a stream of words and
+                                                                     O(nf + n0 dF ) updates and O(n0 F + dF + n0 d)
+    1
+     Note that Ravichandran et al. (2005) used pointwise mu-         memory, where F is the (large) number of unique
+tual information features, which are not additive since they
+                                                                        2
+require a global statistic to compute.                                      For the bigram features used in § 4, f = 2.
+
+
+                                                               232
+
+
+features. Our algorithm is superior in terms of
+memory (because of the pooling trick), and has the
+benefit of supporting similarity queries online.
+
+3.2     Pooling Normally-distributed Values
+We now discuss why it is possible to use a
+fixed pool of random values instead of generating
+unique ones for each feature. Let g be the c.d.f.
+of the distribution N (0, 1). It is easy to see that
+picking x ∈ (0, 1) uniformly results in g −1 (x) be-
+ing chosen with distribution N (0, 1). Now, if we
+select for our pool the values
+
+      g −1 (1/m), g −1 (2/m), . . . , g −1 (1 − 1/m),
+                                                                                           (a)
+for some sufficiently large m, then this is identical
+to sampling from N (0, 1) with the caveat that the
+accuracy of the sample is limited. More precisely,
+the deviation from sampling from this pool is off
+from the actual value by at most
+
+         max     {g −1 ((i + 1)/m) − g −1 (i/m)}.
+      i=1,...,m−2
+
+   By choosing m to be sufficiently large, we can
+bound the error of the approximate sample from
+a true sample (i.e., the loss in precision expressed
+above) to be a small fraction (e.g., 1%) of the ac-
+tual value. This would result in the same relative
+error in the computation of the dot product (i.e.,
+1%), which would almost never affect the sign of                                           (b)
+the final value. Hence, pooling as above should
+give results almost identical to the case where all            Figure 1: Predicted versus actual cosine values for 50,000
+the random values were chosen independently. Fi-               pairs, using LSH signatures generated online, with d = 32 in
+                                                               Fig. 1(a) and d = 256 in Fig. 1(b).
+nally, we make the observation that, for large m,
+randomly choosing m values from N (0, 1) results
+in a set of values that are distributed very similarly         2004). The underlying operation is a linear op-
+to the pool described above. An interesting avenue             erator that is easily composed (i.e., via addition),
+for future work is making this analysis more math-             and the randomness between machines can be tied
+ematically precise.                                            based on a shared seed s. At any point in process-
+                                                               ing the stream(s), current results can be aggregated
+3.3     Extensions
+                                                               by summing the d-dimensional vectors for each
+Decay The algorithm can be extended to support                 word, from each machine.
+temporal decay in the stream, where recent obser-
+vations are given higher relative weight, by mul-              4   Experiments
+tiplying the current sums by a decay value (e.g.,
+                                                               Similar to the experiments of Ravichandran et
+0.9) on a regular interval (e.g., once an hour, once
+                                                               al. (2005), we evaluated the fidelity of signature
+a day, once a week, etc.).
+                                                               generation in the context of calculating distribu-
+Distributed The algorithm can be easily dis-                   tional similarity between words across a large
+tributed across multiple machines in order to pro-             text collection: in our case, articles taken from
+cess different parts of a stream, or multiple differ-          the NYTimes portion of the Gigaword corpus
+ent streams, in parallel, such as in the context of            (Graff, 2003). The collection was processed as a
+the MapReduce framework (Dean and Ghemawat,                    stream, sentence by sentence, using bigram fea-
+
+
+                                                         233
+
+
+    d     16        32        64       128       256
+ SLSH     0.2885    0.2112    0.1486   0.1081    0.0769
+  LSH     0.2892    0.2095    0.1506   0.1083    0.0755
+
+Table 1: Mean absolute error when using signatures gener-
+ated online (StreamingLSH), compared to offline (LSH).
+
+
+
+tures. This gave a stream of 773,185,086 tokens,
+with 1,138,467 unique types. Given the number
+of types, this led to a (sparse) feature space with
+dimension on the order of 2.5 million.
+   After compiling signatures, fifty-thousand
+hx, yi pairs of types were randomly sampled
+by selecting x and y each independently, with
+replacement, from those types with at least 10 to-
+kens in the stream (where 310,327 types satisfied                 Figure 2: Absolute error between predicted and true co-
+this constraint). The true cosine values between                  sine for a sample of pairs, when using signatures of length
+                                                                  log2 (d) ∈ {4, 5, 6, 7, 8}, drawn with added jitter to avoid
+each such x and y was computed based on offline                   overplotting.
+calculation, and compared to the cosine similarity
+predicted by the Hamming distance between the                                                         ●
+
+                                                                                                0.8
+signatures for x and y. Unless otherwise specified,                       Mean Absolute Error
+the random pool size was fixed at m = 10, 000.
+   Figure 1 visually reaffirms the trade-off in LSH                                             0.6
+between the number of bits and the accuracy of
+cosine prediction across the range of cosine val-
+ues. As the underlying vectors are strictly posi-                                               0.4
+
+tive, the true cosine is restricted to [0, 1]. Figure 2                                                    ●
+
+
+
+shows the absolute error between truth and predic-                                              0.2
+tion for a similar sample, measured using signa-                                                                ●
+                                                                                                                     ●
+                                                                                                                           ●     ●     ●
+tures of a variety of bit lengths. Here we see hori-
+zontal bands arising from truly orthogonal vectors                                                        101       102   103   104   105
+leading to step-wise absolute error values tracked                                                                  Pool Size
+to Hamming distance.
+   Table 1 compares the online and batch LSH al-                      Figure 3: Error versus pool size, when using d = 256.
+gorithms, giving the mean absolute error between
+predicted and actual cosine values, computed for
+                                                                  of potentially sufficient signature lengths.
+the fifty-thousand element sample, using signa-
+tures of various lengths. These results confirm that
+we achieve the same level of accuracy with online
+                                                                  5     Conclusions
+updates as compared to the standard method.                       We have shown that when updates to a feature vec-
+   Figure 3 shows how a pool size as low as m =                   tor are additive, it is possible to convert the offline
+100 gives reasonable variation in random values,                  LSH signature generation method into a stream-
+and that m = 10, 000 is sufficient. When using a                  ing algorithm. In addition to allowing for on-
+standard 32 bit floating point representation, this               line querying of signatures, our approach leads to
+is just 40 KBytes of memory, as compared to, e.g.,                space efficiencies, as it does not require the ex-
+the 2.5 GBytes required to store 256 random vec-                  plicit representation of either the feature vectors,
+tors each containing 2.5 million elements.                        nor the random matrix. Possibilities for future
+   Table 2 is based on taking an example for each                 work include the pairing of this method with algo-
+of three part-of-speech categories, and reporting                 rithms for dynamic clustering, as well as exploring
+the resultant top-5 words as according to approx-                 algorithms for different distances (e.g., L2 ) and es-
+imated cosine similarity. Depending on the in-                    timators (e.g., asymmetric estimators (Dong et al.,
+tended application, these results indicate a range                2009)).
+
+
+                                                            234
+
+
+  London                                                                 David Graff. 2003. English Gigaword. Linguistic
+ Milan.97 , Madrid.96 , Stockholm.96 , Manila.95 , Moscow.95
+                                                                           Data Consortium, Philadelphia.
+ ASHER0 , Champaign0 , MANS0 , NOBLE0 , come0
+ Prague1 , Vienna1 , suburban1 , synchronism1 , Copenhagen2
+                                                                         Piotr Indyk and Rajeev Motwani. 1998. Approximate
+ Frankfurt4 , Prague4 , Taszar5 , Brussels6 , Copenhagen6
+ Prague12 , Stockholm12 , Frankfurt14 , Madrid14 , Manila14                 nearest neighbors: towards removing the curse of di-
+ Stockholm20 , Milan22 , Madrid24 , Taipei24 , Frankfurt25                  mensionality. In Proceedings of STOC.
+  in
+ during.99 , on.98 , beneath.98 , from.98 , onto.97                      Abby Levenberg and Miles Osborne. 2009. Stream-
+ Across0 , Addressing0 , Addy0 , Against0 , Allmon0                        based Randomised Language Models for SMT. In
+ aboard0 , mishandled0 , overlooking0 , Addressing1 , Rejecting1           Proceedings of EMNLP.
+ Rejecting2 , beneath2 , during2 , from3 , hamstringing3
+ during4 , beneath5 , of6 , on7 , overlooking7                           Ping Li, Kenneth W. Church, and Trevor J. Hastie.
+ during10 , on13 , beneath15 , of17 , overlooking17                         2008. One Sketch For All: Theory and Application
+  sold                                                                      of Conditional Random Sampling. In Advances in
+ deployed.84 , presented.83 , sacrificed.82 , held.82 , installed.82        Neural Information Processing Systems 21.
+ Bustin0 , Diors0 , Draining0 , Kosses0 , UNA0
+ delivered2 , held2 , marks2 , seared2 , Ranked3                         Sasa Petrovic, Miles Osborne, and Victor Lavrenko.
+ delivered5 , rendered5 , presented6 , displayed7 , exhibited7             2010. Streaming First Story Detection with appli-
+ held18 , rendered18 , presented19 , deployed20 , displayed20              cation to Twitter. In Proceedings of NAACL.
+ presented41 , rendered42 , held47 , leased47 , reopened47
+                                                                         Deepak Ravichandran, Patrick Pantel, and Eduard
+Table 2: Top-5 items based on true cosine (bold), then using               Hovy. 2005. Randomized Algorithms and NLP:
+minimal Hamming distance, given in top-down order when
+                                                                           Using Locality Sensitive Hash Functions for High
+using signatures of length log2 (d) ∈ {4, 5, 6, 7, 8}. Ties bro-
+ken lexicographically. Values given as subscripts.                         Speed Noun Clustering. In Proceedings of ACL.
+
+                                                                         David Talbot. 2009. Succinct approximate counting of
+                                                                           skewed data. In Proceedings of IJCAI.
+Acknowledgments
+                                                                         Benjamin Van Durme and Ashwin Lall. 2009a. Proba-
+Thanks to Deepak Ravichandran, Miles Osborne,                              bilistic Counting with Randomized Storage. In Pro-
+Sasa Petrovic, Ken Church, Glen Coppersmith,                               ceedings of IJCAI.
+and the anonymous reviewers for their feedback.                          Benjamin Van Durme and Ashwin Lall.        2009b.
+This work began while the first author was at the                          Streaming Pointwise Mutual Information. In Ad-
+University of Rochester, funded by NSF grant IIS-                          vances in Neural Information Processing Systems
+1016735. The second author was supported in                                22.
+part by NSF grant CNS-0905169, funded under
+the American Recovery and Reinvestment Act of
+2009.
+
+
+References
+Moses Charikar. 2002. Similarity estimation tech-
+ niques from rounding algorithms. In Proceedings
+ of STOC.
+
+Jeffrey Dean and Sanjay Ghemawat. 2004. MapRe-
+   duce: Simplified Data Processing on Large Clusters.
+   In Proceedings of OSDI.
+
+Wei Dong, Moses Charikar, and Kai Li. 2009. Asym-
+  metric distance estimation with sketches for similar-
+  ity search in high-dimensional spaces. In Proceed-
+  ings of SIGIR.
+
+Michel X. Goemans and David P. Williamson. 1995.
+  Improved approximation algorithms for maximum
+  cut and satisfiability problems using semidefinite
+  programming. JACM, 42:1115–1145.
+
+Amit Goyal, Hal Daumé III, and Suresh Venkatasub-
+ ramanian. 2009. Streaming for large scale NLP:
+ Language Modeling. In Proceedings of NAACL.
+
+
+                                                                   235
+

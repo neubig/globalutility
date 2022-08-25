@@ -1,0 +1,383 @@
+                     Optimizing Informativeness and Readability
+                           for Sentiment Summarization
+      Hitoshi Nishikawa, Takaaki Hasegawa, Yoshihiro Matsuo and Genichiro Kikui
+                      NTT Cyber Space Laboratories, NTT Corporation
+              {   1-1 Hikari-no-oka, Yokosuka, Kanagawa, 239-0847
+                                                          }       Japan
+                 nishikawa.hitoshi, hasegawa.takaaki
+                                                            @lab.ntt.co.jp
+                  matsuo.yoshihiro, kikui.genichiro
+
+
+                     Abstract                                   This restaurant offers customers delicious foods and a
+                                                                relaxing atmosphere. The staff are very friendly but the
+    We propose a novel algorithm for senti-                     price is a little high.
+    ment summarization that takes account of
+    informativeness and readability, simulta-                              Figure 1: A typical summary.
+    neously. Our algorithm generates a sum-
+    mary by selecting and ordering sentences
+    taken from multiple review texts according                are helpful, such representations necessitate some
+    to two scores that represent the informa-                 simplifications of information to presentation. In
+    tiveness and readability of the sentence or-              contrast, text can present complex information that
+    der. The informativeness score is defined                 can’t readily be visualized, so in this paper we fo-
+    by the number of sentiment expressions                    cus on producing textual summaries.
+    and the readability score is learned from                    One crucial weakness of existing text-oriented
+    the target corpus. We evaluate our method                 summarizers is the poor readability of their results.
+    by summarizing reviews on restaurants.                    Good readability is essential because readability
+    Our method outperforms an existing al-                    strongly affects text comprehension (Barzilay et
+    gorithm as indicated by its ROUGE score                   al., 2002).
+    and human readability experiments.                           To achieve readable summaries, the extracted
+                                                              sentences must be appropriately ordered (Barzilay
+1 Introduction                                                et al., 2002; Lapata, 2003; Barzilay and Lee, 2004;
+The Web holds a massive number of reviews de-                 Barzilay and Lapata, 2005). Barzilay et al. (2002)
+scribing the sentiments of customers about prod-              proposed an algorithm for ordering sentences ac-
+ucts and services. These reviews can help the user            cording to the dates of the publications from which
+reach purchasing decisions and guide companies’               the sentences were extracted. Lapata (2003) pro-
+business activities such as product improvements.             posed an algorithm that computes the probability
+It is, however, almost impossible to read all re-             of two sentences being adjacent for ordering sen-
+views given their sheer number.                               tences. Both methods delink sentence extraction
+   These reviews are best utilized by the devel-              from sentence ordering, so a sentence can be ex-
+opment of automatic text summarization, partic-               tracted that cannot be ordered naturally with the
+ularly sentiment summarization. It enables us to              other extracted sentences.
+efficiently grasp the key bits of information. Senti-            To solve this problem, we propose an algorithm
+ment summarizers are divided into two categories              that chooses sentences and orders them simulta-
+in terms of output style. One outputs lists of                neously in such a way that the ordered sentences
+sentences (Hu and Liu, 2004; Blair-Goldensohn                 maximize the scores of informativeness and read-
+et al., 2008; Titov and McDonald, 2008), the                  ability. Our algorithm efficiently searches for the
+other outputs texts consisting of ordered sentences           best sequence of sentences by using dynamic pro-
+(Carenini et al., 2006; Carenini and Cheung, 2008;            gramming and beam search. We verify that our
+Lerman et al., 2009; Lerman and McDonald,                     method generates summaries that are significantly
+2009). Our work lies in the latter category, and              better than the baseline results in terms of ROUGE
+a typical summary is shown in Figure 1. Although              score (Lin, 2004) and subjective readability mea-
+visual representations such as bar or rader charts            sures. As far as we know, this is the first work to
+
+
+                                                        325
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 325–330,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+simultaneously achieve both informativeness and                once for scoring. In addition, the aspects are clus-
+readability in the area of multi-document summa-               tered and similar aspects (e.g. air, ambience) are
+rization.                                                      treated as the same aspect (e.g. atmosphere). In
+   This paper is organized as follows: Section 2               this paper we define f (e) as the frequency of e in
+describes our summarization method. Section 3                  the target documents.
+reports our evaluation experiments. We conclude                   Sentiments are extracted using a sentiment lex-
+this paper in Section 4.                                       icon and pattern matched from dependency trees
+                                                               of sentences. The sentiment lexicon1 consists of
+2     Optimizing Sentence Sequence                             pairs of sentiment expressions and their polarities,
+Formally, we define a summary S ∗                  =           for example, delicious, friendly and good are pos-
+hs0 , s1 , . . . , sn , sn+1 i as a sequence consist-          itive sentiment expressions, bad and expensive are
+ing of n sentences where s0 and sn+1 are symbols               negative sentiment expressions.
+indicating the beginning and ending of the se-                    To extract sentiments from given sentences,
+quence, respectively. Summary S ∗ is also defined              first, we identify sentiment expressions among
+as follows:                                                    words consisting of parsed sentences. For ex-
+                                                               ample, in the case of the sentence “This restau-
+       S ∗ = argmax[Info(S) + λRead(S)]           (1)          rant offers customers delicious foods and a relax-
+               S∈T
+                                                               ing atmosphere.” in Figure 1, delicious and re-
+                s.t. length(S) ≤ K
+                                                               laxing are identified as sentiment expressions. If
+   where Info(S) indicates the informativeness                 the sentiment expressions are identified, the ex-
+score of S, Read(S) indicates the readability                  pressions and its aspects are extracted as aspect-
+score of S, T indicates possible sequences com-                sentiment expression pairs from dependency tree
+posed of sentences in the target documents, λ                  using some rules. In the case of the example sen-
+is a weight parameter balancing informativeness                tence, foods and delicious, atmosphere and relax-
+against readability, length(S) is the length of S,             ing are extracted as aspect-sentiment expression
+and K is the maximum size of the summary.                      pairs. Finally extracted sentiment expressions are
+   We introduce the informativeness score and the              converted to polarities, we acquire the set of sen-
+readability score, then describe how to optimize a             timents from sentences, for example, h foods, 1i
+sequence.                                                      and h atmosphere, 1i.
+                                                                  Note that since our method relies on only senti-
+2.1    Informativeness Score                                   ment lexicon, extractable aspects are unlimited.
+Since we attempt to summarize reviews, we as-
+sume that a good summary must involve as many                  2.2 Readability Score
+sentiments as possible. Therefore, we define the               Readability consists of various elements such as
+informativeness score as follows:                              conciseness, coherence, and grammar. Since it
+                          ∑                                    is difficult to model all of them, we approximate
+            Info(S) =            f (e)            (2)          readability as the natural order of sentences.
+                        e∈E(S)
+                                                                  To order sentences, Barzilay et al. (2002)
+    where e indicates sentiment e = ha, pi as the tu-
+                                                               used the publication dates of documents to catch
+ple of aspect a and polarity p = {−1, 0, 1}, E(S)
+                                                               temporally-ordered events, but this approach is not
+is the set of sentiments contained S, and f (e) is the
+                                                               really suitable for our goal because reviews focus
+score of sentiment e. Aspect a represents a stand-
+                                                               on entities rather than events. Lapata (2003) em-
+point for evaluating products and services. With
+                                                               ployed the probability of two sentences being ad-
+regard to restaurants, aspects include food, atmo-
+                                                               jacent as determined from a corpus. If the cor-
+sphere and staff. Polarity represents whether the
+                                                               pus consists of reviews, it is expected that this ap-
+sentiment is positive or negative. In this paper, we
+                                                               proach would be effective for sentiment summa-
+define p = −1 as negative, p = 0 as neutral and
+                                                               rization. Therefore, we adopt and improve Lap-
+p = 1 as positive sentiment.
+                                                               ata’s approach to order sentences. We define the
+    Notice that Equation 2 defines the informative-
+                                                                  1
+ness score of a summary as the sum of the score                     Since we aim to summarize Japanese reviews, we utilize
+                                                               Japanese sentiment lexicon (Asano et al., 2008). However,
+of the sentiments contained in S. To avoid du-                 our method is, except for sentiment extraction, language in-
+plicative sentences, each sentiment is counted only            dependent.
+
+
+                                                         326
+
+
+readability score as follows:                                    Sentences: S = {s1 , . . . , sn }
+                        ∑
+                        n                                        Distance matrix: M = [ai,j ]i=0...n+1,j=0...n+1
+          Read(S) =           w> φ(si , si+1 )     (3)           1: H0 ({s0 }, s0 ) = 0
+                        i=0                                      2: for i : 0 . . . n − 1
+   where, given two adjacent sentences si and                    3: for j : 1 . . . n
+si+1 , w> φ(si , si+1 ), which measures the connec-              4:   foreach Hi (C\{j}, k) ∈ b
+tivity of the two sentences, is the inner product of             5:       Hi+1 (C, j) = maxHi (C\{j},k)∈b Hi (C\{j}, k)
+w and φ(si , si+1 ), w is a parameter vector and                 6:                         +Mk,j
+φ(si , si+1 ) is a feature vector of the two sentences.               ∗
+                                                                 7: H = maxHn (C,k) Hn (C, k) + Mk,n+1
+That is, the readability score of sentence sequence
+S is the sum of the connectivity of all adjacent sen-                     Figure 2: Held and Karp Algorithm.
+tences in the sequence.
+   As the features, Lapata (2003) proposed the
+                                                                i.e. the last sentence of the summary being gener-
+Cartesian product of content words in adjacent
+                                                                ated. For example, H2 ({s0 , s2 , s5 }, s2 ) indicates
+sentences. To this, we add named entity tags (e.g.
+                                                                a hypothesis that covers s0 , s2 , s5 and the last sen-
+LOC, ORG) and connectives. We observe that the
+                                                                tence is s2 . Initially, H0 ({s0 }, s0 ) is assigned the
+first sentence of a review of a restaurant frequently
+                                                                score of 0, and new sentences are then added one
+contains named entities indicating location. We
+                                                                by one. In the search procedure, our dynamic pro-
+aim to reproduce this characteristic in the order-
+                                                                gramming based algorithm retains just the hypoth-
+ing.
+                                                                esis with maximum score among the hypotheses
+   We also define feature vector Φ(S) of the entire
+                                                                that have the same sentences and the same last sen-
+sequence S = hs0 , s1 , . . . , sn , sn+1 i as follows:
+                                                                tence. Since this procedure is still computationally
+                        ∑
+                        n
+              Φ(S) =          φ(si , si+1 )        (4)          hard, only the top b hypotheses are expanded.
+                        i=0                                        Note that our method learns w from texts auto-
+   Therefore, the score of sequence S is w> Φ(S).               matically annotated by a POS tagger and a named
+Given a training set, if a trained parameter w as-              entity tagger. Thus manual annotation isn’t re-
+signs a score w> Φ(S + ) to an correct order S +                quired.
+that is higher than a score w> Φ(S − ) to an incor-
+                                                                2.3 Optimization
+rect order S − , it is expected that the trained pa-
+rameter will give higher score to naturally ordered             The argmax operation in Equation 1 also involves
+sentences than to unnaturally ordered sentences.                search, which is NP-hard as described in Section
+   We use Averaged Perceptron (Collins, 2002) to                2.2. Therefore, we adopt the Held and Karp Algo-
+find w. Averaged Perceptron requires an argmax                  rithm and beam search to find approximate solu-
+operation for parameter estimation. Since we at-                tions. The search algorithm is basically the same
+tempt to order a set of sentences, the operation is             as parameter estimation, except for its calculation
+regarded as solving the Traveling Salesman Prob-                of the informativeness score and size limitation.
+lem; that is, we locate the path that offers maxi-              Therefore, when a new sentence is added to a hy-
+mum score through all n sentences as s0 and sn+1                pothesis, both the informativeness and the read-
+are starting and ending points, respectively. Thus              ability scores are calculated. The size of the hy-
+the operation is NP-hard and it is difficult to find            pothesis is also calculated and if the size exceeds
+the global optimal solution. To alleviate this, we              the limit, the sentence can’t be added. A hypoth-
+find an approximate solution by adopting the dy-                esis that can’t accept any more sentences is re-
+namic programming technique of the Held and                     moved from the search procedure and preserved
+Karp Algorithm (Held and Karp, 1962) and beam                   in memory. After all hypotheses are removed,
+search.                                                         the best hypothesis is chosen from among the pre-
+   We show the search procedure in Figure 2. S                  served hypotheses as the solution.
+indicates intended sentences and M is a distance
+                                                                3 Experiments
+matrix of the readability scores of adjacent sen-
+tence pairs. Hi (C, j) indicates the score of the               This section evaluates our method in terms of
+hypothesis that has covered the set of i sentences              ROUGE score and readability. We collected 2,940
+C and has the sentence j at the end of the path,                reviews of 100 restaurants from a website. The
+
+
+                                                          327
+
+
+                    R-2    R-SU4    R-SU9                                               Numbers
+        Baseline   0.089    0.068    0.062                                   Baseline        1.76
+        Method1    0.157    0.096    0.089                                   Method1         4.32
+        Method2    0.172    0.107    0.098                                   Method2        10.41
+        Method3    0.180    0.110    0.101                                   Method3        10.18
+        Human      0.258    0.143    0.131                                   Human           4.75
+
+
+     Table 1: Automatic ROUGE evaluation.                          Table 2: Unique sentiment numbers.
+
+average size of each document set (corresponds to           cording to the Wilcoxon signed-rank test.
+one restaurant) was 5,343 bytes. We attempted                  We discuss the contribution of readability to
+to generate 300 byte summaries, so the summa-               ROUGE scores. Comparing Method2 to Method3,
+rization rate was about 6%. We used CRFs-                   ROUGE scores of the latter were higher for all cri-
+based Japanese dependency parser (Imamura et                teria. It is interesting that the readability criterion
+al., 2007) and named entity recognizer (Suzuki et           also improved ROUGE scores.
+al., 2006) for sentiment extraction and construct-             We also evaluated our method in terms of sen-
+ing feature vectors for readability score, respec-          timents. We extracted sentiments from the sum-
+tively.                                                     maries using the above sentiment extractor, and
+                                                            averaged the unique sentiment numbers. Table 2
+3.1 ROUGE
+                                                            shows the results.
+We used ROUGE (Lin, 2004) for evaluating the                   The references (Human) have fewer sentiments
+content of summaries. We chose ROUGE-2,                     than the summaries generated by our method. In
+ROUGE-SU4 and ROUGE-SU9. We prepared                        other words, the references included almost as
+four reference summaries for each document set.             many other sentences (e.g. reasons for the senti-
+   To evaluate the effects of the informativeness           ments) as those expressing sentiments. Carenini
+score, the readability score and the optimization,          et al. (2006) pointed out that readers wanted “de-
+we compared the following five methods.                     tailed information” in summaries, and the reasons
+   Baseline: employs MMR (Carbonell and Gold-               are one of such piece of information. Including
+stein, 1998). We designed the score of a sentence           them in summaries would greatly improve sum-
+as term frequencies of the content words in a doc-          marizer appeal.
+ument set.
+   Method1: uses optimization without the infor-            3.2 Readability
+mativeness score or readability score. It also used         Readability was evaluated by human judges.
+term frequencies to score sentences.                        Three different summarizers generated summaries
+   Method2: uses the informativeness score and              for each document set. Ten judges evaluated the
+optimization without the readability score.                 thirty summaries for each. Before the evalua-
+   Method3: the proposed method. Following                  tion the judges read evaluation criteria and gave
+Equation 1, the summarizer searches for a se-               points to summaries using a five-point scale. The
+quence with high informativeness and readability            judges weren’t informed of which method gener-
+score. The parameter vector w was trained on the            ated which summary.
+same 2,940 reviews in 5-fold cross validation fash-            We compared three methods; Ordering sen-
+ion. λ was set to 6,000 using a development set.            tences according to publication dates and posi-
+   Human is the reference summaries. To com-                tions in which sentences appear after sentence
+pare our summarizer to human summarization, we              extraction (Method2), Ordering sentences us-
+calculated ROUGE scores between each reference              ing the readability score after sentence extrac-
+and the other references, and averaged them.                tion (Method2+) and searching a document set
+   The results of these experiments are shown in            to discover the sequence with the highest score
+Table 1. ROUGE scores increase in the order of              (Method3).
+Method1, Method2 and Method3 but no method                     Table 3 shows the results of the experiment.
+could match the performance of Human. The                   Readability increased in the order of Method2,
+methods significantly outperformed Baseline ac-             Method2+ and Method3.          According to the
+
+
+                                                      328
+
+
+                        Readability point                     Regina Barzilay, Noemie Elhadad and Kathleen McK-
+            Method2                 3.45                        eown. 2002. Inferring Strategies for Sentence Or-
+            Method2+                3.54
+                                                                dering in Multidocument Summarization. Journal of
+                                                                Artificial Intelligence Research (JAIR), Vol.17, pp.
+            Method3                 3.74                        35–55.
+
+         Table 3: Readability evaluation.                     Regina Barzilay and Lillian Lee. 2004. Catching the
+                                                                Drift: Probabilistic Content Models, with Applica-
+                                                                tions to Generation and Summarization. In Proceed-
+Wilcoxon signed-rank test, there was no signifi-                ings of the Human Language Technology Confer-
+                                                                ence of the North American Chapter of the Associ-
+cance difference between Method2 and Method2+                   ation for Computational Linguistics (HLT-NAACL),
+but the difference between Method2 and Method3                  pp. 113–120.
+was significant, p < 0.10.
+   One important factor behind the higher read-               Regina Barzilay and Mirella Lapata. 2005. Modeling
+ability of Method3 is that it yields longer sen-                Local Coherence: An Entity-based Approach. In
+                                                                Proceedings of the 43rd Annual Meeting of the As-
+tences on average (6.52). Method2 and Method2+                  sociation for Computational Linguistics (ACL), pp.
+yielded averages of 7.23 sentences. The difference              141–148.
+is significant as indicated by p < 0.01. That is,
+Method2 and Method2+ tended to select short sen-              Sasha Blair-Goldensohn, Kerry Hannan, Ryan McDon-
+                                                                ald, Tyler Neylon, George A. Reis and Jeff Rey-
+tences, which made their summaries less readable.               nar. 2008. Building a Sentiment Summarizer for Lo-
+                                                                cal Service Reviews. WWW Workshop NLP Chal-
+4   Conclusion                                                  lenges in the Information Explosion Era (NLPIX).
+
+This paper proposed a novel algorithm for senti-              Jaime Carbonell and Jade Goldstein. 1998. The use of
+ment summarization that takes account of infor-                  MMR, diversity-based reranking for reordering doc-
+mativeness and readability, simultaneously. To                   uments and producing summaries. In Proceedings of
+                                                                 the 21st annual international ACM SIGIR confer-
+summarize reviews, the informativeness score is                  ence on Research and development in information
+based on sentiments and the readability score is                 retrieval (SIGIR), pp. 335–356.
+learned from a corpus of reviews. The preferred
+sequence is determined by using dynamic pro-                  Giuseppe Carenini, Raymond Ng and Adam Pauls.
+                                                                2006. Multi-Document Summarization of Evalua-
+gramming and beam search. Experiments showed                    tive Text. In Proceedings of the 11th European
+that our method generated better summaries than                 Chapter of the Association for Computational Lin-
+the baseline in terms of ROUGE score and read-                  guistics (EACL), pp. 305–312.
+ability.
+                                                              Giuseppe Carenini and Jackie Chi Kit Cheung. 2008.
+   One future work is to include important infor-
+                                                                Extractive vs. NLG-based Abstractive Summariza-
+mation other than sentiments in the summaries.                  tion of Evaluative Text: The Effect of Corpus Con-
+We also plan to model the order of sentences glob-              troversiality. In Proceedings of the 5th International
+ally. Although the ordering model in this paper is              Natural Language Generation Conference (INLG),
+local since it looks at only adjacent sentences, a              pp. 33–41.
+model that can evaluate global order is important             Michael Collins. 2002. Discriminative Training Meth-
+for better summaries.                                           ods for Hidden Markov Models: Theory and Exper-
+                                                                iments with Perceptron Algorithms. In Proceedings
+Acknowledgments                                                 of the 2002 Conference on Empirical Methods on
+                                                                Natural Language Processing (EMNLP), pp. 1–8.
+We would like to sincerely thank Tsutomu Hirao
+                                                              Michael Held and Richard M. Karp. 1962. A dy-
+for his comments and discussions. We would also
+                                                                namic programming approach to sequencing prob-
+like to thank the reviewers for their comments.                 lems. Journal of the Society for Industrial and Ap-
+                                                                plied Mathematics (SIAM), Vol.10, No.1, pp. 196–
+                                                                210.
+References
+                                                              Minqing Hu and Bing Liu. 2004. Mining and Summa-
+Hisako Asano, Toru Hirano, Nozomi Kobayashi and                 rizing Customer Reviews. In Proceedings of the 10th
+  Yoshihiro Matsuo. 2008. Subjective Information In-            ACM SIGKDD International Conference on Knowl-
+  dexing Technology Analyzing Word-of-mouth Con-                edge Discovery and Data Mining (KDD), pp. 168–
+  tent on the Web. NTT Technical Review, Vol.6, No.9.           177.
+
+
+                                                        329
+
+
+Kenji Imamura, Genichiro Kikui and Norihito Yasuda.
+  2007. Japanese Dependency Parsing Using Sequen-
+  tial Labeling for Semi-spoken Language. In Pro-
+  ceedings of the 45th Annual Meeting of the Asso-
+  ciation for Computational Linguistics (ACL) Com-
+  panion Volume Proceedings of the Demo and Poster
+  Sessions, pp. 225–228.
+
+Mirella Lapata. 2003. Probabilistic Text Structuring:
+  Experiments with Sentence Ordering. In Proceed-
+  ings of the 41st Annual Meeting of the Association
+  for Computational Linguistics (ACL), pp. 545–552.
+
+Kevin Lerman, Sasha Blair-Goldensohn and Ryan Mc-
+  Donald. 2009. Sentiment Summarization: Evalu-
+  ating and Learning User Preferences. In Proceed-
+  ings of the 12th Conference of the European Chap-
+  ter of the Association for Computational Linguistics
+  (EACL), pp. 514–522.
+
+Kevin Lerman and Ryan McDonald. 2009. Contrastive
+  Summarization: An Experiment with Consumer Re-
+  views. In Proceedings of Human Language Tech-
+  nologies: the 2009 Annual Conference of the North
+  American Chapter of the Association for Computa-
+  tional Linguistics (NAACL-HLT), Companion Vol-
+  ume: Short Papers, pp. 113–116.
+
+Chin-Yew Lin. 2004. ROUGE: A Package for Auto-
+  matic Evaluation of Summaries. In Proceedings of
+  the Workshop on Text Summarization Branches Out,
+  pp. 74–81.
+
+Jun Suzuki, Erik McDermott and Hideki Isozaki. 2006.
+  Training Conditional Random Fields with Multi-
+  variate Evaluation Measures. In Proceedings of the
+  21st International Conference on Computational
+  Linguistics and 44th Annual Meeting of the ACL
+  (COLING-ACL), pp. 217–224.
+
+Ivan Titov and Ryan McDonald. 2008. A Joint Model
+   of Text and Aspect Ratings for Sentiment Summa-
+   rization. In Proceedings of the 46th Annual Meet-
+   ing of the Association for Computational Linguis-
+   tics: Human Language Technologies (ACL-HLT),
+   pp. 308–316.
+
+
+
+
+                                                         330
+

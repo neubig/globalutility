@@ -1,0 +1,663 @@
+    Syntax-to-Morphology Mapping in Factored Phrase-Based Statistical
+               Machine Translation from English to Turkish
+
+                  Reyyan Yeniterzi                                        Kemal Oflazer
+           Language Technologies Institute                              Computer Science
+             Carnegie Mellon University                          Carnegie Mellon University-Qatar
+             Pittsburgh, PA, 15213, USA                            PO Box 24866, Doha, Qatar
+              reyyan@cs.cmu.edu                                        ko@cs.cmu.edu
+
+
+
+                      Abstract
+                                                               Durgar-El-Kahlout, 2007; Oflazer, 2008; Durgar-
+    We present a novel scheme to apply fac-                    El-Kahlout and Oflazer, 2010) has used an ap-
+    tored phrase-based SMT to a language pair                  proach which relied on identifying the contextu-
+    with very disparate morphological struc-                   ally correct parts-of-speech, roots and any mor-
+    tures. Our approach relies on syntac-                      phemes on the English side, and the complete se-
+    tic analysis on the source side (English)                  quence of roots and overt derivational and inflec-
+    and then encodes a wide variety of local                   tional morphemes for each word on the Turkish
+    and non-local syntactic structures as com-                 side. Once these were identified as separate to-
+    plex structural tags which appear as ad-                   kens, they were then used as “words” in a stan-
+    ditional factors in the training data. On                  dard phrase-based framework (Koehn et al., 2003).
+    the target side (Turkish), we only per-                    They have reported that, given the typical com-
+    form morphological analysis and disam-                     plexity of Turkish words, there was a substantial
+    biguation but treat the complete complex                   percentage of words whose morphological struc-
+    morphological tag as a factor, instead of                  ture was incorrect: either the morphemes were
+    separating morphemes. We incrementally                     not applicable for the part-of-speech category of
+    explore capturing various syntactic sub-                   the root word selected, or the morphemes were
+    structures as complex tags on the En-                      in the wrong order. The main reason given for
+    glish side, and evaluate how our transla-                  these problems was that the same statistical trans-
+    tions improve in BLEU scores. Our max-                     lation, reordering and language modeling mecha-
+    imal set of source and target side trans-                  nisms were being employed to both determine the
+    formations, coupled with some additional                   morphological structure of the words and, at the
+    techniques, provide an 39% relative im-                    same time, get the global order of the words cor-
+    provement from a baseline 17.08 to 23.78                   rect. Even though a significant improvement of a
+    BLEU, all averaged over 10 training and                    standard word-based baseline was achieved, fur-
+    test sets. Now that the syntactic analy-                   ther analysis hinted at a direction where morphol-
+    sis on the English side is available, we                   ogy and syntax on the Turkish side had to be dealt
+    also experiment with more long distance                    with using separate mechanisms.
+    constituent reordering to bring the English
+    constituent order close to Turkish, but find                  Motivated by the observation that many lo-
+    that these transformations do not provide                  cal and some nonlocal syntactic structures in En-
+    any additional consistent tangible gains                   glish essentially map to morphologically complex
+    when averaged over the 10 sets.                            words in Turkish, we present a radically different
+                                                               approach which does not segment Turkish words
+1   Introduction                                               into morphemes, but uses a representation equiv-
+                                                               alent to the full word form. On the English side,
+Statistical machine translation into a morphologi-             we rely on a full syntactic analysis using a depen-
+cally complex language such as Turkish, Finnish                dency parser. This analysis then lets us abstract
+or Arabic, involves the generation of target words             and encode many local and some nonlocal syn-
+with the proper morphology, in addition to prop-               tactic structures as complex tags (dynamically, as
+erly ordering the target words. Earlier work on                opposed to the static complex tags as proposed by
+translation from English to Turkish (Oflazer and               Birch et al. (2007) and Hassan et al. (2007)). Thus
+
+
+                                                         454
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 454–464,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+we can bring the representation of English syntax
+closer to the Turkish morphosyntax.
+   Such an approach enables the following: (i)
+Driven by the pattern of morphological structures
+of full word forms on the Turkish side represented
+as root words and complex tags, we can iden-
+tify and reorganize phrases on the English side,
+to “align” English syntax to Turkish morphology
+wherever possible. (ii) Continuous and discontin-
+uous variants of certain (syntactic) phrases can be
+conflated during the SMT phrase extraction pro-
+cess. (iii) The length of the English sentences can          Figure 1: Transformation of an English preposi-
+be dramatically reduced, as most function words              tional phrase
+encoding syntax are now abstracted into complex
+tags. (iv) The representation of both the source and
+                                                             their are not really aligned to any of the Turkish
+the target sides of the parallel corpus can now be
+                                                             words as they really correspond to two of the mor-
+mostly normalized. This facilitates the use of fac-
+                                                             phemes of the last Turkish word.
+tored phrase-based translation that was not pre-
+                                                                When we tag and syntactically analyze the En-
+viously applicable due to the morphological com-
+                                                             glish side into dependency relations, and morpho-
+plexity on the target side and mismatch between
+                                                             logically analyze and disambiguate the Turkish
+source and target morphologies.
+                                                             phrase, we get the representation in the middle of
+   We find that with the full set of syntax-to-
+                                                             Figure 1, where we have co-indexed components
+morphology transformations and some additional
+                                                             that should map to each other, and some of the
+techniques we can get about 39% relative im-
+                                                             syntactic relations that the function words are in-
+provement in BLEU scores over a word-based
+                                                             volved in are marked with dependency links.1
+baseline and about 28% improvement of a factored
+baseline, all experiments being done over 10 train-             The basic idea in our approach is to take various
+ing and test sets. We also find that further con-            function words on the English side, whose syntac-
+stituent reordering taking advantage of the syntac-          tic relationships are identified by the parser, and
+tic analysis of the source side, does not provide            then package them as complex tags on the related
+tangible improvements when averaged over the 10              content words. So, in this example, if we move
+data sets.                                                   the first two function words from the English side
+                                                             and attach as syntactic tags to the word they are in
+   This paper is organized as follows: Sec-
+                                                             dependency relation with, we get the aligned rep-
+tion 2 presents the basic idea behind syntax-
+                                                             resentation at the bottom of Figure 1.2,3 Here we
+to-morphology alignment. Section 3 describes
+                                                             can note that all root words and tags that corre-
+our experimental set-up and presents results from
+                                                             spond to each other are nicely structured and are
+a sequence of incremental syntax-to-morphology
+                                                             in the same relative order. In fact, we can treat
+transformations, and additional techniques. Sec-
+                                                             each token as being composed of two factors: the
+tion 4 summarizes our constituent reordering ex-
+                                                             roots and the accompanying tags. The tags on the
+periments and their results. Section 5 presents a
+                                                             Turkish side encode morphosyntactic information
+review of related work and situates our approach.
+                                                             encoded in the morphology of the words, while the
+   We assume that the reader is familiar with the
+basics of phrase-based statistical machine transla-             1
+                                                                   The meanings of various tags are as follows: Depen-
+tion (Koehn et al., 2003) and factored statistical           dency Labels: PMOD - Preposition Modifier; POS - Pos-
+machine translation (Koehn and Hoang, 2007).                 sessive. Part-of-Speech Tags for the English words: +IN -
+                                                             Preposition; +PRP$ - Possessive Pronoun; +JJ - Adjective;
+                                                             +NN - Noun; +NNS - Plural Noun. Morphological Feature
+2   Syntax-to-Morphology Mapping                             Tags in the Turkish Sentence: +A3pl - 3rd person plural;
+                                                             +P3sg - 3rd person singular possessive; +Loc - Locative case.
+In this section, we describe how we map between              Note that we mark an English plural noun as +NN NNS to in-
+certain source language syntactic structures and             dicate that the root is a noun and there is a plural morpheme
+                                                             on it. Note also that economic is also related to relations but
+target words with complex morphological struc-               we are not interested in such content words and their rela-
+tures. At the top of Figure 1, we see a pair of              tions.
+                                                                 2
+(syntactic) phrases, where we have (positionally)                  We use to prefix such syntactic tags on the English side.
+                                                                 3
+                                                                   The order is important in that we would like to attach the
+aligned the words that should be translated to each          same sequence of function words in the same order so that
+other. We can note that the function words on and            the resulting tags on the English side are the same.
+
+
+                                                       455
+
+
+(complex) tags on the English side encode local                               complement noun phrase as a component in
+(and sometimes, non-local) syntactic information.                             its complex tag.
+Furthermore, we can see that before the transfor-                         •   Possessive pronouns attach to the head-word
+mations, the English side has 4 words, while af-                              they specify.
+terwards it has only 2 words. We find (and elab-
+                                                                          •   The possessive markers following a noun
+orate later) that this reduction in the English side
+                                                                              (separated by the tokenizer) attached to the
+of the training corpus, in general, is about 30%,
+                                                                              noun.
+and is correlated with improved BLEU scores. We
+believe the removal of many function words and                            •   Auxiliary verbs and negation markers attach
+their folding into complex tags (which do not get                             to the lexical verb that they form a verb com-
+involved in GIZA++ alignment – we only align the                              plex with.
+root words) seems to improve alignment as there                           •   Modals attach to the lexical verb they modify.
+are less number of “words” to worry about during                          • Forms of be used as predicates with adjecti-
+that process.4                                                              val or nominal dependents attach to the de-
+   Another interesting side effect of this represen-                        pendent.
+tation is the following. As the complex syntac-
+tic tags on the English side are based on syntactic                       • Forms of be or have used to form passive
+relations and not necessarily positional proximity,                         voice with past participle verbs, and forms of
+the tag for relations in a phrase like in their cul-                        be used with -ing verbs to form present con-
+tural, historical and economic relations would be                           tinuous verbs, attach to the verb.
+exactly the same as above. Thus phrase extrac-                            • Various adverbial clauses formed with if,
+tion algorithms can conflate all constructs like in                         while, when, etc., are reorganized so that
+their . . . economic relations as one phrase, regard-                       these markers attach to the head verb of the
+less of the intervening modifiers, assuming that                            clause.
+parser does its job properly.                                          As stated earlier, these rules are linguistically mo-
+   Not all cases can be captured as cleanly as the                     tivated and are based on the morphological struc-
+example above, but most transformations capture                        ture of the target language words. Hence for dif-
+local and nonlocal syntax involving many function                      ferent target languages these rules will be differ-
+words and then encode syntax with complex tags                         ent. The rules recognize various local and nonlo-
+                                                                       cal syntactic structures in the source side parse tree
+resembling full morphological tags on the Turk-                        that correspond to complex morphological of tar-
+ish side. These transformations, however, are not                      get words and then remove source function words
+meant to perform sentence level constituent re-                        folding them into complex tags. For instance, the
+ordering on the English side. We explore these                         transformations in Figure 1 are handled by scripts
+later.                                                                 that process Malt Parser’s dependency structure
+                                                                       output and that essentially implement the follow-
+   We developed set of about 20 linguistically-                        ing sequence of rules expressed as pseudo code:
+motivated syntax-to-morphology transformations                         1) if (<Y>+PRP$ POS <Z>+NN<TAG>)
+which had variants parameterized depending on                             then {
+                                                                              APPEND <Y>+PRP$ TO <Z>+NN<TAG>
+what, for instance, the preposition or the adverbial                          REMOVE <Y>+PRP$
+                                                                            }
+was, and how they map to morphological struc-
+ture on the Turkish side. For instance, one general                    2) if (<X>+IN PMOD <Z>+NN<TAG>)
+                                                                          then {
+rule handles cases like while . . . verb and if . . . verb                    APPEND <X>+IN TO <Z>+NN<TAG>
+                                                                              REMOVE <X>+IN
+etc., mapping these to appropriate complex tags.                            }
+It is also possible that multiple transformations                      Here <X>, <Y> and <Z> can be considered as Pro-
+can apply to generate a single English complex                         log like-variables that bind to patterns (mostly root
+tag: a portion of the tag can come from a verb                         words), and the conditions check for specified de-
+complex transformation, and another from an ad-                        pendency relations (e.g., PMOD) between the left
+verbial phrase transformation involving a marked                       and the right sides. When the condition is satis-
+such as while. Our transformations handle the fol-                     fied, then the part matching the function word is
+lowing cases:                                                          removed and its syntactic information is appended
+   • Prepositions attach to the head-word of their                     to form the complex tag on the noun (<TAG> would
+                                                                       either match null string or any previously ap-
+   4
+     Fraser (2009) uses the first four letters of German words         pended function word markers.)5
+after morphological stripping and compound decomposition
+                                                                          5
+to help with alignment in German to English and reverse                     We outline two additional rules later when we see a more
+translation.                                                           complex example in Figure 2.
+
+
+                                                                 456
+
+
+   There are several other rules that handle more                    as book+NN NNS (and not as books+NNS). On
+mundane cases of date and time constructions (for                    the Turkish side, each marker with a preceding
+which, the part of the date construct which the                      + is a morphological feature. The first marker
+parser attaches a preposition, is usually different                  is the part-of-speech tag of the root and the re-
+than the part on the Turkish side that gets inflected                mainder are the overt inflectional and derivational
+with case markers, and these have to be reconciled                   markers of the word. For example, the analy-
+by overriding the parser output.)                                    sis kitap+Noun+P2pl+A3pl+Gen for a word
+   The next section presents an example of a sen-                    like kitap-lar-ınız-ın7 (of your books)
+tence with multiple transformations applied, after                   represents the root kitap (book), a Noun, with
+discussing the preprocessing steps.                                  third person plural agreement A3pl, second per-
+                                                                     son plural possessive agreement, P2pl and geni-
+3     Experimental Setup and Results                                 tive case Gen.
+3.1    Data Preparation                                                 The sentence representations in the middle part
+                                                                     of Figure 2 show these sentences with some of the
+We worked on an English-Turkish parallel corpus                      dependency relations (relevant to our transforma-
+which consists of approximately 50K sentences                        tions) extracted by the parser, explicitly marked as
+with an average of 23 words in English sentences                     labeled links. The representation at the bottom of
+and 18 words in Turkish sentences. This is the                       this figure (except for the co-indexation markers)
+same parallel data that has been used in earlier                     corresponds to the final transformed form of the
+SMT work on Turkish (Durgar-El-Kahlout and                           parallel training and test data. The co-indexation
+Oflazer, 2010). Let’s assume we have the follow-                     is meant to show which root words on one side
+ing pair of parallel sentences:                                      map to which on the other side. Ultimately we
+E:    if a request is made orally the authority must                 would want the alignment process to uncover the
+make a record of it
+T:  istek sözlü olarak yapılmışsa yetkili makam bunu              root word alignments indicated here. We can also
+kaydetmelidir
+                                                                     note that the initial form of the English sentence
+   On the English side of the data, we use the Stan-
+                                                                     has 14 words and the final form after transforma-
+ford Log-Linear Tagger (Toutanova et al., 2003),
+                                                                     tions, has 7 words (with complex tags).8
+to tag the text with Penn Treebank Tagset. On
+the Turkish side, we perform a full morphological
+                                                                     3.2    Experiments
+analysis, (Oflazer, 1994), and morphological dis-
+ambiguation (Yuret and Türe, 2006) to select the                    We evaluated the impact of the transformations
+contextually salient interpretation of words. We                     in factored phrase-based SMT with an English-
+then remove any morphological features that are                      Turkish data set which consists of 52712 parallel
+not explicitly marked by an overt morpheme.6 So                      sentences. In order to have more confidence in the
+for both sides we get,                                               impact of our transformations, we randomly gen-
+E:   if+IN a+DT request+NN is+VBZ made+VBN orally+RB                 erated 10 training, test and tune set combinations.
+the+DT authority+NN must+MD make+VB a+DT record+NN
+of+IN it+PRP                                                         For each combination, the latter two were 1000
+T:        istek+Noun sözlü+Adj olarak+Verb+ByDoingSo               sentences each and the remaining 50712 sentences
+yap+Verb+Pass+Narr+Cond yetkili+Adj makam+Noun
+bu+Pron+Acc kaydet+Verb+Neces+Cop                                    were used as training sets.9,10
+   Finally we parse the English sentences using                         We performed our experiments with the Moses
+MaltParser (Nivre et al., 2007), which gives us                      toolkit (Koehn et al., 2007). In order to encourage
+labeled dependency parses. On the output of the                      long distance reordering in the decoder, we used
+parser, we make one more transformation. We re-                      a distortion limit of -1 and a distortion weight of
+place each word with its root, and possibly add an
+additional tag for any inflectional information con-                    7
+                                                                           - shows surface morpheme boundaries.
+                                                                        8
+veyed by overt morphemes or exceptional forms.                             We could give two more examples of rules to process
+This is done by running the TreeTagger (Schmid,                      the if-clause in the example in Figure 2. These rules would
+                                                                     be applied sequentially: The first rule recognizes the pas-
+1994) on the English side which provides the roots                   sive construction mediated by be+VB<AGR> forming a verb
+in addition to the tags, and then carrying over this                 complex (VC) with <Y>+VB_VBN and appends the former
+information to the parser output. For example,                       to the complex tag on the latter and then deletes the former
+                                                                     token. The second rule then recognizes <X>+IN relating to
+is is tagged as be+VB VBZ, made is tagged as                         <Y>+VB<TAGS>with VMOD and appends the former to the
+make+VB VBN, and a word like books is tagged                         complex tag on the latter and then deletes the former token.
+                                                                         9
+                                                                           The tune set was not used in this work but reserved for
+   6                                                                 future work so that meaningful comparisons could be made.
+     For example, the morphological analyzer outputs +A3sg
+                                                                        10
+to mark a singular noun, if there is no explicit plural mor-               It is possible that the 10 test sets are not mutually exclu-
+pheme. Such markers are removed.                                     sive.
+
+
+                                                               457
+
+
+             Figure 2: An English-Turkish sentence pair with multiple transformations applied
+
+
+0.1.11 We did not use MERT to further optimize                         3.2.1 The Baseline Systems
+our model.12                                                           As a baseline system, we built a standard phrase-
+   For evaluation, we used the BLEU metric (Pap-                       based system, using the surface forms of the words
+ineni et al., 2001). Each experiment was repeated                      without any transformations, and with a 3-gram
+over the 10 data sets. Wherever meaningful, we                         LM in the decoder. We also built a second baseline
+report the average BLEU scores over 10 data sets                       system with a factored model. Instead of using just
+along with the maximum and minimum values and                          the surface form of the word, we included the root,
+the standard deviation.                                                part-of-speech and morphological tag information
+  11
+                                                                       into the corpus as additional factors alongside the
+     These allow and do not penalize unlimited distortions.            surface form.13 Thus, a token is represented with
+  12
+     The experience with MERT for this language pair has
+not been very positive. Earlier work on Turkish indicates that         three factors as Surface|Root|Tags where
+starting with default Moses parameters and applying MERT               Tags are complex tags on the English side, and
+to the resulting model does not even come close to the per-            morphological tags on the Turkish side.14
+formance of the model with those two specific parameters set
+as such (distortion limit -1 and distortion weight 0.1), most             Moses lets word alignment to align over any of
+likely because the default parameters do not encourage the             the factors. We aligned our training sets using only
+range of distortions that are needed to deal with the con-             the root factor to conflate statistics from different
+stituent order differences. Earlier work on Turkish also shows
+that even when the weight-d parameter is initialized with this         forms of the same root. The rest of the factors are
+specific value, the space explored for distortion weight and           then automatically assumed to be aligned, based
+other parameters do not produce any improvements on the
+test set, even though MERT claims there are improvements               on the root alignment. Furthermore, in factored
+on the tune set.                                                       models, we can employ different language models
+   The other practical reasons for not using MERT were                 for different factors. For the initial set of experi-
+the following: at the time we performed this work, the
+discussion thread at http://www.mail-archive.                          ments we used 3-gram LMs for all the factors.
+com/moses-support@mit.edu/msg01012.html                                   For factored decoding, we employed a model
+indicated that MERT was not tested on multiple factors.                whereby we let the decoder translate a surface
+The discussion thread at http://www.mail-archive.
+com/moses-support@mit.edu/msg00262.html                                form directly, but if/when that fails, the decoder
+claimed that MERT does not help very much with factored                can back-off with a generation model that builds
+models. With these observations, we opted not to experiment            a target word from independent translations of the
+with MERT with the multiple factor approach we employed,
+given that it would be risky and time consuming to run                 root and tags.
+MERT needed for 10 different models and then not neces-                  13
+sarily see any (consistent) improvements. MERT however                     In Moses, factors are separated by a ‘|’ symbol.
+                                                                         14
+is orthogonal to the improvements we achieve here and can                  Concatenating Root and Tags gives the Surface
+always be applied on top of the best model we get.                     form, in that the surface is unique given this concatenation.
+
+
+                                                                 458
+
+
+   The results of our baseline models are given in                    the baseline system and the highest performance is
+top two rows of Table 1. As expected, the word-                       attained when all transformations are performed.
+based baseline performs worse than the factored                       However when we take a closer look at the indi-
+baseline. We believe that the use of multiple lan-                    vidual transformations performed on English side,
+guage models (some much less sparse than the sur-                     we observe that not all of them have the same ef-
+face LM) in the factored baseline is the main rea-                    fect. While Noun+Adj transformations give us an
+son for the improvement.                                              increase of 2.73 BLEU points, Verbs improve the
+                                                                      result by only 0.8 points and improvement with
+3.2.2    Applying Syntax-to-Morphology
+                                                                      Adverbs is even lower. To understand why we
+         Mapping Transformations
+                                                                      get such a difference, we investigated the corre-
+To gauge the effects of transformations separately,                   lation of the decrease in the number of tokens on
+we first performed them in batches on the En-                         both sides of the parallel data, with the change in
+glish side. These batches were (i) transforma-                        BLEU scores. The graph in Figure 3 plots the
+tions involving nouns and adjectives (Noun+Adj),                      BLEU scores and the number of tokens in the two
+(ii) transformations involving verbs (Verb), (iii)                    sides of the training data as the data is modified
+transformations involving adverbs (Adv), and                          with transformations. We can see that as the num-
+(iv) transformations involving verbs and adverbs                      ber of tokens in English decrease, the BLEU score
+(Verb+Adv).                                                           increases. In order to measure the relationship
+   We also performed one set of transformations                       between these two variables statistically, we per-
+on the Turkish side. In general, English preposi-                     formed a correlation analysis and found that there
+tions translate as case markers on Turkish nouns.                     is a strong negative correlation of -0.99 between
+However, there are quite a number of lexical post-                    the BLEU score and the number of English tokens.
+positions in Turkish which also correspond to En-                     We can also note that the largest reduction in the
+glish prepositions. To normalize these with the                       number of tokens comes with the application of
+handling of case-markers, we treated these postpo-                    the Noun+Adj transformations, which correlates
+sitions as if they were case-markers and attached                     with the largest increase in BLEU score.
+them to the immediately preceding noun, and then                         It is also interesting to look at the n-gram pre-
+aligned the resulting training data (PostP).15                        cision components of the BLEU scores (again av-
+   The results of these experiments are presented                     eraged). In Table 2, we list these for words (ac-
+in Table 1. We can observe that the com-                              tual BLEU), roots (BLEU-R) to see how effective
+bined syntax-to-morphology transformations on                         we are in getting the root words right, and mor-
+the source side provide a substantial improvement                     phological tags, (BLEU-M), to see how effective
+by themselves and a simple target side transfor-                      we are in getting just the morphosyntax right. It
+mation on top of those provides a further boost
+to 21.96 BLEU which represents a 28.57% rel-                                                1-gr.    2-gr.    3-gr.    4-gr.
+                                                                        BLEU       21.96   55.73    27.86    16.61    10.68
+ative improvement over the word-based baseline                          BLEU-R     27.63   68.60    35.49    21.08    13.47
+and a 18.00% relative improvement over the fac-                         BLEU-M     27.93   67.41    37.27    21.40    13.41
+tored baseline.
+                                                                      Table 2: Details of Word, Root and Morphology
+ Experiment              Ave.    STD     Max.     Min.                BLEU Scores
+ Baseline               17.08    0.60    17.99    15.97
+ Factored Baseline      18.61    0.76    19.41    16.80
+                                                                      seems we are getting almost 69% of the root words
+ Noun+Adj               21.33    0.62    22.27    20.05
+ Verb                   19.41    0.62    20.19    17.99               and 68% of the morphological tags correct, but
+ Adv                    18.62    0.58    19.24    17.30               not necessarily getting the combination equally as
+ Verb+Adv               19.42    0.59    20.17    18.13               good, since only about 56% of the full word forms
+ Noun+Adj               21.67    0.72    22.66    20.38
+  +Verb+Adv                                                           are correct. One possible way to address is to use
+ Noun+Adj+Verb          21.96     0.72   22.91    20.67               longer distance constraints on the morphological
+  +Adv+PostP                                                          tag factors, to see if we can select them better.
+Table 1: BLEU scores for a variety of transforma-                     3.2.3   Experiments with higher-order
+tion combinations                                                             language models
+   We can see that every transformation improves                      Factored phrase-based SMT allows the use of mul-
+                                                                      tiple language models for the target side, for dif-
+  15
+    Note than in this case, the translations would be gener-          ferent factors during decoding. Since the number
+ated in the same format, but we then split such postpositions
+from the words they are attached to, during decoding, and             of possible distinct morphological tags (the mor-
+then evaluate the BLEU score.                                         phological tag vocabulary size) in our training data
+
+
+                                                                459
+
+
+                     Figure 3: BLEU scores vs number of tokens in the training sets
+
+
+(about 3700) is small compared to distinct num-                3-gram root LM       1-gr.    2-gr.    3-gr.    4-gr.
+                                                               BLEU      22.61     55.85    28.21    17.16    11.36
+ber of surface forms (about 52K) and distinct roots            BLEU-R    28.21     68.67    35.80    21.55    14.07
+(about 15K including numbers), it makes sense to               BLEU-M 28.68        67.50    37.59    22.02    14.22
+investigate the contribution of higher order n-gram            4-gram root LM       1-gr.    2-gr.    3-gr.    4-gr.
+                                                               BLEU      22.80     55.85    28.39    17.34    11.54
+language models for the morphological tag factor               BLEU-R    28.48     68.68    35.97    21.79    14.35
+on the target side, to see if we can address the ob-           BLEU-M 28.82        67.49    37.63    22.17    14.40
+servation in the previous section.
+                                                             Table 3: Details of Word, Root and Morphology
+                                                             BLEU Scores, with 8-gram tag LM and 3/4-gram
+                                                             root LMs
+   Using the data transformed with Noun+Adj-
++Verb+Adv+PostP transformations which previ-                 3.2.4   Augmenting the Training Data
+ously gave us the best results overall, we experi-
+mented with using higher order models (4-grams               In order to alleviate the lack of large scale parallel
+to 9-grams) during decoding, for the morphologi-             corpora for the English–Turkish language pair, we
+cal tag factor models, keeping the surface and root          experimented with augmenting the training data
+models at 3-gram. We observed that for all the 10            with reliable phrase pairs obtained from a previous
+data sets, the improvements were consistent for up           alignment. Phrase table entries for the surface fac-
+to 8-gram. The BLEU with the 8-gram for only                 tors produced by Moses after it does an alignment
+the morphological tag factor averaged over the 10            on the roots, contain the English (e) and Turkish (t)
+data sets was 22.61 (max: 23.66, min: 21.37, std:            parts of a pair of aligned phrases, and the proba-
+0.72) compared to the 21.96 in Table 1. Using a 4-           bilities, p(e|t), the conditional probability that the
+gram root LM, considerably less sparse than word             English phrase is e given that the Turkish phrase
+forms but more sparse that tags, we get a BLEU               is t, and p(t|e), the conditional probability that
+score of 22.80 (max: 24.07, min: 21.57, std: 0.85).          the Turkish phrase is t given the English phrase is
+The details of the various BLEU scores are shown             e. Among these phrase table entries, those with
+in the two halves of Table 3. It seems that larger           p(e|t) ≈ p(t|e) and p(t|e) + p(e|t) larger than
+n-gram LMs contribute to the larger n-gram preci-            some threshold, can be considered as reliable mu-
+sions contributing to the BLEU but not to the uni-           tual translations, in that they mostly translate to
+gram precision.                                              each other and not much to others. We extracted
+
+
+                                                       460
+
+
+from the phrase table those phrases with 0.9 ≤                       of reordering gave consistent improvements for
+p(e|t)/p(t|e) ≤ 1.1 and p(t|e) + p(e|t) ≥ 1.5                        all the data sets. A cursory examinations of
+and added them to the training data to further bias                  the alignments produced after these reordering
+the alignment process. The resulting BLEU score                      transformations indicated that the resulting root
+was 23.78 averaged over 10 data sets (max: 24.52,                    alignments were not necessarily that close to
+min: 22.25, std: 0.71).16                                            being monotonic as we would have expected.
+
+4    Experiments with Constituent                                        Experiment      Ave.    STD    Max.    Min.
+                                                                         Baseline        21.96   0.72   22.91   20.67
+     Reordering                                                          ObjR            21.94   0.71   23.12   20.56
+                                                                         ObjR+AdvR       21.73   0.50   22.44   20.69
+The transformations in the previous section do                           ObjR+PassAgR    21.88   0.73   23.03   20.51
+not perform any constituent level reordering, but                        ObjR+SubCR      21.88   0.61   22.77   20.92
+rather eliminate certain English function words as
+tokens in the text and fold them into complex syn-                   Table 4: BLEU scores of after reordering transfor-
+tactic tags. That is, no transformations reorder                     mations
+the English SVO order to Turkish SOV,17 for in-
+stance, or move postnominal prepositional phrase                     5   Related Work
+modifiers in English, to prenominal phrasal mod-                     Statistical Machine Translation into a morpholog-
+ifiers in Turkish. Now that we have the parses                       ically rich language is a challenging problem in
+of the English side, we have also investigated a                     that, on the target side, the decoder needs to gen-
+more comprehensive set of reordering transforma-                     erate both the right sequence of constituents and
+tions which perform the following constituent re-                    the right sequence of morphemes for each word.
+orderings to bring English constituent order more                    Furthermore, since for such languages one can
+in line with the Turkish constitent order at the top                 generate tens of hundreds of inflected variants,
+and embedded phrase levels:                                          standard word-based alignment approaches suf-
+                                                                     fer from sparseness issues. Koehn (2005) applied
+    • Object reordering (ObjR), in which the ob-
+                                                                     standard phrase-based SMT to Finnish using the
+      jects and their dependents are moved in front
+                                                                     Europarl corpus and reported that translation to
+      of the verb.
+                                                                     Finnish had the worst BLEU scores.
+    • Adverbial phrase reordering (AdvR), which                         Using morphology in statistical machine trans-
+      involve moving post-verbal adverbial phrases                   lation has been addressed by many researchers for
+      in front of the verb.                                          translation from or into morphologically rich(er)
+                                                                     languages. Niessen and Ney (2004) used mor-
+    • Passive sentence agent reordering (PassAgR),                   phological decomposition to get better alignments.
+      in which any post-verbal agents marked by                      Yang and Kirchhoff (2006) have used phrase-
+      by, are moved in front of the verb.                            based backoff models to translate unknown words
+                                                                     by morphologically decomposing the unknown
+    • Subordinate clause reordering (SubCR)                          source words. Lee (2004) and Zolmann et al.
+      which involve moving postnominal relative                      (2006) have exploited morphology in Arabic-
+      clauses or prepositional phrase modifers in                    English SMT. Popovic and Ney (2004) investi-
+      front of any modifiers of the head noun.                       gated improving translation quality from inflected
+      Similarly any prepositional phrases attached                   languages by using stems, suffixes and part-of-
+      to verbs are moved to in front of the verb.                    speech tags. Goldwater and McClosky (2005)
+  We         performed       these      reorderings                  use morphological analysis on the Czech side to
+on top of the data obtained with the                                 get improvements in Czech-to-English statistical
+Noun+Adj+Verb+Adv+PostP             transformations                  machine translation. Minkov et al. (2007) have
+earlier in Section 3.2.2 and used the same decoder                   used morphological postprocessing on the target
+parameters. Table 4 shows the performance                            side, to improve translation quality. Avramidis and
+obtained after various combination of reordering                     Koehn (2008) have annotated English with addi-
+operations over the 10 data sets. Although there                     tional morphological information extracted from a
+were some improvements for certain cases, none                       syntactic tree, and have used this in translation to
+   16
+                                                                     Greek and Czech. Recently, Bisazza and Federico
+      These experiments were done on top of the model in             (2009) have applied morphological segmentation
+3.2.3 with a 3-gram word and root LMs and 8-gram tag LM.
+   17
+      Although Turkish is a free-constituent order language,         in Turkish-to-English statistical machine transla-
+SOV is the dominant order in text.                                   tion and found that it provides nontrivial BLEU
+
+
+                                                               461
+
+
+score improvements.                                           improvement in BLEU scores over a word-based
+   In the context of translation from English to              baseline and about 28% improvement of a factored
+Turkish, Durgar-El Kahlout and Oflazer (2010)                 baseline. We also experimented with numerous
+have explored different representational units of             additional syntactic reordering transformation on
+the lexical morphemes and found that selectively              the source to further bring the constituent order in
+splitting morphemes on the target side provided               line with the target order but found that these did
+nontrivial improvement in the BLEU score. Their               not provide any tangible improvements when av-
+approach was based on splitting the target Turk-              eraged over the 10 different data sets.
+ish side, into constituent morphemes while our ap-               It is possible that the techniques presented in
+proach in this paper is the polar opposite: we do             this paper may be less effective if the available
+not segment morphemes on the Turkish side but                 data is much larger, but we have reasons to be-
+rather join function words on the English side to             lieve that they will still be effective then also. The
+the related content words. Our approach is some-              reduction in size of the source language side of
+what similar to recent approaches that use com-               the training corpus seems to be definitely effective
+plex syntactically-motivated complex tags. Birch              and there no reason why such a reduction (if not
+et al. (2007) have integrated more syntax in a                more) will not be observed in larger data. Also,
+factored translation approach by using CCG su-                the preprocessing of English prepositional phrases
+pertags as a separate factor and have reported                and many adverbial phrases usually involve rather
+a 0.46 BLEU point improvement in Dutch-to-                    long distance relations in the source side syntactic
+English translations. Although they used su-                  structure18 and when such structures are coded as
+pertags, these were obtained not via syntactic anal-          complex tags on the nominal or verbal heads, such
+ysis but by supertagging, while we determine, on              long distance syntax is effectively “localized” and
+the fly, the appropriate syntactic tags based on syn-         thus can be better captured with the limited win-
+tactic structure. A similar approach based on su-             dow size used for phrase extraction.
+pertagging was proposed by Hassan et al. (2007).                 One limitation of the approach presented here
+They used both CCG supertags and LTAG su-                     is that it is not directly applicable in the reverse
+pertags in Arabic-to-English phrase-based transla-            direction. The data encoding and set-up can di-
+tion and have reported about 6% relative improve-             rectly be employed to generate English “transla-
+ment in BLEU scores. In the context of reorder-               tion” expressed as a sequence of root and complex
+ing, one recent work (Xu et al., 2009), was able              tag combinations, but then some of the complex
+to get an improvement of 0.6 BLEU points by us-               tags could encode various syntactic constructs. To
+ing source syntactic analysis and a constituent re-           finalize the translation after the decoding step, the
+ordering scheme like ours for English-to-Turkish              function words/tags in the complex tag would then
+translation, but without using any morphology.                have to be unattached and their proper positions
+                                                              in the sentence would have to be located. The
+6   Conclusions                                               problem is essentially one of generating multiple
+                                                              candidate sentences with the unattached function
+We have presented a novel way to incorporate                  words ambiguously positioned (say in a lattice)
+source syntactic structure in English-to-Turkish              and then use a second language model to rerank
+phrase-based machine translation by parsing the               these sentences to select the target sentence. This
+source sentences and then encoding many local                 is an avenue of research that we intend to look at
+and nonlocal source syntactic structures as addi-             in the very near future.
+tional complex tag factors. Our goal was to ob-
+tain representations of source syntactic structures           Acknowledgements
+that parallel target morphological structures, and
+enable us to extend factored translation, in appli-           We thank Joakim Nivre for providing us with the
+cability, to languages with very disparate morpho-            parser. This publication was made possible by the
+logical structures.                                           generous support of the Qatar Foundation through
+   In our experiments over a limited amount train-            Carnegie Mellon University’s Seed Research pro-
+ing data, but repeated with 10 different training             gram. The statements made herein are solely the
+and test sets, we found that syntax-to-morphology             responsibility of the authors.
+mapping transformations on the source side sen-
+tences, along with a very small set of transforma-               18
+                                                                    For instance, consider the example in Figure 2 involving
+tions on the target side, coupled with some ad-               if with some additional modifiers added to the intervening
+ditional techniques provided about 39% relative               noun phrase.
+
+
+                                                        462
+
+
+References                                                      Einat Minkov, Kristina Toutanova, and Hisami Suzuki.
+                                                                  2007. Generating complex morphology for machine
+Eleftherios Avramidis and Philipp Koehn. 2008. En-                translation. In Proceedings of the 45th ACL, pages
+  riching morphologically poor languages for statis-              128–135, Prague, Czech Republic, June. Associa-
+  tical machine translation. In Proceedings of ACL-               tion for Computational Linguistics.
+  08/HLT, pages 763–770, Columbus, Ohio, June.
+                                                                Sonja Niessen and Hermann Ney. 2004. Statisti-
+Alexandra Birch, Miles Osborne, and Philipp Koehn.                cal machine translation with scarce resources using
+  2007. CCG supertags in factored translation models.             morpho-syntatic information. Computational Lin-
+  In Proceedings of SMT Workshop at the 45th ACL.                 guistics, 30(2):181–204.
+Arianna Bisazza and Marcello Federico. 2009. Mor-               Joakim Nivre, Hall Johan, Nilsson Jens, Chanev
+  phological pre-processing for Turkish to English sta-           Atanas, Gülşen Eryiğit, Sandra Kübler, Marinov
+  tistical machine translation. In Proceedings of the             Stetoslav, and Erwin Marsi. 2007. Maltparser:
+  International Workshop on Spoken Language Trans-                A language-independent system for data-driven de-
+  lation, Tokyo, Japan, December.                                 pendency parsing. Natural Language Engineering
+                                                                  Journal, 13(2):99–135.
+İlknur Durgar-El-Kahlout and Kemal Oflazer. 2010.
+    Exploiting morphology and local word reordering in          Kemal Oflazer and İlknur Durgar-El-Kahlout. 2007.
+    English to Turkish phrase-based statistical machine           Exploring different representational units in
+    translation. IEEE Transactions on Audio, Speech,              English-to-Turkish statistical machine translation.
+    and Language Processing. To Appear.                           In Proceedings of Statistical Machine Translation
+                                                                  Workshop at the 45th Annual Meeting of the
+Alexander Fraser. 2009. Experiments in morphosyn-                 Association for Computational Linguistics, pages
+  tactic processing for translating to and from German.           25–32.
+  In Proceedings of the Fourth Workshop on Statis-
+  tical Machine Translation, pages 115–119, Athens,             Kemal Oflazer. 1994. Two-level description of Turk-
+  Greece, March. Association for Computational Lin-               ish morphology. Literary and Linguistic Comput-
+  guistics.                                                       ing, 9(2):137–148.
+
+Sharon Goldwater and David McClosky. 2005. Im-                  Kemal Oflazer. 2008. Statistical machine translation
+  proving statistical MT through morphological anal-              into a morphologically complex language. In Pro-
+  ysis. In Proceedings of HLT/EMNLP-2005, pages                   ceedings of the Conference on Intelligent Text Pro-
+  676–683, Vancouver, British Columbia, Canada,                   cessing and Computational Linguistics (CICLing),
+  October.                                                        pages 376–387.
+
+Hany Hassan, Khalil Sima’an, and Andy Way. 2007.                Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+  Supertagged phrase-based statistical machine trans-             Jing Zhu. 2001. BLEU: A method for automatic
+  lation. In Proceedings of the 45th ACL, pages 288–              evaluation of machine translation. In Proceedings
+  295, Prague, Czech Republic, June. Association for              of the 40th ACL, pages 311–318.
+  Computational Linguistics.                                    Maja Popovic and Hermann Ney. 2004. Towards the
+                                                                 use of word stems and suffixes for statistical ma-
+Philipp Koehn and Hieu Hoang. 2007. Factored trans-
+                                                                 chine translation. In Proceedings of the 4th LREC,
+  lation models. In Proceedings of EMNLP.
+                                                                 pages 1585–1588, May.
+Philipp Koehn, Franz Josef Och, and Daniel Marcu.               Helmut Schmid. 1994. Probabilistic part-of-speech
+  2003. Statistical phrase-based translation. In Pro-             tagging using decision trees. In Proceedings of
+  ceedings of HLT/NAACL-2003.                                     International Conference on New Methods in Lan-
+                                                                  guage Processing.
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris
+  Callison-Burch, Marcello Federico, Nicola Bertoldi,           Kristina Toutanova, Dan Klein, Christopher D. Man-
+  Brooke Cowan, Wade Shen, Christine Moran,                       ning, and Yoram Singer. 2003. Feature-rich part-of-
+  Richard Zens, Chris Dyer, Ondrej Bojar, Alexan-                 speech tagging with a cyclic dependency network.
+  dra Constantin, and Evan Herbst. 2007. Moses:                   In Proceedings of HLT/NAACL-2003, pages 252–
+  Open source toolkit for statistical machine transla-            259.
+  tion. In Proceedings of the 45th ACL–demonstration
+  session, pages 177–180.                                       Peng Xu, Jaeho Kang, Michael Ringgaard, and Franz
+                                                                  Och. 2009. Using a dependency parser to improve
+Philipp Koehn. 2005. Europarl: A parallel corpus for              SMT for subject-object-verb languages. In Proceed-
+  statistical machine translation. In MT Summit X.                ings HLT/NAACL-2009, pages 245–253, June.
+Young-Suk Lee. 2004. Morphological analysis for                 Mei Yang and Katrin Kirchhoff. 2006. Phrase-based
+  statistical machine translation. In Proceedings of             backoff models for machine translation of highly in-
+  HLT/NAACL-2004 – Companion Volume, pages 57–                   flected languages. In Proceedings of EACL-2006,
+  60.                                                            pages 41–48.
+
+
+                                                          463
+
+
+Deniz Yuret and Ferhan Türe. 2006. Learning mor-
+  phological disambiguation rules for Turkish. In
+  Proceedings of HLT/NAACL-2006, pages 328–334,
+  New York City, USA, June.
+Andreas Zollmann, Ashish Venugopal, and Stephan
+  Vogel. 2006. Bridging the inflection morphol-
+  ogy gap for Arabic statistical machine translation.
+  In Proceedings of HLT/NAACL-2006 – Companion
+  Volume, pages 201–204, New York City, USA, June.
+
+
+
+
+                                                        464
+

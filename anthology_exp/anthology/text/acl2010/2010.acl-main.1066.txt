@@ -1,0 +1,655 @@
+                        Generating Templates of Entity Summaries
+                     with an Entity-Aspect Model and Pattern Mining
+
+                          Peng Li1 and Jing Jiang2 and Yinglin Wang1
+      1
+          Department of Computer Science and Engineering, Shanghai Jiao Tong University
+                2
+                  School of Information Systems, Singapore Management University
+            {lipeng,ylwang}@sjtu.edu.cn                 jingjiang@smu.edu.sg
+
+
+                        Abstract                                 as the industry, founder and headquarter of the
+                                                                 company. Our goal is to automatically construct
+    In this paper, we propose a novel approach                   a summary template that outlines the most salient
+    to automatic generation of summary tem-                      types of facts for an entity category, given a col-
+    plates from given collections of summary                     lection of entity summaries from this category.
+    articles. This kind of summary templates                        Such kind of summary templates can be very
+    can be useful in various applications. We                    useful in many applications. First of all, they
+    first develop an entity-aspect LDA model                     can uncover the underlying structures of summary
+    to simultaneously cluster both sentences                     articles and help better organize the information
+    and words into aspects. We then apply fre-                   units, much in the same way as infoboxes do in
+    quent subtree pattern mining on the depen-                   Wikipedia. In fact, automatic template genera-
+    dency parse trees of the clustered and la-                   tion provides a solution to induction of infobox
+    beled sentences to discover sentence pat-                    structures, which are still highly incomplete in
+    terns that well represent the aspects. Key                   Wikipedia (Wu and Weld, 2007). A template
+    features of our method include automatic                     can also serve as a starting point for human edi-
+    grouping of semantically related sentence                    tors to create new summary articles. Furthermore,
+    patterns and automatic identification of                     with summary templates, we can potentially ap-
+    template slots that need to be filled in. We                 ply information retrieval and extraction techniques
+    apply our method on five Wikipedia entity                    to construct summaries for new entities automati-
+    categories and compare our method with                       cally on the fly, improving the user experience for
+    two baseline methods. Both quantitative                      search engine and question answering systems.
+    evaluation based on human judgment and
+                                                                    Despite its usefulness, the problem has not been
+    qualitative comparison demonstrate the ef-
+                                                                 well studied. The most relevant work is by Fila-
+    fectiveness and advantages of our method.
+                                                                 tova et al. (2006) on automatic creation of domain
+                                                                 templates, where the defintion of a domain is sim-
+1   Introduction
+                                                                 ilar to our notion of an entity category. Filatova
+In this paper, we study the task of automatically                et al. (2006) first identify the important verbs for
+generating templates for entity summaries. An en-                a domain using corpus statistics, and then find fre-
+tity summary is a short document that gives the                  quent parse tree patterns from sentences contain-
+most important facts about an entity. In Wikipedia,              ing these verbs to construct a domain template.
+for instance, most articles have an introduction                 There are two major limitations of their approach.
+section that summarizes the subject entity before                First, the focus on verbs restricts the template pat-
+the table of contents and other elaborate sections.              terns that can be found. Second, redundant or
+These introduction sections are examples of en-                  related patterns using different verbs to express
+tity summaries we consider. Summaries of enti-                   the same or similar facts cannot be grouped to-
+ties from the same category usually share some                   gether. For example, “won X award” and “re-
+common structure. For example, biographies of                    ceived X prize” are considered two different pat-
+physicists usually contain facts about the national-             terns by this approach. We propose a method that
+ity, educational background, affiliation and major               can overcome these two limitations. Automatic
+contributions of the physicist, whereas introduc-                template generation is also related to a number of
+tions of companies usually list information such                 other problems that have been studied before, in-
+
+
+                                                           640
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 640–649,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+cluding unsupervised IE pattern discovery (Sudo                Aspect                        Pattern
+et al., 2003; Shinyama and Sekine, 2006; Sekine,                        ENT   received his phd from ? university
+                                                                  1     ENT   studied ? under ?
+2006; Yan et al., 2009) and automatic generation                        ENT   earned his ? in physics from university of
+of Wikipedia articles (Sauper and Barzilay, 2009).                      ?
+We discuss the differences of our work from exist-                      ENT   was awarded the medal in ?
+                                                                  2     ENT   won the ? award
+ing related work in Section 6.                                          ENT   received the nobel prize in physics in ?
+   In this paper we propose a novel approach to                         ENT   was ? director
+                                                                  3     ENT   was the head of ?
+the task of automatically generating entity sum-                        ENT   worked for ?
+mary templates. We first develop an entity-aspect                       ENT   made contributions to ?
+model that extends standard LDA to identify clus-                 4     ENT   is best known for work on ?
+                                                                        ENT   is noted for ?
+ters of words that can represent different aspects
+of facts that are salient in a given summary col-             Table 1: Examples of some good template patterns
+lection (Section 3). For example, the words “re-              and their aspects generated by our method.
+ceived,” “award,” “won” and “Nobel” may be
+clustered together from biographies of physicists
+to represent one aspect, even though they may ap-             ucational background, affiliation, major contribu-
+pear in different sentences from different biogra-            tions, awards received, etc.
+phies. Simultaneously, the entity-aspect model
+                                                                 However, it is not clear what is the best repre-
+separates words in each sentence into background
+                                                              sentation of such templates. Should a template
+words, document words and aspect words, and
+                                                              comprise a list of subtopic labels (e.g. “educa-
+sentences likely about the same aspect are natu-
+                                                              tion” and “affiliation”) or a set of explicit ques-
+rally clustered together. After this aspect identi-
+                                                              tions? Here we define a template format based on
+fication step, we mine frequent subtree patterns
+                                                              the usage of the templates as well as our obser-
+from the dependency parse trees of the clustered
+                                                              vations from Wikipedia entity summaries. First,
+sentences (Section 4). Different from previous
+                                                              since we expect that the templates can be used by
+work, we leverage the word labels assigned by the
+                                                              human editors for creating new summaries, we use
+entity-aspect model to prune the patterns and to
+                                                              sentence patterns that are human readable as basic
+locate template slots to be filled in.
+                                                              units of the templates. For example, we may have
+   We evaluate our method on five entity cate-                a sentence pattern “ENT graduated from ? Uni-
+gories using Wikipedia articles (Section 5). Be-              versity” for the entity category “physicist,” where
+cause the task is new and thus there is no stan-              ENT is a placeholder for the entity that the sum-
+dard evaluation criteria, we conduct both quanti-             mary is about, and ‘?’ is a slot to be filled in. Sec-
+tative evaluation using our own human judgment                ond, we observe that information about entities of
+and qualitative comparison. Our evaluation shows              the same category can be grouped into subtopics.
+that our method can obtain better sentence patterns           For example, the sentences “Bohr is a Nobel lau-
+in terms of f1 measure compared with two baseline             reate” and “Einstein received the Nobel Prize” are
+methods, and it can also achieve reasonably good              paraphrases of the same type of facts, while the
+quality of aspect clusters in terms of purity. Com-           sentences “Taub earned his doctorate at Prince-
+pared with standard LDA and K-means sentence                  ton University” and “he graduated from MIT” are
+clustering, the aspects identified by our method are          slightly different but both describe a person’s ed-
+also more meaningful.                                         ucational background. Therefore, it makes sense
+                                                              to group sentence patterns based on the subtopics
+2   The Task                                                  they pertain to. Here we call these subtopics the
+Given a collection of entity summaries from the               aspects of a summary template.
+same entity category, our task is to automatically               Formally, we define a summary template to be a
+construct a summary template that outlines the                set of sentence patterns grouped into aspects. Each
+most important information one should include in              sentence pattern has a placeholder for the entity to
+a summary for this entity category. For example,              be summarized and possibly one or more template
+given a collection of biographies of physicists, ide-         slots to be filled in. Table 1 shows some sentence
+ally the summary template should indicate that im-            patterns our method has generated for the “physi-
+portant facts about a physicist include his/her ed-           cist” category.
+
+
+                                                        641
+
+
+2.1 Overview of Our Method                                     ties being discussed, that is, they are specific to
+Our automatic template generation method con-                  the summary documents.
+sists of two steps:                                               To capture background words and document-
+Aspect Identification: In this step, our goal is               specific words, Chemudugunta et al. (2007)
+to automatically identify the different aspects or             proposed to introduce a background topic and
+subtopics of the given summary collection. We si-              document-specific topics. Here we borrow their
+multaneously cluster sentences and words into as-              idea and also include a background topic as well
+pects, using an entity-aspect model extended from              as document-specific topics. To discover aspects
+the standard LDA model that is widely used in                  that are local to one or a few adjacent sentences but
+text mining (Blei et al., 2003). The output of this            may occur in many documents, Titov and McDon-
+step are sentences clustered into aspects, with each           ald (2008) proposed a multi-grain topic model,
+word labeled as a stop word, a background word,                which relies on word co-occurrences within short
+a document word or an aspect word.                             paragraphs rather than documents in order to dis-
+Sentence Pattern Generation: In this step, we                  cover aspects. Inspired by their model, we rely
+generate human-readable sentence patterns to rep-              on word co-occurrences within single sentences to
+resent each aspect. We use frequent subtree pat-               identify aspects.
+tern mining to find the most representative sen-
+tence structures for each aspect. The fixed struc-             3.1 Entity-Aspect Model
+ture of a sentence pattern consists of aspect words,           We now formally present our entity-aspect model.
+background words and stop words, while docu-                   First, we assume that stop words can be identified
+ment words become template slots whose values                  using a standard stop word list. We then assume
+can vary from summary to summary.                              that for a given entity category there are three
+                                                               kinds of unigram language models (i.e. multino-
+3   Aspect Identification                                      mial word distributions). There is a background
+At the aspect identification step, our goal is to dis-         model φB that generates words commonly used
+cover the most salient aspects or subtopics con-               in all documents and all aspects. There are D
+tained in a summary collection. Here we propose                document models ψ d (1 ≤ d ≤ D), where D
+a principled method based on a modified LDA                    is the number of documents in the given sum-
+model to simultaneously cluster both sentences                 mary collection, and there are A aspect models φa
+and words to discover aspects.                                 (1 ≤ a ≤ A), where A is the number of aspects.
+   We first make the following observation. In en-             We assume that these word distributions have a
+tity summaries such as the introduction sections               uniform Dirichlet prior with parameter β.
+of Wikipedia articles, most sentences are talk-                   Since not all aspects are discussed equally fre-
+ing about a single fact of the entity. If we look              quently, we assume that there is a global aspect
+closely, there are a few different kinds of words in           distribution θ that controls how often each aspect
+these sentences. First of all, there are stop words            occurs in the collection. θ is sampled from another
+that occur frequently in any document collection.              Dirichlet prior with parameter α. There is also a
+Second, for a given entity category, some words                multinomial distribution π that controls in each
+are generally used in all aspects of the collection.           sentence how often we encounter a background
+Third, some words are clearly associated with the              word, a document word, or an aspect word. π has
+aspects of the sentences they occur in. And finally,           a Dirichlet prior with parameter γ.
+there are also words that are document or entity                  Let Sd denote the number of sentences in doc-
+specific. For example, in Table 2 we show two                  ument d, Nd,s denote the number of words (after
+sentences related to the “affiliation” aspect from             stop word removal) in sentence s of document d,
+the “physicist” summary collection. Stop words                 and wd,s,n denote the n’th word in this sentence.
+such as “is” and “the” are labeled with “S.” The               We introduce hidden variables zd,s for each sen-
+word “physics” can be regarded as a background                 tence to indicate the aspect a sentence belongs to.
+word for this collection. “Professor” and “univer-             We also introduce hidden variables yd,s,n for each
+sity” are clearly related to the “affiliation” aspect.         word to indicate whether a word is generated from
+Finally words such as “Modena” and “Chicago”                   the background model, the document model, or
+are specifically associated with the subject enti-             the aspect model. Figure 1 shows the process of
+
+
+                                                         642
+
+
+      Venturi/D is/S a/S professor/A of/S physics/B at/S the/S University/A of/S
+  Modena/D ./S
+      He/S was/S a/S professor/A of/S physics/B at/S the/S University/A of/S
+  Chicago/D until/S 1982/D ./S
+
+Table 2: Two sentences on “affiliation” from the “physicist” entity category. S: stop word. B: background
+word. A: aspect word. D: document word.
+
+
+     1. Draw θ ∼ Dir(α), φB ∼ Dir(β), π ∼ Dir(γ)                             2004). Due to space limit, we give the formulas
+     2. For each aspect a = 1, . . . , A,                                    for the Gibbs sampler below without derivation.
+          (a) draw φa ∼ Dir(β)                                                  First, given sentence s in document d, we sam-
+     3. For each document d = 1, . . . , D,                                  ple a value for zd,s given the values of all other z
+          (a) draw ψ d ∼ Dir(β)                                              and y variables using the following formula:
+          (b) for each sentence s = 1, . . . , Sd
+                i. draw zd,s ∼ Multi(θ)
+                                                                                         p(zd,s = a|z ¬{d,s} , y, w)
+               ii. for each word n = 1, . . . , Nd,s                                                  QV QE(v) a
+                                                                                            A
+                  A. draw yd,s,n ∼ Multi(π)                                               C(a) +α       v=1       i=0 (C(v) + i + β)
+                                                                                    ∝               · QE                             .
+                   B. draw wd,s,n ∼ Multi(φB ) if yd,s,n = 1,                              A
+                                                                                         C(·) + Aα            (·)    a
+                                                                                                           i=0 (C(·) + i + V β)
+                      wd,s,n ∼ Multi(ψ d ) if yd,s,n = 2, or
+                      wd,s,n ∼ Multi(φzd,s ) if yd,s,n = 3
+                                                                              In the formula above, z ¬{d,s} is the current aspect
+                                                                             assignment of all sentences excluding the current
+   Figure 1: The document generation process.                                            A is the number of sentences assigned
+                                                                             sentence. C(a)
+                                                                                                 A is the total number of sen-
+                                                                             to aspect a, and C(·)
+                    D
+                                    Nd,s     Sd                              tences. V is the vocabulary size. C(v)a is the num-
+
+                     ϕ          w      y     z                               ber of times word v has been assigned to aspect
+                                                                                   a is the total number of words assigned to
+                                                                             a. C(·)
+                                                                             aspect a. All the counts above exclude the current
+                     φ         φB     π      θ                               sentence. E(v) is the number of times word v oc-
+                          A
+                                       γ     α                               curs in the current sentence and is assigned to be
+                     β                                                       an aspect word, as indicated by y, and E(·) is the
+                                                                             total number of words in the current sentence that
+          Figure 2: The entity-aspect model.                                 are assigned to be an aspect word.
+                                                                                We then sample a value for yd,s,n for each word
+generating the whole document collection. The                                in the current sentence using the following formu-
+plate notation of the model is shown in Figure 2.                            las:
+Note that the values of α, β and γ are fixed. The
+                                                                                                                π         B
+number of aspects A is also manually set.                                                                     C(1) + γ C(wd,s,n ) + β
+                                                                             p(yd,s,n = 1|z, y ¬{d,s,n} ) ∝    π
+                                                                                                                        ·   B
+                                                                                                                                      ,
+                                                                                                              C(·) + 3γ   C(·) +Vβ
+3.2 Inference                                                                                                   π
+                                                                                                              C(2)
+                                                                                                                          d
+                                                                                                                   + γ C(wd,s,n ) + β
+                                                                             p(yd,s,n = 2|z, y ¬{d,s,n} ) ∝             ·             ,
+Given a summary collection, i.e. the set of all                                                                π
+                                                                                                              C(·) + 3γ     d
+                                                                                                                          C(·) +Vβ
+wd,s,n , our goal is to find the most likely assign-                                                            π
+                                                                                                              C(3)
+                                                                                                                          a
+                                                                                                                   + γ C(wd,s,n ) + β
+ment of zd,s and yd,s,n , that is, the assignment that                       p(yd,s,n = 3|z, y ¬{d,s,n} ) ∝    π        ·   a         .
+                                                                                                              C(·) + 3γ   C(·) +Vβ
+maximizes p(z, y|w; α, β, γ), where z, y and w rep-
+resent the set of all z, y and w variables, respec-                           In the formulas above, y ¬{d,s,n} is the set of all y
+                                                                                                            π , C π and C π are
+                                                                             variables excluding yd,s,n . C(1)
+tively. With the assignment, sentences are natu-                                                                 (2)        (3)
+rally clustered into aspects, and words are labeled                          the numbers of words assigned to be a background
+as either a background word, a document word, or                             word, a document word, or an aspect word, respec-
+                                                                                           π is the total number of words. C B
+                                                                             tively, and C(·)
+an aspect word.
+    We        approximate             p(y, z|w; α, β, γ)       by            and C d are counters similar to C a but are for the
+p(y, z|w; φ̂B , {ψ̂ d }D
+                       d=1 , { φ̂a A
+                                  } a=1 , θ̂, π̂),    where   φ̂ B
+                                                                   ,         background model and the document models. In
+{ψ̂ d }D
+       d=1 , { φ̂a A
+                  } a=1 , θ̂  and    π̂   are     estimated using            all these counts, the current word is excluded.
+Gibbs sampling, which is commonly used for                                      With one Gibbs sample, we can make the fol-
+inference for LDA models (Griffiths and Steyvers,                            lowing estimation:
+
+
+                                                                       643
+
+
+                                                                           the aspect words in each sentence, which are use-
+          B
+        C(v)  +β                  d
+                                C(v)  +β                  a
+                                                        C(v) +β            ful in the next pattern mining step. Directly taking
+φ̂B
+  v =    B
+                   , ψ̂vd   =    d
+                                           , φ̂av   =    a
+                                                                 ,         the most frequent words from each sentence clus-
+        C(·) + V β              C(·) + V β              C(·) +Vβ
+                   A                        π                              ter as aspect words may not work well even af-
+                  C(a) +α                 C(t) +γ
+          θ̂a =    A
+                                , π̂t =    π        (1 ≤ t ≤ 3).           ter stop word removal, because there can be back-
+                  C(·)   + Aα             C(·) + 3γ
+                                                                           ground words commonly used in all aspects.
+  Here the counts include all sentences and all
+words.                                                                     4   Sentence Pattern Generation
+   In our experiments, we set α = 5, β = 0.01 and                          At the pattern generation step, we want to iden-
+γ = 20. We run 100 burn-in iterations through all                          tify human-readable sentence patterns that best
+documents in a collection to stabilize the distri-                         represent each cluster. Following the basic idea
+bution of z and y before collecting samples. We                            from (Filatova et al., 2006), we start with the parse
+found that empirically 100 burn-in iterations were                         trees of sentences in each cluster, and apply a
+sufficient for our data set. We take 10 samples with                       frequent subtree pattern mining algorithm to find
+a gap of 10 iterations between two samples, and                            sentence structures that have occurred at least K
+average over these 10 samples to get the estima-                           times in the cluster. Here we use dependency parse
+tion for the parameters.                                                   trees.
+   After estimating φ̂B , {ψ̂d }D  d=1 , {φ̂ }a=1 , θ̂ and π̂ ,
+                                            a A
+                                                                              However, different from (Filatova et al., 2006),
+we find the values of each zd,s and yd,s,n that max-                       the word labels (S, B, D and A) assigned by the
+imize p(y, z|w; φ̂B , {ψ̂d }D
+                            d=1 , {φ̂ }a=1 , θ̂, π̂). This as-
+                                     a A
+                                                                           entity-aspect model give us some advantages. In-
+signment, together with the standard stop word list                        tuitively, a representative sentence pattern for an
+we use, gives us sentences clustered into A as-                            aspect should contain at least one aspect word. On
+pects, where each word is labeled as either a stop                         the other hand, document words are entity-specific
+word, a background word, a document word or an                             and therefore should not appear in the generic tem-
+aspect word.                                                               plate patterns; instead, they correspond to tem-
+3.3 Comparison with Other Models                                           plate slots that need to be filled in. Furthermore,
+                                                                           since we work on entity summaries, in each sen-
+A major difference of our entity-aspect model
+                                                                           tence there is usually a word or phrase that refers
+from standard LDA model is that we assume each
+                                                                           to the subject entity, and we should have a place-
+sentence belongs to a single aspect while in LDA
+                                                                           holder for the subject entity in each pattern.
+words in the same sentence can be assigned to
+                                                                              Based on the intuitions above, we have the fol-
+different topics. Our one-aspect-per-sentence as-
+                                                                           lowing sentence pattern generation process.
+sumption is important because our goal is to clus-
+ter sentences into aspects so that we can mine                                 1. Locate subject entities: In each sentence, we
+common sentence patterns for each aspect.                                  want to locate the word or phrase that refers to the
+   To cluster sentences, we could have used a                              subject entity. For example, in a biography, usu-
+straightforward solution similar to document clus-                         ally a pronoun “he” or “she” is used to refer to
+tering, where sentences are represented as feature                         the subject person. We use the following heuristic
+vectors using the vector space model, and a stan-                          to locate the subject entities: For each summary
+dard clustering algorithm such as K-means can                              document, we first find the top 3 frequent base
+be applied to group sentences together. However,                           noun phrases that are subjects of sentences. For
+there are some potential problems with directly ap-                        example, in a company introduction, the phrase
+plying this typical document clustering method.                            “the company” is probably used frequently as a
+First, unlike documents, sentences are short, and                          sentence subject. Then for each sentence, we first
+the number of words in a sentence that imply its                           look for the title of the Wikipedia article. If it oc-
+aspect is even smaller. Besides, we do not know                            curs, it is tagged as the subject entity. Otherwise,
+the aspect-related words in advance. As a result,                          we check whether one of the top 3 subject base
+the cosine similarity between two sentences may                            noun phrases occurs, and if so, it is tagged as the
+not reflect whether they are about the same aspect.                        subject entity. Otherwise, we tag the subject of the
+We can perform heuristic term weighting, but the                           sentence as the subject entity. Finally, for the iden-
+method becomes less robust. Second, after sen-                             tified subject entity word or phrase, we replace the
+tence clustering, we may still want to identify the                        label assigned by the entity-aspect model with a
+
+
+                                                                     644
+
+
+                professor_A                                                        Category    D      S           Sd
+                                                  prep_at                                                   min   max    avg
+  nsubj
+            cop                   prep_of                                         US Actress   407   1721    1    21      4
+                      det
+                                                                                  Physicist    697   4238    1    49      6
+   ENT         is_S         a_S     physics_B     university_A                    US CEO       179   1040    1    24      5
+                                                                                  US Company   375   2477    1    36      6
+                                            det             prep_of               Restaurant   152   1195    1    37      7
+
+                                       the_S                ?               Table 3: The number of documents (D), total
+                                                                            number of sentences (S) and minimum, maximum
+Figure 3: An example labeled dependency parse                               and average numbers of sentences per document
+tree.                                                                       (Sd ) of the data set.
+
+
+new label E.                                                                5     Evaluation
+   2. Generate labeled parse trees: We parse each                           Because we study a non-standard task, there is no
+sentence using the Stanford Parser1 . After parsing,                        existing annotated data set. We therefore created a
+for each sentence we obtain a dependency parse                              small data set and made our own human judgment
+tree where each node is a single word and each                              for quantitative evaluation purpose.
+edge is labeled with a dependency relation. Each
+word is also labeled with one of {E, S, B, D,                               5.1    Data
+A}. We replace words labeled with E by a place-                             We downloaded five collections of Wikipedia ar-
+holder ENT, and replace words labeled with D by                             ticles from different entity categories. We took
+a question mark to indicate that these correspond                           only the introduction sections of each article (be-
+to template slots. For the other words, we attach                           fore the tables of contents) as entity summaries.
+their labels to the tree nodes. Figure 3 shows an                           Some statistics of the data set are given in Table 3.
+example labeled dependency parse tree.
+   3. Mine frequent subtree patterns: For the set                           5.2    Quantitative Evaluation
+of parse trees in each cluster, we use FREQT2 , a                           To quantitatively evaluate the summary templates,
+software that implements the frequent subtree pat-                          we want to check (1) whether our sentence pat-
+tern mining algorithm proposed in (Zaki, 2002), to                          terns are meaningful and can represent the corre-
+find all subtrees with a minimum support of K.                              sponding entity categories well, and (2) whether
+   4. Prune patterns: We remove subtree patterns                            semantically related sentence patterns are grouped
+found by FREQT that do not contain ENT or any                               into the same aspect. It is hard to evaluate both
+aspect word. We also remove small patterns that                             together. We therefore separate these two criteria.
+are contained in some other larger pattern in the
+same cluster.                                                               5.2.1 Quality of sentence patterns
+                                                                            To judge the quality of sentence patterns without
+   5. Covert subtree patterns to sentence patterns:
+                                                                            looking at aspect clusters, ideally we want to com-
+The remaining patterns are still represented as sub-
+                                                                            pute the precision and recall of our patterns, that
+trees. To covert them back to human-readable sen-
+                                                                            is, the percentage of our sentence patterns that are
+tence patterns, we map each pattern back to one of
+                                                                            meaningful, and the percentage of true meaningful
+the sentences that contain the pattern to order the
+                                                                            sentence patterns of each category that our method
+tree nodes according to their original order in the
+                                                                            can capture. The former is relatively easy to obtain
+sentence.
+                                                                            because we can ask humans to judge the quality of
+   In the end, for each summary collection, we ob-                          our patterns. The latter is much harder to com-
+tain A clusters of sentence patterns, where each                            pute because we need human judges to find the set
+cluster presumably corresponds to a single aspect                           of true sentence patterns for each entity category,
+or subtopic.                                                                which can be very subjective.
+                                                                               We adopt the following pooling strategy bor-
+                                                                            rowed from information retrieval. Assume we
+  1
+    http://nlp.stanford.edu/software/                                       want to compare a number of methods that each
+lex-parser.shtml
+  2
+    http://chasen.org/˜taku/software/                                       can generate a set of sentence patterns from a sum-
+freqt/                                                                      mary collection. We take the union of these sets
+
+
+                                                                      645
+
+
+of patterns generated by the different methods and                              Category    B    Purity
+                                                                              US Actress    4    0.626
+order them randomly. We then ask a human judge                                Physicist     6    0.714
+to decide whether each sentence pattern is mean-                              US CEO        4    0.674
+ingful for the given category. We can then treat                              US Company    4    0.614
+                                                                              Restaurant    3    0.587
+the set of meaningful sentence patterns found by
+the human judge this way as the ground truth, and               Table 5: The true numbers of aspects as judged
+precision and recall of each method can be com-                 by the human annotator (B), and the purity of the
+puted. If our goal is only to compare the different             clusters.
+methods, this pooling strategy should suffice.
+   We compare our method with the following two                 does more pattern pruning than BL-1 using aspect
+baseline methods.                                               words. Here it is not the case mainly because we
+Baseline 1: In this baseline, we use the same                   used a higher frequency threshold (K = 3) to se-
+subtree pattern mining algorithm to find sentence               lect frequent patterns in BL-1, giving overall fewer
+patterns from each summary collection. We also                  patterns than in our method. For BL-2, the preci-
+locate the subject entities and replace them with               sion is higher than BL-1 but recall is lower. It is
+ENT. However, we do not have aspect words or                    expected because the patterns of BL-2 is a subset
+document words in this case. Therefore we do not                of that of BL-1.
+prune any pattern except to merge small patterns                   There are some advantages of our method that
+with the large ones that contain them. The pat-                 are not reflected in Table 4. First, many of our pat-
+terns generated by this method do not have tem-                 terns contain template slots, which make the pat-
+plate slots.                                                    tern more meaningful. In contrast the baseline pat-
+Baseline 2: In the second baseline, we apply a                  terns do not contain template slots. Because the
+verb-based pruning on the patterns generated by                 human judge did not give preference over patterns
+the first baseline, similar to (Filatova et al., 2006).         with slots, both “ENT won the award” and “ENT
+We first find the top-20 verbs using the scoring                won the ? award” were judged to be meaningful
+function below that is taken from (Filatova et al.,             without any distinction, although the former one
+2006), and then prune patterns that do not contain              generated by our method is more meaningful. Sec-
+any of the top-20 verbs.                                        ond, compared with BL-2, our method can obtain
+                             N (vi )         M (vi )            patterns that do not contain a non-auxiliary verb,
+          s(vi )   =   P                   ·         ,
+                           vj ∈V N  (v j )    D                 such as “ENT was ? director.”
+
+ where N (vi ) is the frequency of verb vi in the               5.2.2 Quality of aspect clusters
+collection, V is the set of all verbs, D is the total           We also want to judge the quality of the aspect
+number of documents in the collection, and M (vi )              clusters. To do so, we ask the human judge to
+is the number of documents in the collection that               group the ground truth sentence patterns of each
+contains vi .                                                   category based on semantic relatedness. We then
+   In Table 4, we show the precision, recall and f1             compute the purity of the automatically generated
+of the sentence patterns generated by our method                clusters against the human judged clusters using
+and the two baseline methods for the five cate-                 purity. The results are shown in Table 5. In our
+gories. For our method, we set the support of                   experiments, we set the number of clusters A used
+the subtree patterns K to 2, that is, each pattern              in the entity-aspect model to be 10. We can see
+has occurred in at least two sentences in the cor-              from Table 5 that our generated aspect clusters can
+responding aspect cluster. For the two baseline                 achieve reasonably good performance.
+methods, because sentences are not clustered, we
+use a larger support K of 3; otherwise, we find                 5.3   Qualitative evaluation
+that there can be too many patterns. We can see                 We also conducted qualitative comparison be-
+that overall our method gives better f1 measures                tween our entity-aspect model and standard LDA
+than the two baseline methods for most categories.              model as well as a K-means sentence clustering
+Our method achieves a good balance between pre-                 method. In Table 6, we show the top 5 fre-
+cision and recall. For BL-1, the precision is high              quent words of three sample aspects as found by
+but recall is low. Intuitively BL-1 should have a               our method, standard LDA, and K-means. Note
+higher recall than our method because our method                that although we try to align the aspects, there is
+
+
+                                                          646
+
+
+                                                                      Category
+                    Method              US Actress      Physicist    US CEO US Company        Restaurant
+                BL-1 precision            0.714          0.695        0.778    0.622            0.706
+                          recall          0.545          0.300        0.367    0.425            0.361
+                             f1           0.618          0.419        0.499    0.505            0.478
+                BL-2 precision            0.845          0.767        0.829    0.809            1.000
+                          recall          0.260          0.096        0.127    0.167            0.188
+                             f1           0.397           0.17        0.220    0.276            0.316
+                Ours precision            0.544          0.607        0.586    0.450            0.560
+                          recall          0.710          0.785        0.712    0.618            0.701
+                             f1           0.616          0.684        0.643    0.520            0.624
+
+                Table 4: Quality of sentence patterns in terms of precision, recall and f1.
+
+     Method                  Sample Aspects                         tify words that are document-specific, and treat
+                     1             2             3
+       Our      university     prize        academy
+                                                                    these words as template slots, which can be poten-
+      entity-   received       nobel        sciences                tially more robust as we do not rely on the quality
+      aspect    ph.d.          physics      member                  of named entity recognition. Last but not least,
+      model     college        awarded      national
+                degree         medal        society                 their documents are event-centered while ours are
+     Standard   physics        nobel        physics                 entity-centered. Therefore we can use heuristics to
+       LDA      american       prize        institute               anchor our patterns on the subject entities.
+                professor      physicist    research
+                received       awarded      member
+                university     john         sciences
+     K-means    physics        physicist    physics                    Sauper and Barzilay (2009) proposed a frame-
+                university     american     academy
+                institute      physics      sciences
+                                                                    work to learn to automatically generate Wikipedia
+                work           university university                articles. There is a fundamental difference be-
+                research       nobel        new                     tween their task and ours. The articles they gen-
+Table 6: Comparison of the top 5 words of three                     erate are long, comprehensive documents consist-
+sample aspects using different methods.                             ing of several sections on different subtopics of
+                                                                    the subject entity, and they focus on learning the
+                                                                    topical structures from complete Wikipedia arti-
+no correspondence between clusters numbered the                     cles. We focus on learning sentence patterns of the
+same but generated by different methods.                            short, concise introduction sections of Wikipedia
+   We can see that our method gives very mean-                      articles.
+ingful aspect clusters. Standard LDA also gives
+meaningful words, but background words such
+as “physics” and “physicist” are mixed with as-                        Our entity-aspect model is related to a num-
+pect words. Entity-specific words such as “john”                    ber of previous extensions of LDA models.
+also appear mixed with aspect words. K-means                        Chemudugunta et al. (2007) proposed to intro-
+clusters are much less meaningful, with too many                    duce a background topic and document-specific
+background words mixed with aspect words.                           topics. Our background and document language
+                                                                    models are similar to theirs. However, they still
+6   Related Work
+                                                                    treat documents as bags of words rather than sets
+The most related existing work is on domain tem-                    of sentences as in our model. Titov and McDon-
+plate generation by Filatova et al. (2006). There                   ald (2008) exploited the idea that a short paragraph
+are several differences between our work and                        within a document is likely to be about the same
+theirs. First, their template patterns must contain a               aspect. Our one-aspect-per-sentence assumption
+non-auxiliary verb whereas ours do not have this                    is a stricter than theirs, but it is required in our
+restriction. Second, their verb-centered patterns                   model for the purpose of mining sentence patterns.
+are independent of each other, whereas we group                     The way we separate words into stop words, back-
+semantically related patterns into aspects, giving                  ground words, document words and aspect words
+more meaningful templates. Third, in their work,                    bears similarity to that used in (Daumé III and
+named entities, numbers and general nouns are                       Marcu, 2006; Haghighi and Vanderwende, 2009),
+treated as template slots. In our method, we ap-                    but their task is multi-document summarization
+ply the entity-aspect model to automatically iden-                  while ours is to induce summary templates.
+
+
+                                                             647
+
+
+7   Conclusions and Future Work                                References
+In this paper, we studied the task of automati-                David Blei, Andrew Y. Ng, and Michael I. Jordan.
+                                                                 2003. Latent dirichlet allocation. Journal of Ma-
+cally generating templates for entity summaries.
+                                                                 chine Learning Research, 3:993–1022.
+We proposed an entity-aspect model that can auto-
+matically cluster sentences and words into aspects.            Chaitanya Chemudugunta, Padhraic Smyth, and Mark
+The model also labels words in sentences as either               Steyvers. 2007. Modeling general and specific as-
+                                                                 pects of documents with a probabilistic topic model.
+a stop word, a background word, a document word                  In Advances in Neural Information Processing Sys-
+or an aspect word. We then applied frequent sub-                 tems 19, pages 241–248.
+tree pattern mining to generate sentence patterns
+                                                               Hal Daumé III and Daniel Marcu. 2006. Bayesian
+that can represent the aspects. We took advan-
+                                                                 query-focused summarization. In Proceedings of
+tage of the labels generated by the entity-aspect                the 21st International Conference on Computational
+model to prune patterns and to locate template                   Linguistics and 44th Annual Meeting of the Associa-
+slots. We conducted both quantitative and qualita-               tion for Computational Linguistics, pages 305–312.
+tive evaluation using five collections of Wikipedia            Elena Filatova, Vasileios Hatzivassiloglou, and Kath-
+entity summaries. We found that our method gave                  leen McKeown. 2006. Automatic creation of do-
+overall better template patterns than two baseline               main templates. In Proceedings of 21st Interna-
+methods, and the aspect clusters generated by our                tional Conference on Computational Linguistics and
+                                                                 the 44th Annual Meeting of the Association for Com-
+method are reasonably good.                                      putational Linguistics, pages 207–214.
+    There are a number of directions we plan to pur-
+sue in the future in order to improve our method.              Thomas L. Griffiths and Mark Steyvers. 2004. Find-
+First, we can possibly apply linguistic knowledge                ing scientific topics. Proceedings of the National
+                                                                 Academy of Sciences of the United States of Amer-
+to improve the quality of sentence patterns. Cur-                ica, 101(Suppl. 1):5228–5235.
+rently the method may generate similar sentence
+patterns that differ only slightly, e.g. change of a           Aria Haghighi and Lucy Vanderwende. 2009. Explor-
+                                                                 ing content models for multi-document summariza-
+preposition. Also, the sentence patterns may not                 tion. In Proceedings of the Human Language Tech-
+form complete, meaningful sentences. For exam-                   nology Conference of the North American Chapter
+ple, a sentence pattern may contain an adjective                 of the Association for Computational Linguistics,
+but not the noun it modifies. We plan to study                   pages 362–370.
+how to use linguistic knowledge to guide the con-              Christina Sauper and Regina Barzilay. 2009. Automat-
+struction of sentence patterns and make them more                ically generating Wikipedia articles: A structure-
+meaningful. Second, we have not quantitatively                   aware approach. In Proceedings of the Joint Confer-
+evaluated the quality of the template slots, because             ence of the 47th Annual Meeting of the ACL and the
+                                                                 4th International Joint Conference on Natural Lan-
+our judgment is only at the whole sentence pattern               guage Processing of the AFNLP, pages 208–216.
+level. We plan to get more human judges and more
+rigorously judge the relevance and usefulness of               Satoshi Sekine. 2006. On-demand information extrac-
+                                                                 tion. In Proceedings of 21st International Confer-
+both the sentence patterns and the template slots.
+                                                                 ence on Computational Linguistics and the 44th An-
+It is also possible to introduce certain rules or con-           nual Meeting of the Association for Computational
+straints to selectively form template slots rather               Linguistics, pages 731–738.
+than treating all words labeled with D as template
+                                                               Yusuke Shinyama and Satoshi Sekine. 2006. Preemp-
+slots.                                                           tive information extraction using unrestricted rela-
+                                                                 tion discovery. In Proceedings of the Human Lan-
+Acknowledgments                                                  guage Technology Conference of the North Ameri-
+                                                                 can Chapter of the Association for Computational
+This work was done during Peng Li’s visit to the                 Linguistics, pages 304–311.
+Singapore Management University. This work
+was partially supported by the National High-tech              Kiyoshi Sudo, Satoshi Sekine, and Ralph Grishman.
+Research and Development Project of China (863)                  2003. An improved extraction pattern representa-
+                                                                 tion model for automatic IE pattern acquisition. In
+under the grant number 2009AA04Z106 and the                      Proceedings of the 41st Annual Meeting of the Asso-
+National Science Foundation of China (NSFC) un-                  ciation for Computational Linguistics, pages 224–
+der the grant number 60773088. We thank the                      231.
+anonymous reviewers for their helpful comments.                Ivan Titov and Ryan McDonald. 2008. Modeling
+                                                                  online reviews with multi-grain topic models. In
+
+
+                                                         648
+
+
+  Proceeding of the 17th International Conference on
+  World Wide Web, pages 111–120.
+
+Fei Wu and Daniel S. Weld. 2007. Autonomously se-
+  mantifying Wikipedia. In Proceedings of the 16th
+  ACM Conference on Information and Knowledge
+  Management, pages 41–50.
+Yulan Yan, Naoaki Okazaki, Yutaka Matsuo, Zhenglu
+  Yang, and Mitsuru Ishizuka. 2009. Unsupervised
+  relation extraction by mining Wikipedia texts using
+  information from the Web. In Proceedings of the
+  Joint Conference of the 47th Annual Meeting of the
+  ACL and the 4th International Joint Conference on
+  Natural Language Processing of the AFNLP, pages
+  1021–1029.
+Mohammed J. Zaki. 2002. Efficiently mining fre-
+ quent trees in a forest. In Proceedings of the 8th
+ ACM SIGKDD International Conference on Knowl-
+ edge Discovery and Data Mining, pages 71–80.
+
+
+
+
+                                                        649
+

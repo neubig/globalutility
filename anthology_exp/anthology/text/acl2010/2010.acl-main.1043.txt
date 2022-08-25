@@ -1,0 +1,1052 @@
+           Employing Personal/Impersonal Views in Supervised and
+                 Semi-supervised Sentiment Classification
+
+           Shoushan Li†‡          Chu-Ren Huang†             Guodong Zhou‡            Sophia Yat Mei Lee†
+      †                                                            ‡
+      Department of Chinese and Bilingual                         Natural Language Processing Lab
+                   Studies                                   School of Computer Science and Technology
+     The Hong Kong Polytechnic University                            Soochow University, China
+      {shoushan.li,churenhuang,                                      gdzhou@suda.edu.cn
+          sophiaym}@gmail.com
+
+
+                                                               and ‘unfavorable’. Such relation is usually
+                       Abstract                                expressed in text by stating the information
+                                                               involving either a person (one element in X ) or a
+    In this paper, we adopt two views, personal                target object itself (one element in Y ). The first
+    and impersonal views, and systematically                   type of statement called personal view, e.g. ‘I am
+    employ them in both supervised and                         so happy with this book’, contains X ’s
+    semi-supervised sentiment classification. Here,            “subjective” feeling and preference towards a
+    personal views consist of those sentences
+                                                               target object, which directly expresses
+    which directly express speaker’s feeling and
+    preference towards a target object while                   sentimental evaluation. This kind of information
+    impersonal views focus on statements towards               is normally domain-independent and serves as
+    a target object for evaluation. To obtain them,            highly relevant clues to sentiment classification.
+    an unsupervised mining approach is proposed.               The latter type of statement called impersonal
+    On this basis, an ensemble method and a                    view, e.g. ‘it is too small’, contains Y ’s
+    co-training algorithm are explored to employ               “objective” (i.e. or at least criteria-based)
+    the two views in supervised and                            evaluation of the target object. This kind of
+    semi-supervised      sentiment    classification           information      tends      to     contain   much
+    respectively. Experimental results across eight            domain-specific       classification    knowledge.
+    domains demonstrate the effectiveness of our
+                                                               Although such information is sometimes not as
+    proposed approach.
+                                                               explicit as personal views in classifying the
+                                                               sentiment of a text, speaker’s sentiment is
+1    Introduction
+                                                               usually implied by the evaluation result.
+As a special task of text classification, sentiment                It is well-known that sentiment classification
+classification aims to classify a text according to            is very domain-specific (Blitzer et al., 2007), so
+the expressed sentimental polarities of opinions               it is critical to eliminate its dependence on a
+such as ‘thumb up’ or ‘thumb down’ on the                      large-scale labeled data for its wide applications.
+movies (Pang et al., 2002). This task has recently             Since the unlabeled data is ample and easy to
+received considerable interests in the Natural                 collect, a successful semi-supervised sentiment
+Language Processing (NLP) community due to its                 classification system would significantly
+wide applications.                                             minimize the involvement of labor and time.
+   In general, the objective of sentiment                      Therefore, given the two different views
+classification can be represented as a kind of                 mentioned above, one promising application is to
+binary relation R, defined as an ordered triple (X,            adopt them in co-training algorithms, which has
+Y, G), where X is an object set including different            been proven to be an effective semi-supervised
+kinds of people (e.g. writers, reviewers, or users),           learning strategy of incorporating unlabeled data
+Y is another object set including the target                   to further improve the classification performance
+objects (e.g. products, events, or even some                   (Zhu, 2005). In addition, we would show that
+people), and G is a subset of the Cartesian                    personal/impersonal views are linguistically
+product X × Y . The concerned relation in                      marked and mining them in text can be easily
+sentiment classification is X ’s evaluation on Y,              performed without special annotation.
+such as ‘thumb up’, ‘thumb down’, ‘favorable’,
+
+
+                                                           414
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 414–423,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   In this paper, we systematically employ                Supervised methods consider sentiment
+personal/impersonal views in supervised and            classification as a standard classification problem
+semi-supervised sentiment classification. First,       in which labeled data in a domain are used to
+an unsupervised bootstrapping method is adopted        train a domain-specific classifier. Pang et al.
+to automatically separate one document into            (2002) are the first to apply supervised machine
+personal and impersonal views. Then, both views        learning methods to sentiment classification.
+are employed in supervised sentiment                   Subsequently, many other studies make efforts to
+classification via an ensemble of individual           improve      the     performance      of    machine
+classifiers generated by each view. Finally, a         learning-based classifiers by various means, such
+co-training algorithm is proposed to incorporate       as using subjectivity summarization (Pang and
+unlabeled data for semi-supervised sentiment           Lee, 2004), seeking new superior textual features
+classification.                                        (Riloff et al., 2006), and employing document
+   The remainder of this paper is organized as         subcomponent information (McDonald et al.,
+follows. Section 2 introduces the related work of      2007). As far as the challenge of
+sentiment classification. Section 3 presents our       domain-dependency is concerned, Blitzer et al.
+unsupervised approach for mining personal and          (2007) present a domain adaptation approach for
+impersonal views. Section 4 and Section 5              sentiment classification.
+propose our supervised and semi-supervised                Semi-supervised methods combine unlabeled
+methods on sentiment classification respectively.      data with labeled training data (often
+Experimental results are presented and analyzed        small-scaled) to improve the models. Compared
+in Section 6. Section 7 discusses on the               to the supervised and unsupervised methods,
+differences between personal/impersonal and            semi-supervised       methods      for    sentiment
+subjective/objective. Finally, Section 8 draws our     classification are relatively new and have much
+conclusions and outlines the future work.              less related studies. Dasgupta and Ng (2009)
+                                                       integrate various methods in semi-supervised
+2   Related Work                                       sentiment classification including spectral
+                                                       clustering, active learning, transductive learning,
+Recently, a variety of studies have been reported
+                                                       and ensemble learning. They achieve a very
+on sentiment classification at different levels:
+                                                       impressive improvement across five domains.
+word level (Esuli and Sebastiani, 2005), phrase
+                                                       Wan (2009) applies a co-training method to
+level (Wilson et al., 2009), sentence level (Kim
+                                                       semi-supervised learning with labeled English
+and Hovy, 2004; Liu et al., 2005), and document
+                                                       corpus and unlabeled Chinese corpus for Chinese
+level (Turney, 2002; Pang et al., 2002). This
+                                                       sentiment classification.
+paper focuses on the document-level sentiment
+classification.    Generally,      document-level      3       Unsupervised Mining of Personal and
+sentiment classification methods can be
+                                                               Impersonal Views
+categorized into three types: unsupervised,
+supervised, and semi-supervised.                       As mentioned in Section 1, the objective of
+   Unsupervised methods involve deriving a             sentiment classification is to classify a specific
+sentiment classifier without any labeled               binary relation: X ’s evaluation on Y, where X is
+documents. Most of previous work use a set of          an object set including different kinds of persons
+labeled sentiment words called seed words to           and Y is another object set including the target
+perform unsupervised classification. Turney            objects to be evaluated. First of all, we focus on
+(2002) determines the sentiment orientation of a       an analysis on sentences in product reviews
+document by calculating point-wise mutual              regarding the two views: personal and
+information between the words in the document          impersonal views.
+and the seed words of ‘excellent’ and ‘poor’.             The personal view consists of personal
+Kennedy and Inkpen (2006) use a term-counting          sentences (i.e. X ’s sentences) exemplified
+method with a set of seed words to determine the       below:
+sentiment. Zagibalov and Carroll (2008) first          I.    Personal preference:
+propose a seed word selection approach and then              E1: I love this breadmaker!
+apply the same term-counting method for Chinese              E2: I disliked it from the beginning.
+sentiment classifications. These unsupervised          II.      Personal emotion description:
+approaches       are      believed     to      be            E3: Very disappointed!
+domain-independent for sentiment classification.             E4: I am happy with the product.
+                                                       III. Personal actions:
+
+                                                     415
+
+
+   E5: Do not waste your money.                                          (e.g. E3). Figure 1 shows the unsupervised
+   E6: I have recommended this machine to all my                         mining algorithm.
+friends.
+   The impersonal view consists of impersonal
+sentences (i.e. Y ’s sentences) exemplified below:                       Input:
+                                                                              The training data D
+I.   Impersonal feature description:
+                                                                         Output:
+      E7: They are too thin to start with.
+                                                                              All personal and impersonal sentences, i.e.
+      E8: This product is extremely quiet.
+                                                                         sentence sets S personal and Simpersonal .
+II.      Impersonal evaluation:
+      E9: It's great.                                                    Procedure:
+      E10: The product is a waste of time and money.                     (1). Segment all documents in D to sentences
+III. Impersonal actions:                                                       S using punctuations (such as periods and
+      E11: This product not even worth a penny.                               interrogation marks)
+      E12: It broke down again and again.                                (2). Apply the heuristic rules to classify the
+   We find that the subject of a sentence presents                            sentences S with proper pronouns into, S p1
+important cues for personal/impersonal views,                                   and      Si1
+even though a formal and computable definition                           (3).   Train a binary classifier f p − i with                S p1 and
+of this contrast cannot be found. Here, subject
+                                                                                 Si1
+refers to one of the two main constituents in the
+traditional English grammar (the other                                   (4).   Use       f p − i to classify the remaining sentences
+constituent being the predicate) (Crystal, 2003)1.                              into     S p 2 and       Si 2
+For example, the subjects in the above examples                          (5).    S personal = S p1 ∪ S p 2 ,    Simpersonal = Si1 ∪ Si 2
+of E1, E7 and E11 are ‘I’, ‘they’, and ‘this
+product’ respectively. For automatic mining the
+two views, personal/impersonal sentences can be                               Figure 1: The algorithm for unsupervised mining
+defined according to their subjects:                                         personal and impersonal sentences from a training
+   Personal sentence: the sentence whose                                                            data
+subject is (or represents) a person.
+                                                                         4      Employing      Personal/Impersonal
+   Impersonal sentence: the sentence whose
+subject is not (does not represent) a person.                                   Views in Supervised Sentiment
+   In this study, we mainly focus on product                                    Classification
+review classification where the target object in                         After unsupervised mining of personal and
+the set Y is not a person. The definitions need                          impersonal sentences, the training data is divided
+to be adjusted when the evaluation target itself is                      into two views: the personal view, which
+a person, e.g. the political sentiment                                   contains personal sentences, and the impersonal
+classification by Durant and Smith (2007).                               view, which contains impersonal sentences.
+   Our unsupervised mining approach for mining                           Obviously, these two views can be used to train
+personal and impersonal sentences consists of                            two different classifiers, f1 and f 2 , for
+two main steps. First, we extract an initial set of
+                                                                         sentiment classification respectively.
+personal and impersonal sentences with some
+                                                                            Since our mining approach is unsupervised,
+heuristic rules: If the first word of one sentence
+                                                                         there inevitably exist some noises. In addition,
+is (or implies) a personal pronoun including ‘I’,
+                                                                         the sentences of different views may share the
+‘we’, and ‘do’, then the sentence is extracted as a
+                                                                         same information for sentiment classification.
+personal sentence; If the first word of one
+                                                                         For example, consider the following two
+sentence is an impersonal pronoun including 'it',
+                                                                         sentences: ‘It is a waste of money.’ and ‘Do not
+'they', 'this', and 'these', then the sentence is
+                                                                         waste your money.’ Apparently, the first one
+extracted as an impersonal sentence. Second, we
+                                                                         belongs to the impersonal view while the second
+apply the classifier which is trained with the
+                                                                         one belongs to personal view, according to our
+initial set of personal and impersonal sentences
+                                                                         heuristic rules. However, these two sentences
+to classify the remaining sentences. This step
+                                                                         share the same word, ‘waste’, which conveys
+aims to classify the sentences without pronouns
+                                                                         strong negative sentiment information. This
+                                                                         suggests that training a single-view classifier f 3
+   1
+      The subject has the grammatical function in a sentence of          with all sentences should help. Therefore, three
+relating its constituent (a noun phrase) by means of the verb to any     base classifiers, f1 , f 2 , and f 3 , are eventually
+other elements present in the sentence, i.e. objects, complements,
+and adverbials.                                                          derived from the personal view, the impersonal
+
+                                                                       416
+
+
+view and the single view, respectively. Each base                   5           Employing      Personal/Impersonal
+classifier provides not only the class label                                    Views in Semi-Supervised Sentiment
+outputs but also some kinds of confidence                                       Classification
+measurements, e.g. posterior probabilities of the
+testing sample belonging to each class.                             Semi-supervised learning is a strategy which
+     Formally, each base classifier f l (l = 1, 2,3)                combines unlabeled data with labeled training
+                                                                    data to improve the models. Given the two-view
+assigns a test sample (denoted as xl ) a posterior
+                                                                   classifiers f1 and f 2 along with the single-view
+probability vector P ( xl ) :
+                                                                   classifier f 3 , we perform a co-training algorithm
+              P( xl ) = < p(c1 | xl ), p(c2 | xl ) >t               for semi-supervised sentiment classification. The
+where p(c1 | xl ) denotes the probability that the                  co-training       algorithm    is     a     specific
+ l -th base classifier considers the sample                         semi-supervised learning approach which starts
+belonging to c1 .                                                   with a set of labeled data and increases the
+                                                                    amount of labeled data using the unlabeled data
+     In the ensemble learning literature, various
+                                                                    by bootstrapping (Blum and Mitchell, 1998).
+methods have been presented for combining base
+                                                                    Figure 2 shows the co-training algorithm in our
+classifiers. The combining methods are
+                                                                    semi-supervised sentiment classification.
+categorized into two groups (Duin, 2002): fixed
+rules such as voting rule, product rule, and sum
+rule (Kittler et al., 1998), and trained rules such                 Input:
+as weighted sum rule (Fumera and Roli, 2005)                             The labeled data L containing personal
+and meta-learning approaches (Vilalta and Drissi,                   sentence set S L − personal and impersonal sentence set
+2002). In this study, we choose a fixed rule and a                      S L − impersonal
+trained rule to combine the three base classifiers                       The unlabeled data U containing personal
+  f1 , f 2 , and f 3 .                                              sentence set SU − personal and impersonal sentence set
+     The chosen fixed rule is product rule which                        SU − impersonal
+combine base classifiers by multiplying the
+                                                                    Output:
+posterior possibilities and using the multiplied                        New labeled data L
+possibility for decision, i.e.                                      Procedure:
+                       assign y → c j                               Loop for N iterations until U = φ
+                                     3                              (1).         Learn the first classifier f1 with S L − personal
+            where j = arg max ∏ p(ci | xl )
+                              i     l =1
+                                                                    (2).         Use       f1      to label samples from U with
+  The chosen trained rule is stacking (Vilalta and                               SU − personal
+Drissi, 2002; Džeroski and Ženko, 2004) where a                     (3).         Choose n1           positive and n1 negative most
+meta-classifier is trained with the output of the                                confidently predicted samples A1
+base classifiers as the input. Formally, let x '
+                                                                    (4).         Learn the second classifier f 2 with S L − impersonal
+denote a feature vector of a sample from the
+development data. The output of the l -th base                      (5).         Use       f 2 to label samples from U with
+classifier f l on this sample is the probability                                 SU − impersonal
+distribution over the category set {c1 , c2 } , i.e.                (6).         Choose n2           positive and n2 negative most
+                                                                               confidently predicted samples A2
+          P ( x 'l ) =< p (c1 | x 'l ), pl (c2 | x 'l ) >
+                                                                    (7).         Learn the third classifier f 3 with L
+Then, a meta-classifier is trained using the
+development data with the meta-level feature                        (8).         Use f 3 to label samples from U
+vector x meta ∈ R 2×3                                               (9).         Choose n3 positive and n3 negative most
+                                                                           confidently predicted samples A3
+        x meta =< P( x 'l =1 ), P ( x 'l = 2 ), P ( x 'l =3 ) >
+                                                                    (10). Add    samples         A1 ∪ A2 ∪ A3             with       the
+   In our experiments, we perform stacking with
+4-fold cross validation to generate meta-training                         corresponding labels into L
+                                                                    (11). Update S L − personal and S L − impersonal
+data where each fold is used as the development
+data and the other three folds are used to train the
+base classifiers in the training phase.                                            Figure 2: Our co-training algorithm for
+                                                                                  semi-supervised sentiment classification
+
+
+
+                                                                  417
+
+
+   After obtaining the new labeled data, we can                        combination methods. Thus we apply the ME
+either adopt one classifier (i.e. f 3 ) or a                           classification algorithm for further combination
+combined classifier (i.e. f1 + f 2 + f 3 ) in further                  and co-training. In particular, we only employ
+                                                                       Boolean features, representing the presence or
+training and testing. In our experimentation, we
+                                                                       absence of a word in a document. Finally, we
+explore both of them with the former referred to
+                                                                       perform t-test to evaluate the significance of the
+as co-training and single classifier and the latter
+                                                                       performance difference between two systems
+referred to as co-training and combined
+                                                                       with different methods (Yang and Liu, 1999).
+classifier.
+                                                                                                    Sentence Number in the Training Data
+                                                                                    40000
+6       Experimental Studies
+                                                                                                        29290
+                                                                                    30000   27714
+We have systematically explored our method on
+
+
+
+
+                                                                           Number
+product reviews from eight domains: book, DVD,                                                                                             16441             13818
+                                                                                    20000                                        14265
+                                                                                            16134               15573                               14852
+                                                                                                                         14753           14414
+electronic appliances, kitchen appliances, health,                                                  12691   11941
+                                                                                                                                                            13097
+                                                                                                                        8477     8337              8843
+network, pet and software.                                                          10000
+
+6.1      Experimental Setting                                                           0
+
+
+
+
+                                                                                            ok
+
+
+                                                                                                               D
+
+                                                                                                             ic
+
+
+                                                                                                               n
+
+                                                                                                              th
+
+
+                                                                                                               k
+
+
+                                                                                                                                                         t
+
+                                                                                                                                                        re
+The product reviews on the first four domains
+
+
+
+
+                                                                                                            DV
+
+
+
+
+                                                                                                            he
+
+
+
+
+                                                                                                            or
+
+
+                                                                                                                                                      Pe
+                                                                                        Bo
+
+
+
+
+                                                                                                          on
+
+
+
+
+                                                                                                           al
+
+
+
+
+                                                                                                                                                     wa
+                                                                                                         tc
+
+
+
+
+                                                                                                         tw
+                                                                                                        tr
+
+
+
+
+                                                                                                        He
+
+
+
+
+                                                                                                                                                   ft
+                                                                                                       Ki
+
+
+
+
+                                                                                                       Ne
+                                                                                                      ec
+
+
+
+
+                                                                                                                                                 So
+(book, DVD, electronic, and kitchen appliances)
+
+
+
+
+                                                                                                    El
+come from the multi-domain sentiment                                                                    Number of personal sentences
+classification     corpus,     collected    from                                                        Number of impersonal sentences
+
+http://www.amazon.com/ by Blitzer et al. (2007)2.                              Figure 3: Distribution of personal and impersonal
+Besides, we also collect the product views from                                  sentences in the training data of each domain
+http://www.amazon.com/ on other four domains
+(health, network, pet and software)3. Each of the                      6.2            Experimental Results on Supervised
+eight domains contains 1000 positive and 1000                                         Sentiment Classification
+negative reviews. Figure 3 gives the distribution                      4-fold cross validation is performed for
+of personal and impersonal sentences in the                            supervised        sentiment     classification.    For
+training data (75% labeled data of all data). It                       comparison, we generate two random views by
+shows that there are more impersonal sentences                         randomly splitting the whole feature space into
+than personal ones in each domain, in particular                       two parts. Each part is seen as a view and used to
+in the DVD domain, where the number of                                 train a classifier. The combination (two random
+impersonal sentences is at least twice as many as                      view classifiers along with the single-view
+that of personal sentences. This unusual                               classifier f 3 ) results are shown in the last column
+phenomenon is mainly attributed to the fact that                       of Table 1. The comparison between random two
+many objective descriptions, e.g. the movie plot                       views and our proposed two views will clarify
+introductions, are expressed in the DVD domain                         whether the performance gain comes truly from
+which makes the extracted personal and                                 our proposed two-view mining, or simply from
+impersonal sentences rather unbalanced.                                using the classifier combination strategy.
+   We apply both support vector machine (SVM)                             Table 1 shows the performances of different
+and Maximum Entropy (ME) algorithms with the
+                                                                       classifiers, where the single-view classifier f 3
+help of the SVM-light4 and Mallet5 tools. All
+parameters are set to their default values. We                         which uses all sentences for training and testing,
+find that ME performs slightly better than SVM                         is considered as our baseline. Note that the
+on the average. Furthermore, ME offers posterior                       baseline performances of the first four domains
+probability information which is required for                          are worse than the ones reported in Blitzer et al.
+                                                                       (2007). But their experiment is performed with
+                                                                       only one split on the data with 80% as the
+    2
+      http://www.seas.upenn.edu/~mdredze/datasets/sentiment/           training data and 20% as the testing data, which
+    3
+      Note that the second version of multi-domain sentiment           means the size of their training data is larger than
+classification corpus does contain data from many other domains.
+However, we find that the reviews in the other domains contain         ours. Also, we find that our performances are
+many duplicated samples. Therefore, we re-collect the reviews from     similar to the ones (described as fully supervised
+http://www.amazon.com/ and filter those duplicated ones. The new
+collection is here:
+                                                                       results) reported in Dasgupta and Ng (2009)
+http://llt.cbs.polyu.edu.hk/~lss/ACL2010_Data_SSLi.zip                 where the same data in the four domains are used
+   4
+   5
+      http://svmlight.joachims.org/                                    and 10-fold cross validation is performed.
+      http://mallet.cs.umass.edu/
+
+
+                                                                     418
+
+
+  Domain      Personal      Impersonal      Single View       Combination        Combination        Combination
+                View           View          Classifier        (Stacking)       (Product rule)        with two
+              Classifier     Classifier      (baseline)        f1 + f 2 + f 3     f1 + f 2 + f 3   random views
+                  f1             f2               f3                                               (Product rule)
+   Book        0.7004         0.7474           0.7654            0.7919             0.7949            0.7546
+   DVD         0.6931         0.7663           0.7884            0.8079             0.8165            0.8054
+ Electronic    0.7414         0.7844           0.8074            0.8304             0.8364            0.8210
+  Kitchen      0.7430         0.8030           0.8290            0.8555             0.8565            0.8152
+   Health      0.7000         0.7370           0.7559            0.7780             0.7815            0.7548
+  Network      0.7655         0.7710           0.8265            0.8360             0.8435            0.8312
+    Pet        0.6940         0.7145           0.7390            0.7565             0.7665            0.7423
+  Software     0.7035         0.7205           0.7470            0.7730             0.7715            0.7615
+ AVERAGE       0.7176         0.7555           0.7823            0.8037             0.8084            0.7858
+
+                           Table 1: Performance of supervised sentiment classification
+
+   From Table 1, we can see that impersonal view              Transductive SVM, which seeks the largest
+classifier f1 consistently performs better than           separation between labeled and unlabeled data
+personal view classifier f 2 . Similar to the             through regularization (Joachims, 1999). We
+                                                          implement it with the help of the SVM-light tool.
+sentence distributions, the difference in the
+                                                              Co-training         with     random      two-view
+classification performances between these two
+                                                          generation (briefly called co-training with
+views in the DVD domain is the largest (0.6931
+                                                          random views), where two views are generated
+vs. 0.7663).
+                                                          by randomly splitting the whole feature space
+   Both the combination methods (stacking and
+                                                          into two parts.
+product rule) significantly outperform the
+                                                              In semi-supervised sentiment classification,
+baseline in each domain (p-value<0.01) with a
+                                                          the data are randomly partitioned into labeled
+decent average performance improvement of
+                                                          training data, unlabeled data, and testing data
+2.61%. Although the performance difference
+                                                          with the proportion of 10%, 70% and 20%
+between the product rule and stacking is not
+                                                          respectively. Figure 4 reports the classification
+significant, the product rule is obviously a better
+                                                          accuracies in all iterations, where baseline
+choice as it involves much easier implementation.
+                                                          indicates the supervised classifier f 3 trained on
+Therefore, in the semi-supervised learning
+process, we only use the product rule to combine          the 10% data; both co-training and single
+the individual classifiers. Finally, it shows that        classifier and co-training and combined
+random generation of two views with the                   classifier refer to co-training using our proposed
+combination method of the product rule only               personal and impersonal views. But the former
+slightly outperforms the baseline on the average          merely applies the baseline classifier f 3 trained
+(0.7858 vs. 0.7823) but performs much worse               the new labeled data to test on the testing data
+than our unsupervised mining of personal and              while the latter applies the combined classifier
+impersonal views.                                          f1 + f 2 + f 3 . In each iteration, two top-confident
+6.3   Experimental             Results           on       samples in each category are chosen, i.e.
+      Semi-supervised                     Sentiment        n1 = n2 = n3 = 2 . For clarity, results of other
+      Classification                                      methods (e.g. self-training, transductive SVM)
+                                                          are not shown in Figure 4 but will be reported in
+We systematically evaluate and compare our                Figure 5 later.
+two-view learning method with various                         Figure 4 shows that co-training and
+semi-supervised ones as follows:                          combined classifier always outperforms
+   Self-training, which uses the unlabeled data           co-training and single classifier. This again
+in a bootstrapping way like co-training yet limits        justifies the effectiveness of our two-view
+the number of classifiers and the number of               learning on supervised sentiment classification.
+views to one. Only the baseline classifier f 3 is
+used to select most confident unlabeled samples
+in each iteration.
+
+
+                                                      419
+
+
+                                              Domain: Book                                                                 Domain: DVD
+                0.76                                                                                   0.7
+
+                0.74                                                                                  0.68
+                0.72
+                                                                                                      0.66
+ Accuracy
+
+
+
+
+                                                                                        Accuracy
+                 0.7
+                                                                                                      0.64
+                0.68
+                                                                                                      0.62
+                0.66
+
+                0.64                                                                                   0.6
+
+                0.62                                                                                  0.58
+                              25       50             75         100   125                                   25     50              75       100   125
+                                            Iteration Number                                                              Iteration Number
+
+                                            Domain: Electronic
+                                                                                                                          Domain: Kitchen
+                                                                                                      0.82
+
+                 0.8
+                                                                                                       0.8
+                0.78
+    Accuracy
+
+
+
+
+                                                                                         Accuracy
+                                                                                                      0.78
+                0.76
+
+                0.74                                                                                  0.76
+
+
+                0.72                                                                                  0.74
+
+                 0.7
+                              25       50              75        100   125                            0.72
+                                             Iteration Number                                                25      50             75       100   125
+                                                                                                                          Iteration Number
+
+
+                                             Domain: Health                                                               Domain: Network
+                0.66                                                                                  0.86
+
+                0.64                                                                                  0.84
+
+                                                                                                      0.82
+                0.62
+  Accuracy
+
+
+
+
+                                                                                           Accuracy
+                                                                                                       0.8
+                 0.6
+                                                                                                      0.78
+                0.58
+                                                                                                      0.76
+                0.56                                                                                  0.74
+
+                0.54                                                                                  0.72
+                              25       50             75         100   125                                   25      50             75       100   125
+                                            Iteration Number                                                              Iteration Number
+
+                                               Domain: Pet                                                                Domain: Software
+                0.68                                                                                  0.72
+
+
+                0.66                                                                                   0.7
+     Accuracy
+
+
+
+
+                                                                                        Accuracy
+
+
+
+
+                0.64                                                                                  0.68
+
+
+                0.62                                                                                  0.66
+
+
+                  0.6                                                                                 0.64
+
+
+                0.58                                                                                  0.62
+                              25       50             75         100   125                                   25     50              75       100   125
+                                            Iteration Number                                                              Iteration Number
+                                                                       Baseline
+                                                                       Co-traning and single classifier
+                                                                       Co-traning and combined classifier
+
+
+
+
+                        Figure 4: Classification performance vs. iteration numbers (using 10% labeled data as training data)
+
+   One open question is whether the unlabeled                                                       performance more than 7% on the average
+data improve the performance. Let us set aside                                                      compared to the baseline.
+the influence of the combination strategy and                                                          Figure 5 shows the classification results of
+focus on the effectiveness of semi-supervised                                                       different methods with different sizes of the
+learning by comparing the baseline and                                                              labeled data: 5%, 10%, and 15% of all data,
+co-training and single classifier. Figure 4                                                         where the testing data are kept the same (20% of
+shows different results on different domains.                                                       all data). Specifically, the results of other
+Semi-supervised learning fails on the DVD                                                           methods including self-training, transductive
+domain while on the three domains of book,                                                          SVM, and random views are presented when
+electronic, and software, semi-supervised                                                           10% labeled data are used in training. It shows
+learning benefits slightly (p-value>0.05). In                                                       that self-training performs much worse than our
+contrast, semi-supervised learning benefits much                                                    approach and fails to improve the performance of
+on the other four domains (health, kitchen,                                                         five of the eight domains. Transductive SVM
+network, and pet) from using unlabeled data and                                                     performs even worse and can only improve the
+the performance improvements are statistically                                                      performance of the “software” domain. Although
+significant (p-value<0.01). Overall speaking, we                                                    co-training with random views outperforms the
+think that the unlabeled data are very helpful as                                                   baseline on four of the eight domains, it performs
+they lead to about 4% accuracy improvement on                                                       worse than co-training and single classifier.
+the average except for the DVD domain. Along                                                        This suggests that the impressive improvements
+with the supervised combination strategy, our                                                       are mainly due to our unsupervised two-view
+approach can significantly improve the                                                              mining rather than the combination strategy.
+
+
+                                                                                  420
+
+
+            Baseline                                                               Transductive SVM                                                 Self-training
+            Co-training with random views                                          Co-training and single classifier                                Co-training and combined classifier
+
+                                                                                     Using 10% labeled data as training data
+            0.85
+             0.8
+            0.75
+ Accuracy
+
+
+
+
+             0.7
+            0.65
+             0.6
+            0.55
+             0.5
+                          Book                      DVD               Electronic                Kitchen                   Health                  Network                    Pet                 Software
+
+
+                          Using 5% labeled data as training data
+                                                                                                                                  Using 15% labeled data as training data
+                                                                            0.8675
+                                                                                                                                                                                     0.8625
+             0.85                                     0.7855                                                       0.85                                     0.8325
+                                                                                                                                                   0.782                     0.765
+                                                                           0.747                                                                           0.763                                        0.735
+ Accuracy
+
+
+
+
+             0.75
+
+
+
+
+                                                                                                        Accuracy
+                                                                                                                             0.716           0.7375
+                                      0.683
+                                              0.7    0.69
+                                                                                       0.67
+                                                                                                                   0.75                                                                            0.6925
+                                                                                                0.653                     0.679                                                           0.6625
+                    0.626                                          0.615
+             0.65           0.601                                                    0.584                         0.65           0.677                                    0.615
+                            0.564                                                                                                         0.655                                         0.5925
+                                                                                              0.525
+             0.55                   0.495                   0.55                                                   0.55                                            0.564
+
+             0.45                                                                                                  0.45
+                     ok
+
+
+                                       D
+
+
+
+
+                                                                                          t
+                                      th
+                                       n
+
+
+
+
+                                       k
+
+
+
+
+                                                                                         re
+                                      ic
+
+
+
+
+                                                                                                                        ok
+
+
+                                                                                                                                              D
+
+
+
+
+                                                                                                                                                                                               t
+                                                                                                                                             th
+                                                                                                                                              n
+
+
+
+
+                                                                                                                                              k
+
+
+
+
+                                                                                                                                                                                              re
+                                                                                                                                             ic
+                                     DV
+
+
+
+
+                                                                                        Pe
+                                    he
+
+
+
+
+                                    or
+
+
+
+
+                                                                                                                                            DV
+
+
+
+
+                                                                                                                                                                                             Pe
+                                                                                                                                           he
+
+
+
+
+                                                                                                                                           or
+                   Bo
+
+
+
+
+                                   al
+
+
+
+
+                                                                                       wa
+                                   on
+
+
+
+
+                                                                                                                      Bo
+
+
+
+
+                                                                                                                                          al
+
+
+
+
+                                                                                                                                                                                            wa
+                                                                                                                                          on
+                                  tc
+
+
+
+
+                                  tw
+
+
+
+
+                                                                                                                                         tc
+
+
+
+
+                                                                                                                                         tw
+                                 He
+
+
+
+
+                                                                                     ft
+                                tr
+
+
+
+
+                                                                                                                                        He
+
+
+
+
+                                                                                                                                                                                          ft
+                                                                                                                                       tr
+                               Ki
+
+
+
+
+                               Ne
+
+
+
+
+                                                                                                                                      Ki
+
+
+
+
+                                                                                                                                      Ne
+                                                                                   So
+                              ec
+
+
+
+
+                                                                                                                                                                                        So
+                                                                                                                                     ec
+                            El
+
+
+
+
+                                                                                                                                   El
+Figure 5: Performance of semi-supervised sentiment classification when 5%, 10%, and 15% labeled data are used
+
+    Figure 5 also shows that our approach is rather                                                                personal and impersonal views are dealt with. As
+robust and achieves excellent performances in                                                                      personal and impersonal views have different
+different training data sizes, although our                                                                        ways of expressing opinions, splitting them into
+approach fails on two domains, i.e. book and                                                                       two separations can filter some classification
+DVD, when only 5% of the labeled data are used.                                                                    noises. For example, in the sentence of “I have
+This failure may be due to that some of the                                                                        seen amazing dancing, and good dancing. This
+samples in these two domains are too ambiguous                                                                     was TERRIBLE dancing!”. The first sentence is
+and hard to classify. Manual checking shows that                                                                   classified as a personal sentence and the second
+quite a lot of samples on these two domains are                                                                    one is an impersonal sentence. Although the
+even too difficult for professionals to give a                                                                     words ‘amazing’ and ‘good’ convey strong
+high-confident label. Another possible reason is                                                                   positive sentiment information, the whole text is
+that there exist too many objective descriptions                                                                   negative. If we get the bag-of-words from the
+in these two domains, thus introducing too much                                                                    whole text, the classification result will be wrong.
+noisy information for semi-supervised learning.                                                                    Rather, splitting the text into two parts based on
+    The effectiveness of different sizes of chosen                                                                 different views allows correct classification as
+samples in each iteration is also evaluated like                                                                   the personal view rarely contains impersonal
+ n1 = n2 = n3 = 6 and n1 = 3, n2 = n3 = 6 (This                                                                    words such as ‘amazing’ and ‘good’. The
+assignment is considered because the personal                                                                      classification result will thus be influenced by
+view classifier performs worse than the other two                                                                  the impersonal view.
+classifiers). Our experimental results are still                                                                      In addition, a document may contain both
+unsuccessful in the DVD domain and do not                                                                          personal and impersonal sentences, and each of
+show much difference on other domains. We also                                                                     them, to a certain extent, , provides classification
+test the co-training approach without the                                                                          evidence. In fact, we randomly select 50
+single-view classifier f 3 . Experimental results                                                                  documents in the domain of kitchen appliances
+                                                                                                                   and find that 80% of the documents take both
+show that the inclusion of the single-view
+                                                                                                                   personal and impersonal sentences in which both
+classifier f 3 slightly helps the co-training                                                                      of them express explicit opinions. That is to say,
+approach. The detailed discussion of the results                                                                   the two views provide different, complementary
+is omitted due to space limit.                                                                                     information for classification. This qualifies the
+                                                                                                                   success requirement of co-training algorithm to
+6.4 Why our approach is effective?
+                                                                                                                   some extend. This might be the reason for the
+One main reason for the effectiveness of our                                                                       effectiveness of our approach on semi-supervised
+approach on supervised learning is the way how                                                                     learning.
+
+
+                                                                                                        421
+
+
+7    Discussion on Personal/Impersonal vs.                significantly improves the performance across all
+     Subjective/Objective                                 eight domains on supervised sentiment
+                                                          classification and greatly outperforms the
+As mentioned in Section 1, personal view                  baseline with more than 7% accuracy
+contains X ’s “subjective” feeling, and                   improvement on the average across seven of
+impersonal view contains Y ’s “objective” (i.e. or        eight domains (except the DVD domain) on
+at least criteria-based) evaluation of the target         semi-supervised sentiment classification.
+object. However, our technically-defined                     In the future work, we will integrate the
+concepts of personal/impersonal are definitely            subjectivity summarization strategy (Pang and
+different from subjective/objective: Personal             Lee, 2004) to help discard noisy objective
+view can certainly contain many objective                 sentences. Moreover, we need to consider the
+expressions, e.g. ‘I bought this electric kettle’ and     cases when both X and Y appear in a sentence.
+impersonal view can contain many subjective               For example, the sentence “I think they're poor”
+expressions, e.g. ‘It is disappointing’.                  should be an impersonal view but wrongly
+   Our technically-defined personal/impersonal            classified as a personal one according to our
+views are two different ways to describe                  technical rules. We believe that these will help
+opinions. Personal sentences are often used to            improve our approach and hopefully are
+express opinions in a direct way and their target         applicable to the DVD domain. Another
+object should be one of X. Impersonal ones are            interesting and practical idea is to integrate
+often used to express opinions in an indirect way         active learning (Settles, 2009), another popular
+and their target object should be one of Y. The           but principally different kind of semi-supervised
+ideal definition of personal (or impersonal) view         learning approach, with our two-view learning
+given in Section 1 is believed to be a subset of          approach to build high-performance systems
+our technical definition of personal (or                  with the least labeled data.
+impersonal) view. Thus impersonal view may
+contain both Y ’s objective evaluation (more              Acknowledgments
+likely to be domain independent) and subjective
+Y’s description.                                          The research work described in this paper has
+   In addition, simply splitting text into                been partially supported by Start-up Grant for
+subjective/objective views is not particularly            Newly Appointed Professors, No. 1-BBZM in
+helpful. Since a piece of objective text provides         the Hong Kong Polytechnic University and two
+rather limited implicit classification information,       NSFC grants, No. 60873150 and No. 90920004.
+the classification abilities of the two views are         We also thank the three anonymous reviewers
+very unbalanced. This makes the co-training               for their invaluable comments.
+process unfeasible. Therefore, we believe that
+our technically-defined personal/impersonal               References
+views are more suitable for two-view learning             Blitzer J., M. Dredze, and F. Pereira. 2007.
+compared to subjective/objective views.                      Biographies, Bollywood, Boom-boxes and
+                                                             Blenders: Domain Adaptation for Sentiment
+8    Conclusion and Future Work                              Classification. In Proceedings of ACL-07.
+
+In this paper, we propose a robust and effective          Blum A. and T. Mitchell. 1998. Combining labeled
+two-view model for sentiment classification                 and unlabeled data with co-training. In
+                                                            Proceedings of COLT-98.
+based on personal/impersonal views. Here, the
+personal view consists of subjective sentences            Crystal D. 2003. The Cambridge Encyclopedia of the
+whose subject is a person, whereas the                      English Language. Cambridge University Press.
+impersonal view consists of objective sentences           Dasgupta S. and V. Ng. 2009. Mine the Easy and
+whose subject is not a person. Such views are               Classify the Hard: Experiments with Automatic
+lexically cued and can be obtained without                  Sentiment Classification. In Proceedings of
+pre-labeled data and thus we explore an                     ACL-IJCNLP-09.
+unsupervised learning approach to mine them.              Duin R. 2002. The Combining Classifier: To Train Or
+Combination methods and a co-training                       Not To Train? In Proceedings of 16th International
+algorithm are proposed to deal with supervised              Conference on Pattern Recognition (ICPR-02).
+and semi-supervised sentiment classification
+                                                          Durant K. and M. Smith. 2007. Predicting the
+respectively. Evaluation on product reviews from
+                                                            Political Sentiment of Web Log Posts using
+eight domains shows that our approach
+
+                                                        422
+
+
+  Supervised Machine Learning Techniques Coupled          Vilalta R. and Y. Drissi. 2002. A Perspective View
+  with Feature Selection. In Processing of Advances          and Survey of Meta-learning. Artificial Intelligence
+  in Web Mining and Web Usage Analysis.                      Review, 18(2): 77–95.
+Džeroski S. and B. Ženko. 2004. Is Combining              Wan X. 2009. Co-Training for Cross-Lingual
+  Classifiers with Stacking Better than Selecting the      Sentiment Classification. In Proceedings of
+  Best One? Machine Learning, vol.54(3),                   ACL-IJCNLP-09.
+  pp.255-273, 2004.
+                                                          Wilson T., J. Wiebe, and P. Hoffmann. 2009.
+Esuli A. and F. Sebastiani. 2005. Determining the           Recognizing Contextual Polarity: An Exploration
+  Semantic Orientation of Terms through Gloss               of Features for Phrase-Level Sentiment Analysis.
+  Classification. In Proceedings of CIKM-05.                Computational Linguistics, vol.35(3), pp.399-433,
+                                                            2009.
+Fumera G. and F. Roli. 2005. A Theoretical and
+  Experimental Analysis of Linear Combiners for           Yang Y. and X. Liu. 1999. A Re-Examination of Text
+  Multiple Classifier Systems. IEEE Trans. PAMI,            Categorization methods. In Proceedings of
+  vol.27, pp.942–956, 2005                                  SIGIR-99.
+Joachims, T. 1999. Transductive Inference for Text        Zagibalov T. and J. Carroll. 2008. Automatic Seed
+   Classification using Support Vector Machines.            Word Selection for Unsupervised Sentiment
+   ICML1999.                                                Classification of Chinese Test. In Proceedings of
+                                                            COLING-08.
+Kennedy A. and D. Inkpen. 2006. Sentiment
+  Classification of Movie Reviews using Contextual        Zhu X. 2005. Semi-supervised Learning Literature
+  Valence Shifters. Computational Intelligence,             Survey. Technical Report Computer Sciences 1530,
+  vol.22(2), pp.110-125, 2006.                              University of Wisconsin – Madison.
+Kim S. and E. Hovy. 2004. Determining the
+  Sentiment of Opinions. In Proceedings of
+  COLING-04.
+Kittler J., M. Hatef, R. Duin, and J. Matas. 1998. On
+   Combining Classifiers. IEEE Trans. PAMI, vol.20,
+   pp.226-239, 1998
+Liu B., M. Hu, and J. Cheng. 2005. Opinion Observer:
+   Analyzing and Comparing Opinions on the Web.
+   In Proceedings of WWW-05.
+McDonald R., K. Hannan, T. Neylon, M. Wells, and J.
+  Reynar.     2007.    Structured     Models    for
+  Fine-to-coarse Sentiment Analysis. In Proceedings
+  of ACL-07.
+Pang B. and L. Lee. 2004. A Sentimental Education:
+  Sentiment     Analysis     using    Subjectivity
+  Summarization based on Minimum Cuts. In
+  Proceedings of ACL-04.
+Pang B., L. Lee, and S. Vaithyanathan. 2002. Thumbs
+  up? Sentiment Classification using Machine
+  Learning Techniques. In Proceedings of
+  EMNLP-02.
+Riloff E., S. Patwardhan, and J. Wiebe. 2006. Feature
+   Subsumption for Opinion Analysis. In Proceedings
+   of EMNLP-06.
+Settles B. 2009. Active Learning Literature Survey.
+   Technical Report 1648, Department of Computer
+   Sciences, University of Wisconsin at Madison,
+   Wisconsin.
+Turney P. 2002. Thumbs Up or Thumbs Down?
+  Semantic Orientation Applied to Unsupervised
+  Classification of Reviews. In Proceedings of
+  ACL-02.
+
+
+                                                        423
+

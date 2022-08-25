@@ -1,0 +1,697 @@
+       Bilingual Sense Similarity for Statistical Machine Translation
+
+
+                           Boxing Chen, George Foster and Roland Kuhn
+                                      National Research Council Canada
+             283 Alexandre-Taché Boulevard, Gatineau (Québec), Canada J8X 3X7
+             {Boxing.Chen, George.Foster, Roland.Kuhn}@nrc.ca
+
+
+
+                                                             ty function which has been most widely used is
+                     Abstract                                cosine distance (Salton and McGill, 1983); other
+                                                             similarity functions include Euclidean distance,
+                                                             City Block distance (Bullinaria and Levy; 2007),
+                                                             and Dice and Jaccard coefficients (Frakes and
+    This paper proposes new algorithms to com-               Baeza-Yates, 1992), etc. Measures of monolin-
+    pute the sense similarity between two units              gual sense similarity have been widely used in
+    (words, phrases, rules, etc.) from parallel cor-
+                                                             many applications, such as synonym recognizing
+    pora. The sense similarity scores are computed
+    by using the vector space model. We then ap-
+                                                             (Landauer and Dumais, 1997), word clustering
+    ply the algorithms to statistical machine trans-         (Pantel and Lin 2002), word sense disambigua-
+    lation by computing the sense similarity be-             tion (Yuret and Yatbaz 2009), etc.
+    tween the source and target side of translation              Use of the vector space model to compute
+    rule pairs. Similarity scores are used as addi-          sense similarity has also been adapted to the mul-
+    tional features of the translation model to im-          tilingual condition, based on the assumption that
+    prove translation performance. Significant im-           two terms with similar meanings often occur in
+    provements are obtained over a state-of-the-art          comparable contexts across languages. Fung
+    hierarchical phrase-based machine translation            (1998) and Rapp (1999) adopted VSM for the
+    system.
+                                                             application of extracting translation pairs from
+                                                             comparable or even unrelated corpora. The vec-
+1    Introduction                                            tors in different languages are first mapped to a
+The sense of a term can generally be inferred                common space using an initial bilingual dictio-
+from its context. The underlying idea is that a              nary, and then compared.
+term is characterized by the contexts it co-occurs               However, there is no previous work that uses
+with. This is also well known as the Distribu-               the VSM to compute sense similarity for terms
+tional Hypothesis (Harris, 1954): terms occurring            from parallel corpora. The sense similarities, i.e.
+in similar contexts tend to have similar mean-               the translation probabilities in a translation mod-
+ings. There has been a lot of work to compute the            el, for units from parallel corpora are mainly
+sense similarity between terms based on their                based on the co-occurrence counts of the two
+distribution in a corpus, such as (Hindle, 1990;             units. Therefore, questions emerge: how good is
+Lund and Burgess, 1996; Landauer and Dumais,                 the sense similarity computed via VSM for two
+1997; Lin, 1998; Turney, 2001; Pantel and Lin,               units from parallel corpora? Is it useful for multi-
+2002; Pado and Lapata, 2007).                                lingual applications, such as statistical machine
+   In the work just cited, a common procedure is             translation (SMT)?
+followed. Given two terms to be compared, one                    In this paper, we try to answer these questions,
+first extracts various features for each term from           focusing on sense similarity applied to the SMT
+their contexts in a corpus and forms a vector                task. For this task, translation rules are heuristi-
+space model (VSM); then, one computes their                  cally extracted from automatically word-aligned
+similarity by using similarity functions. The fea-           sentence pairs. Due to noise in the training cor-
+tures include words within a surface window of a             pus or wrong word alignment, the source and
+fixed size (Lund and Burgess, 1996), grammati-               target sides of some rules are not semantically
+cal dependencies (Lin, 1998; Pantel and Lin                  equivalent, as can be seen from the following
+2002; Pado and Lapata, 2007), etc. The similari-
+
+
+                                                         834
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 834–843,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+real examples which are taken from the rule table                                   source          target
+built on our training data (Section 5.1):                              Ini. phr. 他 出席 了 会议 he attended the meeting
+                                                                        Rule 1 他 出席 了 X1        he attended X1
+    世界 上 X 之一 ||| one of X (*)                                        Context 1                  the, meeting
+                                                                                     会议
+    世界 上 X 之一 ||| one of X in the world
+    许多 市民 ||| many citizens
+                                                                       Rule 2         会议                 the meeting
+                                                                      Context 2    他, 出席, 了             he, attended
+    许多 市民 ||| many hong kong residents (*)
+                                                                       Rule 3      他 X1 会议            he X1 the meeting
+                                                                      Context 3     出席, 了                  attended
+The source and target sides of the rules with (*)
+at the end are not semantically equivalent; it                         Rule 4       出席 了                   attended
+seems likely that measuring the semantic similar-                     Context 4     他,会议               he, the, meeting
+ity from their context between the source and
+target sides of rules might be helpful to machine                 Figure 1: example of hierarchical rule pairs and their
+translation.                                                      context features.
+   In this work, we first propose new algorithms
+to compute the sense similarity between two                          Rule frequencies are counted during rule ex-
+units (unit here includes word, phrase, rule, etc.)               traction over word-aligned sentence pairs, and
+in different languages by using their contexts.                   they are normalized to estimate features on rules.
+Second, we use the sense similarities between the                 Following (Chiang, 2005; Chiang, 2007), 4 fea-
+source and target sides of a translation rule to                  tures are computed for each rule:
+improve statistical machine translation perfor-                       •    P (γ | α ) and P (α | γ ) are direct and in-
+mance.                                                                   verse rule-based conditional probabilities;
+   This work attempts to measure directly the
+                                                                        •      Pw (γ | α ) and Pw (α | γ ) are direct and in-
+sense similarity for units from different languag-
+es by comparing their contexts1. Our contribution                            verse lexical weights (Koehn et al., 2003).
+includes proposing new bilingual sense similarity                   Empirically, this method has yielded better
+algorithms and applying them to machine trans-                    performance on language pairs such as Chinese-
+lation.                                                           English than the phrase-based method because it
+   We chose a hierarchical phrase-based SMT                       permits phrases with gaps; it generalizes the
+system as our baseline; thus, the units involved                  normal phrase-based models in a way that allows
+in computation of sense similarities are hierar-                  long-distance reordering (Chiang, 2005; Chiang,
+chical rules.                                                     2007). We use the Joshua implementation of the
+                                                                  method for decoding (Li et al., 2009).
+2     Hierarchical phrase-based MT system
+The hierarchical phrase-based translation method                  3         Bag-of-Words Vector Space Model
+(Chiang, 2005; Chiang, 2007) is a formal syntax-                  To compute the sense similarity via VSM, we
+based translation modeling method; its transla-                   follow the previous work (Lin, 1998) and
+tion model is a weighted synchronous context                      represent the source and target side of a rule by
+free grammar (SCFG). No explicit linguistic syn-                  feature vectors. In our work, each feature corres-
+tactic information appears in the model. An                       ponds to a context word which co-occurs with
+SCFG rule has the following form:                                 the translation rule.
+                       X → α,γ , ~
+                                                                  3.1        Context Features
+where X is a non-terminal symbol shared by all
+the rules; each rule has at most two non-                         In the hierarchical phrase-based translation me-
+terminals. α ( γ ) is a source (target) string con-               thod, the translation rules are extracted by ab-
+                                                                  stracting some words from an initial phrase pair
+sisting of terminal and non-terminal symbols. ~
+defines a one-to-one correspondence between                       (Chiang, 2005). Consider a rule with non-
+non-terminals in α and γ .                                        terminals on the source and target side; for a giv-
+                                                                  en instance of the rule (a particular phrase pair in
+                                                                  the training corpus), the context will be the
+1
+  There has been a lot of work (more details in Section 7) on     words instantiating the non-terminals. In turn, the
+applying word sense disambiguation (WSD) techniques in            context for the sub-phrases that instantiate the
+SMT for translation selection. However, WSD techniques            non-terminals will be the words in the remainder
+for SMT do so indirectly, using source-side context to help       of the phrase pair. For example in Figure 1, if we
+select a particular translation for a source rule.
+
+
+                                                                835
+
+
+have an initial phrase pair 他 出席 了 会议 ||| he                    where N is the total frequency counts of all rules
+attended the meeting, and we extract four rules                 and their context words. Since we are using this
+from this initial phrase: 他 出席 了 X1 ||| he at-                  value as a weight, following (Turney, 2001), we
+tended X1, 会议 ||| the meeting, 他 X1 会议 ||| he                   drop log, N and F (r ) . Thus (3) simplifies to:
+X1 the meeting, and 出席 了 ||| attended. There-                                             F (r , c )
+                                                                                      w(r , c ) =                (4)
+fore, the and meeting are context features of tar-                                         F (c )
+get pattern he attended X1; he and attended are
+                                                                It can be seen as an estimate of P(r | c) , the em-
+the context features of the meeting; attended is
+the context feature of he X1 the meeting; also he,              pirical probability of observing r given c.
+the and meeting are the context feature of at-                     A problem with P(r | c) is that it is biased
+tended (in each case, there are also source-side                towards infrequent words/features. We therefore
+context features).                                              smooth w(r , c ) with add-k smoothing:
+3.2    Bag-of-Words Model                                                                  F ( r , c) + k        F (r , c ) + k
+                                                                      w(r , c ) =    R
+                                                                                                             =                  (5)
+                                                                                                                 F (c) + kR
+For each side of a translation rule pair, its context                               ∑ ( F ( r , c) + k )
+                                                                                                 i
+words are all collected from the training data,                                     i =1
+and two “bags-of-words” which consist of col-                   where k is a tunable global smoothing constant,
+lections of source and target context words co-                 and R is the number of rules.
+occurring with the rule’s source and target sides
+are created.                                                    4      Similarity Functions
+               B f = { f1 , f 2 ,..., f I }                     There are many possibilities for calculating simi-
+                                                        (1)
+            Be = {e1 , e2 ,..., eJ }                            larities between bags-of-words in different lan-
+                                                                guages. We consider IBM model 1 probabilities
+where f i (1 ≤ i ≤ I ) are source context words                 and cosine distance similarity functions.
+which co-occur with the source side of rule α ,
+and e j (1 ≤ j ≤ J ) are target context words                   4.1      IBM Model 1 Probabilities
+which co-occur with the target side of rule γ .                 For the IBM model 1 similarity function, we take
+                                                                the geometric mean of symmetrized conditional
+   Therefore, we can represent source and target
+                             v        v                         IBM model 1 (Brown et al., 1993) bag probabili-
+sides of the rule by vectors v f and ve as in Eq-               ties, as in Equation (6).
+uation (2):                                                           sim(α , γ ) = sqrt( P( B f | Be ) ⋅ P( Be | B f )) (6)
+              v
+              v f = {w f1 , w f 2 ,..., w f I }                     To compute P ( B f | Be ) , IBM model 1 as-
+              v                                         (2)
+              ve = {we1 , we2 ,..., weJ }                       sumes that all source words are conditionally
+where w f i and we j are values for each source                 independent, so that:
+                                                                                                         I
+and target context feature; normally, these values                           P( B f | Be ) = ∏ p ( f i | Be )                  (7)
+are based on the counts of the words in the cor-                                                      i =1
+responding bags.                                                   To compute, we use a “Noisy-OR” combina-
+                                                                tion which has shown better performance than
+3.3    Feature Weighting Schemes                                standard IBM model 1 probability, as described
+We use pointwise mutual information (Church et                  in (Zens and Ney, 2004):
+al., 1990) to compute the feature values. Let c                       p( fi | Be ) = 1 − p( f i | Be )      (8)
+( c ∈ B f or c ∈ Be ) be a context word and                                                          J
+
+F (r , c ) be the frequency count of a rule r ( α or                     p( fi | Be ) ≈ 1 − ∏ (1 − p ( f i | e j ))            (9)
+                                                                                                     j =1
+γ ) co-occurring with the context word c. The
+pointwise mutual information MI (r , c ) is de-                 where p( f i | Be ) is the probability that f i is not
+fined as:                                                       in the translation of Be , and is the IBM model 1
+                                     F ( r, c )                 probability.
+                                    log
+   w(r , c) = MI (r , c) =              N               (3)     4.2      Vector Space Mapping
+                               F (r )          F (c )
+                           log        × log
+                                N               N               A common way to calculate semantic similarity
+                                                                is by vector space cosine distance; we will also
+
+                                                              836
+
+
+use this similarity function in our algorithm.                                     where I and J are the number of the words in
+However, the two vectors in Equation (2) cannot                                    source and target bag-of-words; w f i and we j are
+be directly compared because the axes of their
+spaces represent different words in different lan-                                 values of source and target features; waf i is the
+guages, and also their dimensions I and J are not                                  transformed weight mapped from all target fea-
+assured to be the same. Therefore, we need to                                      tures to the source dimension at word fi.
+first map a vector into the space of the other vec-
+tor, so that the similarity can be calculated. Fung                                4.4           Improved Similarity Function
+(1998) and Rapp (1999) map the vector one-                                         To incorporate more information than the origi-
+dimension-to-one-dimension (a context word is a                                    nal similarity functions – IBM model 1 proba-
+dimension in each vector space) from one lan-                                      bilities in Equation (6) and naïve cosine distance
+guage to another language via an initial bilingual                                 similarity function in Equation (12) – we refine
+dictionary. We follow (Zhao et al., 2004) to do                                    the similarity function and propose a new algo-
+vector space mapping.                                                              rithm.
+   Our goal is – given a source pattern – to dis-                                     As shown in Figure 2, suppose that we have a
+tinguish between the senses of its associated tar-
+                                                                                   rule pair (α , γ ) . C ffull and Cefull are the contexts
+get patterns. Therefore, we map all vectors in
+target language into the vector space in the                                       extracted according to the definition in section 3
+source language. What we want is a representa-                                     from the full training data for α and for γ , re-
+      v                                                                                                     cooc
+tion va in the source language space of the target                                 spectively. C f                 and C e
+                                                                                                                              cooc
+                                                                                                                                      are the contexts for
+        v           v
+vector ve . To get va , we can let waf i , the weight                                  α and γ when α and γ co-occur. Obviously,
+of the ith source feature, be a linear combination                                 they satisfy the constraints: C cooc ⊆ C ffull and
+                                                                                                                   f
+over target features. That is to say, given a
+source feature weight for fi, each target feature                                      Cecooc ⊆ Cefull . Therefore, the original similarity
+weight is linked to it with some probability. So                                   functions are to compare the two context vectors
+that we can calculate a transformed vector from                                    built on full training data directly, as shown in
+the target vectors by calculating weights waf i us-                                Equation (13).
+ing a translation lexicon:                                                                             sim(α , γ ) = sim(C ffull , Cefull )
+                                                                                                                               (13)
+                          J
+            w = ∑ Pr( f i | e j ) we j
+                fi
+                                                                          (10)        Then, we propose a new similarity function as
+               a
+                         j =1
+                                                                                   follows:
+                                                                                       sim(α , γ ) =
+where p( f i | e j ) is a lexical probability (we use
+                                                                                       sim(C ffull , C cooc
+                                                                                                       f    )λ1 ⋅ sim(C cooc
+                                                                                                                        f    , Cecooc )λ2 ⋅ sim(Cefull , Cecooc )λ3 (14)
+IBM model 1 probability). Now the source vec-
+                           v                                                       where the parameters λi (i=1,2,3) can be tuned
+tor and the mapped vector va have the same di-
+                                                                                   via minimal error rate training (MERT) (Och,
+mensions as shown in (11):                                                         2003).
+             v
+             v f = {w f1 , w f 2 ,..., w f I }
+             v                                                            (11)
+             va = {waf1 , waf 2 ,..., waf I }
+                                                                                            α                      C ffull         C cooc
+                                                                                                                                     f
+4.3    Naïve Cosine Distance Similarity
+The standard cosine distance is defined as the
+                                 v       v
+inner product of the two vectors v f and va nor-
+                                                                                             γ                        Cefull         Cecooc
+malized by their norms. Based on Equation (10)
+and (11), it is easy to derive the similarity as fol-
+lows:
+                                         v v
+                                         v f ⋅ va                                                  Figure 2: contexts for rule α                   and   γ   .
+                         v v
+      sim(α , γ ) = cos( v f , v a ) = v          v
+                                      | v f | ⋅ | va |
+                                                                                      A unit’s sense is defined by all its contexts in
+                               I    J                                     (12)
+                                                                                   the whole training data; it may have a lot of dif-
+                          ∑∑ wi =1 j =1
+                                           fi   Pr( f i | e j )we j
+                                                                                   ferent senses in the whole training data. Howev-
+                     =                I                    I
+                                                                      2            er, when it is linked with another unit in the other
+                         sqrt (∑ w 2fi )sqrt (∑ wafi )
+                                    I =1                  i =1
+                                                                                   language, its sense pool is constrained and is just
+
+
+                                                                                 837
+
+
+a subset of the whole sense set. sim (C ffull , C cooc )     called English Gigaword corpus. Both language
+                                                  f
+                                                             models are used for both tasks.
+is the metric which evaluates the similarity be-                We carried out experiments for translating
+tween the whole sense pool of α and the sense                Chinese to English. We use the same develop-
+pool when α          co-occurs with γ ;                      ment and test sets for the two data conditions.
+sim (Cefull , Cecooc ) is the analogous similarity me-       We first created a development set which used
+tric for γ . They range from 0 to 1. These two               mainly data from the NIST 2005 test set, and
+                                                             also some balanced-genre web-text from the
+metrics both evaluate the similarity for two vec-
+                                                             NIST training material. Evaluation was per-
+tors in the same language, so using cosine dis-
+                                                             formed on the NIST 2006 and 2008 test sets. Ta-
+tance to compute the similarity is straightfor-
+                                                             ble 1 gives figures for training, development and
+ward. And we can set a relatively large size for
+                                                             test corpora; |S| is the number of the sentences,
+the vector, since it is not necessary to do vector
+                                                             and |W| is the number of running words. Four
+mapping as the vectors are in the same language.
+                                                             references are provided for all dev and test sets.
+ sim(C cooc
+       f    , Cecooc ) computes the similarity between
+the context vectors when α and γ co-occur. We                                                     Chi           Eng
+may compute sim(C cooc  , Cecooc ) by using IBM                               Large        |S|        3,322K
+                      f
+                                                                 Parallel     Data        |W|    64.2M 62.6M
+model 1 probability and cosine distance similari-
+                                                                  Train       Small        |S|         245K
+ty functions as Equation (6) and (12). Therefore,
+on top of the degree of bilingual semantic simi-                              Data        |W|    9.0M      10.5M
+larity between a source and a target translation                   Dev                     |S|   1,506     1,506 × 4
+unit, we have also incorporated the monolingual                    Test   NIST06           |S|   1,664     1,664 × 4
+semantic similarity between all occurrences of a                          NIST08           |S|   1,357     1,357 × 4
+source or target unit, and that unit’s occurrence                     Gigaword             |S|      -       11.7M
+as part of the given rule, into the sense similarity
+measure.                                                     Table 1: Statistics of training, dev, and test sets for
+                                                             Chinese-to-English task.
+5       Experiments
+                                                                For German-to-English tasks, we used WMT
+We evaluate the algorithm of bilingual sense si-             2006 4 data sets. The parallel training data con-
+milarity via machine translation. The sense simi-            tains 21 million target words; both the dev set
+larity scores are used as feature functions in the           and test set contain 2000 sentences; one refer-
+translation model.                                           ence is provided for each source input sentence.
+                                                             Only the target-language half of the parallel
+5.1       Data
+                                                             training data are used to train the language model
+We evaluated with different language pairs: Chi-             in this task.
+nese-to-English, and German-to-English. For
+Chinese-to-English tasks, we carried out the ex-             5.2       Results
+periments in two data conditions. The first one is           For the baseline, we train the translation model
+the large data condition, based on training data             by following (Chiang, 2005; Chiang, 2007) and
+for the NIST 2 2009 evaluation Chinese-to-                   our decoder is Joshua 5 , an open-source hierar-
+English track. In particular, all the allowed bilin-         chical phrase-based machine translation system
+gual corpora except the UN corpus and Hong                   written in Java. Our evaluation metric is IBM
+Kong Hansard corpus have been used for esti-                 BLEU (Papineni et al., 2002), which performs
+mating the translation model. The second one is              case-insensitive matching of n-grams up to n = 4.
+the small data condition where only the FBIS 3               Following (Koehn, 2004), we use the bootstrap-
+corpus is used to train the translation model. We            resampling test to do significance testing.
+trained two language models: the first one is a 4-              By observing the results on dev set in the addi-
+gram LM which is estimated on the target side of             tional experiments, we first set the smoothing
+the texts used in the large data condition. The              constant k in Equation (5) to 0.5.
+second LM is a 5-gram LM trained on the so-                     Then, we need to set the sizes of the vectors to
+                                                             balance the computing time and translation accu-
+
+2                                                            4
+    http://www.nist.gov/speech/tests/mt                          http://www.statmt.org/wmt06/
+3                                                            5
+    LDC2003E14                                                   http://www.cs.jhu.edu/~ccb/joshua/index.html
+
+
+                                                           838
+
+
+racy, i.e., we keep only the top N context words                   Table 2 compares the performance of Alg1
+with the highest feature value for each side of a               and Alg2 on the Chinese-to-English small data
+rule 6 . In the following, we use “Alg1” to                     condition. Both Alg1 and Alg2 improved the
+represent the original similarity functions which               performance over the baseline, and Alg2 ob-
+compare the two context vectors built on full                   tained slight and consistent improvements over
+training data, as in Equation (13); while we use                Alg1. The improved similarity function Alg2
+“Alg2” to represent the improved similarity as in               makes it possible to incorporate monolingual
+Equation (14). “IBM” represents IBM model 1                     semantic similarity on top of the bilingual se-
+probabilities, and “COS” represents cosine dis-                 mantic similarity, thus it may improve the accu-
+tance similarity function.                                      racy of the similarity estimate. Alg2 significantly
+   After carrying out a series of additional expe-              improved the performance over the baseline. The
+riments on the small data condition and observ-                 Alg2 cosine similarity function got 0.7 BLEU-
+ing the results on the dev set, we set the size of              score (p<0.01) improvement over the baseline
+the vector to 500 for Alg1; while for Alg2, we                  for NIST 2006 test set, and a 0.5 BLEU-score
+set the sizes of C ffull and Cefull N1 to 1000, and the         (p<0.05) for NIST 2008 test set.
+                                                                   Table 3 reports the performance of Alg2 on
+sizes of C cooc
+           f    and Cecooc N2 to 100.                           Chinese-to-English NIST large data condition
+   The sizes of the vectors in Alg2 are set in the              and German-to-English WMT task. We can see
+following process: first, we set N2 to 500 and let              that IBM model 1 and cosine distance similarity
+N1 range from 500 to 3,000, we observed that the                function both obtained significant improvement
+dev set got best performance when N1 was 1000;                  on all test sets of the two tasks. The two similari-
+then we set N1 to 1000 and let N1 range from 50                 ty functions obtained comparable results.
+to 1000, we got best performance when N1 =100.
+We use this setting as the default setting in all               6        Analysis and Discussion
+remaining experiments.
+                                                                6.1        Effect of Single Features
+         Algorithm NIST’06 NIST’08                              In Alg2, the similarity score consists of three
+          Baseline  27.4    21.2                                parts as in Equation (14): sim(C ffull , C cooc     f ) ,
+         Alg1 IBM   27.8*   21.5
+                                                                sim(Cefull , Cecooc ) , and sim(C cooc
+                                                                                                  f    , Cecooc ) ; where
+         Alg1 COS   27.8*   21.5
+         Alg2 IBM   27.9*   21.6*                                   sim(C cooc
+                                                                          f    , Cecooc ) could be computed by IBM mod-
+         Alg2 COS   28.1**  21.7*                               el 1 probabilities simIBM (C cooc
+                                                                                             f    , Cecooc ) or cosine dis-
+                                                                tance similarity function simCOS (C cooc        f , Cecooc ) .
+Table 2: Results (BLEU%) of small data Chinese-to-
+English NIST task. Alg1 represents the original simi-           Therefore, our first study is to determine which
+larity functions as in Equation (13); while Alg2                one of the above four features has the most im-
+represents the improved similarity as in Equation               pact on the result. Table 4 shows the results ob-
+(14). IBM represents IBM model 1 probability, and               tained by using each of the 4 features. First, we
+COS represents cosine distance similarity function. *           can see that simIBM (C cooc , Cecooc ) always gives a
+                                                                                        f
+or ** means result is significantly better than the
+baseline (p < 0.05 or p < 0.01, respectively).                  better improvement than simCOS (C cooc f  , Cecooc ) . This
+                                                                is because simIBM (C cooc
+                                                                                     f    , Cecooc ) scores are more
+                    Ch-En                     De-En
+                                                                diverse than the latter when the number of con-
+    Algorithm NIST’06 NIST’08                 Test’06           text features is small (there are many rules that
+     Baseline  31.0     23.8                  26.9              have only a few contexts.) For an extreme exam-
+    Alg2 IBM   31.5*    24.5**                27.2*             ple, suppose that there is only one context word
+    Alg2 COS   31.6**   24.5**                27.3*             in each vector of source and target context fea-
+                                                                tures, and the translation probability of the two
+Table 3: Results (BLEU%) of large data Chinese-to-              context words is not 0. In this case,
+English NIST task and German-to-English WMT
+task.                                                            simIBM (C cooc
+                                                                           f    , Cecooc ) reflects the translation proba-
+                                                                bility       of    the     context      word   pair,   while
+6                                                                   simCOS (C cooc
+                                                                              f    , Cecooc ) is always 1.
+  We have also conducted additional experiments by remov-
+ing the stop words from the context vectors; however, we          Second, sim (C ffull , C cooc
+                                                                                           f    ) and sim(Cefull , Cecooc )
+did not observe any consistent improvement. So we filter
+the context vectors by only considering the feature values.     also give some improvements even when used
+
+                                                              839
+
+
+independently. For a possible explanation, con-                  Algorithm          Dev NIST’06 NIST’08
+sider the following example. The Chinese word                     Baseline          20.2  27.4    21.2
+“ 红 ” can translate to “red”, “communist”, or                    Alg2 IBM           20.5  27.9    21.6
+“hong” (the transliteration of 红, when it is used                Alg2 COS           20.6  28.1    21.7
+in a person’s name). Since these translations are              Alg2 IBM+COS         20.8  27.9    21.5
+likely to be associated with very different source
+contexts, each will have a low sim (C ffull , C cooc )     Table 5: Results (BLEU%) for combination of two
+                                                f
+                                                           similarity scores. Further improvement was only ob-
+score. Another Chinese word 小溪 may translate               tained on dev set but not on test sets.
+into synonymous words, such as “brook”,
+“stream”, and “rivulet”, each of which will have           6.3    Comparison with Simple Contextual
+a high sim (C ffull , C cooc ) score. Clearly, 红 is a             Features
+                        f
+
+more “dangerous” word than 小溪, since choos-                Now, we try to answer the question: can the si-
+ing the wrong translation for it would be a bad            milarity features computed by the function in
+mistake. But if the two words have similar trans-          Equation (14) be replaced with some other sim-
+lation distributions, the system cannot distinguish        ple features? We did additional experiments on
+between them. The monolingual similarity scores            small data Chinese-to-English task to test the
+give it the ability to avoid “dangerous” words,            following features: (15) and (16) represent the
+and choose alternatives (such as larger phrase             sum of the counts of the context words in Cfull,
+translations) when available.                              while (17) represents the proportion of words in
+   Third, the similarity function of Alg2 consis-          the context of α that appeared in the context of
+tently achieved further improvement by incorpo-            the rule ( α , γ ); similarly, (18) is related to the
+rating the monolingual similarities computed for           properties of the words in the context of γ .
+the source and target side. This confirms the ef-
+fectiveness of our algorithm.                                        N f (α ) = ∑ f ∈C full F (α , f i )                  (15)
+                                                                                         i        f
+
+
+
+                                  CE_LD     CE_SD                   N e (γ ) = ∑e ∈C full F (γ , e j )                    (16)
+                                                                                     j        e
+
+       testset (NIST)            ’06 ’08 ’06 ’08
+          Baseline               31.0 23.8 27.4 21.2                                ∑        f i ∈C cooc
+                                                                                                           F (α , f i )
+                                                                   E f (α , γ ) =                   f
+                                                                                                                          (17)
+       sim (C ffull , C cooc
+                        f    )   31.1 24.3 27.5 21.3                                              N f (α )
+       sim(Cefull , Cecooc )    31.1 23.9 27.9 21.5
+      simIBM (C , C ) 31.4 24.3 27.9 21.5
+                  cooc    cooc
+                                                                                    ∑        e j ∈Cecooc
+                                                                                                           F (γ , e j )
+                  f       e                                         Ee (α , γ ) =                                         (18)
+                                                                                        N e (γ )
+      simCOS (C cooc
+                f    , Cecooc ) 31.2 23.9 27.7 21.4
+          Alg2 IBM               31.5 24.5 27.9 21.6       where F (α , f i ) and F (γ , e j ) are the frequency
+          Alg2 COS               31.6 24.5 28.1 21.7       counts of rule α or γ                      co-occurring with the
+                                                           context word f i or e j respectively.
+Table 4: Results (BLEU%) of Chinese-to-English
+large data (CE_LD) and small data (CE_SD) NIST
+task by applying one feature.                                    Feature      Dev NIST’06 NIST’08
+                                                                 Baseline     20.2  27.4    21.2
+6.2      Effect of Combining the Two Similari-                     +Nf        20.5  27.6    21.4
+         ties                                                      +Ne        20.5  27.5    21.3
+We then combine the two similarity scores by                       +Ef        20.4  27.5    21.2
+using both of them as features to see if we could                  +Ee        20.4  27.3    21.2
+obtain further improvement. In practice, we use                  +Nf+Ne       20.5  27.5    21.3
+the four features in Table 4 together.
+   Table 5 reports the results on the small data           Table 6: Results (BLEU%) of using simple features
+condition. We observed further improvement on              based on context on small data NIST task. Some im-
+dev set, but failed to get the same improvements           provements are obtained on dev set, but there was no
+on test sets or even lost performance. Since the           significant effect on the test sets.
+IBM+COS configuration has one extra feature, it
+is possible that it overfits the dev set.                    Table 6 shows results obtained by adding the
+                                                           above features to the system for the small data
+
+
+                                                         840
+
+
+condition. Although all these features have ob-             2) In addition to bilingual similarity, Alg2 re-
+tained some improvements on dev set, there was           lies on the degree of monolingual similarity be-
+no significant effect on the test sets. This means       tween the sense of a source or target unit within a
+simple features based on context, such as the            rule, and the sense of the unit in general. This has
+sum of the counts of the context features, are not       a bias in favor of less ambiguous rules, i.e. rules
+as helpful as the sense similarity computed by           involving only units with closely related mean-
+Equation (14).                                           ings. Although this bias is helpful on its own,
+                                                         possibly due to the mechanism we outline in sec-
+6.4   Null Context Feature                               tion 6.1, it appears to have a synergistic effect
+There are two cases where no context word can            when used along with the bilingual similarity
+be extracted according to the definition of con-         feature.
+text in Section 3.1. The first case is when a rule          3) Finally, we note that many of the features
+pair is always a full sentence-pair in the training      we use for capturing similarity, such as the con-
+data. The second case is when for some rule              text “the, of” for instantiations of X in the unit
+pairs, either their source or target contexts are        the X of, are arguably more syntactic than seman-
+out of the span limit of the initial phrase, so that     tic. Thus, like other “semantic” approaches, ours
+we cannot extract contexts for those rule-pairs.         can be seen as blending syntactic and semantic
+For Chinese-to-English NIST task, there are              information.
+about 1% of the rules that do not have contexts;
+for German-to-English task, this number is about         7    Related Work
+0.4%. We assign a uniform number as their bi-            There has been extensive work on incorporating
+lingual sense similarity score, and this number is       semantics into SMT. Key papers by Carpuat and
+tuned through MERT. We call it the null context          Wu (2007) and Chan et al (2007) showed that
+feature. It is included in all the results reported      word-sense disambiguation (WSD) techniques
+from Table 2 to Table 6. In Table 7, we show the         relying on source-language context can be effec-
+weight of the null context feature tuned by run-         tive in selecting translations in phrase-based and
+ning MERT in the experiments reported in Sec-            hierarchical SMT. More recent work has aimed
+tion 5.2. We can learn that penalties always dis-        at incorporating richer disambiguating features
+courage using those rules which have no context          into the SMT log-linear model (Gimpel and
+to be extracted.                                         Smith, 2008; Chiang et al, 2009); predicting co-
+                                                         herent sets of target words rather than individual
+                      Task                               phrase translations (Bangalore et al, 2009; Maus-
+         Alg.   CE_SD CE_LD DE                           er et al, 2009); and selecting applicable rules in
+       Alg2 IBM -0.09 -0.37 -0.15                        hierarchical (He et al, 2008) and syntactic (Liu et
+       Alg2 COS -0.59 -0.42 -0.36                        al, 2008) translation, relying on source as well as
+                                                         target context. Work by Wu and Fung (2009)
+Table 7: Weight learned for employing the null con-      breaks new ground in attempting to match se-
+text feature. CE_SD, CE_LD and DE are Chinese-to-        mantic roles derived from a semantic parser
+English small data task, large data task and German-
+                                                         across source and target languages.
+to-English task respectively.
+                                                            Our work is different from all the above ap-
+6.5   Discussion                                         proaches in that we attempt to discriminate
+                                                         among hierarchical rules based on: 1) the degree
+Our aim in this paper is to characterize the se-
+                                                         of bilingual semantic similarity between source
+mantic similarity of bilingual hierarchical rules.
+                                                         and target translation units; and 2) the monolin-
+We can make several observations concerning
+                                                         gual semantic similarity between occurrences of
+our features:
+                                                         source or target units as part of the given rule,
+   1) Rules that are largely syntactic in nature,
+                                                         and in general. In another words, WSD explicitly
+such as 的 X ||| the X of, will have very diffuse         tries to choose a translation given the current
+“meanings” and therefore lower similarity                source context, while our work rates rule pairs
+scores. It could be that the gains we obtained           independent of the current context.
+come simply from biasing the system against
+such rules. However, the results in table 6 show         8    Conclusions and Future Work
+that this is unlikely to be the case: features that
+just count context words help very little.               In this paper, we have proposed an approach that
+                                                         uses the vector space model to compute the sense
+
+                                                       841
+
+
+similarity for terms from parallel corpora and             D. Chiang. 2005. A hierarchical phrase-based model
+applied it to statistical machine translation. We            for statistical machine translation. In: Proceedings
+saw that the bilingual sense similarity computed             of ACL, pp. 263–270.
+by our algorithm led to significant improve-               D. Chiang. 2007. Hierarchical phrase-based transla-
+ments. Therefore, we can answer the questions                tion. Computational Linguistics. 33(2):201–228.
+proposed in Section 1. We have shown that the              D. Chiang, W. Wang and K. Knight. 2009. 11,001
+sense similarity computed between units from                 new features for statistical machine translation. In:
+parallel corpora by means of our algorithm is                Proc. NAACL HLT, pp. 218–226.
+helpful for at least one multilingual application:
+statistical machine translation.                           K. W. Church and P. Hanks. 1990. Word association
+                                                             norms, mutual information, and lexicography.
+   Finally, although we described and evaluated
+                                                             Computational Linguistics, 16(1):22–29.
+bilingual sense similarity algorithms applied to a
+hierarchical phrase-based system, this method is           W. B. Frakes and R. Baeza-Yates, editors. 1992. In-
+also suitable for syntax-based MT systems and                formation Retrieval, Data Structure and Algo-
+phrase-based MT systems. The only difference is              rithms. Prentice Hall.
+the definition of the context. For a syntax-based          P. Fung. 1998. A statistical view on bilingual lexicon
+system, the context of a rule could be defined                extraction: From parallel corpora to non-parallel
+similarly to the way it was defined in the work               corpora. In: Proceedings of AMTA, pp. 1–17. Oct.
+described above. For a phrase-based system, the               Langhorne, PA, USA.
+context of a phrase could be defined as its sur-           J. Gimenez and L. Marquez. 2009. Discriminative
+rounding words in a given size window. In our                 Phrase Selection for SMT. In: Goutte et al (ed.),
+future work, we may try this algorithm on syn-                Learning Machine Translation. MIT Press.
+tax-based MT systems and phrase-based MT sys-              K. Gimpel and N. A. Smith. 2008. Rich Source-Side
+tems with different context features. It would               Context for Statistical Machine Translation. In:
+also be possible to use this technique during                Proceedings of WMT, Columbus, OH.
+training of an SMT system – for instance, to im-
+                                                           Z. Harris. 1954. Distributional structure. Word,
+prove the bilingual word alignment or reduce the             10(23): 146-162.
+training data noise.
+                                                           Z. He, Q. Liu, and S. Lin. 2008. Improving Statistical
+References                                                    Machine Translation using Lexicalized Rule Selec-
+                                                              tion. In: Proceedings of COLING, Manchester,
+S. Bangalore, S. Kanthak, and P. Haffner. 2009. Sta-          UK.
+   tistical Machine Translation through Global Lexi-
+   cal Selection and Sentence Reconstruction. In:          D. Hindle. 1990. Noun classification from predicate-
+   Goutte et al (ed.), Learning Machine Translation.         argument structures. In: Proceedings of ACL. pp.
+   MIT Press.                                                268-275. Pittsburgh, PA.
+
+P. F. Brown, V. J. Della Pietra, S. A. Della Pietra &      P. Koehn, F. Och, D. Marcu. 2003. Statistical Phrase-
+   R. L. Mercer. 1993. The Mathematics of Statistical         Based Translation. In: Proceedings of HLT-
+   Machine Translation: Parameter Estimation. Com-            NAACL. pp. 127-133, Edmonton, Canada
+   putational Linguistics, 19(2) 263-312.                  P. Koehn. 2004. Statistical significance tests for ma-
+J. Bullinaria and J. Levy. 2007. Extracting semantic         chine translation evaluation. In: Proceedings of
+   representations from word co-occurrence statistics:       EMNLP, pp. 388–395. July, Barcelona, Spain.
+   A computational study. Behavior Research Me-            T. Landauer and S. T. Dumais. 1997. A solution to
+   thods, 39 (3), 510–526.                                    Plato’s problem: The Latent Semantic Analysis
+M. Carpuat and D. Wu. 2007. Improving Statistical             theory of the acquisition, induction, and representa-
+  Machine Translation using Word Sense Disambig-              tion of knowledge. Psychological Review. 104:211-
+  uation. In: Proceedings of EMNLP, Prague.                   240.
+
+M. Carpuat. 2009. One Translation per Discourse. In:       Z. Li, C. Callison-Burch, C. Dyer, J. Ganitkevitch, S.
+  Proceedings of NAACL HLT Workshop on Se-                    Khudanpur, L. Schwartz, W. Thornton, J. Weese
+  mantic Evaluations, Boulder, CO.                            and O. Zaidan, 2009. Joshua: An Open Source
+                                                              Toolkit for Parsing-based Machine Translation. In:
+Y. Chan, H. Ng and D. Chiang. 2007. Word Sense                Proceedings of the WMT. March. Athens, Greece.
+  Disambiguation Improves Statistical Machine
+  Translation. In: Proceedings of ACL, Prague.             D. Lin. 1998. Automatic retrieval and clustering of
+                                                             similar words. In: Proceedings of COLING/ACL-
+                                                             98. pp. 768-774. Montreal, Canada.
+
+
+                                                         842
+
+
+Q. Liu, Z. He, Y. Liu and S. Lin. 2008. Maximum
+  Entropy based Rule Selection Model for Syntax-
+  based Statistical Machine Translation. In: Proceed-
+  ings of EMNLP, Honolulu, Hawaii.
+K. Lund, and C. Burgess. 1996. Producing high-
+  dimensional semantic spaces from lexical co-
+  occurrence. Behavior Research Methods, Instru-
+  ments, and Computers, 28 (2), 203–208.
+A. Mauser, S. Hasan and H. Ney. 2009. Extending
+  Statistical Machine Translation with Discrimina-
+  tive and Trigger-Based Lexicon Models. In: Pro-
+  ceedings of EMNLP, Singapore.
+F. Och. 2003. Minimum error rate training in statistic-
+   al machine translation. In: Proceedings of ACL.
+   Sapporo, Japan.
+S. Pado and M. Lapata. 2007. Dependency-based con-
+   struction of semantic space models. Computational
+   Linguistics, 33 (2), 161–199.
+P. Pantel and D. Lin. 2002. Discovering word senses
+   from text. In: Proceedings of ACM SIGKDD Con-
+   ference on Knowledge Discovery and Data Mining,
+   pp. 613–619. Edmonton, Canada.
+K. Papineni, S. Roukos, T. Ward, and W. Zhu. 2002.
+  Bleu: a method for automatic evaluation of ma-
+  chine translation. In Proceedings of ACL, pp. 311–
+  318. July. Philadelphia, PA, USA.
+R. Rapp. 1999. Automatic Identification of Word
+  Translations from Unrelated English and German
+  Corpora. In: Proceedings of ACL, pp. 519–526.
+  June. Maryland.
+G. Salton and M. J. McGill. 1983. Introduction to
+  Modern Information Retrieval. McGraw-Hill, New
+  York.
+P. Turney. 2001. Mining the Web for synonyms:
+   PMI-IR versus LSA on TOEFL. In: Proceedings of
+   the Twelfth European Conference on Machine
+   Learning, pp. 491–502, Berlin, Germany.
+D. Wu and P. Fung. 2009. Semantic Roles for SMT:
+  A Hybrid Two-Pass Model. In: Proceedings of
+  NAACL/HLT, Boulder, CO.
+D. Yuret and M. A. Yatbaz. 2009. The Noisy Channel
+   Model for Unsupervised Word Sense Disambigua-
+   tion. In: Computational Linguistics. Vol. 1(1) 1-18.
+R. Zens and H. Ney. 2004. Improvements in phrase-
+   based statistical machine translation. In: Proceed-
+   ings of NAACL-HLT. Boston, MA.
+B. Zhao, S. Vogel, M. Eck, and A. Waibel. 2004.
+  Phrase pair rescoring with term weighting for sta-
+  tistical machine translation. In Proceedings of
+  EMNLP, pp. 206–213. July. Barcelona, Spain.
+
+
+
+
+                                                          843
+

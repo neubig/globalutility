@@ -1,0 +1,701 @@
+Inducing Domain-specific Semantic Class Taggers from (Almost) Nothing
+
+                                   Ruihong Huang and Ellen Riloff
+                                        School of Computing
+                                          University of Utah
+                                      Salt Lake City, UT 84112
+                                 {huangrh,riloff}@cs.utah.edu
+
+
+                      Abstract                                 sometimes temporal and numeric expressions as
+    This research explores the idea of inducing                well. The mention detection task was introduced
+    domain-specific semantic class taggers us-                 in recent ACE evaluations (e.g., (ACE, 2007;
+    ing only a domain-specific text collection                 ACE, 2008)) and requires systems to identify all
+    and seed words. The learning process be-                   noun phrases (proper names, nominals, and pro-
+    gins by inducing a classifier that only has                nouns) that correspond to 5-7 semantic classes.
+    access to contextual features, forcing it to                  Despite widespread interest in semantic tag-
+    generalize beyond the seeds. The contex-                   ging, nearly all semantic taggers for comprehen-
+    tual classifier then labels new instances,                 sive NP tagging still rely on supervised learn-
+    to expand and diversify the training set.                  ing, which requires annotated data for training.
+    Next, a cross-category bootstrapping pro-                  A few annotated corpora exist, but they are rela-
+    cess simultaneously trains a suite of clas-                tively small and most were developed for broad-
+    sifiers for multiple semantic classes. The                 coverage NLP. Many domains, however, are re-
+    positive instances for one class are used as               plete with specialized terminology and jargon that
+    negative instances for the others in an it-                cannot be adequately handled by general-purpose
+    erative bootstrapping cycle. We also ex-                   systems. Domains such as biology, medicine, and
+    plore a one-semantic-class-per-discourse                   law are teeming with specialized vocabulary that
+    heuristic, and use the classifiers to dynam-               necessitates training on domain-specific corpora.
+    ically create semantic features. We eval-                     Our research explores the idea of inducing
+    uate our approach by inducing six seman-                   domain-specific semantic taggers using a small
+    tic taggers from a collection of veterinary                set of seed words as the only form of human su-
+    medicine message board posts.                              pervision. Given an (unannotated) collection of
+                                                               domain-specific text, we automatically generate
+1 Introduction                                                 training instances by labelling every instance of a
+The goal of our research is to create semantic class           seed word with its designated semantic class. We
+taggers that can assign a semantic class label to ev-          then train a classifier to do semantic tagging using
+ery noun phrase in a sentence. For example, con-               these seed-based annotations, using bootstrapping
+sider the sentence: “The lab mix was diagnosed                 to iteratively improve performance.
+with parvo and given abx”. A semantic tagger                      On the surface, this approach appears to be a
+should identify the “the lab mix” as an ANIMAL,                contradiction. The classifier must learn how to as-
+“parvo” as a DISEASE, and “abx” (antibiotics)                  sign different semantic tags to different instances
+as a DRUG. Accurate semantic tagging could be                  of the same word based on context (e.g., “lab”
+beneficial for many NLP tasks, including coref-                may refer to an animal in one context but a labora-
+erence resolution and word sense disambiguation,               tory in another). And yet, we plan to train the clas-
+and many NLP applications, such as event extrac-               sifier using stand-alone seed words, making the as-
+tion systems and question answering technology.                sumption that every instance of the seed belongs to
+   Semantic class tagging has been the subject of              the same semantic class. We resolve this apparent
+previous research, primarily under the guises of               contradiction by using semantically unambiguous
+named entity recognition (NER) and mention de-                 seeds and by introducing an initial context-only
+tection. Named entity recognizers perform se-                  training phase before bootstrapping begins. First,
+mantic tagging on proper name noun phrases, and                we train a strictly contextual classifier that only
+
+
+                                                         275
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 275–285,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+has access to contextual features and cannot see                 mention detection systems (e.g., see (ACE, 2005;
+the seed. Then we apply the classifier to the corpus             ACE, 2007; ACE, 2008)) require tagging of NPs
+to automatically label new instances, and combine                that correspond to 5-7 general semantic classes.
+these new instances with the seed-based instances.               These systems are typically trained with super-
+This process expands and diversifies the training                vised learning using annotated corpora, although
+set to fuel subsequent bootstrapping.                            techniques have been developed to use resources
+   Another challenge is that we want to use a small              for one language to train systems for different lan-
+set of seeds to minimize the amount of human ef-                 guages (e.g., (Zitouni and Florian, 2009)).
+fort, and then use bootstrapping to fully exploit                   Another line of relevant work is semantic class
+the domain-specific corpus. Iterative self-training,             induction (e.g., (Riloff and Shepherd, 1997; Roark
+however, often has difficulty sustaining momen-                  and Charniak, 1998; Thelen and Riloff, 2002; Ng,
+tum or it succumbs to semantic drift (Komachi                    2007; McIntosh and Curran, 2009), where the goal
+et al., 2008; McIntosh and Curran, 2009). To                     is to induce a stand-alone dictionary of words with
+address these issues, we simultaneously induce                   semantic class labels. These techniques are of-
+a suite of classifiers for multiple semantic cat-                ten designed to learn specialized terminology from
+egories, using the positive instances of one se-                 unannotated domain-specific texts via bootstrap-
+mantic category as negative instances for the oth-               ping. Our work, however, focuses on classifica-
+ers. As bootstrapping progresses, the classifiers                tion of NP instances in context, so the same phrase
+gradually improve themselves, and each other,                    may be assigned to different semantic classes in
+over many iterations. We also explore a one-                     different contexts. Consequently, our classifier
+semantic-class-per-discourse (OSCPD) heuristic                   can also assign semantic class labels to pronouns.
+that infuses the learning process with fresh train-
+                                                                    There has also been work on extracting seman-
+ing instances, which may be substantially differ-
+                                                                 tically related terms or category members from
+ent from the ones seen previously, and we use the
+                                                                 the Web (e.g., (Paşca, 2004; Etzioni et al., 2005;
+labels produced by the classifiers to dynamically
+                                                                 Kozareva et al., 2008; Carlson et al., 2009)). These
+create semantic features.
+                                                                 techniques harvest broad-coverage semantic infor-
+   We evaluate our approach by creating six se-
+                                                                 mation from the Web using patterns and statistics,
+mantic taggers using a collection of message board
+                                                                 typically for the purpose of knowledge acquisi-
+posts in the domain of veterinary medicine. Our
+                                                                 tion. Importantly, our goal is to classify instances
+results show this approach produces high-quality
+                                                                 in context, rather than generate lists of terms. In
+semantic taggers after a sustained bootstrapping
+                                                                 addition, the goal of our research is to learn spe-
+cycle that maintains good precision while steadily
+                                                                 cialized terms and jargon that may not be common
+increasing recall over many iterations.
+                                                                 on the Web, as well as domain-specific usages that
+2 Related Work                                                   may differ from the norm (e.g., “mix” and “lab”
+                                                                 are usually ANIMALS in our domain).
+Semantic class tagging is most closely related to                   The idea of simulataneously learning multiple
+named entity recognition (NER), mention detec-                   semantic categories to prevent semantic drift has
+tion, and semantic lexicon induction. NER sys-                   been explored for other tasks, such as semantic
+tems (e.g., (Bikel et al., 1997; Collins and Singer,             lexicon induction (Thelen and Riloff, 2002; McIn-
+1999; Cucerzan and Yarowsky, 1999; Fleischman                    tosh and Curran, 2009) and pattern learning (Yan-
+and Hovy, 2002) identify proper named entities,                  garber, 2003). Our bootstrapping model can be
+such as people, organizations, and locations. Sev-               viewed as a form of self-training (e.g., (Ng and
+eral bootstrapping methods for NER have been                     Cardie, 2003; Mihalcea, 2004; McClosky et al.,
+previously developed (e.g., (Collins and Singer,                 2006)), and cross-category training is similar in
+1999; Niu et al., 2003)). NER systems, how-                      spirit to co-training (e.g., (Blum and Mitchell,
+ever, do not identify nominal NP instances (e.g.,                1998; Collins and Singer, 1999; Riloff and Jones,
+“a software manufacturer” or “the beach”), or han-               1999; Mueller et al., 2002; Phillips and Riloff,
+dle semantic classes that are not associated with                2002)). But, importantly, our classifiers all use the
+proper named entities (e.g., symptoms).1 ACE                     same feature set so they do not represent indepen-
+   1
+     Some NER systems also handle specialized constructs         dent views of the data. They do, however, offer
+such as dates and monetary amounts.                              slightly different perspectives because each is at-
+
+
+                                                           276
+
+
+tempting to recognize a different semantic class.            training set. Second, we employ a cross-category
+                                                             bootstrapping process that simultaneously trains
+3 Bootstrapping an Instance-based                            a suite of classifiers for multiple semantic cate-
+  Semantic Class Tagger from Seeds                           gories, using the positive instances for one se-
+3.1   Motivation                                             mantic class as negative instances for the oth-
+                                                             ers. This cross-category training process gives
+Our goal is to create a bootstrapping model that
+                                                             the learner sustained momentum over many boot-
+can rapidly create semantic class taggers using
+                                                             strapping iterations. Finally, we explore two ad-
+just a small set of seed words and an unanno-
+                                                             ditional enhancements: (1) a one-semantic-class-
+tated domain-specific corpus. Our motivation
+                                                             per-discourse heuristic to automatically generate
+comes from specialized domains that cannot be
+                                                             new training instances, and (2) dynamically cre-
+adequately handled by general-purpose NLP sys-
+                                                             ated semantic features produced by the classifiers
+tems. As an example of such a domain, we have
+                                                             themselves. In the following sections, we explain
+been working with a collection of message board
+                                                             each of these steps in detail.
+posts in the field of veterinary medicine. Given a
+document, we want a semantic class tagger to label
+                                                             3.2 Phase 1: Inducing a Contextual Classifier
+every NP with a semantic category, for example:
+                                                             The main challenge that we faced was how to train
+      [A 14yo doxy]AN IM AL owned by                         an instance-based classifier using seed words as
+      [a reputable breeder]HU M AN is be-                    the only form of human supervision. First, the user
+      ing treated for [IBD]DISEASE with                      must provide a small set of seed words that are
+      [pred]DRU G .                                          relatively unambiguous (e.g., “dog” will nearly
+   When we began working with these texts, we                always refer to an animal in our domain). But
+were immediately confronted by a dizzying array              even so, training a traditional classifier from seed-
+of non-standard words and word uses. In addition             based instances would likely produce a classifier
+to formal veterinary vocabulary (e.g., animal dis-           that learns to recognize the seeds but is unable to
+eases), veterinarians often use informal, shorthand          classify new examples. We needed to force the
+terms when posting on-line. For example, they                classifier to generalize beyond the seed words.
+frequently refer to breeds using “nicknames” or                 Our solution was to introduce an initial train-
+shortened terms (e.g., gshep for German shepherd,            ing step that induces a strictly contextual classifier.
+doxy for dachsund, bxr for boxer, labx for labrador          First, we generate training instances by automati-
+cross). Often, they refer to animals based solely on         cally labeling each instance of a seed word with
+their physical characteristics, for example “a dlh”          its designated semantic class. However, when we
+(domestic long hair), “a m/n” (male, neutered), or           create feature vectors for the classifier, the seeds
+“a 2yo” (2 year old). This phenomenon occurs                 themselves are hidden and only contextual fea-
+with other semantic categories as well, such as              tures are used to represent each training instance.
+drugs and medical tests (e.g., pred for prednisone,          By essentially “masking” the seed words so the
+and rads for radiographs).                                   classifier can only see the contexts around them,
+   Nearly all semantic class taggers are trained us-         we force the classifier to generalize.
+ing supervised learning with manually annotated                 We create a suite of strictly contextual classi-
+data. However, annotated data is rarely available            fiers, one for each semantic category. Each classi-
+for specialized domains, and it is expensive to ob-          fier makes a binary decision as to whether a noun
+tain because domain experts must do the annota-              phrase belongs to its semantic category. We use
+tion work. So we set out to create a bootstrapping           the seed words for category Ck to generate posi-
+model that can rapidly create domain-specific se-            tive training instances for the Ck classifier, and the
+mantic taggers using just a few seed words and a             seed words for all other categories to generate the
+domain-specific text collection.                             negative training instances for Ck .
+   Our bootstrapping model consists of two dis-                 We use an in-house sentence segmenter and NP
+tinct phases. First, we train strictly contextual            chunker to identify the base NPs in each sentence
+classifiers from the seed annotations. We then ap-           and create feature vectors that represent each con-
+ply the classifiers to the unlabeled data to gener-          stituent in the sentence as either an NP or an in-
+ate new annotated instances that are added to the            dividual word. For each seed word, the feature
+
+
+                                                       277
+
+
+vector captures a context window of 3 constituents            This process greatly enhances the diversity of
+(word or NP) to its left and 3 constituents (word             the training data. In this initial learning step,
+or NP) to its right. Each constituent is represented          the strictly contextual classifiers substantially in-
+with a lexical feature: for NPs, we use its head              crease the number of training instances for each
+noun; for individual words, we use the word itself.           semantic category, producing a more diverse mix
+The seed word, however, is discarded so that the              of seed-generated instances and context-generated
+classifier is essentially blind-folded and cannot see         instances.
+the seed that produced the training instance. We
+also create a feature for every modifier that pre-            3.3 Phase 2: Cross-Category Bootstrapping
+cedes the head noun in the target NP, except for              The next phase of the learning process is an iter-
+articles which are discarded. As an example, con-             ative bootstrapping procedure. The key challenge
+sider the following sentence:                                 was to design a bootstrapping model that would
+                                                              not succumb to semantic drift and would have sus-
+     Fluffy was diagnosed with FELV after a
+                                                              tained momentum to continue learning over many
+     blood test showed that he tested positive.
+                                                              iterations.
+Suppose that “FELV” is a seed for the DISEASE                    Figure 1 shows the design of our cross-category
+category and “test” is a seed for the TEST cate-              bootstrapping model.2 We simultaneously train a
+gory. Two training instances would be created,                suite of binary classifiers, one for each semantic
+with feature vectors that look like this, where M             category, C1 . . . Cn . After each training cycle,
+represents a modifier inside the target NP:                   all of the classifiers are applied to the remaining
+                                                              unlabeled instances and each classifier labels the
+was−3 diagnosed−2 with−1 af ter1 test2                        (positive) instances that it is most confident about
+showed3 ⇒ DISEASE                                             (i.e., the instances that it classifies with a confi-
+                                                              dence score ≥ θcf ). The set of instances positively
+with−3 F ELV−2 af ter−1 bloodM showed1                        labeled by classifier Ck are shown as Ck+ in Figure
+that2 he3 ⇒ TEST                                              1. All of the new instances produced by classifier
+   The contextual classifiers are then applied to the         Ck are then added to the set of positive training
+corpus to automatically label new instances. We               instances for Ck and to the set of negative training
+use a confidence score to label only the instances            instances for all of the other classifiers.
+that the classifiers are most certain about. We com-             One potential problem with this scheme is that
+pute a confidence score for instance i with respect           some categories are more prolific than others, plus
+to semantic class Ck by considering both the score            we are collecting negative instances from a set
+of the Ck classifier as well as the scores of the             of competing classifiers. Consequently, this ap-
+competing classifiers. Intuitively, we have confi-            proach can produce highly imbalanced training
+dence in labeling an instance as category Ck if the           sets. Therefore we enforced a 3:1 ratio of nega-
+Ck classifier gave it a positive score, and its score         tives to positives by randomly selecting a subset
+is much higher than the score of any other classi-            of the possible negative instances. We discuss this
+fier. We use the following scoring function:                  issue further in Section 4.4.
+
+     Confidence(i,Ck ) =
+        score(i,Ck ) - max(∀j6=k score(i,Cj ))                  seeds
+                                                                                   +       +    +         +          +         +
+                                                                                 C 1 C i=1     C2     C i=2         Cn     C i=n
+We employ support vector machines (SVMs)                       unlabeled
+                                                                                (+)   ( _)     (+)    ( _)          (+)
+                                                                                                                            _
+                                                                                                                           ( )
+(Joachims, 1999) with a linear kernel as our classi-                                                 C2
+                                                                                      C1                                  Cn
+fiers, using the SVMlin software (Keerthi and De-
+                                                                                  +              +
+Coste, 2005). We use the value produced by the                                   C1             C2                    +
+                                                                                                                     Cn
+decision function (essentially the distance from               labeled
+
+the hyperplane) as the score for a classifier. We
+specify a threshold θcf and only assign a semantic                   Figure 1: Cross-Category Bootstrapping
+tag Ck to an instance i if Confidence(i,Ck ) ≥ θcf .             2
+                                                                   For simplicity, this picture does not depict the initial con-
+   All instances that pass the confidence thresh-             textual training step, but that can be viewed as the first itera-
+old are labeled and added to the training set.                tion in this general framework.
+
+
+                                                        278
+
+
+   Cross-category training has two advantages                             contexts, thereby infusing the bootstrapping pro-
+over independent self-training. First, as oth-                            cess with “fresh” training examples.
+ers have shown for pattern learning and lexicon                              In early experiments, we found that OSCPD can
+induction (Thelen and Riloff, 2002; Yangarber,                            be aggressive, pulling in many new instances. If
+2003; McIntosh and Curran, 2009), simultane-                              the classifier labels a word incorrectly, however,
+ously training classifiers for multiple categories                        then the OSCPD heuristic will compound the er-
+reduces semantic drift because each classifier is                         ror and mislabel even more instances incorrectly.
+deterred from encroaching on another one’s terri-                         Therefore we only apply this heuristic to instances
+tory (i.e., claiming the instances from a compet-                         that are labeled with extremely high confidence
+ing class as its own). Second, similar in spirit to                       (θcf ≥ 2.5) and that pass a global sanity check,
+co-training3 , this approach allows each classifier                       gsc(w) ≥ 0.2, which ensures that a relatively high
+to obtain new training instances from an outside                          proportion of labeled instances with the same head
+source that has a slightly different perspective.                         noun have been assigned to the same semantic
+                                                                                                               w          w
+While independent self-training can quickly run                           class. Specifically, gsc(w) = 0.1∗ wl/cl
+                                                                                                                   +0.9∗ wu/c
+                                                                                                                            u
+out of steam, cross-category training supplies each                       where wl and wu are the # of labeled and unla-
+classifier with a constant stream of new (negative)                       beled instances, respectively, wl/c is the # of in-
+instances produced by competing classifiers. In                           stances labeled as c, and wu/c is the # of unlabeled
+Section 4, we will show that cross-category boot-                         instances that receive a positive confidence score
+strapping performs substantially better than an in-                       for c when given to the classifier. The intuition
+dependent self-training model, where each classi-                         behind the second term is that most instances are
+fier is bootstrapped separately.                                          initially unlabeled and we want to make sure that
+   The feature set for these classifiers is exactly the                   many of the unlabeled instances are likely to be-
+same as described in Section 3.2, except that we                          long to the same semantic class (even though the
+add a new lexical feature that represents the head                        classifier isn’t ready to commit to them yet).
+noun of the target NP (i.e., the NP that needs to be
+tagged). This allows the classifiers to consider the                      3.5 Dynamic Semantic Features
+local context as well as the target word itself when                      For many NLP tasks, classifiers use semantic fea-
+making decisions.                                                         tures to represent the semantic class of words.
+                                                                          These features are typically obtained from exter-
+3.4    One Semantic Class Per Discourse                                   nal resources such as Wordnet (Miller, 1990). Our
+We also explored the idea of using a one semantic                         bootstrapping model incrementally trains seman-
+class per discourse (OSCPD) heuristic to gener-                           tic class taggers, so we explored the idea of using
+ate additional training instances during bootstrap-                       the labels assigned by the classifiers to create en-
+ping. Inspired by Yarowsky’s one sense per dis-                           hanced feature vectors by dynamically adding se-
+course heuristic for word sense disambiguation                            mantic features. This process allows later stages
+(Yarowsky, 1995), we make the assumption that                             of bootstrapping to directly benefit from earlier
+multiple instances of a word in the same discourse                        stages. For example, consider the sentence:
+will nearly always correspond to the same seman-
+                                                                               He started the doxy on Vetsulin today.
+tic class. Since our data set consists of message
+board posts organized as threads, we consider all                         If “Vetsulin” was labeled as a DRUG in a previ-
+posts in the same thread to be a single discourse.                        ous bootstrapping iteration, then the feature vector
+   After each training step, we apply the classi-                         representing the context around “doxy” can be en-
+fiers to the unlabeled data to label some new in-                         hanced to include an additional semantic feature
+stances. For each newly labeled instance, the OS-                         identifying Vetsulin as a DRUG, which would look
+CPD heuristic collects all instances with the same                        like this:
+head noun in the same discourse (thread) and uni-
+laterally labels them with the same semantic class.                       He−2 started−1 on1 V etsulin2 DRU G2 today3
+This heuristic serves as meta-knowledge to label
+                                                                          Intuitively, the semantic features should help the
+instances that (potentially) occur in very different
+                                                                          classifier identify more general contextual pat-
+    3
+      But technically this is not co-training because our feature         terns, such as “started <X> on DRUG”. To create
+sets are all the same.                                                    semantic features, we use the semantic tags that
+
+
+                                                                    279
+
+
+have been assigned to the current set of labeled in-          ing numbers. For training, we used 4,629 threads,
+stances. When a feature vector is created for a tar-          consisting of 25,944 individual posts. We devel-
+get NP, we check every noun instance in its context           oped classifiers to identify six semantic categories:
+window to see if it has been assigned a semantic              ANIMAL, DISEASE / SYMPTOM 4 , DRUG , HUMAN ,
+tag, and if so, then we add a semantic feature. In            TEST, and OTHER .
+the early stages of bootstrapping, however, rela-                The message board posts contain an abundance
+tively few nouns will be assigned semantic tags,              of veterinary terminology and jargon, so two do-
+so these features are often missing.                          main experts5 from VIN created a test set (answer
+                                                              key) for our evaluation. We defined annotation
+3.6   Thresholds and Stopping Criterion                       guidelines6 for each semantic category and con-
+When new instances are automatically labeled                  ducted an inter-annotator agreement study to mea-
+during bootstrapping, it is critically important that         sure the consistency of the two domain experts on
+most of the labels are correct or performance                 30 message board posts, which contained 1,473
+rapidly deteriorates. This suggests that we should            noun phrases. The annotators achieved a relatively
+only label instances in which the classifier has              high κ score of .80. Each annotator then labeled an
+high confidence. On the other hand, a high thresh-            additional 35 documents, which gave us a test set
+old often yields few new instances, which can                 containing 100 manually annotated message board
+cause the bootstrapping process to sputter and halt.          posts. The table below shows the distribution of
+To balance these competing demands, we used                   semantic classes in the test set.
+a sliding threshold that begins conservatively but               Animal     Dis/Sym      Drug     Test    Human      Other
+gradually loosens the reins as bootstrapping pro-                 612         900        369      404      818       1723
+gresses. Initially, we set θcf = 2.0, which only                 To select seed words, we used the procedure
+labels instances that the classifier is highly confi-         proposed by Roark and Charniak (1998), ranking
+dent about. When fewer than min new instances                 all of the head nouns in the training corpus by fre-
+can be labeled, we automatically decrease θcf by              quency and manually selecting the first 10 nouns
+0.2, allowing another batch of new instances to be            that unambiguously belong to each category.7 This
+labeled, albeit with slightly less confidence. We             process is fast, relatively objective, and guaranteed
+continue decreasing the threshold, as needed, un-             to yield high-frequency terms, which is important
+til θcf < 1.0, when we end the bootstrapping                  for bootstrapping. We used the Stanford part-of-
+process. In Section 4, we show that this sliding              speech tagger (Toutanova et al., 2003) to identify
+threshold outperforms fixed threshold values.                 nouns, and our own simple rule-based NP chunker.
+4 Evaluation                                                  4.2 Baselines
+4.1   Data                                                    To assess the difficulty of our data set and task,
+Our data set consists of message board posts from             we evaluated several baselines. The first baseline
+the Veterinary Information Network (VIN), which               searches for each head noun in WordNet and la-
+is a web site (www.vin.com) for professionals in              bels the noun as category Ck if it has a hypernym
+veterinary medicine. Among other things, VIN                  synset corresponding to that category. We manu-
+hosts forums where veterinarians engage in dis-               ally identified the WordNet synsets that, to the best
+cussions about medical issues, cases in their prac-           of our ability, seem to most closely correspond
+tices, etc. Over half of the small animal veterinar-             4
+                                                                    We used a single category for diseases and symptoms
+ians in the U.S. and Canada use VIN. Analysis of              because our domain experts had difficulty distinguishing be-
+veterinary data could not only improve pet health             tween them. A veterinary consultant explained that the same
+                                                              term (e.g., diabetes) may be considered a symptom in one
+care, but also provide early warning signs of in-             context if it is secondary to another condition (e.g., pancre-
+fectious disease outbreaks, emerging zoonotic dis-            atitis) and a disease in a different context if it is the primary
+eases, exposures to environmental toxins, and con-            diagnosis.
+                                                                  5
+                                                                    One annotator is a veterinarian and the other is a veteri-
+tamination in the food chain.                                 nary technician.
+                                                                  6
+   We obtained over 15,000 VIN message board                        The annotators were also allowed to label an NP as
+threads representing three topics: cardiology, en-            POS Error if it was clearly misparsed. These cases were not
+                                                              used in the evaluation.
+docrinology, and feline internal medicine. We did                 7
+                                                                    We used 20 seeds for DIS / SYM because we merged two
+basic cleaning, removing html tags and tokeniz-               categories and for OTHER because it is a broad catch-all class.
+
+
+                                                        280
+
+
+       Method                       Animal   Dis/Sym    Drug     Test   Human                      Other        Avg
+                                                     BASELINES
+       WordNet                      32/80/46 21/81/34 25/35/29   NA     62/66/64                    NA       35/66/45.8
+       Seeds                       38/100/55 14/99/25 21/97/35 29/94/45 80/99/88                  18/93/30   37/98/53.1
+       Supervised                   67/94/78 20/88/33 24/96/39 34/90/49 79/99/88                  31/91/46   45/94/60.7
+       Ind. Self-Train I.13         61/84/71 39/80/52 53/77/62 55/70/61 81/96/88                  30/82/44   58/81/67.4
+                                   CROSS-CATEGORY BOOTSTRAPPED CLASSIFIERS
+       Contextual I.1               59/77/67 33/84/47 42/80/55 49/77/59 82/93/87                  33/80/47   53/82/64.3
+       XCategory I.45               86/71/78 57/82/67 70/78/74 73/65/69 85/92/89                  46/82/59   75/78/76.1
+       XCat+OSCPD I.40              86/69/77 59/81/68 72/70/71 72/69/71 86/92/89                  50/81/62   75/76/75.6
+       XCat+OSCPD+SF I.39           86/70/77 60/81/69 69/81/75 73/69/71 86/91/89                  50/81/62   75/78/76.6
+
+                       Table 1: Experimental results, reported as Recall/Precision/F score
+
+
+to each semantic class. We do not report Word-                         which trains only the strictly contextual classi-
+Net results for TEST because there did not seem                        fiers. The average F score improved from 53.1 for
+be an appropriate synset, or for the OTHER cate-                       the seeds alone to 64.3 with the contextual classi-
+gory because that is a catch-all class. The first row                  fiers. The next row, XCategory I.45, shows the
+of Table 1 shows the results, which are reported                       results after cross-category bootstrapping, which
+as Recall/Precision/F score8 . The WordNet base-                       ended after 45 iterations. (We indicate the num-
+line yields low recall (21-32%) for every category                     ber of iterations until bootstrapping ended using
+except HUMAN, which confirms that many veteri-                         the notation I.#.) With cross-category bootstrap-
+nary terms are not present in WordNet. The sur-                        ping, the average F score increased from 64.3 to
+prisingly low precision for some categories is due                     76.1. A closer inspection reveals that all of the se-
+to atypical word uses (e.g., patient, boy, and girl                    mantic categories except HUMAN achieved large
+are HUMAN in WordNet but nearly always ANI -                           recall gains. And importantly, these recall gains
+MALS in our domain), and overgeneralities (e.g.,                       were obtained with relatively little loss of preci-
+WordNet lists calcium as a DRUG).                                      sion, with the exception of TEST.
+   The second baseline simply labels every in-                            Next, we measured the impact of the one-
+stance of a seed with its designated semantic class.                   semantic-class-per-discourse heuristic, shown as
+All non-seed instances remain unlabeled. As ex-                        XCat+OSCPD I.40. From Table 1, it appears that
+pected, the seeds produce high precision but low                       OSCPD produced mixed results: recall increased
+recall. The exception is HUMAN, where 80% of                           by 1-4 points for DIS / SYM, DRUG, HUMAN, and
+the instances match a seed word, undoubtedly be-                       OTHER , but precision was inconsistent, improv-
+cause five of the ten HUMAN seeds are 1st and 2nd                      ing by +4 for T EST but dropping by -8 for DRUG.
+person pronouns, which are extremely common.                           However, this single snapshot in time does not tell
+   A third baseline trains semantic classifiers using                  the full story. Figure 2 shows the performance
+supervised learning by performing 10-fold cross-                       of the classifiers during the course of bootstrap-
+validation on the test set. The feature set and                        ping. The OSCPD heuristic produced a steeper
+classifier settings are exactly the same as with                       learning curve, and consistently improved perfor-
+our bootstrapped classifiers.9 Supervised learning                     mance until the last few iterations when its perfor-
+achieves good precision but low recall for all cate-                   mance dipped. This is probably due to the fact that
+gories except ANIMAL and HUMAN. In the next                            noise gradually increases during bootstrapping, so
+section, we present the experimental results for                       incorrect labels are more likely and OSCPD will
+our bootstrapped classifiers.                                          compound any mistakes by the classifier. A good
+                                                                       future strategy might be to use the OSCPD heuris-
+4.3    Results for Bootstrapped Classifiers
+                                                                       tic only during the early stages of bootstrapping
+The bottom section of Table 1 displays the results                     when the classifier’s decisions are most reliable.
+for our bootstrapped classifiers. The Contextual
+                                                                          We also evaluated the effect of dynamically cre-
+I.1 row shows results after just the first iteration,
+                                                                       ated semantic features. When added to the ba-
+   8
+      We use an F(1) score, where recall and precision are             sic XCategory system, they had almost no ef-
+equally weighted.                                                      fect. We suspect this is because the semantic fea-
+    9
+      For all of our classifiers, supervised and bootstrapped,
+we label all instances of the seed words first and then apply          tures are sparse during most of the bootstrapping
+the classifiers to the unlabeled (non-seed) instances.                 process. However, the semantic features did im-
+
+
+                                                                 281
+
+
+            78                                                                     85
+
+
+                                                                                   80
+            76
+
+                                                                                   75
+
+            74
+                                                                                   70
+F measure (%)
+
+
+
+
+            72                                                                     65
+
+
+                                                                                   60
+            70
+                                                                                                                                         Precision
+                                                                                   55
+            68
+                                        independent self−training                                                                        Recall
+                                                                                   50
+                                        cross−category bootstrapping                 0     5     10     15         20
+                                                                                                             # of iterations
+                                                                                                                               25   30        35     40
+
+            66                          +OSCPD
+                                        +OSCPD+SemFeat
+            64
+              0   5   10   15     20      25      30   35    40        45
+                                                                                  Figure 3: Recall and Precision scores during
+                                # of iterations                                   cross-category bootstrapping
+
+        Figure 2: Average F scores after each iteration
+                                                                                  call steadily improves while precision stays con-
+                                                                                  sistently high with only a slight dropoff at the end.
+prove performance when coupled with the OSCPD
+heuristic, presumably because the OSCPD heuris-                                   4.4 Analysis
+tic aggressively labels more instances in the earlier                             To assess the impact of corpus size, we generated
+stages of bootstrapping, increasing the prevalence                                a learning curve with randomly selected subsets
+of semantic class tags. The XCat+OSCPD+SF                                         of the training texts. Figure 4 shows the average F
+I.39 row in Table 1 shows that the semantic fea-                                                                    1 1 1 1 3
+                                                                                  score of our best system using 16  , 8 , 4 , 2 , 4 , and
+tures coupled with OSCPD dramatically increased                                                                1
+                                                                                  all of the data. With just 16 th of the training set,
+the precision for DRUG, yielding the best overall F                               the system has about 1,600 message board posts
+score of 76.6.                                                                    to use for training, which yields a similar F score
+   We conducted one additional experiment to as-                                  (roughly 61%) as the supervised baseline that used
+sess the benefits of cross-category bootstrapping.                                100 manually annotated posts via 10-fold cross-
+We created an analogous suite of classifiers using                                validation. So with 16 times more text, seed-based
+self-training, where each classifier independently                                bootstrapping achieves roughly the same results as
+labels the instances that it is most confident about,                             supervised learning. This result reflects the natural
+adds them only to its own training set, and then                                  trade-off between supervised learning and seed-
+retrains itself. The Ind. Self-Train I.13 row in                                  based bootstrapping. Supervised learning exploits
+Table 1 shows that these classifiers achieved only                                manually annotated data, but must make do with
+58% recall (compared to 75% for XCategory) and                                    a relatively small amount of training text because
+an average F score of 67.4 (compared to 76.1 for                                  manual annotations are expensive. In contrast,
+XCategory). One reason for the disparity is that                                  seed-based bootstrapping exploits a small number
+the self-training model ended after just 13 boot-                                 of human-provided seeds, but needs a larger set of
+strapping cycles (I.13), given the same threshold                                 (unannotated) texts for training because the seeds
+values. To see if we could push it further, we low-                               produce relatively sparse annotations of the texts.
+ered the confidence threshold to 0 and it continued                                  An additional advantage of seed-based boot-
+learning through 35 iterations. Even so, its final                                strapping methods is that they can easily exploit
+score was 65% recall with 79% precision, which is                                 unlimited amounts of training text. For many do-
+still well below the 75% recall with 78% precision                                mains, large text collections are readily available.
+produced by the XCategory model. These results                                    Figure 4 shows a steady improvement in perfor-
+support our claim that cross-category bootstrap-                                  mance as the amount of training text grows. Over-
+ping is more effective than independently self-                                   all, the F score improves from roughly 61% to
+trained models.                                                                   nearly 77% simply by giving the system access to
+   Figure 3 tracks the recall and precision scores                                more unannotated text during bootstrapping.
+of the XCat+OSCPD+SF system as bootstrap-                                            We also evaluated the effectiveness of our slid-
+ping progresses. This graph shows the sustained                                   ing confidence threshold (Section 3.6). The ta-
+momentum of cross-category bootstrapping: re-                                     ble below shows the results using fixed thresholds
+
+
+                                                                            282
+
+
+                 80                                                             whelm the less frequent categories with negative
+                 75
+                 70                                                             instances.
+                 65
+                                                                                                Neg:Pos   R/P/F
+                 60
+                                                                                                1:1       72/79/75.2
+ F measure (%)
+
+
+
+                                                                                                2:1       74/78/76.1
+                                                                                                3:1       75/78/76.6
+                 40                                                                             4:1       75/77/76.0
+                                                                                                5:1       76/77/76.4
+
+                 20
+                                                                                   Finally, we examined performance on gendered
+                                                                                pronouns (he/she/him/her), which can refer to ei-
+                 0                                                              ther animals or people in the veterinary domain.
+                      0   1/16 1/8     1/4          1/2         3/4   1
+                                              ration of data                    84% (220/261) of the gendered pronouns were an-
+                                                                                notated as ANIMAL in the test set. Our classi-
+                                     Figure 4: Learning Curve                   fier achieved 95% recall (209/220) and 90% preci-
+                                                                                sion (209/232) for ANIMAL and 15% recall (6/41)
+                                                                                and 100% precision (6/6) for HUMAN. So while
+of 1.0, 1.5, 2.0, as well as the sliding threshold                              it failed to recognize most of the (relatively few)
+(which begins at 2.0 and ends at 1.0 decreasing by                              gendered pronouns that refer to a person, it was
+0.2 when the number of newly labeled instances                                  highly effective at identifying the ANIMAL refer-
+falls below 3000 (i.e., < 500 per category, on av-                              ences and it was always correct when it did assign
+erage). This table depicts the expected trade-off                               a HUMAN tag to a pronoun.
+between recall and precision for the fixed thresh-
+olds, with higher thresholds producing higher pre-                              5 Conclusions
+cision but lower recall. The sliding threshold pro-
+duces the best F score, achieving the best balance                              We presented a novel technique for inducing
+of high recall and precision.                                                   domain-specific semantic class taggers from a
+                                                                                handful of seed words and an unannotated text
+                                         θcf       R/P/F                        collection. Our results showed that the induced
+                                         1.0       71/77/74.1
+                                         1.5       69/81/74.7                   taggers achieve good performance on six seman-
+                                         2.0       65/82/72.4                   tic categories associated with the domain of vet-
+                                         Sliding   75/78/76.6                   erinary medicine. Our technique allows seman-
+   As mentioned in Section 3.3, we used 3 times                                 tic class taggers to be rapidly created for special-
+as many negative instances as positive instances                                ized domains with minimal human effort. In future
+for every semantic category during bootstrap-                                   work, we plan to investigate whether these seman-
+ping. This ratio was based on early experiments                                 tic taggers can be used to improve other tasks.
+where we needed to limit the number of neg-
+ative instances per category because the cross-                                 Acknowledgments
+category framework naturally produces an ex-                                    We are very grateful to the people at the Veterinary
+tremely skewed negative/positive training set. We                               Information Network for providing us access to
+revisited this issue to empirically assess the impact                           their resources. Special thanks to Paul Pion, DVM
+of the negative/positive ratio on performance. The                              and Nicky Mastin, DVM for making their data
+table below shows recall, precision, and F score                                available to us, and to Sherri Lofing and Becky
+results when we vary the ratio from 1:1 to 5:1. A                               Lundgren, DVM for their time and expertise in
+1:1 ratio seems to be too conservative, improving                               creating the gold standard annotations. This re-
+precision a bit but lowering recall. However the                                search was supported in part by Department of
+difference in performance between the other ra-                                 Homeland Security Grant N0014-07-1-0152 and
+tios is small. Our conclusion is that a 1:1 ratio is                            Air Force Contract FA8750-09-C-0172 under the
+too restrictive but, in general, the cross-category                             DARPA Machine Reading Program.
+bootstrapping process is relatively insensitive to
+the specific negative/positive ratio used. Our ob-
+servation from preliminary experiments, however,                                References
+is that the negative/positive ratio does need to be                             ACE. 2005. NIST ACE evaluation website.           In
+controlled, or else the dominant categories over-                                 http://www.nist.gov/speech/tests/ace/2005.
+
+
+                                                                          283
+
+
+ACE. 2007. NIST ACE evaluation website.             In           Meeting of the Association for Computational Lin-
+  http://www.nist.gov/speech/tests/ace/2007.                     guistics: Human Language Technologies (ACL-08).
+
+ACE. 2008. NIST ACE evaluation website.             In         D. McClosky, E. Charniak, and M Johnson. 2006. Ef-
+  http://www.nist.gov/speech/tests/ace/2008.                     fective self-training for parsing. In HLT-NAACL-
+                                                                 2006.
+Daniel M. Bikel, Scott Miller, Richard Schwartz,
+  and Ralph Weischedel. 1997. Nymble: a high-                  T. McIntosh and J. Curran. 2009. Reducing Semantic
+  performance learning name-finder. In Proceedings                Drift with Bagging and Distributional Similarity. In
+  of ANLP-97, pages 194–201.                                      Proceedings of the 47th Annual Meeting of the As-
+                                                                  sociation for Computational Linguistics.
+A. Blum and T. Mitchell. 1998. Combining Labeled
+  and Unlabeled Data with Co-Training. In Proceed-             R. Mihalcea. 2004. Co-training and Self-training for
+  ings of the 11th Annual Conference on Computa-                  Word Sense Disambiguation. In CoNLL-2004.
+  tional Learning Theory (COLT-98).
+                                                               G. Miller. 1990. Wordnet: An On-line Lexical
+Andrew Carlson, Justin Betteridge, Estevam R. Hr-                Database. International Journal of Lexicography,
+  uschka Jr., and Tom M. Mitchell. 2009. Coupling                3(4).
+  semi-supervised learning of categories and relations.
+                                                               C. Mueller, S. Rapp, and M. Strube. 2002. Applying
+  In HLT-NAACL 2009 Workshop on Semi-Supervised
+                                                                  co-training to reference resolution. In Proceedings
+  Learning for NLP.
+                                                                  of the 40th Annual Meeting of the Association for
+M. Collins and Y. Singer. 1999. Unsupervised Mod-                 Computational Linguistics.
+  els for Named Entity Classification. In Proceedings          V. Ng and C. Cardie. 2003. Weakly supervised natural
+  of the Joint SIGDAT Conference on Empirical Meth-               language learning without redundant views. In HLT-
+  ods in Natural Language Processing and Very Large               NAACL-2003.
+  Corpora (EMNLP/VLC-99).
+                                                               V. Ng. 2007. Semantic Class Induction and Corefer-
+S. Cucerzan and D. Yarowsky. 1999. Language In-                   ence Resolution. In Proceedings of the 45th Annual
+   dependent Named Entity Recognition Combining                   Meeting of the Association for Computational Lin-
+   Morphologi cal and Contextual Evidence. In Pro-                guistics.
+   ceedings of the Joint SIGDAT Conference on Empir-
+   ical Methods in Natural Language Processing and             Cheng Niu, Wei Li, Jihong Ding, and Rohini K. Sri-
+   Very Large Corpora (EMNLP/VLC-99).                            hari. 2003. A bootstrapping approach to named
+                                                                 entity classification using successive learners. In
+O. Etzioni, M. Cafarella, D. Downey, A. Popescu,                 Proceedings of the 41st Annual Meeting on Associa-
+  T. Shaked, S. Soderland, D. Weld, and A. Yates.                tion for Computational Linguistics (ACL-03), pages
+  2005. Unsupervised named-entity extraction from                335–342.
+  the web: an experimental study. Artificial Intelli-
+  gence, 165(1):91–134, June.                                  M. Paşca. 2004. Acquisition of categorized named
+                                                                 entities for web search. In Proc. of the Thirteenth
+M.B. Fleischman and E.H. Hovy. 2002. Fine grained                ACM International Conference on Information and
+  classification of named entities. In Proceedings of            Knowledge Management, pages 137–145.
+  the COLING conference, August.
+                                                               W. Phillips and E. Riloff. 2002. Exploiting Strong
+T. Joachims. 1999. Making Large-Scale Support                    Syntactic Heuristics and Co-Training to Learn Se-
+   Vector Machine Learning Practical. In A. Smola                mantic Lexicons. In Proceedings of the 2002 Con-
+   B. Schölkopf, C. Burges, editor, Advances in Ker-            ference on Empirical Methods in Natural Language
+   nel Methods: Support Vector Machines. MIT Press,              Processing, pages 125–132.
+   Cambridge, MA.
+                                                               E. Riloff and R. Jones. 1999. Learning Dictionar-
+S. Keerthi and D. DeCoste. 2005. A Modified Finite                ies for Information Extraction by Multi-Level Boot-
+   Newton Method for Fast Solution of Large Scale                 strapping. In Proceedings of the Sixteenth National
+   Linear SVMs. Journal of Machine Learning Re-                   Conference on Artificial Intelligence.
+   search.
+                                                               E. Riloff and J. Shepherd. 1997. A Corpus-Based Ap-
+Mamoru Komachi, Taku Kudo, Masashi Shimbo, and                    proach for Building Semantic Lexicons. In Proceed-
+ Yuji Matsumoto. 2008. Graph-based analysis of                    ings of the Second Conference on Empirical Meth-
+ semantic drift in espresso-like bootstrapping algo-              ods in Natural Language Processing, pages 117–
+ rithms. In Proceedings of the 2008 Conference on                 124.
+ Empirical Methods in Natural Language Process-
+ ing.                                                          B. Roark and E. Charniak. 1998. Noun-phrase Co-
+                                                                 occurrence Statistics for Semi-automatic Semantic
+Z. Kozareva, E. Riloff, and E. Hovy. 2008. Semantic              Lexicon Construction. In Proceedings of the 36th
+   Class Learning from the Web with Hyponym Pattern              Annual Meeting of the Association for Computa-
+   Linkage Graphs. In Proceedings of the 46th Annual             tional Linguistics, pages 1110–1116.
+
+
+                                                         284
+
+
+M. Thelen and E. Riloff. 2002. A Bootstrapping
+  Method for Learning Semantic Lexicons Using Ex-
+  traction Pa ttern Contexts. In Proceedings of the
+  2002 Conference on Empirical Methods in Natural
+  Language Processing, pages 214–221.
+K. Toutanova, D. Klein, C. Manning, and Y. Singer.
+  2003. Feature-Rich Part-of-Speech Tagging with
+  a Cyclic Dependency Network. In Proceedings of
+  HLT-NAACL 2003.
+R. Yangarber. 2003. Counter-training in the discovery
+   of semantic patterns. In Proceedings of the 41th An-
+   nual Meeting of the Association for Computational
+   Linguistics.
+D. Yarowsky. 1995. Unsupervised Word Sense Dis-
+  ambiguation Rivaling Supervised Methods. In Pro-
+  ceedings of the 33rd Annual Meeting of the Associa-
+  tion for Computational Linguistics.
+Imed Zitouni and Radu Florian. 2009. Cross-language
+  information propagation for arabic mention detec-
+  tion. ACM Transactions on Asian Language Infor-
+  mation Processing (TALIP), 8(4):1–21.
+
+
+
+
+                                                        285
+

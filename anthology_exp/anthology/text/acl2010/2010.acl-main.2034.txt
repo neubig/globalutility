@@ -1,0 +1,355 @@
+            Learning Common Grammar from Multilingual Corpus
+
+        Tomoharu Iwata                Daichi Mochihashi              Hiroshi Sawada
+                          NTT Communication Science Laboratories
+                      2-4 Hikaridai, Seika-cho, Soraku-gun, Kyoto, Japan
+                  {iwata,daichi,sawada}@cslab.kecl.ntt.co.jp
+
+
+
+                    Abstract                                    In our scenario, we use probabilistic context-
+                                                             free grammars (PCFGs) as our monolingual gram-
+    We propose a corpus-based probabilis-                    mar model. We assume that a PCFG for each
+    tic framework to extract hidden common                   language is generated from a general model that
+    syntax across languages from non-parallel                are common across languages, and each sentence
+    multilingual corpora in an unsupervised                  in multilingual corpora is generated from the lan-
+    fashion. For this purpose, we assume a                   guage dependent PCFG. The inference of the gen-
+    generative model for multilingual corpora,               eral model as well as the multilingual PCFGs can
+    where each sentence is generated from a                  be performed by using a variational method for
+    language dependent probabilistic context-                efficiency. Our approach is based on a Bayesian
+    free grammar (PCFG), and these PCFGs                     multitask learning framework (Yu et al., 2005;
+    are generated from a prior grammar that                  Daumé III, 2009). Hierarchical Bayesian model-
+    is common across languages. We also de-                  ing provides a natural way of obtaining a joint reg-
+    velop a variational method for efficient in-             ularization for individual models by assuming that
+    ference. Experiments on a non-parallel                   the model parameters are drawn from a common
+    multilingual corpus of eleven languages                  prior distribution (Yu et al., 2005).
+    demonstrate the feasibility of the proposed
+    method.                                                  2 Related work
+
+1 Introduction                                               The unsupervised grammar induction task has
+                                                             been extensively studied (Carroll and Charniak,
+Languages share certain common proper-                       1992; Stolcke and Omohundro, 1994; Klein and
+ties (Pinker, 1994). For example, the word order             Manning, 2002; Klein and Manning, 2004; Liang
+in most European languages is subject-verb-object            et al., 2007). Recently, models have been pro-
+(SVO), and some words with similar forms are                 posed that outperform PCFG in the grammar in-
+used with similar meanings in different languages.           duction task (Klein and Manning, 2002; Klein and
+The reasons for these common properties can be               Manning, 2004). We used PCFG as a first step
+attributed to: 1) a common ancestor language,                for capturing commonalities in syntax across lan-
+2) borrowing from nearby languages, and 3) the               guages because of its simplicity. The proposed
+innate abilities of humans (Chomsky, 1965).                  framework can be used for probabilistic grammar
+   We assume hidden commonalities in syntax                  models other than PCFG.
+across languages, and try to extract a common                   Grammar induction using bilingual parallel cor-
+grammar from non-parallel multilingual corpora.              pora has been studied mainly in machine transla-
+For this purpose, we propose a generative model              tion research (Wu, 1997; Melamed, 2003; Eisner,
+for multilingual grammars that is learned in an              2003; Chiang, 2005; Blunsom et al., 2009; Sny-
+unsupervised fashion. There are some computa-                der et al., 2009). These methods require sentence-
+tional models for capturing commonalities at the             aligned parallel data, which can be costly to obtain
+phoneme and word level (Oakes, 2000; Bouchard-               and difficult to scale to many languages. On the
+Côté et al., 2008), but, as far as we know, no at-         other hand, our model does not require sentences
+tempt has been made to extract commonalities in              to be aligned. Moreover, since the complexity of
+syntax level from non-parallel and non-annotated             our model increases linearly with the number of
+multilingual corpora.                                        languages, our model is easily applicable to cor-
+
+
+                                                       184
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 184–188,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+pora of more than two languages, as we will show
+                                                                                                           z1
+in the experiments. To our knowledge, the only                        θ θ
+                                                                     a,b     αθA     θ lA
+grammar induction work on non-parallel corpora
+                                                                      φ φ
+is (Cohen and Smith, 2009), but their method does                    a,b     αφA     φ lA            z2         z3
+not model a common grammar, and requires prior
+information such as part-of-speech tags. In con-                     αψ             ψlA
+trast, our method does not require any such prior                                    |L|              x2        x3
+information.                                                                            |K|                       |L|
+
+3    Proposed Method                                                        Figure 1: Graphical model.
+3.1 Model
+Let X = {X l }l∈L be a non-parallel and non-                         (a) For each rule type t ∈ {0, 1}:
+annotated multilingual corpus, where X l is a set                         i. Draw common rule type parameters
+                                                                               θ
+                                                                             αAt  ∼ Gam(aθ , bθ )
+of sentences in language l, and L is a set of lan-
+                                                                     (b) For each nonterminal pair (B, C):
+guages. The task is to learn multilingual PCFGs
+                                                                          i. Draw common production parameters
+G = {Gl }l∈L and a common grammar that gen-                                    φ
+                                                                             αABC    ∼ Gam(aφ , bφ )
+erates these PCFGs. Here, Gl = (K, W l , Φl )
+represents a PCFG of language l, where K is a                    2. For each language l ∈ L:
+set of nonterminals, W l is a set of terminals, and                  (a) For each nonterminal A ∈ K:
+Φl is a set of rule probabilities. Note that a set of                      i. Draw rule type parameters
+nonterminals K is shared among languages, but                                 θlA ∼ Dir(αθA )
+a set of terminals W l and rule probabilities Φl                          ii. Draw binary production parameters
+                                                                              φlA ∼ Dir(αφA )
+are specific to the language. For simplicity, we                         iii. Draw emission parameters
+consider Chomsky normal form grammars, which                                  ψ lA ∼ Dir(αψ )
+have two types of rules: emissions rewrite a non-                    (b) For each node i in the parse tree:
+terminal as a terminal A → w, and binary pro-                              i. Choose rule type
+                                                                              tli ∼ Mult(θ lzi )
+ductions rewrite a nonterminal as two nontermi-
+                                                                          ii. If tli = 0:
+nals A → BC, where A, B, C ∈ K and w ∈ W l .                                 A. Emit terminal
+   The rule probabilities for each nonterminal                                    xli ∼ Mult(ψ lzi )
+A of PCFG Gl in language l consist of: 1)                                iii. Otherwise:
+θ Al = {θlAt }t∈{0,1} , where θlA0 and θlA1 repre-                           A. Generate children nonterminals
+                                                                                  (zlL(i) , zlR(i) ) ∼ Mult(φlzi ),
+sent probabilities of choosing the emission rule
+and the binary production rule, respectively, 2)               where L(i) and R(i) represent the left and right
+φlA = {φlABC }B,C∈K , where φlABC repre-                       children of node i. Figure 1 shows a graphi-
+sents the probability of nonterminal production                cal model representation of the proposed model,
+A → BC, and 3) ψ lA = {ψlAw }w∈W l , where                     where the shaded and unshaded nodes indicate ob-
+ψlAw represents the probability of terminal emis-              served and latent variables, respectively.
+∑ A → w. Note that θlA0 + θlA1∑= 1, θlAt ≥ 0,
+sion
+   B,C φlABC = 1, φlABC ≥ 0,            w ψlAw = 1,            3.2 Inference
+and ψlAw ≥ 0. In the proposed model, multino-                  The inference of the proposed model can be ef-
+mial parameters θ lA and φlA are generated from                ficiently computed using a variational Bayesian
+Dirichlet distributions that are common across lan-            method. We extend the variational method to
+guages: θlA ∼ Dir(αθA ) and φlA ∼ Dir(αφA ),                   the monolingual PCFG learning of Kurihara and
+since we assume that languages share a common                  Sato (2004) for multilingual corpora. The goal
+syntax structure. αθA and αφA represent the param-             is to estimate posterior p(Z, Φ, α|X), where Z
+eters of a common grammar. We use the Dirichlet                is a set of parse trees, Φ = {Φl }l∈L is a
+prior because it is the conjugate prior for the multi-         set of language dependent parameters, Φl =
+nomial distribution. In summary, the proposed                  {θ lA , φlA , ψ lA }A∈K , and α = {αθA , αAφ
+                                                                                                            }A∈K
+model assumes the following generative process                 is a set of common parameters. In the variational
+for a multilingual corpus,                                     method, posterior p(Z, Φ, α|X) is approximated
+    1. For each nonterminal A ∈ K:                             by a tractable variational distribution q(Z, Φ, α).
+
+
+                                                         185
+
+
+We use the following variational distribution,                   described in (Minka, 2000). The update rule is as
+                   ∏                  ∏                          follows,
+ q(Z, Φ, α) =          q(αθA )q(αφA )     q(z ld )                                        ( ∑ θ                   )
+                      A                    l,d                     θ(new)     aθ −1+αAtθ L Ψ(                  θ
+                                                                                                t0 αAt0 )−Ψ(αAt )
+                     ∏                                           αAt      ← θ ∑( ∑ θ                             ) ,
+                 ×          q(θ lA )q(φlA )q(ψ lA ), (1)                        b + l Ψ( t0 γlAt0 ) − Ψ(γlAtθ )
+
+                      l,A
+                                                                                                                 (9)
+                                                                 where L is the number of languages, and Ψ(x) =
+                                                                 ∂ log Γ(x)
+where we assume that hyperparameters q(αθA ) and                     ∂x     is the digamma function. Similarly, the
+                                                                                                   φ
+q(αφA ) are degenerated, or q(α) = δα∗ (α), and                  common production parameter αABC        can be up-
+infer them by point estimation instead of distribu-              dated as follows,
+tion estimation. We find an approximate posterior
+                                                                                              φ
+distribution that minimizes the Kullback-Leibler                        φ(new)      aφ − 1 + αABC LJABC
+                                                                      αABC ←            φ
+                                                                                            ∑   0       ,              (10)
+divergence from the true posterior. The variational                                    b + l JlABC
+distribution of the parse tree of the dth sentence in                                 ∑         φ                     φ
+language l is obtained as follows,                               where JABC = Ψ( B 0 ,C 0 αAB        0 C 0 ) − Ψ(αABC ),
+                                                                        0
+                                                                                   ∑         φ                     φ
+               ∏ (           )C(A→BC;z ld ,l,d)                  and JlABC    = Ψ( B 0 ,C 0 γlAB 0 C 0 ) − Ψ(γlABC ).
+                        φ
+q(z ld ) ∝         θ
+                  πlA1 πlABC                                        Since factored variational distributions depend
+             A→BC                                                on each other, an optimal approximated posterior
+              ∏ (      ψ
+                           )C(A→w;z ld ,l,d)                     can be obtained by updating parameters by (2) -
+         ×        θ
+                 πlA0 πlAw                   , (2)
+                                                                 (10) alternatively until convergence. The updat-
+             A→w
+                                                                 ing of language dependent distributions by (2) -
+where C(r; z, l, d) is the count of rule r that oc-              (8) is also described in (Kurihara and Sato, 2004;
+curs in the dth sentence of language l with parse                Liang et al., 2007) while the updating of common
+tree z. The multinomial weights are calculated as                grammar parameters by (9) and (10) is new. The
+follows,                                                         inference can be carried out efficiently using the
+                     (        [        ])                        inside-outside algorithm based on dynamic pro-
+           θ
+          πlAt = exp Eq(θ lA ) log θlAt ,       (3)              gramming (Lari and Young, 1990).
+                                                                    After the inference, the probability of a com-
+                 (       [        ])
+       φ
+      πlABC = exp Eq(φ ) log φlABC ,                (4)          mon grammar rule A → BC is calculated by
+                      lA
+                 (       [       ])                              φ̂A→BC = θ̂1 φ̂ABC , where θ̂1 = α1θ /(α0θ + α1θ )
+         ψ                                                                                 ∑
+       πlAw = exp Eq(ψ ) log ψlAw .                 (5)          and φ̂ABC = αABC   φ
+                                                                                         / B 0 ,C 0 αAB φ
+                                                                                                             0 C 0 represent
+                      lA
+                                                                 the mean values of θl0 and φlABC , respectively.
+The variational Dirichlet parameters for q(θ lA ) =
+Dir(γ θlA ), q(φlA ) = Dir(γ φlA ), and q(ψ lA ) =               4 Experimental results
+Dir(γ ψlA ), are obtained as follows,
+                                                          We evaluated our method by employing the Eu-
+                  ∑                                       roParl corpus (Koehn, 2005). The corpus con-
+    θ       θ
+   γlAt = αAt  +        q(z ld )C(A, t; z ld , l, d), (6)
+                 d,z ld
+                                                          sists of the proceedings of the European Parlia-
+                                                          ment in eleven western European languages: Dan-
+                    ∑
+  φ         φ
+γlABC = αABC +            q(z ld )C(A → BC; z ld , l, d), ish (da), German (de), Greek (el), English (en),
+                   d,z ld
+                                                          Spanish (es), Finnish (fi), French (fr), Italian (it),
+                                                      (7) Dutch (nl), Portuguese (pt), and Swedish (sv), and
+    ψ
+                 ∑
+  γlAw = α +ψ
+                        q(z ld )C(A → w; z ld , l, d),    it contains roughly 1,500,000 sentences in each
+                 d,z ld                                   language. We set the number of nonterminals at
+                                                      (8) |K| = 20, and omitted sentences with more than
+where C(A, t; z, l, d) is the count of rule type t        ten words for tractability. We randomly sampled
+that is selected in nonterminal A in the dth sen-         100,000 sentences for each language, and ana-
+tence of language l with parse tree z.                    lyzed them using our method. It should be noted
+   The common rule type parameter αAt      θ that min-    that our random samples are not sentence-aligned.
+imizes the KL divergence between the true pos-               Figure 2 shows the most probable terminals of
+terior and the approximate posterior can be ob-           emission for each language and nonterminal with
+tained by using the fixed-point iteration method          a high probability of selecting the emission rule.
+
+
+                                                           186
+
+
+2: verb and auxiliary verb (V)                            0 → 16 11     (R → S . )        0.11
+                                                          16 → 7 6      (S → SBJ VP)      0.06
+                                                          6 → 2 12      (VP → V NP)       0.04
+                                                          12 → 13 5     (NP → DT N)       0.19
+                                                          15 → 17 19    (NP → NP N)       0.07
+                                                          17 → 5 9      (NP → N PR)       0.07
+                                                          15 → 13 5     (NP → DT N)       0.06
+
+5: noun (N)
+                                                          Figure 3: Examples of inferred common gram-
+                                                          mar rules in eleven languages, and their proba-
+                                                          bilities. Hand-provided annotations have the fol-
+                                                          lowing meanings, R: root, S: sentence, NP: noun
+                                                          phrase, VP: verb phrase, and others appear in Fig-
+                                                          ure 2.
+
+                                                          We named nonterminals by using grammatical cat-
+7: subject (SBJ)                                          egories after the inference. We can see that words
+                                                          in the same grammatical category clustered across
+                                                          languages as well as within a language. Fig-
+                                                          ure 3 shows examples of inferred common gram-
+                                                          mar rules with high probabilities. Grammar rules
+                                                          that seem to be common to European languages
+                                                          have been extracted.
+
+                                                          5 Discussion
+9: preposition (PR)
+                                                          We have proposed a Bayesian hierarchical PCFG
+                                                          model for capturing commonalities at the syntax
+                                                          level for non-parallel multilingual corpora. Al-
+                                                          though our results have been encouraging, a num-
+                                                          ber of directions remain in which we must extend
+                                                          our approach. First, we need to evaluate our model
+                                                          quantitatively using corpora with a greater diver-
+11: punctuation (.)                                       sity of languages. Measurement examples include
+                                                          the perplexity, and machine translation score. Sec-
+                                                          ond, we need to improve our model. For ex-
+                                                          ample, we can infer the number of nonterminals
+                                                          with a nonparametric Bayesian model (Liang et
+                                                          al., 2007), infer the model more robustly based
+                                                          on a Markov chain Monte Carlo inference (John-
+                                                          son et al., 2007), and use probabilistic grammar
+                                                          models other than PCFGs. In our model, all the
+13: determiner (DT)
+                                                          multilingual grammars are generated from a gen-
+                                                          eral model. We can extend it hierarchically using
+                                                          the coalescent (Kingman, 1982). That model may
+                                                          help to infer an evolutionary tree of languages in
+                                                          terms of grammatical structure without the etymo-
+                                                          logical information that is generally used (Gray
+                                                          and Atkinson, 2003). Finally, the proposed ap-
+                                                          proach may help to indicate the presence of a uni-
+                                                          versal grammar (Chomsky, 1965), or to find it.
+Figure 2: Probable terminals of emission for each
+language and nonterminal.
+
+
+                                                    187
+
+
+References                                                          Dan Klein and Christopher D. Manning. 2004. Corpus-
+                                                                      based induction of syntactic structure: models of depen-
+Phil Blunsom, Trevor Cohn, and Miles Osborne. 2009.                   dency and constituency. In ACL ’04: Proceedings of the
+   Bayesian synchronous grammar induction. In D. Koller,              42nd Annual Meeting on Association for Computational
+   D. Schuurmans, Y. Bengio, and L. Bottou, editors, Ad-              Linguistics, page 478, Morristown, NJ, USA. Association
+   vances in Neural Information Processing Systems 21,                for Computational Linguistics.
+   pages 161–168.
+                                                                    Philipp Koehn. 2005. Europarl: A parallel corpus for sta-
+Alexandre Bouchard-Côté, Percy Liang, Thomas Griffiths,              tistical machine translation. In Proceedings of the 10th
+   and Dan Klein. 2008. A probabilistic approach to lan-               Machine Translation Summit, pages 79–86.
+   guage change. In J.C. Platt, D. Koller, Y. Singer, and
+   S. Roweis, editors, Advances in Neural Information Pro-          Kenichi Kurihara and Taisuke Sato. 2004. An applica-
+   cessing Systems 20, pages 169–176, Cambridge, MA.                  tion of the variational Bayesian approach to probabilistic
+   MIT Press.                                                         context-free grammars. In International Joint Conference
+                                                                      on Natural Language Processing Workshop Beyond Shal-
+Glenn Carroll and Eugene Charniak. 1992. Two experiments              low Analysis.
+  on learning probabilistic dependency grammars from cor-
+  pora. In Working Notes of the Workshop Statistically-             K. Lari and S.J. Young. 1990. The estimation of stochastic
+  Based NLP Techniques, pages 1–13. AAAI.                              context-free grammars using the inside-outside algorithm.
+                                                                       Computer Speech and Language, 4:35–56.
+David Chiang. 2005. A hierarchical phrase-based model for
+  statistical machine translation. In ACL ’05: Proceedings          Percy Liang, Slav Petrov, Michael I. Jordan, and Dan Klein.
+  of the 43rd Annual Meeting on Association for Computa-               2007. The infinite PCFG using hierarchical dirichlet pro-
+  tional Linguistics, pages 263–270, Morristown, NJ, USA.              cesses. In EMNLP ’07: Proceedings of the Empirical
+  Association for Computational Linguistics.                           Methods on Natural Language Processing, pages 688–
+                                                                       697.
+Norm Chomsky. 1965. Aspects of the Theory of Syntax. MIT
+  Press.                                                            I. Dan Melamed. 2003. Multitext grammars and syn-
+                                                                       chronous parsers. In NAACL ’03: Proceedings of the 2003
+Shay B. Cohen and Noah A. Smith. 2009. Shared logistic                 Conference of the North American Chapter of the Associ-
+  normal distributions for soft parameter tying in unsuper-            ation for Computational Linguistics on Human Language
+  vised grammar induction. In NAACL ’09: Proceedings of                Technology, pages 79–86, Morristown, NJ, USA. Associ-
+  Human Language Technologies: The 2009 Annual Con-                    ation for Computational Linguistics.
+  ference of the North American Chapter of the Association
+                                                                    Thomas Minka. 2000. Estimating a Dirichlet distribution.
+  for Computational Linguistics, pages 74–82, Morristown,
+                                                                      Technical report, M.I.T.
+  NJ, USA. Association for Computational Linguistics.
+                                                                    Michael P. Oakes. 2000. Computer estimation of vocabu-
+Hal Daumé III. 2009. Bayesian multitask learning with la-            lary in a protolanguage from word lists in four daughter
+  tent hierarchies. In Proceedings of the Twenty-Fifth An-            languages. Journal of Quantitative Linguistics, 7(3):233–
+  nual Conference on Uncertainty in Artificial Intelligence           243.
+  (UAI-09), pages 135–142, Corvallis, Oregon. AUAI Press.
+                                                                    Steven Pinker. 1994. The Language Instinct: How the Mind
+Jason Eisner. 2003. Learning non-isomorphic tree mappings              Creates Language. HarperCollins, New York.
+   for machine translation. In ACL ’03: Proceedings of the
+   41st Annual Meeting on Association for Computational             Benjamin Snyder, Tahira Naseem, and Regina Barzilay.
+   Linguistics, pages 205–208, Morristown, NJ, USA. As-               2009. Unsupervised multilingual grammar induction. In
+   sociation for Computational Linguistics.                           Proceedings of the Joint Conference of the 47th Annual
+                                                                      Meeting of the ACL and the 4th International Joint Con-
+Russell D. Gray and Quentin D. Atkinson. 2003. Language-              ference on Natural Language Processing of the AFNLP,
+  tree divergence times support the Anatolian theory of               pages 73–81, Suntec, Singapore, August. Association for
+  Indo-European origin.      Nature, 426(6965):435–439,               Computational Linguistics.
+  November.
+                                                                    Andreas Stolcke and Stephen M. Omohundro. 1994. In-
+Mark Johnson, Thomas Griffiths, and Sharon Goldwater.                 ducing probabilistic grammars by Bayesian model merg-
+  2007. Bayesian inference for PCFGs via Markov chain                 ing. In ICGI ’94: Proceedings of the Second International
+  Monte Carlo. In Human Language Technologies 2007:                   Colloquium on Grammatical Inference and Applications,
+  The Conference of the North American Chapter of the                 pages 106–118, London, UK. Springer-Verlag.
+  Association for Computational Linguistics; Proceedings
+  of the Main Conference, pages 139–146, Rochester, New             Dekai Wu. 1997. Stochastic inversion transduction gram-
+  York, April. Association for Computational Linguistics.             mars and bilingual parsing of parallel corpora. Comput.
+                                                                      Linguist., 23(3):377–403.
+J. F. C. Kingman. 1982. The coalescent. Stochastic Pro-
+   cesses and their Applications, 13:235–248.                       Kai Yu, Volker Tresp, and Anton Schwaighofer. 2005.
+                                                                      Learning gaussian processes from multiple tasks. In
+Dan Klein and Christopher D. Manning. 2002. A generative              ICML ’05: Proceedings of the 22nd International Confer-
+  constituent-context model for improved grammar induc-               ence on Machine Learning, pages 1012–1019, New York,
+  tion. In ACL ’02: Proceedings of the 40th Annual Meet-              NY, USA. ACM.
+  ing on Association for Computational Linguistics, pages
+  128–135, Morristown, NJ, USA. Association for Compu-
+  tational Linguistics.
+
+
+                                                              188
+

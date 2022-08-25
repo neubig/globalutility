@@ -1,0 +1,699 @@
+                  Extracting Social Networks from Literary Fiction
+
+         David K. Elson                        Nicholas Dames                      Kathleen R. McKeown
+    Dept. of Computer Science                 English Department                  Dept. of Computer Science
+       Columbia University                   Columbia University                    Columbia University
+     delson@cs.columbia.edu                  nd122@columbia.edu                    kathy@cs.columbia.edu
+
+
+
+                      Abstract                                 We present a method to automatically construct
+                                                               a network based on dialogue interactions between
+    We present a method for extracting so-                     characters in a novel. Our approach includes com-
+    cial networks from literature, namely,                     ponents for finding instances of quoted speech,
+    nineteenth-century British novels and se-                  attributing each quote to a character, and iden-
+    rials. We derive the networks from di-                     tifying when certain characters are in conversa-
+    alogue interactions, and thus our method                   tion. We then construct a network where char-
+    depends on the ability to determine when                   acters are vertices and edges signify an amount
+    two characters are in conversation. Our                    of bilateral conversation between those charac-
+    approach involves character name chunk-                    ters, with edge weights corresponding to the fre-
+    ing, quoted speech attribution and conver-                 quency and length of their exchanges. In contrast
+    sation detection given the set of quotes.                  to previous approaches to social network construc-
+    We extract features from the social net-                   tion, ours relies on a novel combination of pattern-
+    works and examine their correlation with                   based detection, statistical methods, and adapta-
+    one another, as well as with metadata such                 tion of standard natural language tools for the liter-
+    as the novel’s setting. Our results provide                ary genre. We carried out this work on a corpus of
+    evidence that the majority of novels in this               60 nineteenth-century novels and serials, includ-
+    time period do not fit two characterizations               ing 31 authors such as Dickens, Austen and Conan
+    provided by literacy scholars. Instead, our                Doyle.
+    results suggest an alternative explanation                    In order to evaluate the literary claims in ques-
+    for differences in social networks.                        tion, we compute various characteristics of the
+                                                               dialogue-based social network and stratify these
+1    Introduction
+                                                               results by categories such as the novel’s setting.
+Literary studies about the nineteenth-century                  For example, the density of the network provides
+British novel are often concerned with the nature              evidence about the cohesion of a large or small
+of the community that surrounds the protagonist.               community, and cliques may indicate a social frag-
+Some theorists have suggested a relationship be-               mentation. Our results surprisingly provide evi-
+tween the size of a community and the amount of                dence that the majority of novels in this time pe-
+dialogue that occurs, positing that “face to face              riod do not fit the suggestions provided by liter-
+time” diminishes as the number of characters in                ary scholars, and we suggest an alternative expla-
+the novel grows. Others suggest that as the social             nation for our observations of differences across
+setting becomes more urbanized, the quality of di-             novels.
+alogue also changes, with more interactions occur-                In the following sections, we survey related
+ring in rural communities than urban communities.              work on social networks as well as computational
+Such claims have typically been made, however,                 studies of literature. We then present the literary
+on the basis of a few novels that are studied in               hypotheses in more detail. We describe the meth-
+depth. In this paper, we aim to determine whether              ods we use to extract dialogue and construct con-
+an automated study of a much larger sample of                  versational networks, along with our approach to
+nineteenth century novels supports these claims.               analyzing their characteristics. After we present
+   The research presented here is concerned with               the statistical results, we analyze their significance
+the extraction of social networks from literature.             from a literary perspective.
+
+
+                                                         138
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 138–147,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2   Related Work                                               3   Hypotheses
+Computer-assisted literary analysis has typically              It is commonly held that the novel is a literary
+occurred at the word level. This level of granular-            form which tries to produce an accurate represen-
+ity lends itself to studies of authorial style based           tation of the social world. Within literary stud-
+on patterns of word use (Burrows, 2004), and re-               ies, the recurring problem is how that represen-
+searchers have successfully “outed” the writers of             tation is achieved. Theories about the relation
+anonymous texts by comparing their style to that               between novelistic form (the workings of plot,
+of a corpus of known authors (Mostellar and Wal-               characters, and dialogue, to take the most basic
+lace, 1984). Determining instances of “text reuse,”            categories) and changes to real-world social mi-
+a type of paraphrasing, is also a form of analysis             lieux abound. Many of these theories center on
+at the lexical level, and it has recently been used to         nineteenth-century European fiction; innovations
+validate theories about the lineage of ancient texts           in novelistic form during this period, as well as the
+(Lee, 2007).                                                   rapid social changes brought about by revolution,
+   Analysis of literature using more semantically-             industrialization, and transport development, have
+oriented techniques has been rare, most likely be-             traditionally been linked. These theories, however,
+cause of the difficulty in automatically determin-             have used only a select few representative novels
+ing meaningful interpretations. Some exceptions                as proof. By using statistical methods of analy-
+include recent work on learning common event se-               sis, it is possible to move beyond this small corpus
+quences in news stories (Chambers and Jurafsky,                of proof texts. We believe these methods are es-
+2008), an approach based on statistical methods,               sential to testing the validity of some core theories
+and the development of an event calculus for char-             about social interaction and their representation in
+acterizing stories written by children (Halpin et al.,         literary genres like the novel.
+2004), a knowledge-based strategy. On the other                   Major versions of the theories about the social
+hand, literary theorists, linguists and others have            worlds of nineteenth-century fiction tend to cen-
+long developed symbolic but non-computational                  ter on characters, in two specific ways: how many
+models for novels. For example, Moretti (2005)                 characters novels tend to have, and how those
+has graphically mapped out texts according to ge-              characters interact with one another. These two
+ography, social connections and other variables.               “formal” facts about novels are usually explained
+   While researchers have not attempted the auto-              with reference to a novel’s setting. From the influ-
+matic construction of social networks represent-               ential work of the Russian critic Mikhail Bakhtin
+ing connections between characters in a corpus                 to the present, a consensus emerged that as nov-
+of novels, the ACE program has involved entity                 els are increasingly set in urban areas, the num-
+and relation extraction in unstructured text (Dod-             ber of characters and the quality of their interac-
+dington et al., 2004). Other recent work in so-                tion change to suit the setting. Bakhtin’s term for
+cial network construction has explored the use of              this causal relationship was chronotope: the “in-
+structured data such as email headers (McCallum                trinsic interconnectedness of temporal and spatial
+et al., 2007) and U.S. Senate bill cosponsorship               relationships that are artistically expressed in liter-
+(Cho and Fowler, 2010). In an analysis of discus-              ature,” in which “space becomes charged and re-
+sion forums, Gruzd and Haythornthwaite (2008)                  sponsive to movements of time, plot, and history”
+explored the use of message text as well as posting            (Bakhtin, 1981, 84). In Bakhtin’s analysis, dif-
+data to infer who is talking to whom. In this pa-              ferent spaces have different social and emotional
+per, we also explore how to build a network based              potentialities, which in turn affect the most basic
+on conversational interaction, but we analyze the              aspects of a novel’s aesthetic technique.
+reported dialogue found in novels to determine the                After Bakhtin’s invention of the chronotope,
+links. The kinds of language that is used to signal            much literary criticism and theory devoted itself
+such information is quite different in the two me-             to filling in, or describing, the qualities of spe-
+dia. In discussion forums, people tend to use ad-              cific chronotopes, particularly those of the village
+dresses such as “Hi Tom,” while in novels, a sys-              or rural environment and the city or urban en-
+tem must determine both the speaker of a quota-                vironment. Following a suggestion of Bakhtin’s
+tion and then the intended recipient of the dialogue           that the population of village or rural fictions is
+act. This is a significantly different problem.                modeled on the world of the family, made up of
+
+
+                                                         139
+
+
+ Author/Title/Year                            Persp.   Setting   Author/Title/Year                           Persp.   Setting
+ Ainsworth, Jack Sheppard (1839)              3rd      urban     Gaskell, North and South (1854)             3rd      urban
+ Austen, Emma (1815)                          3rd      rural     Gissing, In the Year of Jubilee (1894)      3rd      urban
+ Austen, Mansfield Park (1814)                3rd      rural     Gissing, New Grub Street (1891)             3rd      urban
+ Austen, Persuasion (1817)                    3rd      rural     Hardy, Jude the Obscure (1894)              3rd      mixed
+ Austen, Pride and Prejudice (1813)           3rd      rural     Hardy, The Return of the Native (1878)      3rd      rural
+ Braddon, Lady Audley’s Secret (1862)         3rd      mixed     Hardy, Tess of the d’Ubervilles (1891)      3rd      rural
+ Braddon, Aurora Floyd (1863)                 3rd      rural     Hughes, Tom Brown’s School Days (1857)      3rd      rural
+ Brontë, Anne, The Tenant of Wildfell Hall   1st      rural     James, The Portrait of a Lady (1881)        3rd      urban
+ (1848)
+ Brontë, Charlotte, Jane Eyre (1847)         1st      rural     James, The Ambassadors (1903)               3rd      urban
+ Brontë, Charlotte, Villette (1853)          1st      mixed     James, The Wings of the Dove (1902)         3rd      urban
+ Brontë, Emily, Wuthering Heights (1847)     1st      rural     Kingsley, Alton Locke (1860)                1st      mixed
+ Bulwer-Lytton, Paul Clifford (1830)          3rd      urban     Martineau, Deerbrook (1839)                 3rd      rural
+ Collins, The Moonstone (1868)                1st      urban     Meredith, The Egoist (1879)                 3rd      rural
+ Collins, The Woman in White (1859)           1st      urban     Meredith, The Ordeal of Richard Feverel     3rd      rural
+                                                                 (1859)
+ Conan Doyle, The Sign of the Four (1890)     1st      urban     Mitford, Our Village (1824)                 1st      rural
+ Conan Doyle, A Study in Scarlet (1887)       1st      urban     Reade, Hard Cash (1863)                     3rd      urban
+ Dickens, Bleak House (1852)                  mixed    urban     Scott, The Bride of Lammermoor (1819)       3rd      rural
+ Dickens, David Copperfield (1849)            1st      mixed     Scott, The Heart of Mid-Lothian (1818)      3rd      rural
+ Dickens, Little Dorrit (1855)                3rd      urban     Scott, Waverley (1814)                      3rd      rural
+ Dickens, Oliver Twist (1837)                 3rd      urban     Stevenson, The Strange Case of Dr. Jekyll   1st      urban
+                                                                 and Mr. Hyde (1886)
+ Dickens, The Pickwick Papers (1836)          3rd      mixed     Stoker, Dracula (1897)                      1st      urban
+ Disraeli, Sybil, or the Two Nations (1845)   3rd      mixed     Thackeray, History of Henry Esmond          1st      urban
+                                                                 (1852)
+ Edgeworth, Belinda (1801)                    3rd      rural     Thackeray, History of Pendennis (1848)      1st      urban
+ Edgeworth, Castle Rackrent (1800)            3rd      rural     Thackeray, Vanity Fair (1847)               3rd      urban
+ Eliot, Adam Bede (1859)                      3rd      rural     Trollope, Barchester Towers (1857)          3rd      rural
+ Eliot, Daniel Deronda (1876)                 3rd      urban     Trollope, Doctor Thorne (1858)              3rd      rural
+ Eliot, Middlemarch (1871)                    3rd      rural     Trollope, Phineas Finn (1867)               3rd      urban
+ Eliot, The Mill on the Floss (1860)          3rd      rural     Trollope, The Way We Live Now (1874)        3rd      urban
+ Galt, Annals of the Parish (1821)            1st      rural     Wilde, The Picture of Dorian Gray (1890)    3rd      urban
+ Gaskell, Mary Barton (1848)                  3rd      urban     Wood, East Lynne (1860)                     3rd      mixed
+
+      Table 1: Properties of the nineteenth-century British novels and serials included in our study.
+
+
+an intimately related set of characters, many crit-               ton argues, the city is where “most of our en-
+ics analyzed the formal expression of this world                  counters consist of seeing rather than speaking,
+as constituted by a small set of characters who                   glimpsing each other as objects rather than con-
+express themselves conversationally. Raymond                      versing as fellow subjects” (Eagleton, 2005, 145).
+Williams used the term “knowable communities”                     Moretti argues in similar terms. For him, the
+to describe this world, in which face-to-face rela-               difference in number of characters is “not just a
+tions of a restricted set of characters are the pri-              matter of quantity... it’s a qualitative, morpho-
+mary mode of social interaction (Williams, 1975,                  logical one” (Moretti, 1999, 68). As the number
+166).                                                             of characters increases, Moretti argues (following
+   By contrast, the urban world, in this traditional              Bakhtin in his logic), social interactions of differ-
+account, is both larger and more complex. To                      ent kinds and durations multiply, displacing the
+describe the social-psychological impact of the                   family-centered and conversational logic of vil-
+city, Franco Moretti argues, protagonists of urban                lage or rural fictions. “The narrative system be-
+novels “change overnight from ‘sons’ into ‘young                  comes complicated, unstable: the city turns into a
+men’: their affective ties are no longer vertical                 gigantic roulette table, where helpers and antago-
+ones (between successive generations), but hor-                   nists mix in unpredictable combinations” (Moretti,
+izontal, within the same generation. They are                     1999, 68). This argument about how novelistic
+drawn towards those unknown yet congenial faces                   setting produces different forms of social interac-
+seen in gardens, or at the theater; future friends,               tion is precisely what our method seeks to evalu-
+or rivals, or both” (Moretti, 1999, 65). The re-                  ate.
+sult is two-fold: more characters, indeed a mass                     Our corpus of 60 novels was selected for its rep-
+of characters, and more interactions, although less               resentativeness, particularly in the following cate-
+actual conversation; as literary critic Terry Eagle-              gories: authorial (novels from the major canoni-
+
+
+                                                            140
+
+
+cal authors of the period), historical (novels from                    sprawling, populous, less conversational
+each decade), generic (from the major sub-genres                       urban fictions or Moretti’s and Eagleton’s
+of nineteenth-century fiction), sociological (set in                   analyses. If true, it would suggest that the
+rural, urban, and mixed locales), and technical                        inverse relationship of hypothesis #1 (more
+(narrated in first-person and third-person form).                      characters means less conversation) can be
+The novels, as well as important metadata we as-                       correlated to, and perhaps even caused by,
+signed to them (the perspective and setting), are                      the geography of a novel’s setting. The
+shown in Table 1. We define urban to mean set                          claims about novelistic geography and social
+in a metropolitan zone, characterized by multi-                        interaction have usually been based on
+ple forms of labor (not just agricultural). Here,                      comparisons of a selected few novelists (Jane
+social relations are largely financial or commer-                      Austen and Charles Dickens preeminently).
+cial in character. We conversely define rural to                       Do they remain valid when tested against a
+describe texts that are set in a country or vil-                       larger corpus?
+lage zone, where agriculture is the primary activ-
+ity, and where land-owning, non-productive, rent-               4     Extracting Conversational Networks
+collecting gentry are socially predominant. Social                    from Literature
+relations here are still modeled on feudalism (rela-            In order to test these hypotheses, we developed
+tions of peasant-lord loyalty and family tie) rather            a novel approach to extracting social networks
+than the commercial cash nexus. We also explored                from literary texts themselves, building on exist-
+other properties of the texts, such as literary genre,          ing analysis tools. We defined “social network”
+but focus on the results found with setting and per-            as “conversational network” for purposes of eval-
+spective. We obtained electronic encodings of the               uating these literary theories. In a conversational
+texts from Project Gutenberg. All told, these texts             network, vertices represent characters (assumed to
+total more than 10 million words.                               be named entities) and edges indicate at least one
+   We assembled this representative corpus in or-               instance of dialogue interaction between two char-
+der to test two hypotheses, which are derived from              acters over the course of the novel. The weight of
+the aforementioned theories:                                    each edge is proportional to the amount of inter-
+                                                                action. We define a conversation as a continuous
+  1. That there is an inverse correlation between               span of narrative time featuring a set of characters
+     the amount of dialogue in a novel and the                  in which the following conditions are met:
+     number of characters in that novel. One ba-
+     sic, shared assumption of these theorists is                   1. The characters are in the same place at the
+     that as the network of characters expands–                        same time;
+     as, in Moretti’s words, a quantitative change
+     becomes qualitative– the importance, and in                    2. The characters take turns speaking; and
+     fact amount, of dialogue decreases. With                       3. The characters are mutually aware of each
+     a method for extracting conversation from a                       other and each character’s speech is mutually
+     large corpus of texts, it is possible to test this                intended for the other to hear.
+     hypothesis against a wide range of data.
+                                                                   In the following subsections, we discuss the
+  2. That a significant difference in the                       methods we devised for the three problems in text
+     nineteenth-century novel’s representation of               processing invoked by this approach: identifying
+     social interaction is geographical: novels set             the characters present in a literary text, assigning
+     in urban environments depict a complex but                 a “speaker” (if any) to each instance of quoted
+     loose social network, in which numerous                    speech from among those characters, and con-
+     characters share little conversational interac-            structing a social network by detecting conversa-
+     tion, while novels set in rural environments               tions from the set of dialogue acts.
+     inhabit more tightly bound social networks,
+     with fewer characters sharing much more                    4.1    Character Identification
+     conversational interaction. This hypothesis                The first challenge was to identify the candi-
+     is based on the contrast between Williams’s                date speakers by “chunking” names (such as Mr.
+     rural “knowable communities” and the                       Holmes) from the text. We processed each novel
+
+
+                                                          141
+
+
+with the Stanford NER tagger (Finkel et al., 2005)                We divided this corpus into training and testing
+and extracted noun phrases that were categorized               sets, and used the training set to develop a catego-
+as persons or organizations. We then clustered the             rizer that assigned one of five syntactic categories
+noun phrases into coreferents for the same entity              to each quote. For example, if a quote is followed
+(person or organization). The clustering process is            by a verb that indicates verbal expression (such as
+as follows:                                                    “said”), and then a character mention, a category
+                                                               called Character trigram is assigned to the quote.
+  1. For each named entity, we generate varia-                 The fifth category is a catch-all for quotes that do
+     tions on the name that we would expect to                 not fall into the other four. In many cases, the an-
+     see in a coreferent. Each variation omits cer-            swer can be reliably determined based solely on
+     tain parts of multi-word names, respecting ti-            its syntactic category. For instance, in the Char-
+     tles and first/last name distinctions, similar to         acter trigram category, the mentioned character is
+     work by Davis et al. (2003). For example,                 the quote’s speaker in 99% of both the training and
+     Mr. Sherlock Holmes may refer to the same                 testing sets.
+     character as Mr. Holmes, Sherlock Holmes,                    In all, we were able to determine the speaker
+     Sherlock and Holmes.                                      of 57% of the testing set with 96% accuracy just
+  2. For each named entity, we compile a list of               on the basis of syntactic categorization. This is
+     other named entities that may be coreferents,             the technique we used to construct our conversa-
+     either because they are identical or because              tional networks. In another study, we applied ma-
+     one is an expected variation on the other.                chine learning tools to the data (one model for
+                                                               each syntactic category) and achieved an overall
+  3. We then match each named entity to the most               accuracy of 83% over the entire test set (Elson
+     recent of its possible coreferents. In aggre-             and McKeown, 2010). The other 43% of quotes
+     gate, this creates a cluster of mentions for              are left here as “unknown” speakers; however, in
+     each character.                                           the present study, we are interested in conversa-
+                                                               tions rather than individual quotes. Each conversa-
+   We also pre-processed the texts to normalize                tion is likely to consist of multiple quotes by each
+formatting, detect headings and chapter breaks, re-            speaker, increasing the chances of detecting the in-
+move metadata, and identify likely instances of                teraction. Moreover, this design decision empha-
+quoted speech (that is, mark up spans of text that             sizes the precision of the social networks over their
+fall between quotation marks, assumed to be a su-              recall. This tilts “in favor” of hypothesis #1 (that
+perset of the quoted speech present in the text).              there are fewer social interactions in larger com-
+                                                               munities); however, we shall see that despite the
+4.2   Quoted Speech Attribution
+                                                               emphasis of precision over recall, we identify a
+In order to programmatically assign a speaker to               sufficient mass of interactions in the texts to con-
+each instance of quoted speech, we applied a high-             stitute evidence against this hypothesis.
+precision subset of a general approach we describe
+elsewhere (Elson and McKeown, 2010). The first                 4.3   Constructing social networks
+step of this approach was to compile a separate
+training and testing corpus of literary texts from             We then applied the results from our character
+British, American and Russian authors of the nine-             identification and quoted speech attribution meth-
+teenth and twentieth centuries. The training cor-              ods toward the construction of conversational net-
+pus consisted of about 111,000 words including                 works from literature. We derived one network
+3,176 instances of quoted speech. To obtain gold-              from each text in our corpus.
+standard annotations, we conducted an online sur-                 We first assigned vertices to character enti-
+vey via Amazon’s Mechanical Turk program. For                  ties that are mentioned repeatedly throughout the
+each quote, we asked three annotators to indepen-              novel. Coreferents for the same name (such as
+dently choose a speaker from the list of contex-               Mr. Darcy and Darcy) were grouped into the same
+tual candidates– or, choose “spoken by an unlisted             vertex. We found that a network that included in-
+character” if the answer was not available, or “not            cidental or single-mention named entities became
+spoken by any character” for non-dialogue cases                too noisy to function effectively, so we filtered out
+such as sneer quotes.                                          the entities that are mentioned fewer than three
+
+
+                                                         142
+
+
+times in the novel or are responsible for less than                         
+
+
+
+
+1% of the named entity mentions in the novel.
+   We assigned undirected edges between vertices
+that represent adjacency in quoted speech frag-                                                                     
+ments. Specifically, we set the weight of each
+undirected edge between two character vertices to
+the total length, in words, of all quotes that either
+character speaks from among all pairs of adjacent
+                                                                                                                                                 
+
+
+
+
+quotes in which they both speak– implying face to
+face conversation. We empirically determined that
+the most accurate definition of “adjacency” is one                                                
+
+                                                                                                                                                         
+
+
+
+
+where the two characters’ quotes fall within 300
+words of one another with no attributed quotes in                                                                      
+
+
+
+
+between. When such an adjacency is found, the
+length of the quote is added to the edge weight,
+under the hypothesis that the significance of the re-                                                               
+
+
+
+
+lationship between two individuals is proportional
+to the length of the dialogue that they exchange.                   
+Finally, we normalized each edge’s weight by the
+                                                              Figure 1: Automatically extracted conversation
+length of the novel.
+                                                              network for Jane Austen’s Mansfield Park.
+   An example network, automatically constructed
+in this manner from Jane Austen’s Mansfield Park,
+is shown in Figure 1. The width of each vertex is             4.4   Evaluation
+drawn to be proportional to the character’s share
+of all the named entity mentions in the book (so              To check the accuracy of our method for extracting
+that protagonists, who are mentioned frequently,              conversational networks, we conducted an evalua-
+appear in larger ovals). The width of each edge is            tion involving four of the novels (The Sign of the
+drawn to be proportional to its weight (total con-            Four, Emma, David Copperfield and The Portrait
+versation length).                                            of a Lady). We did not use these texts when devel-
+   We also experimented with two alternate meth-              oping our method for identifying conversations.
+ods for identifying edges, for purposes of a base-            For each book, we randomly selected 4-5 chap-
+line:                                                         ters from among those with significant amounts
+                                                              of quoted speech, so that all excerpts from each
+  1. The “correlation” method divides the text
+                                                              novel amounted to at least 10,000 words. We then
+     into 10-paragraph segments and counts the
+                                                              asked three annotators to identity all the conversa-
+     number of mentions of each character in
+                                                              tions that occur in all 44,000 words. We requested
+     each segment (excluding mentions inside
+                                                              that the annotators include both direct and indi-
+     quoted speech). It then computes the Pear-
+                                                              rect (unquoted) speech, and define “conversation”
+     son product-moment correlation coefficient
+                                                              as in the beginning of Section 4, but exclude “re-
+     for the distributions of mentions for each pair
+                                                              told” conversations (those that occur within other
+     of characters. These coefficients are used for
+                                                              dialogue).
+     the edge weights. Characters that tend to ap-
+                                                                 We processed the annotation results by breaking
+     pear together in the same areas of the novel
+                                                              down each multi-way conversation into all of its
+     are taken to be more socially connected, and
+                                                              unique two-character interactions (for example, a
+     have a higher edge weight.
+                                                              conversation between four people indicates six bi-
+  2. The “spoken mention” method counts occur-                lateral interactions). To calculate inter-annotator
+     rences when one character refers to another              agreement, we first compiled a list of all possi-
+     in his or her quoted speech. These counts,               ble interactions between all characters in each text.
+     normalized by the length of the text, are used           In this model, each annotator contributed a set of
+     as edge weights. The intuition is that charac-           “yes” or “no” decisions, one for every character
+     ters who refer to one another are likely to be           pair. We then applied the kappa measurement for
+     in conversation.                                         agreement in a binary classification problem (Co-
+
+
+                                                        143
+
+
+    Method               Precision   Recall    F                5. The average degree of the graph, defined as
+    Speech adjacency     .95         .51       .67
+    Correlation          .21         .65       .31                                       |Ev |
+                                                                                  P
+                                                                                     v∈V         2|E|
+    Spoken-mention       .45         .49       .47                                             =               (1)
+                                                                                      |V |       |V |
+Table 2: Precision, recall, and F-measure of three                  where |Ev | is the number of edges incident
+methods for detecting bilateral conversations in                    on a vertex v, and |V | is the number of ver-
+literary texts.                                                     tices. In other words, this determines the
+                                                                    average number of characters connected to
+hen, 1960). In 95% of character pairs, annota-                      each character in the conversational network
+tors were unanimous, which is a high agreement                      (“with how many people on average does a
+of k = .82.                                                         character converse?”).
+   The precision and recall of our method for de-               6. A variation on graph density that normalizes
+tecting conversations is shown in Table 2. Preci-                  the average degree feature by the number of
+sion was .95; this indicates that we can be con-                   characters:
+fident in the specificity of the conversational net-
+works that we automatically construct. Recall was                             P
+                                                                                    |Ev |        2|E|
+                                                                               v∈V
+.51, indicating a sensitivity of slightly more than                                       =                    (2)
+                                                                           |V |(|V | − 1)   |V |(|V | − 1)
+half. There were several reasons that we did not
+detect the missing links, including indirect speech,                By dividing again by |V | − 1, we use this
+quotes attributed to anaphoras or coreferents, and                  as a metric for the overall connectedness of
+“diffuse” conversations in which the characters do                  the graph: “with what percent of the entire
+not speak in turn with one another.                                 network (besides herself) does each charac-
+   To calculate precision and recall for the two                    ter converse, on average?” The weight of the
+baseline social networks, we set a threshold t to                   edge, as long as it is greater than 0, does not
+derive a binary prediction from the continuous                      affect either the network’s average degree or
+edge weights. The precision and recall values                       graph density.
+shown for the baselines in Table 2 represent the
+highest performance we achieved by varying t be-              5.2   Results
+tween 0 and 1 (maximizing F-measure over t).                  We derived results from the data in two ways.
+Both baselines performed significantly worse in               First, we examined the strengths of the correla-
+precision and F-measure than our quoted speech                tions between the features that we extracted (for
+adjacency method for detecting conversations.                 example, between number of character vertices
+                                                              and the average degree of each vertex). We used
+5     Data Analysis                                           Pearson’s product-moment correlation coefficient
+5.1    Feature extraction                                     in these calculations. Second, we compared the
+                                                              extracted features to the metadata we previously
+We extracted features from the conversational net-
+                                                              assigned to each text (e.g., urban vs. rural).
+works that emphasize the complexity of the social
+                                                                 Hypothesis #1, which we described in Section
+interactions found in each novel:
+                                                              3, claims that there is an inverse correlation be-
+    1. The number of characters and the number of             tween the amount of dialogue in a nineteenth-
+       speaking characters                                    century novel and the number of characters in that
+                                                              novel. We did not find this to be the case. Rather,
+    2. The variance of the distribution of quoted             we found a weak but positive correlation (r=.16)
+       speech (specifically, the proportion of quotes         between the number of quotes in a novel and
+       spoken by the n most frequent speakers, for            the number of characters (normalizing the quote
+       1 ≤ n ≤ 5)                                             count for text length). There was a stronger pos-
+    3. The number of quotes, and proportion of                itive correlation (r=.50) between the number of
+       words in the novel that are quoted speech              unique speakers (those characters who speak at
+                                                              least once) and the normalized number of quotes,
+    4. The number of 3-cliques and 4-cliques in the           suggesting that larger networks have more conver-
+       social network                                         sations than smaller ones. But because the first
+
+
+                                                        144
+
+
+correlation is weak, we investigated whether fur-                                2.2
+                                                                                   2
+ther analysis could identify other evidence that
+
+
+
+
+                                                                Average Degree
+                                                                                 1.8
+confirms or contradicts the hypothesis.                                          1.6
+                                                                                 1.4
+   Another way to interpret hypothesis #1 is that                                1.2
+social networks with more characters tend to break                                 1
+                                                                                 0.8
+apart and be less connected. However, we found                                   0.6
+the opposite to be true. The correlation between                                 0.4
+
+
+
+
+                                                                                       ru
+
+
+                                                                                                                           ur
+
+
+
+
+                                                                                                                                                                                      1s
+
+
+                                                                                                                                                                                           3r
+the number of characters in each graph and the av-
+
+
+
+
+                                                                                        ra
+
+
+                                                                                                                                   ba
+
+
+
+
+                                                                                                                                                                                           d
+                                                                                                                                                                                       t
+                                                                                            l
+
+
+                                                                                                                                            n
+erage degree (number of conversation partners) for                                                         Setting / Perspective
+each character was a positive, moderately strong
+r=.42. This is not a given; a network can easily, for          Figure 2: The average degree for each character
+example, break into minimally connected or mutu-               as a function of the novel’s setting and its perspec-
+ally exclusive subnetworks when more characters                tive.
+are involved. Instead, we found that networks tend
+to stay close-knit regardless of their size: even the
+density of the graph (the percentage of the com-
+munity that each character talks to) grows with
+the total population size at r=.30. Moreover, as
+the population of speakers grows, the density is
+                                                                                                                                                                                                  
+
+
+
+
+likely to increase at r=.49. A higher number of
+characters (speaking or non-speaking) is also cor-
+related with a higher rate of 3-cliques per charac-                                                   
+                                                                                                                                                             
+
+
+
+ter (r=.38), as well as with a more balanced dis-                                                                                                    
+
+
+
+
+tribution of dialogue (the share of dialogue spo-                                                                                                                      
+
+ken by the top three speakers decreases at r=−.61).                                                                 
+
+
+
+
+This evidence suggests that in nineteenth-century
+British literature, it is the small communities,               Figure 3: Conversational networks for first-person
+rather than the large ones, that tend to be discon-            novels like Collins’s The Woman in White are less
+nected.                                                        connected due to the structure imposed by the per-
+                                                               spective.
+   Hypothesis #2, meanwhile, posited that a
+novel’s setting (urban or rural) would have an ef-
+fect on the structure of its social network. After             average degree measure. Stories told in the third
+defining “social network” as a conversational net-             person had much more connected networks than
+work, we did not find this to be the case. Sur-                stories told in the first person: not only did the av-
+prisingly, the numbers of characters and speakers              erage degree increase with statistical significance
+found in the urban novel were not significantly                (by the homoscedastic t-test to p < .005), so too
+greater than those found in the rural novel. More-             did the graph density (p < .05) and the rate of
+over, each of the features we extracted, such as               3-cliques per character (p < .05).
+the rate of cliques, average degree, density, and                 We believe the reason for this can be intuited
+rate of characters’ mentions of other characters,              with a visual inspection of a first-person graph.
+did not change in a statistically significant man-             Figure 3 shows the conversational network ex-
+ner between the two genres. For example, Figure                tracted for Collins’s The Woman in White, which is
+2 shows the mean over all texts of each network’s              told in the first person. Not surprisingly, the most
+average degree, with confidence intervals, sepa-               oft-repeated named entity in the text is I, referring
+rated by setting into urban and rural. The increase            to the narrator. More surprising is the lack of con-
+in degree seen in urban texts is not significant.              versation connections between the auxiliary char-
+   Rather, the only type of metadata variable that             acters. The story’s structure revolves around the
+did impact the average degree with any signifi-                narrator and each character is understood in terms
+cance was the text’s perspective. Figure 2 also sep-           of his or her relationship to the narrator. Private
+arates texts into first- and third-person tellings and         conversations between auxiliary characters would
+shows the means and confidence intervals for the               not include the narrator, and thus do not appear in a
+
+
+                                                         145
+
+
+first-hand account. An “omniscient” third person               7   Conclusion
+narrator, by contrast, can eavesdrop on any pair
+of characters conversing. This highlights the im-              In this paper, we presented a method for char-
+portance of detecting reported and indirect speech             acterizing a text of literary fiction by extracting
+in future work, as a first-person narrator may hear            the network of social conversations that occur be-
+about other connections without witnessing them.               tween its characters. This allowed us to take a
+                                                               systematic and wide look at a large corpus of
+6   Literary Interpretation of Results                         texts, an approach which complements the nar-
+                                                               rower and deeper analysis performed by literary
+Our data, therefore, markedly do not confirm hy-               scholars and can provide evidence for or against
+pothesis #1. They also suggest, in relation to hy-             some of their claims. In particular, we described
+pothesis #2 (also not confirmed by the data), a                a high-precision method for detecting face-to-face
+strong reason why.                                             conversations between two named characters in a
+   One of the basic assumptions behind hypoth-                 novel, and showed that as the number of charac-
+esis #2– that urban novels contain more charac-                ters in a novel grows, so too do the cohesion, in-
+ters, mirroring the masses of nineteenth-century               terconnectedness and balance of their social net-
+cities– is not borne out by our data. Our results do,          work. In addition, we showed that the form of the
+however, strongly correlate a point of view (third-            novel (first- or third-person) is a stronger predictor
+person narration) with more frequently connected               of these features than the setting (urban or rural).
+characters, implying tighter and more talkative so-            Our results thus far suggest further review of our
+cial networks.                                                 methods, our corpus and our results for more in-
+   We would propose that this suggests that the                sights into the social networks found in this and
+form of a given novel– the standpoint of the nar-              other genres of fiction.
+rative voice, whether the voice is “omniscient” or
+not– is far more determinative of the kind of so-              8   Acknowledgments
+cial network described in the novel than where it
+                                                               This material is based on research supported in
+is set or even the number of characters involved.
+                                                               part by the U.S. National Science Foundation
+Whereas standard accounts of nineteenth-century
+                                                               (NSF) under IIS-0935360. Any opinions, findings
+fiction, following Bakhtin’s notion of the “chrono-
+                                                               and conclusions or recommendations expressed in
+tope,” emphasize the content of the novel as de-
+                                                               this material are those of the authors and do not
+terminative (where it is set, whether the novel fits
+                                                               necessarily reflect the views of the NSF.
+within a genre of “village” or “urban” fiction),
+we have found that content to be surprisingly ir-
+relevant to the shape of social networks within.               References
+Bakhtin’s influential theory, and its detailed re-
+workings by Williams, Moretti, and others, sug-                Mikhail Bakhtin. 1981. Forms of time and of the
+                                                                 chronotope in the novel. In Trans. Michael Holquist
+gests that as the novel becomes more urban, more                 and Caryl Emerson, editors, The Dialogic Imagi-
+centered in (and interested in) populous urban set-              nation: Four Essays, pages 84–258. University of
+tings, the novel’s form changes to accommodate                   Texas Press, Austin.
+the looser, more populated, less conversational
+networks of city life. Our data suggests the op-               John Burrows. 2004. Textual analysis. In Susan
+                                                                 Schreibman, Ray Siemens, and John Unsworth, ed-
+posite: that the “urban novel” is not as strongly                itors, A Companion to Digital Humanities. Black-
+distinctive a form as has been asserted, and that in             well, Oxford.
+fact it can look much like the village fictions of the
+century, as long as the same method of narration is            Nathanael Chambers and Dan Jurafsky. 2008. Unsu-
+                                                                 pervised learning of narrative event chains. In In
+used.                                                            Proceedings of the 46th Annual Meeting of the As-
+   This conclusion leads to some further consider-               sociation of Com- putational Linguistics (ACL-08),
+ations. We are suggesting that the important ele-                pages 789–797, Columbus, Ohio.
+ment of social networks in nineteenth-century fic-
+                                                               Wendy K. Tam Cho and James H. Fowler. 2010. Leg-
+tion is not where the networks are set, but from                 islative success in a small world: Social network
+what standpoint they are imagined or narrated.                   analysis and the dynamics of congressional legisla-
+Narrative voice, that is, trumps setting.                        tion. The Journal of Politics, 72(1):124–135.
+
+
+                                                         146
+
+
+Jacob Cohen. 1960. A coefficient of agreement                   Raymond Williams. 1975. The Country and The City.
+   for nominal scales. Educational and Psychological              Oxford University Press, Oxford.
+   Measurement, 20(1):37–46.
+Peter T. Davis, David K. Elson, and Judith L. Klavans.
+  2003. Methods for precise named entity matching
+  in digital collections. In Proceedings of the Third
+  ACM/IEEE Joint Conference on Digital Libraries
+  (JCDL ’03), Houston, Texas.
+George Doddington, Alexis Mitchell, Mark Przybocki,
+  Lance Ramshaw, Stephanie Strassel, and Ralph
+  Weischedel. 2004. The automatic content ex-
+  traction (ace) program tasks, data, and evaluation.
+  In Proceedings of the Fourth International Confer-
+  ence on Language Resources and Evaluation (LREC
+  2004), pages 837–840, Lisbon.
+Terry Eagleton. 2005. The English Novel: An Intro-
+  duction. Blackwell, Oxford.
+David K. Elson and Kathleen R. McKeown. 2010. Au-
+  tomatic attribution of quoted speech in literary nar-
+  rative. In Proceedings of the Twenty-Fourth AAAI
+  Conference on Artificial Intelligence (AAAI 2010),
+  Atlanta, Georgia.
+Jenny Rose Finkel, Trond Grenager, and Christo-
+   pher D. Manning. 2005. Incorporating non-local
+   information into information extraction systems by
+   gibbs sampling. In Proceedings of the 43nd Annual
+   Meeting of the Association for Computational Lin-
+   guistics (ACL 2005), pages 363–370.
+Anatoliy Gruzd and Caroline Haythornthwaite. 2008.
+  Automated discovery and analysis of social net-
+  works from threaded discussions. In International
+  Network of Social Network Analysis (INSNA) Con-
+  ference, St. Pete Beach, Florida.
+Harry Halpin, Johanna D. Moore, and Judy Robertson.
+  2004. Automatic analysis of plot for story rewrit-
+  ing. In Proceedings of the Conference on Empirical
+  Methods in Natural Language Processing (EMNLP
+  ’04), Barcelona.
+John Lee. 2007. A computational model of text reuse
+  in ancient literary texts. In In Proceedings of the
+  45th Annual Meeting of the Association of Com-
+  putational Linguistics (ACL 2007), pages 472–479,
+  Prague.
+Andrew McCallum, Xuerui Wang, and Andrés
+  Corrada-Emmanual. 2007. Topic and role discovery
+  in social networks with experiments on enron and
+  academic email. Journal of Artificial Intelligence
+  Research, 30:249–272.
+Franco Moretti. 1999. Atlas of the European Novel,
+  1800-1900. Verso, London.
+Franco Moretti. 2005. Graphs, Maps, Trees: Abstract
+  Models for a Literary History. Verso, London.
+Frederick Mostellar and David L. Wallace. 1984. Ap-
+  plied Bayesian and Classical Inference: The Case of
+  The Federalist Papers. Springer, New York.
+
+
+                                                          147
+

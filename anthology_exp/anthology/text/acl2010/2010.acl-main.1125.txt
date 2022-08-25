@@ -1,0 +1,577 @@
+                  Modeling Semantic Relevance for Question-Answer Pairs
+                              in Web Social Communities
+                Baoxun Wang, Xiaolong Wang, Chengjie Sun, Bingquan Liu, Lin Sun
+                           School of Computer Science and Technology
+                                  Harbin Institute of Technology
+                                          Harbin, China
+              {bxwang, wangxl, cjsun, liubq, lsun}@insun.hit.edu.cn
+
+
+                               Abstract                            question-answering (cQA) sites and online fo-
+                                                                   rums. The cQA sites (or systems) provide plat-
+        Quantifying the semantic relevance be-                     forms where users can either ask questions or de-
+        tween questions and their candidate an-                    liver answers, and best answers are selected man-
+        swers is essential to answer detection in                  ually (e.g., Baidu Zhidao2 and Yahoo! Answers3 ).
+        social media corpora. In this paper, a deep                Comparing with cQA sites, online forums have
+        belief network is proposed to model the                    more virtual society characteristics, where people
+        semantic relevance for question-answer                     hold discussions in certain domains, such as tech-
+        pairs. Observing the textual similarity                    niques, travel, sports, etc. Online forums contain
+        between the community-driven question-                     a huge number of QA pairs, and much noise infor-
+        answering (cQA) dataset and the forum                      mation is involved.
+        dataset, we present a novel learning strat-                   To make use of the QA pairs in cQA sites and
+        egy to promote the performance of our                      online forums, one has to face the challenging
+        method on the social community datasets                    problem of distinguishing the questions and their
+        without hand-annotating work. The ex-                      answers from the noise. According to our investi-
+        perimental results show that our method                    gation, the data in the community based sites, es-
+        outperforms the traditional approaches on                  pecially for the forums, have two obvious charac-
+        both the cQA and the forum corpora.                        teristics: (a) a post usually includes a very short
+1       Introduction                                               content, and when a person is initializing or re-
+                                                                   plying a post, an informal tone tends to be used;
+In natural language processing (NLP) and infor-                    (b) most of the posts are useless, which makes
+mation retrieval (IR) fields, question answering                   the community become a noisy environment for
+(QA) problem has attracted much attention over                     question-answer detection.
+the past few years. Nevertheless, most of the QA                      In this paper, a novel approach for modeling the
+researches mainly focus on locating the exact an-                  semantic relevance for QA pairs in the social me-
+swer to a given factoid question in the related doc-               dia sites is proposed. We concentrate on the fol-
+uments. The most well known international evalu-                   lowing two problems:
+ation on the factoid QA task is the Text REtrieval                    1. How to model the semantic relationship be-
+Conference (TREC)1 , and the annotated questions                   tween two short texts using simple textual fea-
+and answers released by TREC have become im-                       tures? As mentioned above, the user generated
+portant resources for the researchers. However,                    questions and their answers via social media are
+when facing a non-factoid question such as why,                    always short texts. The limitation of length leads
+how, or what about, however, almost no automatic                   to the sparsity of the word features. In addition,
+QA systems work very well.                                         the word frequency is usually either 0 or 1, that is,
+   The user-generated question-answer pairs are                    the frequency offers little information except the
+definitely of great importance to solve the non-                   occurrence of a word. Because of this situation,
+factoid questions. Obviously, these natural QA                     the traditional relevance computing methods based
+pairs are usually created during people’s com-                     on word co-occurrence, such as Cosine similarity
+munication via Internet social media, among                        and KL-divergence, are not effective for question-
+which we are interested in the community-driven                       2
+                                                                          http://zhidao.baidu.com
+    1                                                                 3
+        http://trec.nist.gov                                              http://answers.yahoo.com
+
+
+                                                             1230
+            Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1230–1238,
+                      Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+answer semantic modeling. Most researchers try          QA pairs from frequently asked questions (FAQ)
+to introduce structural features or users’ behavior     pages (Jijkoun and de Rijke, 2005; Riezler et al.,
+to improve the models performance, by contrast,         2007) or service call-center dialogues (Berger et
+the effect of textual features is not obvious.          al., 2000).
+   2. How to train a model so that it has good per-        Judging whether a candidate answer is seman-
+formance on both cQA and forum datasets? So             tically related to the question in the cQA page
+far, people have been doing QA researches on the        automatically is a challenging task. A frame-
+cQA and the forum datasets separately (Ding et          work for predicting the quality of answers has
+al., 2008; Surdeanu et al., 2008), and no one has       been presented in (Jeon et al., 2006). Bernhard
+noticed the relationship between the two kinds of       and Gurevych (2009) have developed a transla-
+data. Since both the cQA systems and the online         tion based method to find answers. Surdeanu et
+forums are open platforms for people to commu-          al. (2008) propose an approach to rank the an-
+nicate, the QA pairs in the cQA systems have sim-       swers retrieved by Yahoo! Answers. Our work is
+ilarity with those in the forums. In this case, it is   partly similar to Surdeanu et al. (2008), for we also
+highly valuable and desirable to propose a train-       aim to rank the candidate answers reasonably, but
+ing strategy to improve the model’s performance         our ranking algorithm needs only word informa-
+on both of the two kinds of datasets. In addition,      tion, instead of the combination of different kinds
+it is possible to avoid the expensive and arduous       of features.
+hand-annotating work by introducing the method.
+                                                           Because people have considerable freedom to
+   To solve the first problem, we present a deep
+                                                        post on forums, there are a great number of irrel-
+belief network (DBN) to model the semantic rel-
+                                                        evant posts for answering questions, which makes
+evance between questions and their answers. The
+                                                        it more difficult to detect answers in the forums.
+network establishes the semantic relationship for
+                                                        In this field, exploratory studies have been done by
+QA pairs by minimizing the answer-to-question
+                                                        Feng et al. (2006) and Huang et al. (2007), who ex-
+reconstructing error. Using only word features,
+                                                        tract input-reply pairs for the discussion-bot. Ding
+our model outperforms the traditional methods on
+                                                        et al.(2008) and Cong et al.(2008) have also pre-
+question-answer relevance calculating.
+                                                        sented outstanding research works on forum QA
+   For the second problem, we make our model
+                                                        extraction. Ding et al. (2008) detect question con-
+to learn the semantic knowledge from the solved
+                                                        texts and answers using the conditional random
+question threads in the cQA system. Instead of
+                                                        fields, and a ranking algorithm based on the au-
+mining the structure based features from cQA
+                                                        thority of forum users is proposed by Cong et al.
+pages and forum threads individually, we con-
+                                                        (2008). Treating answer detection as a binary clas-
+sider the textual similarity between the two kinds
+                                                        sification problem is an intuitive idea, thus there
+of data. The semantic information learned from
+                                                        are some studies trying to solve it from this view
+cQA corpus is helpful to detect answers in forums,
+                                                        (Hong and Davison, 2009; Wang et al., 2009). Es-
+which makes our model show good performance
+                                                        pecially Hong and Davison (2009) have achieved
+on social media corpora. Thanks to the labels for
+                                                        a rather high precision on the corpora with less
+the best answers existing in the threads, no manual
+                                                        noise, which also shows the importance of “social”
+work is needed in our strategy.
+                                                        features.
+   The rest of this paper is organized as follows:
+Section 2 surveys the related work. Section 3 in-          In order to select the answers for a given ques-
+troduces the deep belief network for answer de-         tion, one has to face the problem of lexical gap.
+tection. In Section 4, the homogenous data based        One of the problems with lexical gap embedding
+learning strategy is described. Experimental result     is to find similar questions in QA achieves (Jeon et
+is given in Section 5. Finally, conclusions and fu-     al., 2005). Recently, the statistical machine trans-
+ture directions are drawn in Section 6.                 lation (SMT) strategy has become popular. Lee et
+                                                        al. (2008) use translate models to bridge the lexi-
+2   Related Work                                        cal gap between queries and questions in QA col-
+                                                        lections. The SMT based methods are effective on
+The value of the naturally generated question-          modeling the semantic relationship between ques-
+answer pairs has not been recognized until recent       tions and answers and expending users’ queries in
+years. Early studies mainly focus on extracting         answer retrieval (Riezler et al., 2007; Berger et al.,
+
+
+                                                    1231
+
+
+2000; Bernhard and Gurevych, 2009). In (Sur-           model composed of RBMs into the information re-
+deanu et al., 2008), the translation model is used     trieval field, which shows that this model is able to
+to provide features for answer ranking.                obtain semantic information hidden in the word-
+   The structural features (e.g., authorship, ac-      count vectors.
+knowledgement, post position, etc), also called           As shown in Figure 1, the RBM is a two-layer
+non-textual features, play an important role in an-    network. The bottom layer represents a visible
+swer extraction. Such features are used in (Ding       vector v and the top layer represents a latent fea-
+et al., 2008; Cong et al., 2008), and have signifi-    ture h. The matrix W contains the symmetric in-
+cantly improved the performance. The studies of        teraction terms between the visible units and the
+Jeon et al. (2006) and Hong et al. (2009) show that    hidden units. Given an input vector v, the trained
+the structural features have even more contribution
+than the textual features. In this case, the mining
+of textual features tends to be ignored.
+   There are also some other research topics in this
+field. Cong et al. (2008) and Wang et al. (2009)
+both propose the strategies to detect questions in
+the social media corpus, which is proved to be a
+non-trivial task. The deep research on question             Figure 1: Restricted Boltzmann machine
+detection has been taken by Duan et al. (2008).
+A graph based algorithm is presented to answer         RBM model provides a hidden feature h, which
+opinion questions (Li et al., 2009). In email sum-     can be used to reconstruct v with a minimum er-
+marization field, the QA pairs are also extracted      ror. The training algorithm for this paper will be
+from email contents as the main elements of email      described in the next subsection. The ability of the
+summarization (Shrestha and McKeown, 2004).            RBM suggests us to build a deep belief network
+                                                       based on RBM so that the semantic relevance be-
+3   The Deep Belief Network for QA pairs               tween questions and answers can be modeled.
+
+Due to the feature sparsity and the low word fre-      3.2 Pretraining a Deep Belief Network
+quency of the social media corpus, it is difficult     In the social media corpora, the answers are al-
+to model the semantic relevance between ques-          ways descriptive, containing one or several sen-
+tions and answers using only co-occurrence fea-        tences. Noticing that an answer has strong seman-
+tures. It is clear that the semantic link exists be-   tic association with the question and involves more
+tween the question and its answers, even though        information than the question, we propose to train
+they have totally different lexical representations.   a deep belief network by reconstructing the ques-
+Thus a specially designed model may learn se-          tion using its answers. The training object is to
+mantic knowledge by reconstructing a great num-        minimize the error of reconstruction, and after the
+ber of questions using the information in the cor-     pretraining process, a point that lies in a good re-
+responding answers. In this section, we propose        gion of parameter space can be achieved.
+a deep belief network for modeling the seman-             Firstly, the illustration of the DBN model is
+tic relationship between questions and their an-       given in Figure 2. This model is composed of
+swers. Our model is able to map the QA data into       three layers, and here each layer stands for the
+a low-dimensional semantic-feature space, where        RBM or its variant. The bottom layer is a variant
+a question is close to its answers.                    form of RBM’s designed for the QA pairs. This
+                                                       layer we design is a little different from the classi-
+3.1 The Restricted Boltzmann Machine                   cal RBM’s, so that the bottom layer can generate
+An ensemble of binary vectors can be modeled us-       the hidden features according to the visible answer
+ing a two-layer network called a “restricted Boltz-    vector and reconstruct the question vector using
+mann machine” (RBM) (Hinton, 2002). The di-            the hidden features. The pre-training procedure of
+mension reducing approach based on RBM ini-            this architecture is practically convergent. In the
+tially shows good performance on image process-        bottom layer, the binary feature vectors based on
+ing (Hinton and Salakhutdinov, 2006). Salakhut-        the statistics of the word occurrence in the answers
+dinov and Hinton (2009) propose a deep graphical       are used to compute the “hidden features” in the
+
+
+                                                   1232
+
+
+                                                          The training method for the higher two layer is
+                                                          similar to that of the bottom one, and we only have
+                                                          to make each RBM to reconstruct the input data
+                                                          using its hidden features. The parameter updates
+                                                          still obeying the rule defined by gradient ascent,
+                                                          which is quite similar to Equation 3. After train-
+                                                          ing one layer, the h vectors are then sent to the
+                                                          higher-level layer as its “training data”.
+
+                                                          3.3 Fine-tuning the Weights
+                                                          Notice that a greedy strategy is taken to train each
+                                                          layer individually during the pre-training proce-
+                                                          dure, it is necessary to fine-tune the weights of the
+Figure 2: The Deep Belief Network for QA Pairs            entire network for optimal reconstruction. To fine-
+                                                          tune the weights, the network is unrolled, taking
+hidden units. The model can reconstruct the ques-         the answers as the input data to generate the corre-
+tions using the hidden features. The processes can        sponding questions at the output units. Using the
+be modeled as follows:                                    cross-entropy error function, we can then tune the
+                                 X                        network by performing backpropagation through
+          p(h j = 1|a) = σ(b j +   wi j ai )    (1)       it. The experiment results in section 5.2 will show
+                                   i                      fine-tuning makes the network performs better for
+                                  X
+                                                          answer detection.
+          p(qi = 1|h) = σ(bi +         wi j h j )   (2)
+                                   j
+                                                          3.4 Best answer detection
+where σ(x) = 1/(1 + e−x ), a denotes the visible
+                                                          After pre-training and fine-tuning, a deep belief
+feature vector of the answer, qi is the ith element
+                                                          network for QA pairs is established. To detect the
+of the question vector, and h stands for the hid-
+                                                          best answer to a given question, we just have to
+den feature vector for reconstructing the questions.
+                                                          send the vectors of the question and its candidate
+wi j is a symmetric interaction term between word
+                                                          answers into the input units of the network and
+i and hidden feature j, bi stands for the bias of the
+                                                          perform a level-by-level calculation to obtain the
+model for word i, and b j denotes the bias of hidden
+                                                          corresponding feature vectors. Then we calculate
+feature j.
+                                                          the distance between the mapped question vector
+   Given the training set of answer vectors, the bot-
+                                                          and each candidate answer vector. We consider the
+tom layer generates the corresponding hidden fea-
+                                                          candidate answer with the smallest distance as the
+tures using Equation 1. Equation 2 is used to re-
+                                                          best one.
+construct the Bernoulli rates for each word in the
+question vectors after stochastically activating the      4 Learning with Homogenous Data
+hidden features. Then Equation 1 is taken again
+to make the hidden features active. We use 1-step         In this section, we propose our strategy to make
+Contrastive Divergence (Hinton, 2002) to update           our DBN model to detect answers in both cQA and
+the parameters by performing gradient ascent:             forum datasets, while the existing studies focus on
+                                                          one single dataset.
+   ∆wi j = (< qi h j >qData − < qi h j >qRecon )   (3)
+where < qi h j >qData denotes the expectation of          4.1 Homogenous QA Corpora from Different
+the frequency with which the word i in a ques-                Sources
+tion and the feature j are on together when the           Our motivation of finding the homogenous
+hidden features are driven by the question data.          question-answer corpora from different kind of so-
+< qi h j >qRecon defines the corresponding expec-         cial media is to guarantee the model’s performance
+tation when the hidden features are driven by the         and avoid hand-annotating work.
+reconstructed question data.  is the learning rate.         In this paper, we get the “solved question” pages
+   The classical RBM structure is taken to build          in the computer technology domain from Baidu
+the middle layer and the top layer of the network.        Zhidao as the cQA corpus, and the threads of
+
+
+                                                      1233
+
+
+               Figure 3: Comparison of the post content lengths in the cQA and the forum datasets
+
+
+ComputerFansClub Forum4 as the online forum              corpora, and the vertical axis stands for the per-
+corpus. The domains of the corpora are the same.         centage of the words shared by the two corpora in
+To further explain that the two corpora are ho-          the top k words.
+mogenous, we will give the detail comparison on
+text style and word distribution.
+   As shown in Figure 3, we have compared the
+post content lengths of the cQA and the forum
+in our corpora. For the comparison, 5,000 posts
+from the cQA corpus and 5,000 posts from the fo-
+rum corpus are randomly selected. The left panel
+shows the statistical result on the Baidu Zhidao
+data, and the right panel shows the one on the fo-
+rum data. The number i on the horizontal axis de-
+notes the post contents whose lengths range from
+10(i − 1) + 1 to 10i bytes, and the vertical axis rep-
+resents the counts of the post contents. From Fig-
+ure 3 we observe that the contents of most posts
+in both the cQA corpus and the forum corpus are
+short, with the lengths not exceeding 400 bytes.         Figure 4: Distribution of concurrent content words
+   The content length reflects the text style of the
+posts in cQA systems and online forums. From                Figure 4 shows that a large number of meaning-
+Figure 3 it can be also seen that the distributions      ful words appear in both of the two corpora with
+of the content lengths in the two figures are very       high frequencies. The percentage of the concur-
+similar. It shows that the contents in the two cor-      rent words maintains above 64% in the top 1,400
+pora are both mainly short texts.                        words. It indicates that the word distributions of
+   Figure 4 shows the percentage of the concurrent       the two corpora are quite similar, although they
+words in the top-ranked content words with high          come from different social media sites.
+frequency. In detail, we firstly rank the words by          Because the cQA corpus and the forum corpus
+frequency in the two corpora. The words are cho-         used in this study have homogenous characteris-
+sen based on a professional dictionary to guarantee      tics for answer detecting task, a simple strategy
+that they are meaningful in the computer knowl-          may be used to avoid the hand-annotating work.
+edge field. The number k on the horizontal axis in       Apparently, in every “solved question” page of
+Figure 4 represents the top k content words in the       Baidu Zhidao, the best answer is selected by the
+                                                         user who asks this question. We can easily extract
+   4
+       http://bbs.cfanclub.net/                          the QA pairs from the cQA corpus as the training
+
+
+                                                     1234
+
+
+set. Because the two corpora are similar, we can       5.1 Experiment Setup
+apply the deep belief network trained by the cQA       Architecture of the Network: To build the deep
+corpus to detect answers on both the cQA data and      belief network, we use a 1500-1500-1000-600 ar-
+the forum data.                                        chitecture, which means the three layers of the net-
+4.2 Features                                           work have individually 1,500×1,500, 1,500×1,000
+                                                       and 1,000×600 units. Using the network, a 1,500-
+The task of detecting answers in social media cor-     dimensional binary vector is finally mapped to a
+pora suffers from the problem of feature sparsity      600-dimensional real-value vector.
+seriously. High-dimensional feature vectors with          During the pretraining stage, the bottom layer
+only several non-zero dimensions bring large time      is greedily pretrained for 200 passes through the
+consumption to our model. Thus it is necessary to      entire training set, and each of the rest two layers is
+reduce the dimension of the feature vectors.           greedily pretrained for 50 passes. For fine-tuning
+   In this paper, we adopt two kinds of word fea-      we apply the method of conjugate gradients5 , with
+tures. Firstly, we consider the 1,300 most fre-        three line searches performed in each pass. This
+quent words in the training set as Salakhutdinov       algorithm is performed for 50 passes to fine-tune
+and Hinton (2009) did. According to our statis-        the network.
+tics, the frequencies of the rest words are all less      Dataset: we have crawled 20,000 pages of
+then 10, which are not statistically significant and   “solved question” from the computer and network
+may introduce much noise.                              category of Baidu Zhidao as the cQA corpus. Cor-
+   We take the occurrence of some function words       respondingly we obtain 90,000 threads from Com-
+as another kind of features. The function words        puterFansClub, which is an online forum on com-
+are quite meaningful for judging whether a short       puter knowledge. We take the forum threads as
+text is an answer or not, especially for the non-      our forum corpus.
+factoid questions. For example, in the answers to         From the cQA corpus, we extract 12,600 human
+the causation questions, the words such as because     generated QA pairs as the training set without any
+and so are more likely to appear; and the words        manual work to label the best answers. We get the
+such as firstly, then, and should may suggest the      contents from another 2,000 cQA pages to form
+answers to the manner questions. We give an ex-        a testing set, each content of which includes one
+ample for function word selection in Figure 5.         question and 4.5 candidate answers on average,
+                                                       with one best answer among them. To get another
+                                                       testing dataset, we randomly select 2,000 threads
+                                                       from the forum corpus. For this training set, hu-
+                                                       man work are necessary to label the best answers
+                                                       in the posts of the threads. There are 7 posts in-
+                                                       cluded in each thread on average, among which
+                                                       one question and at least one answer exist.
+                                                          Baseline: To show the performance of our
+Figure 5: An example for function word selection
+                                                       method, three main popular relevance computing
+   For this reason, we collect 200 most frequent       methods for ranking candidate answers are con-
+function words in the answers of the training set.     sidered as our baselines. We will briefly introduce
+Then for every short text, either a question or an     them:
+answer, a 1,500-dimensional vector can be gener-          Cosine Similarity. Given a question q and its
+ated. Specifically, all the features we have adopted   candidate answer a, their cosine similarity can be
+are binary, for they only have to denote whether       computed as follows:
+                                                                                 Pn
+the corresponding word appears in the text or not.                                 k=1 wqk × wak
+                                                              cos(q, a) = q                qP             (4)
+                                                                              Pn     2         n     2
+5   Experiments                                                                 k=1 wqk ×      k=1 wak
+
+To evaluate our question-answer semantic rele-         where wqk and wak stand for the weight of the kth
+vance computing method, we compare our ap-             word in the question and the answer respectively.
+proach with the popular methods on the answer              5
+                                                             Code           is           available            at
+detecting task.                                        http://www.kyb.tuebingen.mpg.de/bs/people/carl/code/minimize/
+
+
+                                                   1235
+
+
+The weights can be get by computing the product           effective and meaningful.
+of term frequency (tf ) and inverse document fre-
+quency (idf )                                                Method                P@1 (%)      MRR (%)
+   HowNet based Similarity. HowNet6 is an elec-              Nearest Answer         21.25        38.72
+tronic world knowledge system, which serves as               Cosine Similarity      23.15        43.50
+a powerful tool for meaning computation in hu-               HowNet                 22.55        41.63
+man language technology. Normally the similar-               KL divergence          25.30        51.40
+ity between two passages can be calculated by                DBN (without FT)       41.45        59.64
+two steps: (1) matching the most semantic-similar            DBN (with FT)          45.00        62.03
+words in each passages greedily using the API’s
+provided by HowNet; (2) computing the weighted                   Table 1: Results on Forum Dataset
+average similarities of the word pairs. This strat-
+egy is taken as a baseline method for computing              We have also investigated the reasons for the un-
+the relevance between questions and answers.              satisfying performance of the baseline approaches.
+   KL-divergence Language Model. Given a ques-            Basically, the low precision is ascribable to the
+tion q and its candidate answer a, we can con-            forum corpus we have obtained. As mentioned
+struct unigram language model Mq and unigram              in Section 1, the contents of the forum posts are
+language model Ma . Then we compute KL-                   short, which leads to the sparsity of the features.
+divergence between Mq and Ma as below:                    Besides, when users post messages in the online
+                X                                         forums, they are accustomed to be casual and use
+KL(Ma ||Mq ) =      p(w|Ma ) log(p(w|Ma )/p(w|Mq ))       some synonymous words interchangeably in the
+                  w                                       posts, which is believed to be a significant situ-
+                                                   (5)    ation in Chinese forums especially. Because the
+                                                          features for QA pairs are quite sparse and the con-
+5.2   Results and Analysis
+                                                          tent words in the questions are usually morpholog-
+We evaluate the performance of our approach for           ically different from the ones with the same mean-
+answer detection using two metrics: Precision@1           ing in the answers, the Cosine Similarity method
+(P@1) and Mean Reciprocal Rank (MRR). Ap-                 become less powerful. For HowNet based ap-
+plying the two metrics, we perform the baseline           proaches, there are a large number of words not
+methods and our DBN based methods on the two              included by HowNet, thus it fails to compute the
+testing set above.                                        similarity between questions and answers. KL-
+   Table 1 lists the results achieved on the forum        divergence suffers from the same problems with
+data using the baseline methods and ours. The ad-         the Cosine Similarity method. Compared with
+ditional “Nearest Answer” stands for the method           the Cosine Similarity method, this approach has
+without any ranking strategies, which returns the         achieved the improvement of 9.3% in P@1, but
+nearest candidate answer from the question by po-         it performs much better than the other baseline
+sition. To illustrate the effect of the fine-tuning for   methods in MRR.
+our model, we list the results of our method with-           The baseline results indicate that the online fo-
+out fine-tuning and the results with fine-tuning.         rum is a complex environment with large amount
+   As shown in Table 1, our deep belief network           of noise for answer detection. Traditional IR
+based methods outperform the baseline methods             methods using pure textual features can hardly
+as expected. The main reason for the improve-             achieve good results. The similar baseline results
+ments is that the DBN based approach is able to           for forum answer ranking are also achieved by
+learn semantic relationship between the words in          Hong and Davison (2009), which takes some non-
+QA pairs from the training set. Although the train-       textual features to improve the algorithm’s perfor-
+ing set we offer to the network comes from a dif-         mance. We also notice that, however, the baseline
+ferent source (the cQA corpus), it still provide          methods have obtained better results on forum cor-
+enough knowledge to the network to perform bet-           pus (Cong et al., 2008). One possible reason is that
+ter than the baseline methods. This phenomena in-         the baseline approaches are suitable for their data,
+dicates that the homogenous corpora for training is       since we observe that the “nearest answer” strat-
+    6
+      Detail  information   can     be    found     in:   egy has obtained a 73.5% precision in their work.
+http://www.keenage.com/                                      Our model has achieved the precision of
+
+
+                                                      1236
+
+
+45.00% in P@1 and 62.03% in MRR for answer             to lock down the question thread, which helps to
+detecting on forum data after fine-tuning, while       reduce the noise information in the cQA corpus.
+some related works have reported the results with         Despite the baseline methods’ performances
+the precision over 90% (Cong et al., 2008; Hong        have been improved, our approaches still outper-
+and Davison, 2009). There are mainly two rea-          form them, with a 32.0% improvement in P@1
+sons for this phenomena: Firstly, both of the pre-     and a 15.3% improvement in MRR at least. On
+vious works have adopt non-textual features based      the cQA dataset, our model shows better perfor-
+on the forum structure, such as authorship, po-        mance than the previous experiment, which is ex-
+sition and quotes, etc. The non-textual (or so-        pected because the training set and the testing set
+cial based) features have played a significant role    come from the same corpus, and the DBN model
+in improving the algorithms’ performance. Sec-         is more adaptive to the cQA data.
+ondly, the quality of corpora influences the results      We have observed that, from both of the two
+of the ranking strategies significantly, and even      groups of experiments, fine-tuning is effective for
+the same algorithm may perform differently when        enhancing the performance of our model. On the
+the dataset is changed (Hong and Davison, 2009).       forum data, the results have been improved by
+For the experiments of this paper, large amount of     8.6% in P@1 and 4.0% in MRR, and the improve-
+noise is involved in the forum corpus and we have      ments are 3.5% and 3.1% individually.
+done nothing extra to filter it.
+   Table 2 shows the experimental results on the       6 Conclusions
+cQA dataset. In this experiment, each sample is
+                                                       In this paper, we have proposed a deep belief net-
+composed of one question and its following sev-
+                                                       work based approach to model the semantic rel-
+eral candidate answers. We delete the ones with
+                                                       evance for the question answering pairs in social
+only one answer to confirm there are at least two
+                                                       community corpora.
+candidate answers for each question. The candi-
+                                                          The contributions of this paper can be summa-
+date answers are rearranged by post time, so that
+                                                       rized as follows: (1) The deep belief network we
+the real answers do not always appear next to the
+                                                       present shows good performance on modeling the
+questions. In this group of experiment, no hand-
+                                                       QA pairs’ semantic relevance using only word fea-
+annotating work is needed because the real an-
+                                                       tures. As a data driven approach, our model learns
+swers have been labeled by cQA users.
+                                                       semantic knowledge from large amount of QA
+  Method                 P@1 (%)      MRR (%)          pairs to represent the semantic relevance between
+  Nearest Answer          36.05        56.33           questions and their answers. (2) We have stud-
+  Cosine Similarity       44.05        62.84           ied the textual similarity between the cQA and the
+                                                       forum datasets for QA pair extraction, and intro-
+  HowNet                  41.10        58.75
+                                                       duce a novel learning strategy to make our method
+  KL divergence           43.75        63.10
+                                                       show good performance on both cQA and forum
+  DBN (without FT)        56.20        70.56
+                                                       datasets. The experimental results show that our
+  DBN (with FT)           58.15        72.74
+                                                       method outperforms the traditional approaches on
+                                                       both the cQA and the forum corpora.
+        Table 2: Results on cQA Dataset
+                                                          Our future work will be carried out along two
+   From Table 2 we observe that all the approaches     directions. Firstly, we will further improve the
+perform much better on this dataset. We attribute      performance of our method by adopting the non-
+the improvements to the high quality QA corpus         textual features. Secondly, more research will be
+Baidu Zhidao offers: the candidate answers tend to     taken to put forward other architectures of the deep
+be more formal than the ones in the forums, with       networks for QA detection.
+less noise information included. In addition, the
+                                                       Acknowledgments
+“Nearest Answer” strategy has reached 36.05% in
+P@1 on this dataset, which indicates quite a num-      The authors are grateful to the anonymous re-
+ber of askers receive the real answers at the first    viewers for their constructive comments. Special
+answer post. This result has supported the idea of     thanks to Deyuan Zhang, Bin Liu, Beidong Liu
+introducing position features. What’s more, if the     and Ke Sun for insightful suggestions. This work
+best answer appear immediately, the asker tends        is supported by NSFC (60973076).
+
+
+                                                   1237
+
+
+References                                                   Jiwoon Jeon, W. Bruce Croft, and Joon Ho Lee. 2005.
+                                                                Finding similar questions in large question and an-
+Adam Berger, Rich Caruana, David Cohn, Dayne Fre-               swer archives. In CIKM ’05, pages 84–90, New
+  itag, and Vibhu Mittal. 2000. Bridging the lexi-              York, NY, USA. ACM.
+  cal chasm: Statistical approaches to answer-finding.
+  In In Proceedings of the 23rd annual international         Jiwoon Jeon, W. Bruce Croft, Joon Ho Lee, and Soyeon
+  ACM SIGIR conference on Research and develop-                 Park. 2006. A framework to predict the quality of
+  ment in information retrieval, pages 192–199.                 answers with non-textual features. In SIGIR ’06,
+Delphine Bernhard and Iryna Gurevych. 2009. Com-                pages 228–235, New York, NY, USA. ACM.
+  bining lexical semantic resources with question &          Valentin Jijkoun and Maarten de Rijke. 2005. Retriev-
+  answer archives for translation-based answer find-           ing answers from frequently asked questions pages
+  ing. In Proceedings of the Joint Conference of the           on the web. In CIKM ’05, pages 76–83, New York,
+  47th Annual Meeting of the ACL and the 4th In-               NY, USA. ACM.
+  ternational Joint Conference on Natural Language
+  Processing of the AFNLP, pages 728–736, Suntec,            Jung-Tae Lee, Sang-Bum Kim, Young-In Song, and
+  Singapore, August. Association for Computational             Hae-Chang Rim. 2008. Bridging lexical gaps be-
+  Linguistics.                                                 tween queries and questions on large online q&a
+                                                               collections with compact translation models. In
+Gao Cong, Long Wang, Chin-Yew Lin, Young-In Song,
+                                                               EMNLP ’08: Proceedings of the Conference on Em-
+  and Yueheng Sun. 2008. Finding question-answer
+                                                               pirical Methods in Natural Language Processing,
+  pairs from online forums. In SIGIR ’08: Proceed-
+                                                               pages 410–418, Morristown, NJ, USA. Association
+  ings of the 31st annual international ACM SIGIR
+                                                               for Computational Linguistics.
+  conference on Research and development in infor-
+  mation retrieval, pages 467–474, New York, NY,             Fangtao Li, Yang Tang, Minlie Huang, and Xiaoyan
+  USA. ACM.                                                    Zhu. 2009. Answering opinion questions with
+Shilin Ding, Gao Cong, Chin-Yew Lin, and Xiaoyan               random walks on graphs. In Proceedings of the
+  Zhu. 2008. Using conditional random fields to ex-            Joint Conference of the 47th Annual Meeting of the
+  tract contexts and answers of questions from online          ACL and the 4th International Joint Conference on
+  forums. In Proceedings of ACL-08: HLT, pages                 Natural Language Processing of the AFNLP, pages
+  710–718, Columbus, Ohio, June. Association for               737–745, Suntec, Singapore, August. Association
+  Computational Linguistics.                                   for Computational Linguistics.
+
+Huizhong Duan, Yunbo Cao, Chin-Yew Lin, and Yong             Stefan Riezler, Alexander Vasserman, Ioannis
+  Yu. 2008. Searching questions by identifying ques-            Tsochantaridis, Vibhu Mittal, and Yi Liu. 2007.
+  tion topic and question focus. In Proceedings of              Statistical machine translation for query expansion
+  ACL-08: HLT, pages 156–164, Columbus, Ohio,                   in answer retrieval. In Proceedings of the 45th
+  June. Association for Computational Linguistics.              Annual Meeting of the Association of Computa-
+                                                                tional Linguistics, pages 464–471, Prague, Czech
+Donghui Feng, Erin Shaw, Jihie Kim, and Eduard H.               Republic, June. Association for Computational
+  Hovy. 2006. An intelligent discussion-bot for an-             Linguistics.
+  swering student queries in threaded discussions. In
+  Ccile Paris and Candace L. Sidner, editors, IUI,           Ruslan Salakhutdinov and Geoffrey Hinton. 2009.
+  pages 171–177. ACM.                                          Semantic hashing.    Int. J. Approx. Reasoning,
+                                                               50(7):969–978.
+G. E. Hinton and R. R. Salakhutdinov. 2006. Reduc-
+  ing the dimensionality of data with neural networks.       Lokesh Shrestha and Kathleen McKeown. 2004. De-
+  Science, 313(5786):504–507.                                  tection of question-answer pairs in email conversa-
+                                                               tions. In Proceedings of Coling 2004, pages 889–
+Georey E. Hinton. 2002. Training products of experts           895, Geneva, Switzerland, Aug 23–Aug 27. COL-
+  by minimizing contrastive divergence. Neural Com-            ING.
+  putation, 14.
+                                                             Mihai Surdeanu, Massimiliano Ciaramita, and Hugo
+Liangjie Hong and Brian D. Davison. 2009. A                    Zaragoza. 2008. Learning to rank answers on large
+  classification-based approach to question answering          online QA collections. In Proceedings of ACL-08:
+  in discussion boards. In SIGIR ’09: Proceedings              HLT, pages 719–727, Columbus, Ohio, June. Asso-
+  of the 32nd international ACM SIGIR conference on            ciation for Computational Linguistics.
+  Research and development in information retrieval,
+  pages 171–178, New York, NY, USA. ACM.                     Baoxun Wang, Bingquan Liu, Chengjie Sun, Xiao-
+                                                               long Wang, and Lin Sun. 2009. Extracting chinese
+Jizhou Huang, Ming Zhou, and Dan Yang. 2007. Ex-
+                                                               question-answer pairs from online forums. In SMC
+   tracting chatbot knowledge from online discussion
+                                                               2009: Proceedings of the IEEE International Con-
+   forums. In IJCAI’07: Proceedings of the 20th in-
+                                                               ference on Systems, Man and Cybernetics, 2009.,
+   ternational joint conference on Artifical intelligence,
+                                                               pages 1159–1164.
+   pages 423–428, San Francisco, CA, USA. Morgan
+   Kaufmann Publishers Inc.
+
+
+                                                         1238
+

@@ -1,0 +1,415 @@
+                             Don’t ‘have a clue’?
+           Unsupervised co-learning of downward-entailing operators
+                         Cristian Danescu-Niculescu-Mizil and Lillian Lee
+                         Department of Computer Science, Cornell University
+                            cristian@cs.cornell.edu, llee@cs.cornell.edu
+
+                      Abstract                                 argument of an upward-entailing operator by a su-
+                                                               perset (a more general version); in our case, the set
+    Researchers in textual entailment have
+                                                               ‘opium use’ was replaced by the superset ‘narcotic
+    begun to consider inferences involving
+                                                               use’.
+    downward-entailing operators, an inter-
+                                                                 Downward-entailing (DE) (also known as
+    esting and important class of lexical items
+                                                               downward monotonic or monotone decreasing)
+    that change the way inferences are made.
+                                                               operators violate this default inference rule: with
+    Recent work proposed a method for learn-
+                                                               DE operators, reasoning instead goes from “sets to
+    ing English downward-entailing operators
+                                                               subsets”. An example is the word ‘bans’:
+    that requires access to a high-quality col-
+    lection of negative polarity items (NPIs).                       ‘The law bans opium use’
+    However, English is one of the very few                          6⇒ (⇐)
+    languages for which such a list exists. We                       ‘The law bans narcotic use’.
+    propose the first approach that can be ap-
+    plied to the many languages for which                 Although DE behavior represents an exception to
+    there is no pre-existing high-precision               the default, DE operators are as a class rather com-
+    database of NPIs. As a case study, we                 mon. They are also quite diverse in sense and
+    apply our method to Romanian and show                 even part of speech. Some are simple negations,
+    that our method yields good results. Also,            such as ‘not’, but some other English DE opera-
+    we perform a cross-linguistic analysis that           tors are ‘without’, ‘reluctant to’, ‘to doubt’, and
+    suggests interesting connections to some              ‘to allow’.1 This variety makes them hard to ex-
+    findings in linguistic typology.                      tract automatically.
+                                                             Because DE operators violate the default “sets
+1 Introduction                                            to supersets” inference, identifying them can po-
+  Cristi: “Nicio” ... is that adjective you’ve mentioned. tentially improve performance in many NLP tasks.
+  Anca: A negative pronominal adjective.                  Perhaps the most obvious such tasks are those in-
+  Cristi: You mean there are people who analyze that      volving textual entailment, such as question an-
+          kind of thing?                                  swering, information extraction, summarization,
+  Anca: The Romanian Academy.
+  Cristi: They’re crazy.
+                                                          and the evaluation of machine translation [4]. Re-
+                 —From the movie Police, adjective        searchers are in fact beginning to build textual-
+                                                          entailment systems that can handle inferences in-
+   Downward-entailing operators are an interest-          volving downward-entailing operators other than
+ing and varied class of lexical items that change         simple negations, although these systems almost
+the default way of dealing with certain types of          all rely on small handcrafted lists of DE operators
+inferences. They thus play an important role in           [1–3, 15, 16].2 Other application areas are natural-
+understanding natural language [6, 18–20, etc.].          language generation and human-computer interac-
+   We explain what downward entailing means by            tion, since downward-entailing inferences induce
+first demonstrating the “default” behavior, which
+                                                              1
+is upward entailing. The word ‘observed’ is an                  Some examples showing different constructions for ana-
+                                                          lyzing these operators: ‘The defendant does not own a blue
+example upward-entailing operator: the statement
+                                                               car’ 6⇒ (⇐) ‘The defendant does not own a car’; ‘They are
+  (i) ‘Witnesses observed opium use.’                          reluctant to tango’ 6⇒ (⇐) ‘They are reluctant to dance’;
+                                                               ‘Police doubt Smith threatened Jones’ 6⇒ (⇐) ‘Police doubt
+implies                                                        Smith threatened Jones or Brown’; ‘You are allowed to use
+ (ii) ‘Witnesses observed narcotic use.’                       Mastercard’ 6⇒ (⇐) ‘You are allowed to use any credit card’.
+                                                                   2
+                                                                     The exception [2] employs the list automatically derived
+but not vice versa (we write i ⇒ ( 6⇐) ii). That               by Danescu-Niculescu-Mizil, Lee, and Ducott [5], described
+is, the truth value is preserved if we replace the             later.
+
+
+                                                         247
+                        Proceedings of the ACL 2010 Conference Short Papers, pages 247–252,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+greater cognitive load than inferences in the oppo-                  poses, pseudo-NPIs suffice. Also, our prelim-
+site direction [8].                                                  inary work determined that one of the most fa-
+   Most NLP systems for the applications men-                        mous co-learning algorithms, hubs and authorities
+tioned above have only been deployed for a small                     or HITS [11], is poorly suited to our problem.4
+subset of languages. A key factor is the lack
+of relevant resources for other languages. While                     Contributions To begin with, we apply our al-
+                                                                     gorithm to produce the first large list of DE opera-
+one approach would be to separately develop a
+                                                                     tors for a language other than English. In our case
+method to acquire such resources for each lan-
+                                                                     study on Romanian (§4), we achieve quite high
+guage individually, we instead aim to ameliorate
+the resource-scarcity problem in the case of DE                      precisions at k (for example, iteration achieves a
+operators wholesale: we propose a single unsuper-                    precision at 30 of 87%).
+vised method that can extract DE operators in any                       Auxiliary experiments explore the effects of us-
+language for which raw text corpora exist.                           ing a large but noisy NPI list, should one be avail-
+                                                                     able for the language in question. Intriguingly, we
+Overview of our work Our approach takes the                          find that co-learning new pseudo-NPIs provides
+English-centric work of Danescu-Niculescu-Mizil                      better results.
+et al. [5] — DLD09 for short — as a starting point,                     Finally (§5), we engage in some cross-linguistic
+as they present the first and, until now, only al-                   analysis based on the results of applying our al-
+gorithm for automatically extracting DE operators                    gorithm to English. We find that there are some
+from data. However, our work departs signifi-                        suggestive connections with findings in linguistic
+cantly from DLD09 in the following key respect.                      typology.
+   DLD09 critically depends on access to a high-
+quality, carefully curated collection of negative                    Appendix available A more complete account
+polarity items (NPIs) — lexical items such as                        of our work and its implications can be found in a
+‘any’, ‘ever’, or the idiom ‘have a clue’ that tend                  version of this paper containing appendices, avail-
+to occur only in negative environments (see §2                       able at www.cs.cornell.edu/˜cristian/acl2010/.
+for more details). DLD09 use NPIs as signals of
+                                                                     2    DLD09: successes and challenges
+the occurrence of downward-entailing operators.
+However, almost every language other than En-                        In this section, we briefly summarize those aspects
+glish lacks a high-quality accessible NPI list.                      of the DLD09 method that are important to under-
+   To circumvent this problem, we introduce a                        standing how our new co-learning method works.
+knowledge-lean co-learning approach. Our al-
+gorithm is initialized with a very small seed set                    DE operators and NPIs Acquiring DE opera-
+of NPIs (which we describe how to generate), and                     tors is challenging because of the complete lack of
+then iterates between (a) discovering a set of DE                    annotated data. DLD09’s insight was to make use
+operators using a collection of pseudo-NPIs — a                      of negative polarity items (NPIs), which are words
+concept we introduce — and (b) using the newly-                      or phrases that tend to occur only in negative con-
+acquired DE operators to detect new pseudo-NPIs.                     texts. The reason they did so is that Ladusaw’s hy-
+                                                                     pothesis [7, 13] asserts that NPIs only occur within
+Why this isn’t obvious Although the algorith-                        the scope of DE operators. Figure 1 depicts exam-
+mic idea sketched above seems quite simple, it is                    ples involving the English NPIs ‘any’5 and ‘have
+important to note that prior experiments in that                     a clue’ (in the idiomatic sense) that illustrate this
+direction have not proved fruitful. Preliminary                      relationship. Some other English NPIs are ‘ever’,
+work on learning (German) NPIs using a small                         ‘yet’ and ‘give a damn’.
+list of simple known DE operators did not yield                         Thus, NPIs can be treated as clues that a DE
+strong results [14]. Hoeksema [10] discusses why                     operator might be present (although DE operators
+NPIs might be hard to learn from data.3 We cir-                      may also occur without NPIs).
+cumvent this problem because we are not inter-
+                                                                         4
+ested in learning NPIs per se; rather, for our pur-                        We explored three different edge-weighting schemes
+                                                                     based on co-occurrence frequencies and seed-set member-
+   3
+     In fact, humans can have trouble agreeing on NPI-hood;          ship, but the results were extremely poor; HITS invariably
+for instance, Lichte and Soehn [14] mention doubts about             retrieved very frequent words.
+                                                                         5
+over half of Kürschner [12]’s 344 manually collected German               The free-choice sense of ‘any’, as in ‘I can skim any pa-
+NPIs.                                                                per in five minutes’, is a known exception.
+
+
+                                                               248
+
+
+                                                                NPIs
+                   DE operators                   any 3                         have a clue, idiomatic sense
+                     not or n’t       X We do n’t have any apples               X We do n’t have a clue
+                         doubt        XI doubt they have any apples             X I doubt they have a clue
+                  no DE operator      × They have any apples                    × They have a clue
+
+Figure 1: Examples consistent with Ladusaw’s hypothesis that NPIs can only occur within the scope of
+DE operators. A X denotes an acceptable sentence; a × denotes an unacceptable sentence.
+
+
+DLD09 algorithm Potential DE operators are                            database is not available, using Romanian as a
+collected by extracting those words that appear in                    case study.
+an NPI’s context at least once.6 Then, the potential
+DE operators x are ranked by                                          3.1   Data and evaluation paradigm
+
+               fraction of NPI contexts that contain x                We used Rada Mihalcea’s corpus of ≈1.45 million
+    f (x) :=                                           ,              sentences of raw Romanian newswire articles.
+                relative frequency of x in the corpus
+                                                                         Note that we cannot evaluate impact on textual
+which compares x’s probability of occurrence                          inference because, to our knowledge, no publicly
+conditioned on the appearance of an NPI with its                      available textual-entailment system or evaluation
+probability of occurrence overall.7                                   data for Romanian exists. We therefore examine
+   The method just outlined requires access to a                      the system outputs directly to determine whether
+list of NPIs. DLD09’s system used a subset of                         the top-ranked items are actually DE operators or
+John Lawler’s carefully curated and “moderately                       not. Our evaluation metric is precision at k of a
+complete” list of English NPIs.8 The resultant                        given system’s ranked list of candidate DE oper-
+rankings of candidate English DE operators were                       ators; it is not possible to evaluate recall since no
+judged to be of high quality.                                         list of Romanian DE operators exists (a problem
+The challenge in porting to other languages:                          that is precisely the motivation for this paper).
+cluelessness Can the unsupervised approach of                            To evaluate the results, two native Romanian
+DLD09 be successfully applied to languages other                      speakers labeled the system outputs as being
+than English? Unfortunately, for most other lan-                      “DE”, “not DE” or “Hard (to decide)”. The la-
+guages, it does not seem that large, high-quality                     beling protocol, which was somewhat complex
+NPI lists are available.                                              to prevent bias, is described in the externally-
+                                                                      available appendices (§7.1). The complete system
+   One might wonder whether one can circumvent
+                                                                      output and annotations are publicly available at:
+the NPI-acquisition problem by simply translating
+                                                                      http://www.cs.cornell.edu/˜cristian/acl2010/.
+a known English NPI list into the target language.
+However, NPI-hood need not be preserved under                         3.2   Generating a seed set
+translation [17]. Thus, for most languages, we
+                                                                      Even though, as discussed above, the translation
+lack the critical clues that DLD09 depends on.
+                                                                      of an NPI need not be an NPI, a preliminary re-
+3    Getting a clue                                                   view of the literature indicates that in many lan-
+                                                                      guages, there is some NPI that can be translated
+In this section, we develop an iterative co-                          as ‘any’ or related forms like ‘anybody’. Thus,
+learning algorithm that can extract DE operators                      with a small amount of effort, one can form a min-
+in the many languages where a high-quality NPI                        imal NPI seed set for the DLD09 method by us-
+    6
+                                                                      ing an appropriate target-language translation of
+      DLD09 policies: (a) “NPI context” was defined as the
+                                                                      ‘any’. For Romanian, we used ‘vreo’ and ‘vreun’,
+part of the sentence to the left of the NPI up to the first
+comma, semi-colon or beginning of sentence; (b) to encour-            which are the feminine and masculine translations
+age the discovery of new DE operators, those sentences con-           of English ‘any’.
+taining one of a list of 10 well-known DE operators were dis-
+carded. For Romanian, we treated only negations (‘nu’ and             3.3   DLD09 using the Romanian seed set
+‘n-’) and questions as well-known environments.
+    7
+      DLD09 used an additional distilled score, but we found
+                                                                      We first check whether DLD09 with the two-
+that the distilled score performed worse on Romanian.                 item seed set described in §3.2 performs well on
+    8
+      http://www-personal.umich.edu/∼jlawler/aue/npi.html             Romanian. In fact, the results are fairly poor:
+
+
+                                                                249
+
+
+                            40                                                                                      100
+                                                                                                                                                                      DE
+                                                                      k=80                                           90                                               Hard
+                            35
+                                                                      k=50
+                                                                                                                     80
+                            30
+                                                                          k=40
+                                                                                                                     70
+   Number of DE−operators
+
+
+
+
+                                                                                            Precision at k (in %)
+                            25
+                                                                                                                     60
+                                                                      k=30
+                            20                                                                                       50
+
+                                                                      k=20                                           40
+                            15
+
+                                                                                                                     30
+                            10                                        k=10
+                                                                                                                     20
+
+                             5
+                                                                                                                     10
+
+                             0                                                                                        0
+                                 0          5               9   10   15                                                   10   20   30   40       50   60   70   80
+                                                Iteration                                                                                     k
+
+
+
+
+Figure 2: Left: Number of DE operators in the top k results returned by the co-learning method at each iteration.
+Items labeled “Hard” are not included. Iteration 0 corresponds to DLD09 applied to {‘vreo’, ‘vreun’}. Curves for
+k = 60 and 70 omitted for clarity. Right: Precisions at k for the results of the 9th iteration. The bar divisions are:
+DE (blue/darkest/largest) and Hard (red/lighter, sometimes non-existent).
+
+
+for example, the precision at 30 is below 50%.                                         the right of a DE operator, up to the first comma,
+(See blue/dark bars in figure 3 in the externally-                                     semi-colon or end of sentence); these candidates x
+available appendices for detailed results.)                                            are then ranked by
+   This relatively unsatisfactory performance may                                                                         fraction of DE contexts that contain x
+be a consequence of the very small size of the NPI                                         fr (x) :=                                                             .
+                                                                                                                           relative frequency of x in the corpus
+list employed, and may therefore indicate that it                                         Then, our co-learning algorithm consists of the
+would be fruitful to investigate automatically ex-                                     iteration of the following two steps:
+tending our list of clues.
+                                                                                           • (DE learning) Apply DLD09 using a set N
+3.4                              Main idea: a co-learning approach
+                                                                                             of pseudo-NPIs to retrieve a list of candidate
+Our main insight is that not only can NPIs be used                                           DE operators ranked by f (defined in Section
+as clues for finding DE operators, as shown by                                               2). Let D be the top n candidates in this list.
+DLD09, but conversely, DE operators (if known)
+can potentially be used to discover new NPI-like                                           • (pNPI learning) Apply rDLD using the set D
+clues, which we refer to as pseudo-NPIs (or pNPIs                                            to retrieve a list of pNPIs ranked by fr ; ex-
+for short). By “NPI-like” we mean, “serve as pos-                                            tend N with the top nr pNPIs in this list. In-
+sible indicators of the presence of DE operators,                                            crement n.
+regardless of whether they are actually restricted
+to negative contexts, as true NPIs are”. For exam-                                     Here, N is initialized with the NPI seed set. At
+ple, in English newswire, the words ‘allegation’ or                                    each iteration, we consider the output of the al-
+‘rumor’ tend to occur mainly in DE contexts, like                                      gorithm to be the ranked list of DE operators re-
+‘ denied ’ or ‘ dismissed ’, even though they are                                      trieved in the DE-learning step. In our experi-
+clearly not true NPIs (the sentence ‘I heard a ru-                                     ments, we initialized n to 10 and set nr to 1.
+mor’ is fine). Given this insight, we approach the
+                                                                                       4    Romanian results
+problem using an iterative co-learning paradigm
+that integrates the search for new DE operators                                        Our results show that there is indeed favorable
+with a search for new pNPIs.                                                           synergy between DE-operator and pNPI retrieval.
+   First, we describe an algorithm that is the “re-                                    Figure 2 plots the number of correctly retrieved
+verse” of DLD09 (henceforth rDLD), in that it re-                                      DE operators in the top k outputs at each iteration.
+trieves and ranks pNPIs assuming a given list of                                       The point at iteration 0 corresponds to a datapoint
+DE operators. Potential pNPIs are collected by ex-                                     already discussed above, namely, DLD09 applied
+tracting those words that appear in a DE context                                       to the two ‘any’-translation NPIs. Clearly, we see
+(defined here, to avoid the problems of parsing or                                     general substantial improvement over DLD09, al-
+scope determination, as the part of the sentence to                                    though the increases level off in later iterations.
+
+
+                                                                                 250
+
+
+(Determining how to choose the optimal number                     its own. In the other languages (including Roma-
+of iterations is a subject for future research.)                  nian),10 no indirect pronoun can serve as a suffi-
+   Additional experiments, described in the                       cient seed. So, we expect our method to be vi-
+externally-available appendices (§7.2), suggest                   able for all languages; while the iterative discov-
+that pNPIs can even be more effective clues than                  ery of pNPIs is not necessary (although neither is
+a noisy list of NPIs. (Thus, a larger seed set                    it harmful) for the subset of languages for which a
+does not necessarily mean better performance.)                    sufficient seed exists, such as English, it is essen-
+pNPIs also have the advantage of being derivable                  tial for the languages for which, like Romanian,
+automatically, and might be worth investigating                   ‘any’-equivalents do not suffice.
+from a linguistic perspective in their own right.
+                                                                  Using translation Another interesting question
+                                                                  is whether directly translating DE operators from
+5   Cross-linguistic analysis
+                                                                  English is an alternative to our method. First, we
+Applying our algorithm to English: connec-                        emphasize that there exists no complete list of En-
+tions to linguistic typology So far, we have                      glish DE operators (the largest available collec-
+made no assumptions about the language on which                   tion is the one extracted by DLD09). Second, we
+our algorithm is applied. A valid question is, does               do not know whether DE operators in one lan-
+the quality of the results vary with choice of appli-             guage translate into DE operators in another lan-
+cation language? In particular, what happens if we                guage. Even if that were the case, and we some-
+run our algorithm on English?                                     how had access to ideal translations of DLD09’s
+   Note that in some sense, this is a perverse ques-              list, there would still be considerable value in us-
+tion: the motivation behind our algorithm is the                  ing our method: 14 (39%) of our top 36 highest-
+non-existence of a high-quality list of NPIs for                  ranked Romanian DE operators for iteration 9 do
+the language in question, and English is essen-                   not, according to the Romanian-speaking author,
+tially the only case that does not fit this descrip-              have English equivalents appearing on DLD09’s
+tion. On the other hand, the fact that DLD09 ap-                  90-item list. Some examples are: ‘abţinut’ (ab-
+plied their method for extraction of DE operators                 stained), ‘criticat’ (criticized) and ‘reacţionat’ (re-
+to English necessitates some form of comparison,                  acted). Therefore, a significant fraction of the
+for the sake of experimental completeness.                        DE operators derived by our co-learning algorithm
+   We thus ran our algorithm on the English                       would have been missed by the translation alterna-
+BLLIP newswire corpus with seed set {‘any’} .                     tive even under ideal conditions.
+We observe that, surprisingly, the iterative addi-
+tion of pNPIs has very little effect: the precisions              6        Conclusions
+at k are good at the beginning and stay about the                 We have introduced the first method for discov-
+same across iterations (for details see figure 5 in               ering downward-entailing operators that is univer-
+in the externally-available appendices). Thus, on                 sally applicable. Previous work on automatically
+English, co-learning does not hurt performance,                   detecting DE operators assumed the existence of
+which is good news; but unlike in Romanian, it                    a high-quality collection of NPIs, which renders it
+does not lead to improvements.                                    inapplicable in most languages, where such a re-
+   Why is English ‘any’ seemingly so “powerful”,                  source does not exist. We overcome this limita-
+in contrast to Romanian, where iterating beyond                   tion by employing a novel co-learning approach,
+the initial ‘any’ translations leads to better re-                and demonstrate its effectiveness on Romanian.
+sults? Interestingly, findings from linguistic typol-                Also, we introduce the concept of pseudo-NPIs.
+ogy may shed some light on this issue. Haspel-                    Auxiliary experiments described in the externally-
+math [9] compares the functions of indefinite pro-                available appendices show that pNPIs are actually
+nouns in 40 languages. He shows that English is                   more effective seeds than a noisy “true” NPI list.
+one of the minority of languages (11 out of 40)9 in                  Finally, we noted some cross-linguistic differ-
+which there exists an indefinite pronoun series that              ences in performance, and found an interesting
+occurs in all (Haspelmath’s) classes of DE con-                   connection between these differences and Haspel-
+texts, and thus can constitute a sufficient seed on               math’s [9] characterization of cross-linguistic vari-
+   9
+                                                                  ation in the occurrence of indefinite pronouns.
+     English, Ancash Quechua, Basque, Catalan, French,
+                                                                      10
+Hindi/Urdu, Irish, Portuguese, Swahili, Swedish, Turkish.                  Examples: Chinese, German, Italian, Polish, Serbian.
+
+
+                                                            251
+
+
+Acknowledgments We thank Tudor Marian for                 [9] Martin Haspelmath. Indefinite Pronouns.
+serving as an annotator, Rada Mihalcea for ac-                Oxford University Press, 2001.
+cess to the Romanian newswire corpus, and Claire          [10] Jack Hoeksema. Corpus study of negative
+Cardie, Yejin Choi, Effi Georgala, Mark Liber-                 polarity items. IV-V Jornades de corpus lin-
+man, Myle Ott, João Paula Muchado, Stephen Pur-               guistics 1996-1997, 1997. http://odur.let.rug.
+pura, Mark Yatskar, Ainur Yessenalina, and the                 nl/∼hoeksema/docs/barcelona.html.
+anonymous reviewers for their helpful comments.
+                                                          [11] Jon Kleinberg. Authoritative sources in a hy-
+Supported by NSF grant IIS-0910664.
+                                                               perlinked environment. In Proceedings of
+References                                                     the 9th ACM-SIAM Symposium on Discrete
+                                                               Algorithms (SODA), pages 668–677, 1998.
+[1] Roy Bar-Haim, Jonathan Berant, Ido Da-                     Extended version in Journal of the ACM,
+    gan, Iddo Greental, Shachar Mirkin, Eyal                   46:604–632, 1999.
+    Shnarch, and Idan Szpektor. Efficient seman-
+    tic deduction and approximate matching over           [12] Wilfried Kürschner. Studien zur Negation im
+    compact parse forests. In Proceedings of the               Deutschen. Narr, 1983.
+    Text Analysis Conference (TAC), 2008.                 [13] William A. Ladusaw. Polarity Sensitivity as
+[2] Eric Breck. A simple system for detecting                  Inherent Scope Relations. Garland Press,
+    non-entailment. In Proceedings of the Text                 New York, 1980. Ph.D. thesis date 1979.
+    Analysis Conference (TAC), 2009.                      [14] Timm Lichte and Jan-Philipp Soehn. The re-
+[3] Christos Christodoulopoulos. Creating a nat-               trieval and classification of Negative Polar-
+    ural logic inference system with combinatory               ity Items using statistical profiles. In Sam
+    categorial grammar. Master’s thesis, Univer-               Featherston and Wolfgang Sternefeld, edi-
+    sity of Edinburgh, 2008.                                   tors, Roots: Linguistics in Search of its Ev-
+                                                               idential Base, pages 249–266. Mouton de
+[4] Ido Dagan, Oren Glickman, and Bernardo
+                                                               Gruyter, 2007.
+    Magnini. The PASCAL Recognising Textual
+    Entailment challenge. In Machine Learn-               [15] Bill MacCartney and Christopher D. Man-
+    ing Challenges, Evaluating Predictive Un-                  ning. Modeling semantic containment and
+    certainty, Visual Object Classification and                exclusion in natural language inference. In
+    Recognizing Textual Entailment, First PAS-                 Proceedings of COLING, pages 521–528,
+    CAL Machine Learning Challenges Work-                      2008.
+    shop, pages 177–190. Springer, 2006.                  [16] Rowan Nairn, Cleo Condoravdi, and Lauri
+[5] Cristian Danescu-Niculescu-Mizil, Lillian                  Karttunen. Computing relative polarity for
+    Lee, and Richard Ducott. Without a ‘doubt’?                textual inference. In Proceedings of In-
+    Unsupervised discovery of downward-                        ference in Computational Semantics (ICoS),
+    entailing operators.    In Proceedings of                  2006.
+    NAACL HLT, 2009.                                      [17] Frank Richter, Janina Radó, and Manfred
+[6] David Dowty. The role of negative polar-                   Sailer. Negative polarity items: Corpus
+    ity and concord marking in natural language                linguistics, semantics, and psycholinguis-
+    reasoning. In Mandy Harvey and Lynn San-                   tics: Day 2: Corpus linguistics. Tutorial
+    telmann, editors, Proceedings of SALT IV,                  slides: http://www.sfs.uni-tuebingen.de/∼fr/
+    pages 114–144, 1994.                                       esslli/08/byday/day2/day2-part1.pdf, 2008.
+[7] Gilles Fauconnier. Polarity and the scale             [18] Vı́ctor Sánchez Valencia. Studies on natural
+    principle. In Proceedings of the Chicago Lin-              logic and categorial grammar. PhD thesis,
+    guistic Society (CLS), pages 188–199, 1975.                University of Amsterdam, 1991.
+    Reprinted in Javier Gutierrez-Rexach (ed.),           [19] Johan van Benthem. Essays in Logical Se-
+    Semantics: Critical Concepts in Linguistics,               mantics. Reidel, Dordrecht, 1986.
+    2003.
+                                                          [20] Ton van der Wouden. Negative contexts:
+[8] Bart Geurts and Frans van der Slik. Mono-                  Collocation, polarity and multiple negation.
+    tonicity and processing load. Journal of Se-               Routledge, 1997.
+    mantics, 22(1):97–117, 2005.
+
+
+                                                    252
+

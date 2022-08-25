@@ -1,0 +1,575 @@
+        Importance-Driven Turn-Bidding for Spoken Dialogue Systems
+                              Ethan O. Selfridge and Peter A. Heeman
+                              Center for Spoken Language Understanding
+                                 Oregon Health & Science University
+                             20000 NW Walker Rd., Beaverton, OR, 97006
+
+                                 selfridg@ohsu.edu, heemanp@ohsu.edu
+
+
+                      Abstract                                 during transitions. This leads to the speaker con-
+    Current turn-taking approaches for spoken                  trolling the turn transition. For example, systems
+    dialogue systems rely on the speaker re-                   using the Keep-Or-Release approach will not at-
+    leasing the turn before the other can take it.             tempt to take the turn unless it is sure the user
+    This reliance results in restricted interac-               has released it. One problem with this approach
+    tions that can lead to inefficient dialogues.              is that the system might have important informa-
+    In this paper we present a model we re-                    tion to give but will be unable to get the turn.
+    fer to as Importance-Driven Turn-Bidding                   The speaker-centric nature of current approaches
+    that treats turn-taking as a negotiative pro-              does not enable mixed-initiative interaction and
+    cess. Each conversant bids for the turn                    results in inefficient dialogues. Primarily, these
+    based on the importance of the intended                    approaches have been motivated by smooth tran-
+    utterance, and Reinforcement Learning is                   sitions reported in the human turn-taking studies
+    used to indirectly learn this parameter. We                of Sacks et al. (1974) among others.
+    find that Importance-Driven Turn-Bidding                      Sacks et al. also acknowledge the negotiative
+    performs better than two current turn-                     nature of turn-taking, stating that the “the turn as
+    taking approaches in an artificial collabo-                unit is interactively determined”(p. 727). Other
+    rative slot-filling domain. The negotiative                studies have supported this, suggesting that hu-
+    nature of this model creates efficient dia-                mans negotiate the turn assignment through the
+    logues, and supports the improvement of                    use of cues and that these cues are motivated by
+    mixed-initiative interaction.                              the importance of what the conversant wishes to
+                                                               contribute (Duncan and Niederehe, 1974; Yang
+1   Introduction                                               and Heeman, 2010; Schegloff, 2000). Given
+As spoken dialogue systems are designed to                     this, any dialogue system hoping to interact with
+perform ever more elaborate tasks, the need                    humans efficiently and naturally should have a
+for mixed-initiative interaction necessarily grows.            negotiative and importance-driven quality to its
+Mixed-initiative interaction, where agents (both               turn-taking protocol. We believe that, by focus-
+artificial and human) may freely contribute to                 ing on the rationale of human turn-taking be-
+reach a solution efficiently, has long been a focus            havior, a more effective turn-taking system may
+of dialogue systems research (Allen et al., 1999;              be achieved. We propose the Importance-Driven
+Guinn, 1996). Simple slot-filling tasks might                  Turn-Bidding (IDTB) model where conversants
+not require the flexible environment that mixed-               bid for the turn based on the importance of their
+initiative interaction brings but those of greater             utterance. We use Reinforcement Learning to map
+complexity, such as collaborative task comple-                 a given situation to the optimal utterance and bid-
+tion or long-term planning, certainly do (Fergu-               ding behavior. By allowing conversants to bid for
+son et al., 1996). However, translating this interac-          the turn, the IDTB model enables negotiative turn-
+tion into working systems has proved problematic               taking and supports true mixed-initiative interac-
+(Walker et al., 1997), in part to issues surround-             tion, and with it, greater dialogue efficiency.
+ing turn-taking: the transition from one speaker to               We compare the IDTB model to current turn-
+another.                                                       taking approaches. Using an artificial collab-
+   Many computational turn-taking approaches                   orative dialogue task, we show that the IDTB
+seek to minimize silence and utterance overlap                 model enables the system and user to complete
+
+
+                                                         177
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 177–185,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+the task more efficiently than the other approaches.          the turn to necessarily transition to the listener af-
+Though artificial dialogues are not ideal, they al-           ter the speaker releases it. The possibility that the
+low us to test the validity of the IDTB model be-             dialogue may be better served if the listener does
+fore embarking on costly and time-consuming hu-               not get the turn is not addressed by current ap-
+man studies. Since our primary evaluation criteria            proaches.
+is model comparison, consistent user simulations                 Barge-in, which generally refers to allowing
+provide a constant needed for such measures and               users to speak at any time (Ström and Seneff,
+increase the external validity of our results.                2000), has been the primary means to create a
+                                                              more flexible turn-taking environment. Yet, since
+2   Current Turn-Taking Approaches                            barge-in recasts speaker-centric systems as user-
+                                                              centric, the system’s contributions continue to be
+Current dialogue systems focus on the release-turn            limited. System barge-in has also been investi-
+as the most important aspect of turn-taking, in               gated. Sato et al. (2002) used decision trees to de-
+which a listener will only take the turn after the            termine whether the system should take the turn or
+speaker has released it. The simplest of these ap-            not when the user pauses. An incremental method
+proaches only allows a single utterance per turn,             by DeVault, Sagae, and Traum (2009) found pos-
+after which the turn necessarily transitions to the           sible points that a system could interrupt without
+next speaker. This Single-Utterance (SU) model                loss of user meaning, but failed to supply a rea-
+has been extended to allow the speaker to keep the            sonable model as to when to use such information.
+turn for multiple utterances: the Keep-Or-Release             Despite these advances, barge-in capable systems
+(KR) approach. Since the KR approach gives the                lack a negotiative turn-taking method, and con-
+speaker sole control of the turn, it is overwhelm-            tinue to be deficient for reasons similar to those
+ingly speaker-centric, and so necessarily unnego-             described above.
+tiative. This restriction is meant to encourage
+smooth turn-transitions, and is inspired by the or-           3   Importance-Driven Turn-Bidding
+der, smoothness, and predictability reported in hu-               (IDTB)
+man turn-taking studies (Duncan, 1972; Sacks et
+al., 1974).                                                   We introduce the IDTB model to overcome the de-
+   Systems using the KR approach differ on how                ficiencies of current approaches. The IDTB model
+they detect the user’s release-turn. Turn releases            has two foundational components: (1) The impor-
+are commonly identified in two ways: either us-               tance of speaking is the primary motivation behind
+ing a silence-threshold (Sutton et al., 1996), or             turn-taking behavior, and (2) conversants use turn-
+the predictive nature of turn endings (Sacks et al.,          cue strength to bid for the turn based on this impor-
+1974) and the cues associated with them (e.g. Gra-            tance. Importance may be broadly defined as how
+vano and Hirschberg, 2009). Raux and Eskenazi                 well the utterance leads to some predetermined
+(2009) used decision theory with lexical cues to              conversational success, be it solely task comple-
+predict appropriate places to take the turn. Simi-            tion or encompassing a myriad of social etiquette
+larly, Jonsdottir, Thorisson, and Nivel (2008) used           components.
+Reinforcement Learning to reduce silences be-                    Importance-Driven Turn-Bidding is motivated
+tween turns and minimize overlap between utter-               by empirical studies of human turn-conflict res-
+ances by learning the specific turn-taking patterns           olution. Yang and Heeman (2010) found an in-
+of individual speakers. Skantze and Schlangan                 crease of turn conflicts during tighter time con-
+(2009) used incremental processing of speech and              straints, which suggests that turn-taking is in-
+prosodic turn-cues to reduce the reaction time of             fluenced by the importance of task completion.
+the system, finding that that users rated this ap-            Schlegoff (2000) proposed that persistent utter-
+proach as more human-like than a baseline system.             ance overlap was indicative of conversants hav-
+   In our view, systems built using the KR turn-              ing a strong interest in holding the turn. Walker
+taking approach suffer from two deficits. First,              and Whittaker (1990) show that people will inter-
+the speaker-centricity leads to inefficient dialogues         rupt to remedy some understanding discrepancy,
+since the speaker may continue to hold the turn               which is certainly important to the conversation’s
+even when the listener has vital information to               success. People communicate the importance of
+give. In addition, the lack of negotiation forces             their utterance through turn-cues. Duncan and
+
+
+                                                        178
+
+
+Niederehe (1974) found that turn-cue strength was                       alogue policies since the learning algorithm may
+the best predictor of who won the turn, and this                        capture environmental dynamics that are unat-
+finding is consistent with the use of volume to win                     tended to by human designers (Levin et al., 2000).
+turns found by Yang and Heeman (2010).                                     Reinforcement Learning learns an optimal pol-
+   The IDTB model uses turn-cue strength to bid                         icy, a mapping between a state s and action a,
+for the turn based on the importance of the utter-                      where performing a in s leads to the lowest ex-
+ance. Stronger turn-cues should be used when the                        pected cost for the dialogue (we use minimum
+intended utterance is important to the overall suc-                     cost instead of maximum reward). An -greedy
+cess of the dialogue, and weaker ones when it is                        search is used to estimate Q-scores, the expected
+not. In the prototype described in Section 5, both                      cost of some state–action pair, where the system
+the system and user agents bid for the turn after ev-                   chooses a random action with  probability and the
+ery utterance and the bids are conceptualized here                      argmina Q(s, a) action with 1- probability. For
+as utterance onset: conversants should be quick                         Q-learning, a popular RL algorithm and the one
+to speak important utterances but slow with less                        used here,  is commonly set at 0.2 (Sutton and
+important ones. This is relatively consistent with                      Barto, 1998). Q-learning updates Q(s, a) based
+Yang and Heeman (2010). A mature version of                             on the best action of the next state, given by the
+our work will use cues in addition to utterance on-                     followingp equation, with the step size parameter
+set, such as those recently detailed in Gravano and                     α = 1/ N (s, a) where N (s, a) is the number of
+Hirshberg (2009).1                                                      times the s, a pair has been seen since the begin-
+   A crucial element of our model is the judgment                       ning of training.
+and quantization of utterance importance. We use                                Q(st , at ) = Q(st , at ) + α[costt+1
+Reinforcement Learning (RL) to determine impor-                                 + argmina Q(st+1 , a) − Q(st , at )]
+tance by conceptualizing it as maximizing the re-                          The state space should be formulated as a
+ward over an entire dialogue. Whatever actions                          Markov Decision Process (MDP) for Q-learning
+lead to a higher return may be thought of as more                       to update Q-scores properly. An MDP relies on
+important than ones that do not.2 By using RL to                        a first-order Markov assumption in that the transi-
+learn both the utterance and bid behavior, the sys-                     tion and reward probability from some st , at pair
+tem can find an optimal pairing between them, and                       is completely contained by that pair and is unaf-
+choose the best combination for a given conversa-                       fected by the history st−1 at−1 , st−2 at−2 , . . .. For
+tional situation.                                                       this assumption to be met, care is required when
+                                                                        deciding which features to include for learning.
+4    Information State Update and                                       The RL State features we use are described in the
+     Reinforcement Learning                                             following section.
+We build our dialogue system using the Informa-                         5     Domain and Turn-Taking Models
+tion State Update approach (Larsson and Traum,
+2000) and use Reinforcement Learning for action                         In this section, we show how the IDTB ap-
+selection (Sutton and Barto, 1998). The system                          proach can be implemented for a collaborative
+architecture consists of an Information State (IS)                      slot filling domain. We also describe the Single-
+that represents the agent’s knowledge and is up-                        Utterance and Keep-Or-Release domain imple-
+dated using a variety of rules. The IS also uses                        mentations that we use for comparison.
+rules to propose possible actions. A condensed
+and compressed subset of the IS — the Reinforce-                        5.1    Domain Task
+ment Learning State — is used to learn which pro-                       We use a food ordering domain with two partici-
+posed action to take (Heeman, 2007). It has been                        pants, the system and a user, and three slots: drink,
+shown that using RL to learn dialogue polices is                        burger, and side. The system’s objective is to fill
+generally more effective than “hand crafted” di-                        all three slots with the available fillers as quickly
+    1
+      Our work (present and future) is distinct from some re-           as possible. The user’s role is to specify its de-
+cent work on user pauses (Sato et al., 2002) since we treat             sired filler for each slot, though that specific filler
+turn-taking as an integral piece of dialogue success.                   may not be available. The user simulation, while
+    2
+      We gain an inherent flexibility in using RL since the re-
+ward can be computed by a wide array of components. This                intended to be realistic, is not based on empirical
+is consistent with the broad definition of importance.                  data. Rather, it is designed to provide a rich turn-
+
+
+                                                                  179
+
+
+taking domain to evaluate the performance of dif-                       three inform available slot fillers actions, which
+ferent turn-taking designs. We consider this a col-                     lists the available fillers for that slot and is pro-
+laborative slot-filling task since both conversants                     posed if that specific slot is unfilled or filled with
+must supply information to determine the intersec-                      an unavailable filler; and bye, which is always pro-
+tion of available and desired fillers.                                  posed.
+   Users have two fillers for each slot.3 A user’s                          The user has two actions. They can inform the
+top choice is either available, in which case we say                    system of a desired slot filler, inform slot filler, or
+that the user has adequate filler knowledge, or their                   query the availability of a slot’s top filler, query
+second choice will be available, in which we say                        filler availability. A user will always respond with
+it has inadequate filler knowledge. This assures                        the same slot as a system query, but may change
+that at least one of the user’s filler is available.                    slots entirely for all other situations. Additional
+Whether a user has adequate or inadequate filler                        details on user action selection are given in Section
+knowledge is probabilistically determined based                         5.2.
+on user type, which will be described in Section                            Specific information is used to produce an in-
+5.2.                                                                    stantiated speech action, what we refer to as an
+                                                                        utterance. For example, the speech action inform
+           Table 1: Agent speech acts                                   slot filler results in the utterance of ”inform drink
+     Agent    Actions                                                   d1.” A sample dialogue fragment using the Single-
+     System query slot, inform [yes/no],                                Utterance approach is shown in Table 2. Notice
+              inform avail. slot fillers,                               that in Line 3 the system informs the user that
+              inform filler not available, bye                          their first filler, d1, is unavailable. The user then
+     User     inform slot filler,                                       asks asks about the availability of its second drink
+              query filler availability                                 choice, d2 (Line 4), and upon receiving an affirma-
+                                                                        tive response (Line 5), informs the system of that
+                                                                        filler preference (Line 6).
+    We model conversations at the speech act level,
+shown in Table 1, and so do not model the actual
+words that the user and system might say. Each                                   Table 2: Single-Utterance dialogue
+agent has an Information State that proposes possi-                       Spkr     Speech Action         Utterance
+ble actions. The IS is made up of a number of vari-                       1 S:     q. slot               q. drink
+ables that model the environment and is slightly                          2 U:     i. slot filler        i. drink d1
+different for the system and the user. Shared vari-                       3 S:     i. filler not avail   i. not have d1
+ables include QUD, a stack which manages the                              4 U:     q. filler avail       q. drink have d2
+questions under discussion; lastUtterance, the pre-                       5 S:     i. slot               i. yes
+vious utterance, and slotList, a list of the slot                         6 U:     i. slot filler        i. drink d2
+names. The major system specific IS variables                             7 S:     i. avail slot fillers i. burger have b1
+that are not included in the RL State are availSlot-
+Fillers, the available fillers for each slot; and three                 Implementation in RL: The system uses RL to
+slotFiller variables that hold the fillers given by the                 learn which of the IS proposed actions to take. In
+user. The major user specific IS variables are three                    this domain we use a cost function based on dia-
+desiredSlotFiller variables that hold an ordered list                   logue length and the number of slots filled with an
+of fillers, and unvisitedSlots, a list of slots that the                available filler: C = Number of Utterances + 25 ·
+user believes are unfilled.                                             unavailablyFilledSlots. In the present implemen-
+    The system has a variety of speech actions: in-                     tation the system’s bye utterance is costless. The
+form [yes/no], to answer when the user has asked a                      system chooses the action that minimizes the ex-
+filler availability question; inform filler not avail-                  pected cost of the entire dialogue from the current
+able, to inform the user when they have specified                       state.
+an unavailable filler; three query slot actions (one                       The RL state for the speaker has seven vari-
+for each slot), a query which asks the user for a                       ables:4 QUD-speaker, the stack of speakers who
+filler and is proposed if that specific slot is unfilled;               have unresolved questions; Incorrect-Slot-Fillers,
+    3                                                                      4
+      We use two fillers so as to minimize the length of train-              We experimented with a variety of RL States and this one
+ing. This can be increased without substantial effort.                  proved to be both small and effective.
+
+
+                                                                  180
+
+
+a list of slot fillers (ordered chronologically on              is removed from the desired filler list and the belief
+when the user informed them) that are unavail-                  remains the same.5
+able and have not been resolved; Last-Sys-Speech-
+Action, the last speech action the system per-                  5.3    Turn-Taking Models
+formed; Given-Slot-Fillers, a list of slots that the            We now discuss how turn-taking works for the
+system has performed the inform available slot                  IDTB model and the two competing models that
+filler action on; and three booleans variables, slot-           we use to evaluate our approach. The system
+RL, that specify whether a slot has been filled cor-            chooses its turn action based on the RL state and
+rectly or not (e.g. Drink-RL).                                  we add a boolean variable turn-action to the RL
+                                                                State to indicate when the system is performing a
+5.2   User Types                                                turn action or a speech action. The user uses belief
+                                                                to choose its turn action.
+We define three different types of users — Experts,
+Novices, and Intermediates. User types differ                   Turn-Bidding: Agents bid for the turn at the
+probabilistically on two dimensions: slot knowl-                end of each utterance to determine who will speak
+edge, and slot belief strength. We define experts to            next. Each bid is represented as a value between 0
+have a 90 percent chance of having adequate filler              and 1, and the agent with the lower value (stronger
+knowledge, intermediates a 50 percent chance,                   bid) wins the turn. This is consistent with the
+and novices a 10 percent chance. These proba-                   use of utterance onset. There are 5 types of bids,
+bilities are independent between slots. Slot belief             highest, high, middle, low, and lowest, which are
+strength represents the user’s confidence that it has           spread over a portion of the range as shown in Fig-
+adequate domain knowledge for the slot (i.e. the                ure 1. The system uses RL to choose a bid and
+top choice for that slot is available). It is either            a random number (uniform distribution) is gener-
+a strong, warranted, or weak belief (Chu-Carroll                ated from that bid’s range. The users’ bids are de-
+and Carberry, 1995). The intuition is that experts              termined by their belief strength, which specifies
+should know when their top choice is available,                 the mean of a Gaussian distribution, as shown in
+and novices should know that they do not know                   Figure 1 (e.g Strong belief implies a µ = 0.35).
+the domain well.                                                Computing bids in this fashion leads to, on av-
+    Initial slot belief strength is dependent on user           erage, users with strong beliefs bidding highest,
+type and whether their filler knowledge is ade-                 warranted beliefs bidding in the middle, and weak
+quate (their initial top choice is available). Ex-              beliefs bidding lowest. The use of the probabil-
+perts with adequate filler knowledge have a 70,                 ity distributions allows us to randomly decide ties
+20, and 10 percent chance of having Strong, War-                between system and user bids.
+ranted, and Weak beliefs respectfully. Similarly,
+intermediates with adequate knowledge have a 50,
+25, and 25 percent chance of the respective belief
+strengths. When these user types have inadequate
+filler knowledge the probabilities are reversed to
+determine belief strength (e.g. Experts with inad-
+equate domain knowledge for a slot have a 70%
+chance of having a weak belief). Novice users al-
+ways have a 10, 10, and 80 percent chance of the
+respective belief strengths.
+    The user choses whether to use the query or
+inform speech action based on the slot’s belief
+strength. A strong belief will always result in an                 Figure 1: Bid Value Probability Distribution
+inform, a warranted belief resulting in an inform
+with p = 0.5, and weak belief will result in an in-             Single-Utterance: The Single-Utterance (SU)
+form with p = 0.25. If the user is informed of the              approach, as described in Section 2, has a rigid
+correct fillers by the system’s inform, that slot’s                5
+                                                                     In this simple domain the next filler is guaranteed to be
+belief strength is set to strong. If the user is in-            available if the first is not. We do not model this with belief
+formed that a filler is not available, than that filler         strength since it is probably not representative of reality.
+
+
+                                                          181
+
+
+turn-taking mechanism. After a speaker makes a                 6       Evaluation and Discussion
+single utterance the turn transitions to the listener.
+                                                               We now evaluate the IDTB approach by compar-
+Since the turn transitions after every utterance the
+                                                               ing it against the two competing models: Single-
+system must only choose appropriate utterances,
+                                                               Utterance and Keep-Or-Release. The three turn-
+not turn-taking behavior. Similarly, user agents do
+                                                               taking approaches are trained and tested in four
+not have any turn-taking behavior and slot beliefs
+                                                               user conditions: novice, intermediate, expert, and
+are only used to choose between a query and an
+                                                               combined. In the combined condition, one of the
+inform.
+                                                               three user types is randomly selected for each dia-
+Keep-Or-Release         Model: The         Keep-Or-            logue. We train ten policies for each condition and
+Release (KR) model, as described in Section                    turn-taking approach. Policies are trained using Q-
+2, allows the speaker to either keep the turn to               learning, and −greedy search for 10000 epochs
+make multiple utterances or release it. Taking the             (1 epoch = 100 dialogues, after which the Q-scores
+same approach as English and Heeman (2005),                    are updated) with  = 0.2. Each policy is then
+the system learns to keep or release the turn after            ran over 10000 test dialogues with no exploration
+each utterance that it makes. We also use RL                   ( = 0), and the mean dialogue cost for that pol-
+to determine which conversant should begin the                 icy is determined. The 10 separate policy values
+dialogue. While the use of RL imparts some                     are then averaged to create the mean policy cost.
+importance onto the turn-taking behavior, it                   The mean policy cost between the turn-taking ap-
+is not influencing whether the system gets the                 proaches and user conditions are shown in Table 3.
+turn when it did not already have it. This is an               Lower numbers are indicative of shorter dialogues,
+crucial distinction between KR and IDTB. IDTB                  since the system learns to successfully complete
+allows the conversants to negotiate the turn using             the task in all cases.
+turn-bids motivated by importance, whereas in
+KR only the speaker determines when the turn                   Table 3: Mean Policy Cost for Model and User
+can transition.                                                condition7
+   Users in the KR environment choose whether to                Model Novice Int. Expert Combined
+keep or release the turn similarly to bid decisions.6           SU        7.61    7.09 6.43     7.05
+After a user performs an utterance, it chooses the              KR        6.00    6.35 4.46     6.01
+slot that would be in the next utterance. A number,             IDTB      6.09    5.77 4.35     5.52
+k, is generated from a Gaussian distribution using
+belief strength in the same manner as the IDTB
+users’ bids are chosen. If k ≤ 0.55 then the user              Single User Conditions: Single user conditions
+keeps the turn, otherwise it releases it.                      show how well each turn-taking approach can op-
+                                                               timize its behavior for specific user populations
+5.4   Preliminary Turn-Bidding System                          and handle slight differences found in those pop-
+We described a preliminary turn-bidding system                 ulations. Table 3 shows that the mean policy cost
+in earlier work presented at a workshop (Selfridge             of the SU model is higher than the other two mod-
+and Heeman, 2009). A major limitation was an                   els which indicates longer dialogues on average.
+overly simplified user model. We used two user                 Since the SU system must respond to every user
+types, expert and novice, who had fixed bids. Ex-              utterance and cannot learn a turn-taking strategy
+perts always bid high and had complete domain                  to utilize user knowledge, the dialogues are neces-
+knowledge, and the novices always bid low and                  sarily longer. For example, in the expert condition
+had incomplete domain knowledge. The system,                   the best possible dialogue for a SU interaction will
+using all five bid types, was always able to out bid           have a cost of five (three user utterances for each
+and under bid the simulated users. Among other                 slot, two system utterances in response). This cost
+things, this situation gives the system complete               is in contrast to the best expert dialogue cost of
+control of the turn, which is at odds with the nego-           three (three user utterances) for KR and IDTB in-
+tiative nature of IDTB. The present contribution is            teractions.
+a more realistic and mature implementation.                       The IDTB turn-taking approach outperforms
+                                                               the KR design in all single user conditions ex-
+    6
+      We experimented with a few different KR decision
+                                                                   7
+strategies, and chose the one that performed the best.                 SD between policies ≤ 0.04
+
+
+                                                         182
+
+
+cept for novice (6.09 vs. 6.00). In this condi-
+                                                                Table 4: Bid percentages over ten policies in the
+tion, the KR system takes the turn first, informs
+                                                                Combined User condition for IDTB
+the available fillers for each slot, and then releases           Position H-est High Mid Low L-est
+the turn. The user can then inform its filler eas-               Initial    0.0     0.0    70.0 30.0 0.0
+ily. The IDTB system attempts a similar dialogue                 Medial     20.5    19.4 24.5 23.3 12.3
+strategy by using highest bids but sometimes loses               Final      49.5    41.0 9.5      0.0     0.0
+the turn when users also bid highest. If the user
+uses the turn to query or inform an unavailable
+filler the dialogue grows longer. However, this is              6.1   IDTB Performance:
+quite rare as shown by small difference in perfor-              In our domain, performance is measured by dia-
+mance between the two models. In all other single               logue length and solution quality. However, since
+user conditions, the IDTB approach has shorter di-              solution quality never affects the dialogue cost for
+alogues than the KR approach (5.77 and 4.35 vs.                 a trained system, dialogue length is the only com-
+6.35 and 4.46). A detailed explanation of IDTB’s                ponent influencing the mean policy cost.
+performance will be given in Section 6.1.                          The primary cause of longer dialogues are un-
+                                                                available filler inform and query (UFI–Q) utter-
+Combined User Condition: We next measure                        ances by the user, which are easily identified.
+performance on the combined condition that                      These utterances lengthen the dialogue since the
+mixes all three user types. This condition is more              system must inform the user of the available fillers
+realistic than the other three, as it better mimics             (the user would otherwise not know that the filler
+how a system will be used in actual practice. The               was unavailable) and then the user must then in-
+IDTB approach (mean policy cost = 5.52) outper-                 form the system of its second choice. The mean
+forms the KR (mean policy cost = 6.01) and SU                   number of UFI–Q utterance for each dialogue over
+(mean policy cost = 7.05) approaches. We also                   the ten learned policies are shown for all user con-
+observe that KR outperforms SU. These results                   ditions in Table 5. Notice that these numbers are
+suggest that the more a turn-taking design can be               inversely related to performance: the more UFI–
+flexible and negotiative, the more efficient the dia-           Q utterances, the worse the performance. For ex-
+logues can be.                                                  ample, in the combined condition the IDTB users
+                                                                perform 0.38 UFI–Q utterances per dialogue (u/d)
+                                                                compared to the 0.94 UFI–Q u/d for KR users.
+Exploiting User bidding differences: It fol-
+                                                                While a KR user will release the turn if its planned
+lows that IDTB’s performance stems from its ne-
+gotiative turn transitions. These transitions are dis-
+tinctly different than KR transitions in that there is          Table 5: Mean number of     UFI–Q utterances over
+information inherent in the users bids. A user that             policies
+has a stronger belief strength is more likely to be              Model Novice Int.           Expert     Combined
+have a higher bid and inform an available filler.                KR       0.0     1.15       0.53       0.94
+Policy analysis shows that the IDTB system takes                 IDTB     0.1     0.33       0.39       0.38
+advantage of this information by using moderate
+bids —neither highest nor lowest bids— to filter                utterance has a weak belief, it may select that weak
+users based on their turn behavior. The distribu-               utterance when first getting the turn (either after a
+tion of bids used over the ten learned policies is              system utterance or at the start of the dialogue).
+shown in Table 4. The initial position refers to                This may lead to a UFI–Q utterance. The IDTB
+the first bid of the dialogue; final position, the last         system, however, will outbid the same user, result-
+bid of the dialogue; and medial position, all other             ing in a shorter dialogue. This situation is shown
+bids. Notice that the system uses either the low or             in Tables 6 and 7. The dialogue is the same un-
+mid bids as its initial policy and that 67.2% of di-            til utterance 3, where the IDTB system wins the
+alogue medial bids are moderate. These distribu-                turn with a mid bid over the user’s low bid. In the
+tions show that the system has learned to use the               KR environment however, the user gets the turn
+entire bid range to filter the users, and is not seek-          and performs an unavailable filler inform, which
+ing to win or lose the turn outright. This behavior             the system must react to. This is an instance of
+is impossible in the KR approach.                               the second deficiency of the KR approach, where
+
+
+                                                          183
+
+
+                                                              necessary informs are rarer. In general, however,
+Table 6: Sample IDTB dialogue in Combined User
+                                                              the KR approach has more unnecessary informs
+condition; Cost=6
+ Sys       Usr    Spkr Utt                                    since the KR system can only infer that one of the
+                                                              user’s beliefs was probably weak, otherwise the
+ 1 low     mid    U:     inform burger b1
+                                                              user would not have released the turn. The IDTB
+ 2 h-est low      S:     inform burger have b3
+                                                              system handles this situation by using a high bid,
+ 3 mid low        S:     inform side have s1
+                                                              allowing the user to outbid the system as its con-
+ 4 mid h-est U:          inform burger b3
+                                                              tribution is more important. In other words, the
+ 5 mid high U:           inform drink d1
+                                                              IDTB user can win the turn when it should have it,
+ 6 l-est h-est U:        inform side s1
+                                                              but the KR user cannot.
+ 7 high mid       S:     bye
+                                                              7   Conclusion
+Table 7: Sample KR dialogue in Combined User                  This paper presented the Importance-Driven Turn-
+condition; Cost=7                                             Bidding model of turn-taking. The IDTB model is
+ Agent Utt                       Turn-Action
+                                                              motivated by turn-conflict studies showing that the
+ 1 U:      inform burger b1      Release                      interest in holding the turn influences conversant
+ 2 S:      inform burger have b3 Release                      turn-cues. A computational prototype using Re-
+ 3 U:      inform side s1        Keep                         inforcement Learning to choose appropriate turn-
+ 4 U:      inform drink d1       Keep                         bids performs better than the standard KR and SU
+ 5 U:      inform burger b3      Release                      approaches in an artificial collaborative dialogue
+ 6 S:      inform side have s2   Release                      domain. In short, the Importance-Driven Turn-
+ 7 U:      inform side s2        Release                      Bidding model provides a negotiative turn-taking
+ 8 S:      bye                                                framework that supports mixed-initiative interac-
+                                                              tions.
+the speaking system should not have released the                 In the previous section, we showed that the KR
+turn. The user has the same belief in both scenar-            approach is deficient for two reasons: the speak-
+ios, but the negotiative nature of IDTB enables a             ing system might not keep the turn when it should
+shorter dialogues. In short, the IDTB system can              have, and might release the turn when it should
+win the turn when it should have it, but the KR               not have. This is driven by KR’s speaker-centric
+system cannot.                                                nature; the speaker has no way of judging the
+                                                              potential contribution of the listener. The IDTB
+   A lesser cause of longer dialogues is an instance
+                                                              approach however, due to its negotiative quality,
+of the first deficiency of the KR systems; the lis-
+                                                              does not have this problem.
+tening user cannot get the turn when it should have
+                                                                 Our performance differences arise from situa-
+it. Usually, this situation presents itself when the
+                                                              tions when the system is the speaker and the user
+user releases the turn, having randomly chosen the
+                                                              is the listener. The IDTB model also excels in the
+weaker of the two unfilled slots. The system then
+                                                              opposite situation, when the system is the listener
+has the turn for more than one utterance, inform-
+                                                              and the user is the speaker, though our domain is
+ing the available fillers for two slots. However,
+                                                              not sophisticated enough for this situation to oc-
+the user already had a strong belief and available
+                                                              cur. In the future we hope to develop a domain
+top filler for one of those slots, and the system
+                                                              with more realistic speech acts and a more diffi-
+has increased the dialogue length unnecessarily. In
+                                                              cult dialogue task that will, among other things,
+the combined condition, the KR system produces
+                                                              highlight this situation. We also plan on imple-
+0.06 unnecessary informs per dialogue, whereas
+                                                              menting a fully functional IDTB system, using an
+the IDTB system produces 0.045 per dialogue.
+                                                              incremental processing architecture that not only
+The novice and intermediate conditions mirror this
+                                                              detects, but generates, a wide array of turn-cues.
+(IDTB: 0.009, 0.076 ; KR: 0.019, 0.096 respect-
+fully), but the expert condition does not (IDTB:
+                                                              Acknowledgments
+0.011, KR: 0.0014). In this case, the IDTB system
+wins the turn initially using a low bid and informs           We gratefully acknowledge funding from the
+one of the strong slots, whereas the expert user ini-         National Science Foundation under grant IIS-
+tiates the dialogue for the KR environment and un-            0713698.
+
+
+                                                        184
+
+
+References                                                       S. Larsson and D. Traum. 2000. Information state and
+                                                                    dialogue managment in the trindi dialogue move en-
+J.E Allen, C.I. Guinn, and Horvitz E. 1999. Mixed-                  gine toolkit. Natural Language Engineering, 6:323–
+   initiative interaction. IEEE Intelligent Systems,                340.
+   14(5):14–23.
+                                                                 E. Levin, R. Pieraccini, and W. Eckert. 2000. A
+Jennifer Chu-Carroll and Sandra Carberry. 1995. Re-                 stochastic model of human-machine interaction for
+   sponse generation in collaborative negotiation. In               learning dialog strategies. IEEE Transactions on
+   Proceedings of the 33rd annual meeting on Asso-                  Speech and Audio Processing, 8(1):11 – 23.
+   ciation for Computational Linguistics, pages 136–
+   143, Morristown, NJ, USA. Association for Compu-              A. Raux and M. Eskenazi. 2009. A finite-state turn-
+   tational Linguistics.                                           taking model for spoken dialog systems. In Pro-
+                                                                   ceedings of HLT/NAACL, pages 629–637. Associa-
+David DeVault, Kenji Sagae, and David Traum. 2009.                 tion for Computational Linguistics.
+  Can i finish? learning when to respond to incre-
+                                                                 H. Sacks, E.A. Schegloff, and G. Jefferson. 1974. A
+  mental interpretation results in interactive dialogue.
+                                                                   simplest systematics for the organization of turn-
+  In Proceedings of the SIGDIAL 2009 Conference,
+                                                                   taking for conversation. Language, 50(4):696–735.
+  pages 11–20, London, UK, September. Association
+  for Computational Linguistics.                                 R. Sato, R. Higashinaka, M. Tamoto, M. Nakano, and
+                                                                    K. Aikawa. 2002. Learning decision trees to de-
+S.J. Duncan and G. Niederehe. 1974. On signalling                   termine turn-taking by spoken dialogue systems. In
+   that it’s your turn to speak. Journal of Experimental            ICSLP, pages 861–864, Denver, CO.
+   Social Psychology, 10:234–247.
+                                                                 E.A. Schegloff. 2000). Overlapping talk and the orga-
+S.J. Duncan. 1972. Some signals and rules for taking               nization of turn-taking for conversation. Language
+   speaking turns in conversations. Journal of Person-             in Society, 29:1 – 63.
+   ality and Social Psychology, 23:283–292.
+                                                                 E. O. Selfridge and Peter A. Heeman. 2009. A bidding
+M. English and Peter A. Heeman. 2005. Learning                      approach to turn-taking. In 1st International Work-
+  mixed initiative dialog strategies by using reinforce-            shop on Spoken Dialogue Systems.
+  ment learning on both conversants. In Proceedings
+                                                                 G. Skantze and D. Schlangen. 2009. Incremental di-
+  of HLT/EMNLP, pages 1011–1018.
+                                                                   alogue processing in a micro-domain. In Proceed-
+                                                                   ings of the 12th Conference of the European Chap-
+G. Ferguson, J. Allen, and B. Miller. 1996. TRAINS-
+                                                                   ter of the Association for Computational Linguistics,
+  95: Towards a mixed-initiative planning assistant.
+                                                                   pages 745–753. Association for Computational Lin-
+  In Proceedings of the Third Conference on Artificial
+                                                                   guistics.
+  Intelligence Planning Systems (AIPS-96), pages 70–
+  77.                                                            N. Ström and S. Seneff. 2000. Intelligent barge-in in
+                                                                   conversational systems. In Sixth International Con-
+A. Gravano and J. Hirschberg. 2009. Turn-yielding                  ference on Spoken Language Processing. Citeseer.
+  cues in task-oriented dialogue. In Proceedings of the
+  SIGDIAL 2009 Conference: The 10th Annual Meet-                 R. Sutton and A. Barto. 1998. Reinforcement Learn-
+  ing of the Special Interest Group on Discourse and                ing. MIT Press.
+  Dialogue, pages 253–261. Association for Compu-
+  tational Linguistics.                                          S. Sutton, D. Novick, R. Cole, P. Vermeulen, J. de Vil-
+                                                                    liers, J. Schalkwyk, and M. Fanty. 1996. Build-
+C.I. Guinn. 1996. Mechanisms for mixed-initiative                   ing 10,000 spoken-dialogue systems. In ICSLP,
+   human-computer collaborative discourse. In Pro-                  Philadelphia, Oct.
+   ceedings of the 34th annual meeting on Association
+   for Computational Linguistics, pages 278–285. As-             M. Walker and S. Whittaker. 1990. Mixed initiative
+   sociation for Computational Linguistics.                        in dialoge: an investigation into discourse segmen-
+                                                                   tation. In Proceedings of the 28th Annual Meet-
+                                                                   ing of the Association for Computational Linguis-
+P.A. Heeman. 2007. Combining reinforcement learn-
+                                                                   tics, pages 70–76.
+   ing with information-state update rules. In Pro-
+   ceedings of the Annual Conference of the North                M. Walker, D. Hindle, J. Fromer, G.D. Fabbrizio, and
+   American Association for Computational Linguis-                 C. Mestel. 1997. Evaluating competing agent
+   tics, pages 268–275, Rochester, NY.                             strategies for a voice email agent. In Fifth European
+                                                                   Conference on Speech Communication and Technol-
+Gudny Ragna Jonsdottir, Kristinn R. Thorisson, and                 ogy.
+  Eric Nivel. 2008. Learning smooth, human-like
+  turntaking in realtime dialogue. In IVA ’08: Pro-              Fan Yang and Peter A. Heeman. 2010. Initiative con-
+  ceedings of the 8th international conference on In-              flicts in task-oriented dialogue”. Computer Speech
+  telligent Virtual Agents, pages 162–175, Berlin, Hei-            Language, 24(2):175 – 189.
+  delberg. Springer-Verlag.
+
+
+                                                           185
+

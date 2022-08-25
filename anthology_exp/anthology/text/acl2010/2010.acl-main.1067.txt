@@ -1,0 +1,618 @@
+          Comparable Entity Mining from Comparative Questions
+
+
+                Shasha Li1，Chin-Yew Lin2，Young-In Song2，Zhoujun Li3
+                 1
+                   National University of Defense Technology, Changsha, China
+                            2
+                              Microsoft Research Asia, Beijing, China
+                               3
+                                 Beihang University, Beijing, China
+             shashali@nudt.edu.cn1, {cyl,yosong}@microsoft.com2,
+                                     lizj@buaa.edu.cn3
+
+
+                                                             ty, Nokia N95 (a cellphone), we want to find
+                     Abstract                                comparable entities such as Nokia N82, iPhone
+                                                             and so on.
+    Comparing one thing with another is a typical               In general, it is difficult to decide if two enti-
+    part of human decision making process. How-              ties are comparable or not since people do com-
+    ever, it is not always easy to know what to              pare apples and oranges for various reasons. For
+    compare and what are the alternatives. To ad-            example, “Ford” and “BMW” might be compa-
+    dress this difficulty, we present a novel way to
+                                                             rable as “car manufacturers” or as “market seg-
+    automatically mine comparable entities from
+    comparative questions that users posted on-              ments that their products are targeting”, but we
+    line. To ensure high precision and high recall,          rarely see people comparing “Ford Focus” (car
+    we develop a weakly-supervised bootstrapping             model) and “BMW 328i”. Things also get more
+    method for comparative question identification           complicated when an entity has several functio-
+    and comparable entity extraction by leveraging           nalities. For example, one might compare
+    a large online question archive. The experi-             “iPhone” and “PSP” as “portable game player”
+    mental results show our method achieves F1-              while compare “iPhone” and “Nokia N95” as
+    measure of 82.5% in comparative question                 “mobile phone”. Fortunately, plenty of compara-
+    identification and 83.3% in comparable entity            tive questions are posted online, which provide
+    extraction. Both significantly outperform an
+                                                             evidences for what people want to compare, e.g.
+    existing state-of-the-art method.
+                                                             “Which to buy, iPod or iPhone?”. We call “iPod”
+                                                             and “iPhone” in this example as comparators. In
+1    Introduction
+                                                             this paper, we define comparative questions and
+Comparing alternative options is one essential               comparators as:
+step in decision-making that we carry out every
+day. For example, if someone is interested in cer-               Comparative question: A question that in-
+tain products such as digital cameras, he or she                  tends to compare two or more entities and it
+would want to know what the alternatives are                      has to mention these entities explicitly in the
+and compare different cameras before making a                     question.
+purchase. This type of comparison activity is                    Comparator: An entity which is a target of
+very common in our daily life but requires high                   comparison in a comparative question.
+knowledge skill. Magazines such as Consumer                     According to these definitions, Q1 and Q2 be-
+Reports and PC Magazine and online media such                low are not comparative questions while Q3 is.
+as CNet.com strive in providing editorial com-               “iPod Touch” and “Zune HD” are comparators.
+parison content and surveys to satisfy this need.
+   In the World Wide Web era, a comparison ac-                 Q1: “Which one is better?”
+tivity typically involves: search for relevant web             Q2: “Is Lumix GH-1 the best camera?”
+pages containing information about the targeted                Q3: “What‟s the difference between iPod
+products, find competing products, read reviews,             Touch and Zune HD?”
+and identify pros and cons. In this paper, we fo-
+                                                                The goal of this work is mining comparators
+cus on finding a set of comparable entities given
+                                                             from comparative questions. The results would
+a user‟s input entity. For example, given an enti-
+                                                             be very useful in helping users‟ exploration of
+
+                                                         650
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 650–658,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+alternative choices by suggesting comparable             the case of comparison, we would like to help
+entities based on other users‟ prior requests.           users explore alternatives, i.e. helping them make
+   To mine comparators from comparative ques-            a decision among comparable items.
+tions, we first have to detect whether a question           For example, it is reasonable to recommend
+is comparative or not. According to our defini-          “iPod speaker” or “iPod batteries” if a user is
+tion, a comparative question has to be a question        interested in “iPod”, but we would not compare
+with intent to compare at least two entities.            them with “iPod”. However, items that are com-
+Please note that a question containing at least          parable with “iPod” such as “iPhone” or “PSP”
+two entities is not a comparative question if it         which were found in comparative questions post-
+does not have comparison intent. However, we             ed by users are difficult to be predicted simply
+observe that a question is very likely to be a           based on item similarity between them. Although
+comparative question if it contains at least two         they are all music players, “iPhone” is mainly a
+entities. We leverage this insight and develop a         mobile phone, and “PSP” is mainly a portable
+weakly supervised bootstrapping method to iden-          game device. They are similar but also different
+tify comparative questions and extract compara-          therefore beg comparison with each other. It is
+tors simultaneously.                                     clear that comparator mining and item recom-
+   To our best knowledge, this is the first attempt      mendation are related but not the same.
+to specially address the problem on finding good            Our work on comparator mining is related to
+comparators to support users‟ comparison activi-         the research on entity and relation extraction in
+ty. We are also the first to propose using com-          information extraction (Cardie, 1997; Califf and
+parative questions posted online that reflect what       Mooney, 1999; Soderland, 1999; Radev et al.,
+users truly care about as the medium from which          2002; Carreras et al., 2003). Specifically, the
+we mine comparable entities. Our weakly super-           most relevant work is by Jindal and Liu (2006a
+vised method achieves 82.5% F1-measure in                and 2006b) on mining comparative sentences and
+comparative question identification, 83.3% in            relations. Their methods applied class sequential
+comparator extraction, and 76.8% in end-to-end           rules (CSR) (Chapter 2, Liu 2006) and label se-
+comparative question identification and compa-           quential rules (LSR) (Chapter 2, Liu 2006)
+rator extraction which outperform the most rele-         learned from annotated corpora to identify com-
+vant state-of-the-art method by Jindal & Liu             parative sentences and extract comparative rela-
+(2006b) significantly.                                   tions respectively in the news and review do-
+   The rest of this paper is organized as follows.       mains. The same techniques can be applied to
+The next section discusses previous works. Sec-          comparative question identification and compa-
+tion 3 presents our weakly-supervised method for         rator mining from questions. However, their me-
+comparator mining. Section 4 reports the evalua-         thods typically can achieve high precision but
+tions of our techniques, and we conclude the pa-         suffer from low recall (Jindal and Liu, 2006b)
+per and discuss future work in Section 5.                (J&L). However, ensuring high recall is crucial
+                                                         in our intended application scenario where users
+2     Related Work                                       can issue arbitrary queries. To address this prob-
+                                                         lem, we develop a weakly-supervised bootstrap-
+2.1    Overview                                          ping pattern learning method by effectively leve-
+In terms of discovering related items for an enti-       raging unlabeled questions.
+ty, our work is similar to the research on recom-           Bootstrapping methods have been shown to be
+mender systems, which recommend items to a               very effective in previous information extraction
+user. Recommender systems mainly rely on simi-           research (Riloff, 1996; Riloff and Jones, 1999;
+larities between items and/or their statistical cor-     Ravichandran and Hovy, 2002; Mooney and Bu-
+relations in user log data (Linden et al., 2003).        nescu, 2005; Kozareva et al., 2008). Our work is
+For example, Amazon recommends products to               similar to them in terms of methodology using
+its customers based on their own purchase histo-         bootstrapping technique to extract entities with a
+ries, similar customers‟ purchase histories, and         specific relation. However, our task is different
+similarity between products. However, recom-             from theirs in that it requires not only extracting
+mending an item is not equivalent to finding a           entities (comparator extraction) but also ensuring
+comparable item. In the case of Amazon, the              that the entities are extracted from comparative
+purpose of recommendation is to entice their cus-        questions (comparative question identification),
+tomers to add more items to their shopping carts         which is generally not required in IE task.
+by suggesting similar or related items. While in
+
+                                                       651
+
+
+2.2   Jindal & Liu 2006                                $ES1 and $ES2 and the feature compared with
+                                                       label $FT for each sentence. J&L‟s method was
+In this subsection, we provide a brief summary
+                                                       only applied to noun and pronoun. To differen-
+of the comparative mining method proposed by
+                                                       tiate noun and pronoun that are not comparators
+Jindal and Liu (2006a and 2006b), which is used
+                                                       or features, they added the fourth label $NEF, i.e.
+as baseline for comparison and represents the
+                                                       non-entity-feature. These labels were used as
+state-of-the-art in this area. We first introduce
+                                                       pivots together with special tokens li & rj1 (token
+the definition of CSR and LSR rule used in their
+                                                       position), #start (beginning of a sentence), and
+approach, and then describe their comparative
+                                                       #end (end of a sentence) to generate sequence
+mining method. Readers should refer to J&L‟s
+                                                       data, sequences with single label only and mini-
+original papers for more details.
+                                                       mum support greater than 1% are retained, and
+CSR and LSR                                            then LSRs were created. When applying the
+                                                       learned LSRs for extraction, LSRs with higher
+CSR is a classification rule. It maps a sequence       confidence were applied first.
+pattern S(𝑠1 𝑠2 … 𝑠𝑛 ) to a class C. In our problem,      J&L‟s method have been proved effective in
+C is either comparative or non-comparative.            their experimental setups. However, it has the
+Given a collection of sequences with class in-         following weaknesses:
+formation, every CSR is associated to two para-
+meters: support and confidence. Support is the              The performance of J&L‟s method relies
+proportion of sequences in the collection contain-           heavily on a set of comparative sentence in-
+ing S as a subsequence. Confidence is the propor-            dicative keywords. These keywords were
+tion of sequences labeled as C in the sequences              manually created and they offered no guide-
+containing the S. These parameters are important             lines to select keywords for inclusion. It is
+to evaluate whether a CSR is reliable or not.                also difficult to ensure the completeness of
+    LSR is a labeling rule. It maps an input se-             the keyword list.
+quence pattern 𝑆(𝑠1 𝑠2 … 𝑠𝑖 … 𝑠𝑛 ) to a labeled             Users can express comparative sentences or
+sequence 𝑆′(𝑠1 𝑠2 … 𝑙𝑖 … 𝑠𝑛 ) by replacing one to-           questions in many different ways. To have
+                                                             high recall, a large annotated training corpus
+ken (𝑠𝑖 ) in the input sequence with a designated            is necessary. This is an expensive process.
+label (𝑙𝑖 ). This token is referred as the anchor.
+                                                            Example CSRs and LSRs given in Jindal &
+The anchor in the input sequence could be ex-
+                                                             Liu (2006b) are mostly a combination of
+tracted if its corresponding label in the labeled
+                                                             POS tags and keywords. It is a surprise that
+sequence is what we want (in our case, a compa-
+                                                             their rules achieved high precision but low
+rator). LSRs are also mined from an annotated
+                                                             recall. They attributed most errors to POS
+corpus, therefore each LSR also have two para-
+                                                             tagging errors. However, we suspect that
+meters: support and confidence. They are simi-
+                                                             their rules might be too specific and overfit
+larly defined as in CSR.
+                                                             their small training set (about 2,600 sen-
+Supervised Comparative Mining Method                         tences). We would like to increase recall,
+                                                             avoid overfitting, and allow rules to include
+J&L treated comparative sentence identification              discriminative lexical tokens to retain preci-
+as a classification problem and comparative rela-            sion.
+tion extraction as an information extraction prob-
+lem. They first manually created a set of 83 key-      In the next section, we introduce our method to
+words such as beat, exceed, and outperform that        address these shortcomings.
+are likely indicators of comparative sentences.
+These keywords were then used as pivots to             3     Weakly Supervised Method for Com-
+create part-of-speech (POS) sequence data. A                 parator Mining
+manually annotated corpus with class informa-
+                                                       Our weakly supervised method is a pattern-based
+tion, i.e. comparative or non-comparative, was
+                                                       approach similar to J&L‟s method, but it is dif-
+used to create sequences and CSRs were mined.
+                                                       ferent in many aspects: Instead of using separate
+A Naïve Bayes classifier was trained using the
+                                                       CSRs and LSRs, our method aims to learn se-
+CSRs as features. The classifier was then used to
+identify comparative sentences.                                                    th
+                                                       1
+   Given a set of comparative sentences, J&L            li marks a token is at the i position to the left of the pivot
+                                                                                     th
+manually annotated two comparators with labels         and rj marks a token is at j position to the right of the
+                                                       pivot where i and j are between 1 and 4 in J&L (2006b).
+
+
+                                                     652
+
+
+quential patterns which can be used to identify
+Sequential Patterns
+<#start which city is better, $C or $C ? #end>
+<, $C or $C ? #end>
+<#start $C/NN or $C/NN ? #end>
+<which NN is better, $C or $C ?>
+<which city is JJR, $C or $C ?>
+<which NN is JJR, $C or $C ?>
+...
+Table 1: Candidate indicative extraction pattern (IEP)
+examples of the question “which city is better, NYC or
+Paris?”                                                                  Figure 1: Overview of the bootstrapping alogorithm
+
+comparative question and extract comparators                          If a sequential pattern can be used to extract
+simultaneously.                                                        many reliable comparator pairs, it is very likely
+  In our approach, a sequential pattern is defined                     to be an IEP.
+as a sequence S(s1 s2 … si … sn ) where si can be a                   If a comparator pair can be extracted by an
+word, a POS tag, or a symbol denoting either a                         IEP, the pair is reliable.
+comparator ($C), or the beginning (#start) or the
+end of a question (#end). A sequential pattern is                       Based on these two assumptions, we design
+called an indicative extraction pattern (IEP) if it                  our bootstrapping algorithm as shown in Figure 1.
+can be used to identify comparative questions                        The bootstrapping process starts with a single
+and extract comparators in them with high relia-                     IEP. From it, we extract a set of initial seed com-
+bility. We will formally define the reliability                      parator pairs. For each comparator pair, all ques-
+score of a pattern in the next section.                              tions containing the pair are retrieved from a
+  Once a question matches an IEP, it is classified                   question collection and regarded as comparative
+as a comparative question and the token se-                          questions. From the comparative questions and
+quences corresponding to the comparator slots in                     comparator pairs, all possible sequential patterns
+the IEP are extracted as comparators. When a                         are generated and evaluated by measuring their
+question can match multiple IEPs, the longest                        reliability score defined later in the Pattern Eval-
+IEP is used 2 . Therefore, instead of manually                       uation section. Patterns evaluated as reliable ones
+creating a list of indicative keywords, we create a                  are IEPs and are added into an IEP repository.
+set of IEPs. We will show how to acquire IEPs                           Then, new comparator pairs are extracted from
+automatically using a bootstrapping procedure                        the question collection using the latest IEPs. The
+with minimum supervision by taking advantage                         new comparators are added to a reliable compa-
+of a large unlabeled question collection in the                      rator repository and used as new seeds for pattern
+following subsections. The evaluations shown in                      learning in the next iteration. All questions from
+section 4 confirm that our weakly supervised                         which reliable comparators are extracted are re-
+method can achieve high recall while retain high                     moved from the collection to allow finding new
+precision.                                                           patterns efficiently in later iterations. The
+  This pattern definition is inspired by the work                    process iterates until no more new patterns can
+of Ravichandran and Hovy (2002). Table 1                             be found from the question collection.
+shows some examples of such sequential pat-                             There are two key steps in our method: (1)
+terns. We also allow POS constraint on compara-                      pattern generation and (2) pattern evaluation. In
+tors as shown in the pattern “<, $C/NN or $C/NN                      the following subsections, we will explain them
+? #end>”. It means that a valid comparator must                      in details.
+have a NN POS tag.
+                                                                     Pattern Generation
+3.1     Mining Indicative Extraction Patterns
+                                                                     To generate sequential patterns, we adapt the
+  Our weakly supervised IEP mining approach is                       surface text pattern mining method introduced in
+based on two key assumptions:                                        (Ravichandran and Hovy, 2002). For any given
+                                                                     comparative question and its comparator pairs,
+                                                                     comparators in the question are replaced with
+                                                                     symbol $Cs. Two symbols, #start and #end, are
+2
+  It is because the longest IEP is likely to be the most specif-     attached to the beginning and the end of a sen-
+ic and relevant pattern for the given question.
+
+
+                                                                   653
+
+
+tence in the question. Then, the following three            a question by applying pattern 𝑝𝑖 while the con-
+kinds of sequential patterns are generated from             dition 𝑝𝑖 →∗ denotes any question containing
+sequences of questions:                                     pattern 𝑝𝑖 .
+                                                               However, Equation (1) can suffer from in-
+                                                            complete knowledge about reliable comparator
+   Lexical patterns: Lexical patterns indicate
+                                                            pairs. For example, very few reliable pairs are
+    sequential patterns consisting of only words
+                                                            generally discovered in early stage of bootstrap-
+    and symbols ($C, #start, and #end). They are
+                                                            ping. In this case, the value of Equation (1)
+    generated by suffix tree algorithm (Gusfield,
+                                                            might be underestimated which could affect the
+    1997) with two constraints: A pattern should
+                                                            effectiveness of equation (1) on distinguishing
+    contain more than one $C, and its frequency
+                                                            IEPs from non-reliable patterns. We mitigate this
+    in collection should be more than an empiri-
+                                                            problem by a lookahead procedure. Let us denote
+    cally determined number 𝛽.
+                                                            the set of candidate patterns at the iteration k by
+   Generalized patterns: A lexical pattern can
+                                                            𝑃𝑘 . We define the support 𝑆 for comparator pair
+    be too specific. Thus, we generalize lexical
+                                                            𝑐𝑝𝑖 which can be extracted by 𝑃𝑘 and does not
+    patterns by replacing one or more words with
+                                                            exist in the current reliable set:
+    their POS tags. 2𝑛 − 1 generalized patterns
+    can be produced from a lexical pattern con-                                                𝑘
+                                                                            𝑆 𝑐𝑝𝑖 = 𝑁𝑄 ( 𝑃 → 𝑐𝑝𝑖 )                   (2)
+    taining N words excluding $Cs.
+   Specialized patterns: In some cases, a pat-             where 𝑃𝑘 → 𝑐𝑝𝑖 means that one of the patterns in
+    tern can be too general. For example, al-               𝑃𝑘 can extract 𝑐𝑝𝑖 in certain questions. Intuitive-
+    though a question “ipod or zune?” is com-               ly, if 𝑐𝑝𝑖 can be extracted by many candidate
+    parative, the pattern “<$C or $C>” is too               patterns in 𝑃𝑘 , it is likely to be extracted as a
+    general, and there can be many non-                     reliable one in the next iteration. Based on this
+    comparative questions matching the pattern,             intuition, a pair 𝑐𝑝𝑖 whose support S is more than
+    for instance, “true or false?”. For this reason,        a threshold 𝛼 is regarded as a likely-reliable pair.
+    we perform pattern specialization by adding             Using likely-reliable pairs, lookahead reliability
+    POS tags to all comparator slots. For exam-             score 𝑅 𝑝𝑖 is defined:
+    ple, from the lexical pattern “<$C or $C>”
+                                                                                                   𝑁𝑄 (𝑝 𝑖 →𝑐𝑝 i )
+    and the question “ipod or zune?”, “<$C/NN                                      ∀𝑐𝑝 𝑖 ∈𝐶𝑃 𝑘
+                                                                      𝑅 𝑘 𝑝𝑖 =               𝑟𝑒𝑙
+                                                                                                                       (3)
+    or $C/NN?>” will be produced as a specia-                                             𝑁𝑄 (𝑝 𝑖 →∗)
+    lized pattern.                                                       𝑘
+                                                            , where 𝐶𝑃𝑟𝑒𝑙   indicates a set of likely-reliable
+Note that generalized patterns are generated from           pairs based on 𝑃𝑘 .
+lexical patterns and the specialized patterns are              By interpolating Equation (1) and (3), the final
+generated from the combined set of generalized              reliability score 𝑅(𝑝𝑖 )𝑘𝑓𝑖𝑛𝑎𝑙 for a pattern is de-
+patterns and lexical patterns. The final set of             fined as follows:
+candidate patterns is a mixture of lexical patterns,
+generalized patterns and specialized patterns.                  𝑅(𝑝𝑖 )𝑘𝑓𝑖𝑛𝑎𝑙 = 𝜆 ∙ 𝑅 𝑘 𝑝𝑖 + (1 − 𝜆) ∙ 𝑅 𝑘 (𝑝𝑖 )              (4)
+
+Pattern Evaluation                                          Using Equation (4), we evaluate all candidate
+According to our first assumption, a reliability            patterns and select patterns whose score is more
+score 𝑅 𝑘 (𝑝𝑖 ) for a candidate pattern 𝑝𝑖 at itera-        than threshold 𝛾 as IEPs. All necessary parame-
+tion k can be defined as follows:                           ter values are empirically determined. We will
+                                                            explain how to determine our parameters in sec-
+                  ∀𝑐𝑝 𝑗 ∈𝐶𝑃 𝑘−1
+                                  𝑁𝑄 (𝑝 𝑖 →𝑐𝑝 𝑗 )           tion 4.
+     𝑅 𝑘 𝑝𝑖 =            𝑁𝑄 (𝑝 𝑖 →∗)
+                                                    (1)
+                                                            4        Experiments
+, where 𝑝𝑖 can extract known reliable comparator            4.1       Experiment Setup
+pairs 𝑐𝑝𝑗 . 𝐶𝑃𝑘−1 indicates the reliable compara-
+tor pair repository accumulated until the                   Source Data
+(𝑘 − 1)𝑡ℎ iteration. 𝑁𝑄 (𝑥) means the number of             All experiments were conducted on about 60M
+questions satisfying a condition x. The condition           questions mined from Yahoo! Answers‟ question
+𝑝𝑖 → 𝑐𝑝𝑗 denotes that 𝑐𝑝𝑗 can be extracted from             title field. The reason that we used only a title
+
+
+                                                          654
+
+
+field is that they clearly express a main intention          are four parameters, i.e. α, β, γ, and λ, need to be
+of an asker with a form of simple questions in               determined empirically. We first mined all poss-
+general.                                                     ible candidate patterns from the suffix tree using
+                                                             the initial seeds. From these candidate patterns,
+Evaluation Data                                              we applied them to SET-R and got a new set of
+Two separate data sets were created for evalua-              59,410 candidate comparator pairs. Among these
+tion. First, we collected 5,200 questions by sam-            new candidate comparator pairs, we randomly
+pling 200 questions from each Yahoo! Answers                 selected 100 comparator pairs and manually clas-
+category 3 . Two annotators were asked to label              sified them into reliable or non-reliable compara-
+each question manually as comparative, non-                  tors. Then we found 𝛼 that maximized precision
+comparative, or unknown. Among them, 139                     without hurting recall by investigating frequen-
+(2.67%) questions were classified as comparative,            cies of pairs in the labeled set. By this method, 𝛼
+4,934 (94.88%) as non-comparative, and 127                   was set to 3 in our experiments. Similarly, the
+(2.44%) as unknown questions which are diffi-                threshold parameters 𝛽 and 𝛾 for pattern evalua-
+cult to assess. We call this set SET-A.                      tion were set to 10 and 0.8 respectively. For the
+   Because there are only 139 comparative ques-              interpolation parameter 𝜆 in Equation (3), we
+tions in SET-A, we created another set which                 simply set the value to 0.5 by assuming that two
+contains more comparative questions. We ma-                  reliability scores are equally important.
+nually constructed a keyword set consisting of 53               As evaluation measures for comparative ques-
+words such as “or” and “prefer”, which are good              tion identification and comparator extraction, we
+indicators of comparative questions. In SET-A,               used precision, recall, and F1-measure. All re-
+97.4% of comparative questions contains one or               sults were obtained from 5-fold cross validation.
+more keywords from the keyword set. We then                  Note that J&L‟s method needs a training data but
+randomly selected another 100 questions from                 ours use the unlabeled data (SET-R) with weakly
+each Yahoo! Answers category with one extra                  supervised method to find parameter setting.
+condition that all questions have to contain at              This 5-fold evaluation data is not in the unla-
+least one keyword. These questions were labeled              beled data. Both methods were tested on the
+in the same way as SET-A except that their com-              same test split in the 5-fold cross validation. All
+parators were also annotated. This second set of             evaluation scores are averaged across all 5 folds.
+questions is referred as SET-B. It contains 853                 For question processing, we used our own sta-
+comparative questions and 1,747 non-                         tistical POS tagger developed in-house4.
+comparative questions. For comparative question
+                                                             4.2    Experiment Results
+identification experiments, we used all labeled
+questions in SET-A and SET-B. For comparator                 Comparative Question Identification and
+extraction experiments, we used only SET-B. All              Comparator Extraction
+the remaining unlabeled questions (called as
+SET-R) were used for training our weakly super-                 Table 2 shows our experimental results. In the
+vised method.                                                table, “Identification only” indicates the perfor-
+   As a baseline method, we carefully imple-                 mances in comparative question identification,
+mented J&L‟s method. Specifically, CSRs for                  “Extraction only” denotes the performances of
+comparative question identification were learned             comparator extraction when only comparative
+from the labeled questions, and then a statistical           questions are used as input, and “All” indicates
+classifier was built by using CSR rules as fea-              the end-to-end performances when question
+tures. We examined both SVM and Naïve Bayes                  identification results were used in comparator
+(NB) models as reported in their experiments.                extraction. Note that the results of J&L‟s method
+For the comparator extraction, LSRs were                     on our collections are very comparable to what is
+learned from SET-B and applied for comparator                reported in their paper.
+extraction.                                                     In terms of precision, the J&L‟s method is
+   To start the bootstrapping procedure, we ap-              competitive to our method in comparative ques-
+plied the IEP “<#start nn/$c vs/cc nn/$c ?/.
+#end>” to all the questions in SET-R and ga-                 4
+                                                               We used NLC-PosTagger which is developed by NLC
+thered 12,194 comparator pairs as the initial                group of Microsoft Research Asia. It uses the modified
+seeds. For our weakly supervised method, there               Penn Treebank POS set for its output; for example, NNS
+                                                             (plural nouns), NN (nouns), NP (noun phrases), NPS (plural
+                                                             noun phrases), VBZ (verb, present tense, 3rd person singu-
+3
+    There are 26 top level categories in Yahoo! Answers.     lar), JJ (adjective), RB(adverb), and so on.
+
+
+                                                           655
+
+
+                          Identification only            Extraction only                 All
+                           (SET-A+SET-B)                    (SET-B)                    (SET-B)
+                      J&L (CSR)             Our         J&L         Our            J&L          Our
+                    SVM        NB        Method        (LSR)      Method     SVM        NB     Method
+    Recall          0.601 0.537            0.817*       0.621      0.760*    0.373     0.363   0.760*
+    Precision       0.847 0.851             0.833       0.861      0.916*    0.729     0.703   0.776*
+    F-score         0.704 0.659            0.825*       0.722      0.833*    0.493     0.479   0.768*
+    Table 2: Performance comparison between our method and Jindal and Bing‟s Method (denoted as J&L).
+    The values with * indicate statistically significant improvements over J&L (CSR) SVM or J&L (LSR)
+    according to t-test at p < 0.01 level.
+
+tion identification. However, the recall is signifi-        Table 5 also shows the robustness of our boot-
+cantly lower than ours. In terms of recall, our          strapping algorithm. In Table 5, „All’ indicates
+method outperforms J&L‟s method by 35% and               the performances that all comparator pairs from a
+22% in comparative question identification and           single seed IEP is used for the bootstrapping, and
+comparator extraction respectively. In our analy-        „Partial‟ indicate the performances using only
+sis, the low recall of J&L‟s method is mainly            1,000 randomly sampled pairs from „All’. As
+caused by low coverage of learned CSR patterns           shown in the table, there is no significant per-
+over the test set.                                       formance difference.
+   In the end-to-end experiments, our weakly su-            In addition, we conducted error analysis for
+pervised method performs significantly better            the cases where our method fails to extract cor-
+than J&L‟s method. Our method is about 55%               rect comparator pairs:
+better in F1-measure. This result also highlights
+another advantage of our method that identifies             23.75% of errors on comparator extraction
+comparative questions and extracts comparators               are due to wrong pattern selection by our
+simultaneously using one single pattern. J&L‟s               simple maximum IEP length strategy.
+method uses two kinds of pattern rules, i.e. CSRs           The remaining 67.63% of errors come from
+and LSRs. Its performance drops significantly                comparative questions which cannot be cov-
+due to error propagations. F1-measure of J&L‟s               ered by the learned IEPs.
+method in “All” is about 30% and 32% worse
+than the scores of “Identification only” and “Ex-
+traction” only respectively, our method only                                   Recall      Precision F-score
+shows small amount of performance decrease               Original Patterns     0.689       0. 449      0.544
+(approximately 7-8%).                                    + Specialized         0.731       0.602       0.665
+   We also analyzed the effect of pattern genera-        + Generalized         0.760       0.776       0.768
+lization and specialization. Table 3 shows the           Table 3: Effect of pattern specialization and Generali-
+results. Despite of the simplicity of our methods,       zation in the end-to-end experiments.
+they significantly contribute to performance im-
+provements. This result shows the importance of                 Seed patterns           # of resulted   F-score
+learning patterns flexibly to capture various                                            seed pairs
+comparative question expressions. Among the              <#start nn/$c vs/cc nn/$c      12,194          0.768
+                                                         ?/. #end>
+6,127 learned IEPs in our database, 5,930 pat-
+                                                         <#start which/wdt is/vb       1,478            0.760
+terns are generalized ones, 171 are specialized          better/jjr , nn/$c or/cc
+ones, and only 26 patterns are non-generalized           nn/$c ?/. #end>
+and specialized ones.                                    Table 4: Performance variation over different initial
+   To investigate the robustness of our bootstrap-       seed IEPs in the end-to-end experiments
+ping algorithm for different seed configurations,
+we compare the performances between two dif-             Set (# of seed pairs)    Recall Precision F-score
+ferent seed IEPs. The results are shown in Table         All (12,194)             0.760 0.774          0.768
+4. As shown in the table, the performance of our         Partial (1,000)          0.724 0.763          0.743
+bootstrapping algorithm is stable regardless of          Table 5: Performance variation over different sizes of
+significantly different number of seed pairs gen-        seed pairs generated from a single initial seed IEP
+erated by the two IEPs. This result implies that         “<#start nn/$c vs/cc nn/$c ?/. #end>”.
+our bootstrapping algorithm is not sensitive to
+the choice of IEP.
+
+
+                                                       656
+
+
+       Chanel           Gap                            iPod                  Kobe             Canon
+1      Dior             Old Navy                       Zune                  Lebron           Nikon
+2      Louis Vuitton    American Eagle                 mp3 player            Jordan           Sony
+3      Coach            Banana Republic                PSP                   MJ               Kodak
+4      Gucci            Guess by Marciano              cell phone            Shaq             Panasonic
+5      Prada            ACP Ammunition                 iPhone                Wade             Casio
+6      Lancome          Old Navy brand                 Creative Zen          T-mac            Olympus
+7      Versace          Hollister                      Zen                   Lebron James     Hp
+8      LV               Aeropostal                     iPod nano             Nash             Lexmark
+9      Mac              American Eagle outfitters      iPod touch            KG               Pentax
+10     Dooney           Guess                          iRiver                Bonds            Xerox
+                            Table 6: Examples of comparators for different entities
+Chanel                  Gap                     iPod                  Kobe                    Canon
+Chanel handbag          Gap coupons             iPod nano             Kobe Bryant stats       Canon t2i
+Chanel sunglass         Gap outlet              iPod touch            Lakers Kobe             Canon printers
+Chanel earrings         Gap card                iPod best buy         Kobe espn               Canon printer drivers
+Chanel watches          Gap careers             iTunes                Kobe Dallas Mavericks   Canon downloads
+Chanel shoes            Gap casting call        Apple                 Kobe NBA                Canon copiers
+Chanel jewelry          Gap adventures          iPod shuffle          Kobe 2009               Canon scanner
+Chanel clothing         Old navy                iPod support          Kobe san Antonio        Canon lenses
+Dior                    Banana republic         iPod classic          Kobe Bryant 24          Nikon
+Table 7: Related queries returned by Google related searches for the same target entities in Table 6. The bold
+ones indicate overlapped queries to the comparators in Table 6.
+                                                           comparators for the specific camera product „Ni-
+Examples of Comparator Extraction                          kon 40d‟.
+By applying our bootstrapping method to the                   Table 7 can show the difference between our
+entire source data (60M questions), 328,364                comparator mining and query/item recommenda-
+unique comparator pairs were extracted from                tion. As shown in the table, „Google related
+679,909 automatically identified comparative               searches‟ generally suggests a mixed set of two
+questions.                                                 kinds of related queries for a target entity: (1)
+   Table 6 lists top 10 frequently compared enti-          queries specified with subtopics for an original
+ties for a target item, such as Chanel, Gap, in our        query (e.g., „Chanel handbag‟ for „Chanel‟) and
+question archive. As shown in the table, our               (2) its comparable entities (e.g., „Dior‟ for „Cha-
+comparator mining method successfully discov-              nel‟). It confirms one of our claims that compara-
+ers realistic comparators. For example, for „Cha-          tor mining and query/item recommendation are
+nel’, most results are high-end fashion brands             related but not the same.
+such as „Dior’ or „Louis Vuitton’, while the rank-
+ing results for „Gap’ usually contains similar ap-         5     Conclusion
+parel brands for young people, such as „Old Navy’
+                                                           In this paper, we present a novel weakly super-
+or „Banana Republic’. For the basketball player
+                                                           vised method to identify comparative questions
+„Kobe‟, most of the top ranked comparators are
+                                                           and extract comparator pairs simultaneously. We
+also famous basketball players. Some interesting
+                                                           rely on the key insight that a good comparative
+comparators are shown for „Canon‟ (the compa-
+                                                           question identification pattern should extract
+ny name). It is famous for different kinds of its
+                                                           good comparators, and a good comparator pair
+products, for example, digital cameras and prin-
+                                                           should occur in good comparative questions to
+ters, so it can be compared to different kinds of
+                                                           bootstrap the extraction and identification
+companies. For example, it is compared to „HP’,
+                                                           process. By leveraging large amount of unla-
+„Lexmark’, or „Xerox’, the printer manufacturers,
+                                                           beled data and the bootstrapping process with
+and also compared to „Nikon’, „Sony’, or „Kodak’,
+                                                           slight supervision to determine four parameters,
+the digital camera manufactures. Besides gener-
+                                                           we found 328,364 unique comparator pairs and
+al entities such as a brand or company name, our
+                                                           6,869 extraction patterns without the need of
+method also found an interesting comparable
+                                                           creating a set of comparative question indicator
+entity for a specific item in the experiments. For
+                                                           keywords.
+example, our method recommends „Nikon d40i‟,
+                                                              The experimental results show that our me-
+„Canon rebel xti‟, „Canon rebel xt‟, „Nikon
+                                                           thod is effective in both comparative question
+d3000‟, „Pentax k100d‟, „Canon eos 1000d‟ as
+                                                           identification and comparator extraction. It sig-
+
+                                                       657
+
+
+nificantly improves recall in both tasks while            Raymond J. Mooney and Razvan Bunescu. 2005.
+maintains high precision. Our examples show                  Mining knowledge from text using information ex-
+that these comparator pairs reflect what users are           traction. ACM SIGKDD Exploration Newsletter,
+really interested in comparing.                              7(1):3–10.
+                                                          Dragomir Radev, Weiguo Fan, Hong Qi, and Harris
+   Our comparator mining results can be used for
+                                                             Wu and Amardeep Grewal. 2002. Probabilistic
+a commerce search or product recommendation                  question answering on the web. Journal of the
+system. For example, automatic suggestion of                 American Society for Information Science and
+comparable entities can assist users in their com-           Technology, pages 408–419.
+parison activities before making their purchase           Deepak Ravichandran and Eduard Hovy. 2002.
+decisions. Also, our results can provide useful              Learning surface text patterns for a question ans-
+information to companies which want to identify              wering system. In Proceedings of ACL ’02, pages
+their competitors.                                           41–47.
+   In the future, we would like to improve extrac-        Ellen Riloff and Rosie Jones. 1999. Learning dictio-
+tion pattern application and mine rare extraction            naries for information extraction by multi-level
+                                                             bootstrapping. In Proceedings of AAAI ’99
+patterns. How to identify comparator aliases such
+                                                             /IAAI ’99, pages 474–479.
+as „LV’ and „Louis Vuitton‟ and how to separate           Ellen Riloff. 1996. Automatically generating extrac-
+ambiguous entities such “Paris vs. London” as                tion patterns from untagged text. In Proceedings of
+location and “Paris vs. Nicole” as celebrity are             the 13th National Conference on Artificial Intelli-
+all interesting research topics. We also plan to             gence, pages 1044–1049.
+develop methods to summarize answers pooled               Stephen Soderland. 1999. Learning information ex-
+by a given comparator pair.                                  traction rules for semi-structured and free text. Ma-
+                                                             chine Learning, 34(1-3):233–272.
+6    Acknowledgement
+This work was done when the first author
+worked as an intern at Microsoft Research Asia.
+
+References
+Mary Elaine Califf and Raymond J. Mooney. 1999.
+   Relational learning of pattern-match rules for in-
+   formation extraction. In Proceedings of AAAI’99
+   /IAAI’99.
+Claire Cardie. 1997. Empirical methods in informa-
+   tion extraction. AI magazine, 18:65–79.
+Dan Gusfield. 1997. Algorithms on strings, trees, and
+   sequences: computer science and computational
+   biology. Cambridge University Press, New York,
+   NY, USA
+Taher H. Haveliwala. 2002. Topic-sensitive pagerank.
+   In Proceedings of WWW ’02, pages 517–526.
+Glen Jeh and Jennifer Widom. 2003. Scaling persona-
+   lized web search. In Proceedings of WWW ’03,
+   pages 271–279.
+Nitin Jindal and Bing Liu. 2006a. Identifying compar-
+   ative sentences in text documents. In Proceedings
+   of SIGIR ’06, pages 244–251.
+Nitin Jindal and Bing Liu. 2006b. Mining compara-
+   tive sentences and relations. In Proceedings of
+   AAAI ’06.
+Zornitsa Kozareva, Ellen Riloff, and Eduard Hovy.
+   2008. Semantic class learning from the web with
+   hyponym pattern linkage graphs. In Proceedings of
+   ACL-08: HLT, pages 1048–1056.
+Greg Linden, Brent Smith and Jeremy York. 2003.
+   Amazon.com Recommendations: Item-to-Item
+   Collaborative Filtering. IEEE Internet Computing,
+   pages 76-80.
+
+
+                                                        658
+

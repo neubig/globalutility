@@ -1,0 +1,619 @@
+                   Learning to Adapt to Unknown Users:
+        Referring Expression Generation in Spoken Dialogue Systems
+             Srinivasan Janarthanam                 Oliver Lemon
+               School of Informatics               Interaction Lab
+              University of Edinburgh Mathematics and Computer Science (MACS)
+           s.janarthanam@ed.ac.uk              Heriot-Watt University
+                                               o.lemon@hw.ac.uk
+
+
+                      Abstract                                  Jargon: Please plug one end of the broadband
+                                                                cable into the broadband filter.
+    We present a data-driven approach to learn                  Descriptive: Please plug one end of the thin
+    user-adaptive referring expression gener-                   white cable with grey ends into the
+    ation (REG) policies for spoken dialogue                    small white box.
+    systems. Referring expressions can be dif-
+    ficult to understand in technical domains                  Table 1: Referring expression examples for 2 enti-
+    where users may not know the techni-                       ties (from the corpus)
+    cal ‘jargon’ names of the domain entities.
+    In such cases, dialogue systems must be
+    able to model the user’s (lexical) domain                  setting. For instance, in a technical support con-
+    knowledge and use appropriate referring                    versation, the system could choose to use more
+    expressions. We present a reinforcement                    technical terms with an expert user, or to use more
+    learning (RL) framework in which the sys-                  descriptive and general expressions with novice
+    tem learns REG policies which can adapt                    users, and a mix of the two with intermediate users
+    to unknown users online. Furthermore,                      of various sorts (see examples in Table 1).
+    unlike supervised learning methods which                      In natural human-human conversations, dia-
+    require a large corpus of expert adaptive                  logue partners learn about each other and adapt
+    behaviour to train on, we show that effec-                 their language to suit their domain expertise (Is-
+    tive adaptive policies can be learned from                 sacs and Clark, 1987). This kind of adaptation
+    a small dialogue corpus of non-adaptive                    is called Alignment through Audience
+    human-machine interaction, by using a RL                   Design (Clark and Murphy, 1982; Bell, 1984).
+    framework and a statistical user simula-                   We assume that users are mostly unknown to
+    tion. We show that in comparison to                        the system and therefore that a spoken dialogue
+    adaptive hand-coded baseline policies, the                 system (SDS) must be capable of observing the
+    learned policy performs significantly bet-                 user’s dialogue behaviour, modelling his/her do-
+    ter, with an 18.6% average increase in                     main knowledge, and adapting accordingly, just
+    adaptation accuracy. The best learned pol-                 like human interlocutors. Rule-based and super-
+    icy also takes less dialogue time (average                 vised learning approaches to user adaptation in
+    1.07 min less) than the best hand-coded                    SDS have been proposed earlier (Cawsey, 1993;
+    policy. This is because the learned poli-                  Akiba and Tanaka, 1994). However, such methods
+    cies can adapt online to changing evidence                 require expensive resources such as domain ex-
+    about the user’s domain expertise.                         perts to hand-code the rules, or a corpus of expert-
+                                                               layperson interactions to train on. In contrast, we
+1   Introduction                                               present a corpus-driven framework using which
+We present a reinforcement learning (Sutton and                a user-adaptive REG policy can be learned using
+Barto, 1998) framework to learn user-adaptive re-              RL from a small corpus of non-adaptive human-
+ferring expression generation policies from data-              machine interaction.
+driven user simulations. A user-adaptive REG pol-                 We show that these learned policies perform
+icy allows the system to choose appropriate ex-                better than simple hand-coded adaptive policies
+pressions to refer to domain entities in a dialogue            in terms of accuracy of adaptation and dialogue
+
+
+                                                          69
+         Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 69–78,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+time. We also compared the performance of poli-              cessfully used for learning dialogue management
+cies learned using a hand-coded rule-based simu-             policies since (Levin et al., 1997). The learned
+lation and a data-driven statistical simulation and          policies allow the dialogue manager to optimally
+show that data-driven simulations produce better             choose appropriate dialogue acts such as instruc-
+policies than rule-based ones.                               tions, confirmation requests, and so on, under
+   In section 2, we present some of the related              uncertain noise or other environment conditions.
+work. Section 3 presents the dialogue data that              There have been recent efforts to learn information
+we used to train the user simulation. Section 4 and          presentation and recommendation strategies using
+section 5 describe the dialogue system framework             reinforcement learning (Rieser and Lemon, 2009;
+and the user simulation models. In section 6, we             Hernandez et al., 2003; Rieser and Lemon, 2010),
+present the training and in section 7, we present            and joint optimisation of Dialogue Management
+the evaluation for different REG policies.                   and NLG using hierarchical RL has been pro-
+                                                             posed by (Lemon, 2010). In contrast, we present a
+2   Related work                                             framework to learn to choose appropriate referring
+                                                             expressions based on a user’s domain knowledge.
+There are several ways in which natural language             Earlier, we reported a proof-of-concept work us-
+generation (NLG) systems adapt to users. Some                ing a hand-coded rule-based user simulation (Ja-
+of them adapt to a user’s goals, preferences, en-            narthanam and Lemon, 2009c).
+vironment and so on. Our focus in this study
+is restricted to the user’s lexical domain exper-            3 The Wizard-of-Oz Corpus
+tise. Several NLG systems adapt to the user’s do-
+main expertise at different levels of generation -           We use a corpus of technical support dialogues
+text planning (Paris, 1987), complexity of instruc-          collected from real human users using a Wizard-
+tions (Dale, 1989), referring expressions (Reiter,           of-Oz method (Janarthanam and Lemon, 2009b).
+1991), and so on. Some dialogue systems, such                The corpus consists of 17 dialogues from users
+as COMET, have also incorporated NLG modules                 who were instructed to physically set up a home
+that present appropriate levels of instruction to the        broadband connection using objects like a wire-
+user (McKeown et al., 1993). However, in all the             less modem, cables, filters, etc. They listened to
+above systems, the user’s knowledge is assumed to            the instructions from the system and carried them
+be accurately represented in an initial user model           out using the domain objects laid in front of them.
+using which the system adapts its language. In               The human ‘wizard’ played the role of only an in-
+contrast to all these systems, our adaptive REG              terpreter who would understand what the user said
+policy knows nothing about the user when the con-            and annotate it as a dialogue act. The set-up ex-
+versation starts.                                            amined the effect of using three types of referring
+   Rule-based and supervised learning approaches             expressions (jargon, descriptive, and tutorial), on
+have been proposed to learn and adapt during the             the users.
+conversation dynamically. Such systems learned                  Out of the 17 dialogues, 6 used a jargon strat-
+from the user at the start and later adapted to the          egy, 6 used a descriptive strategy, and 5 used a
+domain knowledge of the users. However, they ei-             tutorial strategy1 . The task had reference to 13
+ther require expensive expert knowledge resources            domain entities, mentioned repeatedly in the di-
+to hand-code the inference rules (Cawsey, 1993) or           alogue. In total, there are 203 jargon, 202 descrip-
+large corpus of expert-layperson interaction from            tive and 167 tutorial referring expressions. Inter-
+which adaptive strategies can be learned and mod-            estingly, users who weren’t acquainted with the
+elled, using methods such as Bayesian networks               domain objects requested clarification on some of
+(Akiba and Tanaka, 1994). In contrast, we present            the referring expressions used. The dialogue ex-
+an approach that learns in the absence of these ex-          changes between the user and system were logged
+pensive resources. It is also not clear how super-           in the form of dialogue acts and the system’s
+vised and rule-based approaches choose between               choices of referring expressions. Each user’s
+when to seek more information and when to adapt.             knowledge of domain entities was recorded both
+In this study, we show that using reinforcement              before and after the task and each user’s interac-
+learning this decision is learned automatically.                1
+                                                                  The tutorial strategy uses both jargon and descriptive ex-
+   Reinforcement Learning (RL) has been suc-                 pressions together.
+
+
+                                                        70
+
+
+tions with the environment were recorded. We use             dialogue management policy πdm . Since, in this
+the dialogue data, pre-task knowledge tests, and             study, we focus only on learning the REG policy,
+the environment interaction data to train a user             the dialogue management is coded in the form of
+simulation model. Pre and post-task test scores              a finite state machine. In this dialogue task, the
+were used to model the learning behaviour of the             system provides two kinds of instructions - ob-
+users during the task (see section 5).                       servation and manipulation. For observation in-
+   The corpus also recorded the time taken to com-           structions, users observe the environment and re-
+plete each dialogue task. We used these data to              port back to the system, and for the manipulation
+build a regression model to calculate total dialogue         instructions (such as plugging in a cable in to a
+time for dialogue simulations. The strategies were           socket), they manipulate the domain entities in the
+never mixed (with some jargon, some descriptive              environment. When the user carries out an instruc-
+and some tutorial expressions) within a single con-          tion, the system state is updated and the next in-
+versation. Therefore, please note that the strate-           struction is given. Sometimes, users do not under-
+gies used for data collection were not adaptive and          stand the referring expressions used by the system
+the human ‘wizard’ has no role in choosing which             and then ask for clarification. In such cases, the
+referring expression to present to the user. Due to          system provides clarification on the referring ex-
+this fact, no user score regarding adaptation was            pression (provide clar), which is information to
+collected. We therefore measure adaptation objec-            enable the user to associate the expression with
+tively as explained in section 6.1.                          the intended referent. The system action As,t (t
+                                                             denoting turn, s denoting system) is therefore to
+4    The Dialogue System                                     either give the user the next instruction or a clarifi-
+In this section, we describe the different modules           cation. When the user responds in any other way,
+of the dialogue system. The interaction between              the instruction is simply repeated. The dialogue
+the different modules is shown in figure 1 (in               manager is also responsible for updating and man-
+learning mode). The dialogue system presents the             aging the system state Ss,t (see section 4.2). The
+user with instructions to setup a broadband con-             system interacts with the user by passing both the
+nection at home. In the Wizard of Oz setup, the              system action As,t and the referring expressions
+system and the user interact using speech. How-              RECs,t (see section 4.3).
+ever, in our machine learning setup, they interact at
+the abstract level of dialogue actions and referring         4.2   The dialogue state
+expressions. Our objective is to learn to choose
+                                                             The dialogue state Ss,t is a set of variables that
+the appropriate referring expressions to refer to the
+                                                             represent the current state of the conversation. In
+domain entities in the instructions.
+                                                             our study, in addition to maintaining an overall di-
+                                                             alogue state, the system maintains a user model
+                                                             U Ms,t which records the initial domain knowl-
+                                                             edge of the user. It is a dynamic model that starts
+                                                             with a state where the system does not have any
+                                                             idea about the user. As the conversation pro-
+                                                             gresses, the dialogue manager records the evi-
+                                                             dence presented to it by the user in terms of his
+                                                             dialogue behaviour, such as asking for clarifica-
+                                                             tion and interpreting jargon. Since the model is
+                                                             updated according to the user’s behaviour, it may
+                                                             be inaccurate if the user’s behaviour is itself uncer-
+                                                             tain. So, when the user’s behaviour changes (for
+    Figure 1: System User Interaction (learning)             instance, from novice to expert), this is reflected
+                                                             in the user model during the conversation. Hence,
+                                                             unlike previous studies mentioned in section 2, the
+4.1 Dialogue Manager                                         user model used in this system is not always an ac-
+The dialogue manager identifies the next instruc-            curate model of the user’s knowledge and reflects
+tion (dialogue act) to give to the user based on the         a level of uncertainty about the user.
+
+
+                                                        71
+
+
+   Each jargon referring expression x is repre-                         policy πreg : U Ms,t → RECs,t , which maps
+sented by a three valued variable in the dialogue                       the states of the dialogue (user model) to optimal
+state: user knows x. The three values that each                         REG actions. The referring expression choices
+variable takes are yes, no, not sure. The vari-                         RECs,t is a set of pairs identifying the refer-
+ables are updated using a simple user model up-                         ent R and the type of expression T used in the
+date algorithm. Initially each variable is set to                       current system utterance. For instance, the pair
+not sure. If the user responds to an instruction                        (broadband filter, desc) represents the descriptive
+containing the referring expression x with a clari-                     expression “small white box”.
+fication request, then user knows x is set to no.                              RECs,t = {(R1 , T1 ), ..., (Rn , Tn )}
+Similarly, if the user responds with appropriate in-
+formation to the system’s instruction, the dialogue                        In the evaluation mode, a trained REG policy in-
+manager sets user knows x is set to yes.                                teracts with unknown users. It consults the learned
+   The dialogue manager updates the variables                           policy πreg to choose the referring expressions
+concerning the referring expressions used in the                        based on the current user model.
+current system utterance appropriately after the                        5 User Simulations
+user’s response each turn. The user may have the
+capacity to learn jargon. However, only the user’s                      In this section, we present user simulation models
+initial knowledge is recorded. This is based on the                     that simulate the dialogue behaviour of a real hu-
+assumption that an estimate of the user’s knowl-                        man user. These external simulation models are
+edge helps to predict the user’s knowledge of the                       different from internal user models used by the
+rest of the referring expressions. Another issue                        dialogue system. In particular, our model is the
+concerning the state space is its size. Since, there                    first to be sensitive to a system’s choices of refer-
+are 13 entities and we only model the jargon ex-                        ring expressions. The simulation has a statistical
+pressions, the state space size is 313 .                                distribution of in-built knowledge profiles that de-
+                                                                        termines the dialogue behaviour of the user being
+4.3 REG module                                                          simulated. If the user does not know a referring
+The REG module is a part of the NLG module                              expression, then he is more likely to request clar-
+whose task is to identify the list of domain enti-                      ification. If the user is able to interpret the refer-
+ties to be referred to and to choose the appropriate                    ring expressions and identify the references then
+referring expression for each of the domain enti-                       he is more likely to follow the system’s instruc-
+ties for each given dialogue act. In this study, we                     tion. This behaviour is simulated by the action se-
+focus only on the production of appropriate refer-                      lection models described below.
+ring expressions to refer to domain entities men-                          Several user simulation models have been pro-
+tioned in the dialogue act. It chooses between the                      posed for use in reinforcement learning of dia-
+two types of referring expressions - jargon and de-                     logue policies (Georgila et al., 2005; Schatzmann
+scriptive. For example, the domain entity broad-                        et al., 2006; Schatzmann et al., 2007; Ai and Lit-
+band filter can be referred to using the jargon ex-                     man, 2007). However, they are suited only for
+pression “broadband filter” or using the descrip-                       learning dialogue management policies, and not
+tive expression “small white box”2 . We call this                       natural language generation policies. Earlier, we
+the act of choosing the REG action. The tutorial                        presented a two-tier simulation trained on data
+strategy was not investigated here since the corpus                     precisely for REG policy learning (Janarthanam
+analysis showed tutorial utterances to be very time                     and Lemon, 2009a). However, it is not suited for
+consuming. In addition, they do not contribute to                       training on small corpus like the one we have at
+the adaptive behaviour of the system.                                   our disposal. In contrast to the earlier model, we
+   The REG module operates in two modes - learn-                        now condition the clarification requests on the ref-
+ing and evaluation. In the learning mode, the REG                       erent class rather than the referent itself to handle
+module is the learning agent. The REG mod-                              data sparsity problem.
+ule learns to associate dialogue states with opti-                         The user simulation (US) receives the system
+mal REG actions. This is represented by a REG                           action As,t and its referring expression choices
+   2
+                                                                        RECs,t at each turn. The US responds with a
+      We will use italicised forms to represent the domain enti-
+ties (e.g. broadband filter) and double quotes to represent the         user action Au,t (u denoting user). This can ei-
+referring expressions (e.g. “broadband filter”).                        ther be a clarification request (cr) or an instruction
+
+
+                                                                   72
+
+
+response (ir). We used two kinds of action selec-                  livebox = 1                power adaptor = 1
+tion models: corpus-driven statistical model and                   wall phone socket = 1      broadband filter = 0
+hand-coded rule-based model.                                       broadband cable = 0        ethernet cable = 1
+                                                                   lb power light = 1         lb power socket = 1
+5.1 Corpus-driven action selection model                           lb broadband light = 0     lb ethernet light = 0
+In the corpus-driven model, the US produces a                      lb adsl socket = 0         lb ethernet socket = 0
+clarification request cr based on the class of the                 pc ethernet socket = 1
+referent C(Ri ), type of the referring expression
+Ti , and the current domain knowledge of the user                 Table 2: Domain knowledge: an Intermediate
+for the referring expression DKu,t (Ri , Ti ). Do-                User
+main entities whose jargon expressions raised clar-
+ification requests in the corpus were listed and
+                                                                  know about. When the system uses expressions
+those that had more than the mean number of clar-
+                                                                  that the user knows, the user generally responds
+ification requests were classified as difficult
+                                                                  to the instruction given by the system. These user
+and others as easy entities (for example, “power
+                                                                  simulation models have been evaluated and found
+adaptor” is easy - all users understood this
+                                                                  to produce behaviour that is very similar to the
+expression, “broadband filter” is difficult).
+                                                                  original corpus data, using the Kullback-Leibler
+Clarification requests are produced using the fol-
+                                                                  divergence metric (Cuayahuitl, 2009).
+lowing model.
+ P (Au,t = cr(Ri , Ti )|C(Ri ), Ti , DKu,t (Ri , Ti ))            5.2   Rule-based action selection model
+              where (Ri , Ti ) ∈ RECs,t                           We also built a rule-based simulation using the
+                                                                  above models but where some of the parameters
+   One should note that the actual literal expres-
+                                                                  were set manually instead of estimated from the
+sion is not used in the transaction. Only the entity
+                                                                  data. The purpose of this simulation is to in-
+that it is referring to (Ri ) and its type (Ti ) are used.
+                                                                  vestigate how learning with a data-driven statisti-
+However, the above model simulates the process
+                                                                  cal simulation compares to learning with a simple
+of interpreting and resolving the expression and
+                                                                  hand-coded rule-based simulation. In this simula-
+identifying the domain entity of interest in the in-
+                                                                  tion, the user always asks for a clarification when
+struction. The user identification of the entity is
+                                                                  he does not know a jargon expression (regardless
+signified when there is no clarification request pro-
+                                                                  of the class of the referent) and never does this
+duced (i.e. Au,t = none). When no clarification
+                                                                  when he knows it. This enforces a stricter, more
+request is produced, the environment action EAu,t
+                                                                  consistent behaviour for the different knowledge
+is generated using the following model.
+                                                                  patterns, which we hypothesise should be easier to
+       P (EAu,t |As,t ) if Au,t ! = cr(Ri , Ti )                  learn to adapt to, but may lead to less robust REG
+   Finally, the user action is an instruction re-                 policies.
+sponse which is determined by the system action
+                                                                  5.3   User Domain knowledge
+As,t . Instruction responses can be different in dif-
+ferent conditions. For an observe and report in-                  The user domain knowledge is initially set to one
+struction, the user issues a provide inf o action                 of several models at the start of every conver-
+and for a manipulation instruction, the user re-                  sation. The models range from novices to ex-
+sponds with an acknowledgement action and so                      perts which were identified from the corpus using
+on.                                                               k-means clustering. The initial knowledge base
+                                                                  (DKu,initial ) for an intermediate user is shown in
+             P (Au,t = ir|EAu,t , As,t )                          table 2. A novice user knows only “power adap-
+   All the above models were trained on our cor-                  tor”, and an expert knows all the jargon expres-
+pus data using maximum likelihood estimation and                  sions. We assume that users can interpret the de-
+smoothed using a variant of Witten-Bell discount-                 scriptive expressions and resolve their references.
+ing. According to the data, clarification requests                Therefore, they are not explicitly represented. We
+are much more likely when jargon expressions                      only code the user’s knowledge of jargon expres-
+are used to refer to the referents that belong to                 sions. This is represented by a boolean variable
+the difficult class and which the user doesn’t                    for each domain entity.
+
+
+                                                             73
+
+
+  Corpus data shows that users can learn jargon                  We designed a reward function for the goal of
+expressions during the conversation. The user’s               adapting to each user’s domain knowledge. We
+domain knowledge DKu is modelled to be dy-                    present the Adaptation Accuracy score AA that
+namic and is updated during the conversation.                 calculates how accurately the agent chose the ex-
+Based on our data, we found that when presented               pressions for each referent r, with respect to the
+with clarification on a jargon expression, users al-          user’s knowledge. Appropriateness of an expres-
+ways learned the jargon.                                      sion is based on the user’s knowledge of the ex-
+                                                              pression. So, when the user knows the jargon ex-
+          if As,t = provide clar(Ri , Ti )                    pression for r, the appropriate expression to use is
+              DKu,t+1 (Ri , Ti ) ← 1                          jargon, and if s/he doesn’t know the jargon, an de-
+   Users also learn when jargon expressions are re-           scriptive expression is appropriate. Although the
+peatedly presented to them. Learning by repetition            user’s domain knowledge is dynamically chang-
+follows the pattern of a learning curve - the greater         ing due to learning, we base appropriateness on
+the number of repetitions #(Ri , Ti ), the higher the         the initial state, because our objective is to adapt to
+likelihood of learning. This is modelled stochas-             the initial state of the user DKu,initial . However,
+tically based on repetition using the parameter               in reality, designers might want their system to ac-
+#(Ri , Ti ) as follows (where (Ri , Ti ) ∈ RECs,t ) .         count for user’s changing knowledge as well. We
+                                                              calculate accuracy per referent RAr as the ratio
+       P (DKu,t+1 (Ri , Ti ) ← 1|#(Ri , Ti ))                 of number of appropriate expressions to the total
+   The final state of the user’s domain knowl-                number of instances of the referent in the dialogue.
+edge (DKu,f inal ) may therefore be different from            We then calculate the overall mean accuracy over
+the initial state (DKu,initial ) due to the learn-            all referents as shown below.
+ing effect produced by the system’s use of jar-
+gon expressions. In most studies done previously,
+the user’s domain knowledge is considered to be                      RAr =  #(appropriate expressions(r))
+                                                                                  #(instances(r))
+static. However in real conversation, we found that
+                                                                                                 1
+the users nearly always learned jargon expressions                AdaptationAccuracyAA = #(r)       Σr RAr
+from the system’s utterances and clarifications.
+                                                                 Note that this reward is computed at the end of
+6   Training                                                  the dialogue (it is a ‘final’ reward), and is then
+                                                              back-propagated along the action sequence that
+The REG module was trained (operated in learn-
+                                                              led to that final state. Thus the reward can be com-
+ing mode) using the above simulations to learn
+                                                              puted for each system REG action, without the
+REG policies that select referring expressions
+                                                              system having access to the user’s initial domain
+based on the user expertise in the domain. As
+                                                              knowledge while it is learning a policy.
+shown in figure 1, the learning agent (REG mod-
+ule) is given a reward at the end of every dialogue.             Since the agent starts the conversation with
+During the training session, the learning agent ex-           no knowledge about the user, it may try to use
+plores different ways to maximize the reward. In              more exploratory moves to learn about the user,
+this section, we discuss how to code the learning             although they may be inappropriate. However,
+agent’s goals as reward. We then discuss how the              by measuring accuracy to the initial user state,
+reward function is used to train the learning agent.          the agent is encouraged to restrict its exploratory
+                                                              moves and start predicting the user’s domain
+6.1 Reward function                                           knowledge as soon as possible. The system should
+A reward function generates a numeric reward for              therefore ideally explore less and adapt more to
+the learning agent’s actions. It gives high rewards           increase accuracy. The above reward function re-
+to the agent when the actions are favourable and              turns 1 when the agent is completely accurate in
+low rewards when they are not. In short, the re-              adapting to the user’s domain knowledge and it
+ward function is a representation of the goal of the          returns 0 if the agent’s REC choices were com-
+agent. It translates the agent’s actions into a scalar        pletely inappropriate. Usually during learning, the
+value that can be maximized by choosing the right             reward value lies between these two extremes and
+action sequences.                                             the agent tries to maximize it to 1.
+
+
+                                                         74
+
+
+6.2 Learning                                                 to explore the possibility of greater rewards. Over
+                                                             time, it stops exploring new state-action combina-
+The REG module was trained in learning mode us-              tions and exploits those actions that contribute to
+ing the above reward function using the SHAR-                higher reward. The REG module learns to choose
+SHA reinforcement learning algorithm (with lin-              the appropriate referring expressions based on the
+ear function approximation) (Shapiro and Langley,            user model in order to maximize the overall adap-
+2002). This is a hierarchical variant of SARSA,              tation accuracy.
+which is an on-policy learning algorithm that up-
+                                                                Figure 2 shows how the agent learns using the
+dates the current behaviour policy (see (Sutton
+                                                             data-driven (Learned DS) and hand-coded simu-
+and Barto, 1998)). The training produced approx.
+                                                             lations (Learned HS) during training. It can be
+5000 dialogues. Two types of simulations were
+                                                             seen in the figure 2 that towards the end the curve
+used as described above: Data-driven and Hand-
+                                                             plateaus signifying that learning has converged.
+coded. Both user simulations were calibrated to
+produce three types of users: Novice, Int2 (in-
+termediate) and Expert, randomly but with equal
+probability. Novice users knew just one jargon
+expression, Int2 knew seven, and Expert users
+knew all thirteen jargon expressions. There was
+an underlying pattern in these knowledge profiles.
+For example, Intermediate users were those who
+knew the commonplace domain entities but not
+those specific to broadband connection. For in-
+stance, they knew “ethernet cable” and “pc ether-
+net socket” but not “broadband filter” and “broad-
+band cable”.
+   Initially, the REG policy chooses randomly be-
+tween the referring expression types for each do-
+                                                                     Figure 2: Learning curves - Training
+main entity in the system utterance, irrespective
+of the user model state. Once the referring expres-
+sions are chosen, the system presents the user sim-
+                                                             7     Evaluation
+ulation with both the dialogue act and referring ex-
+pression choices. The choice of referring expres-            In this section, we present the evaluation metrics
+sion affects the user’s dialogue behaviour which in          used, the baseline policies that were hand-coded
+turn makes the dialogue manager update the user              for comparison, and the results of evaluation.
+model. For instance, choosing a jargon expres-
+sion could evoke a clarification request from the            7.1    Metrics
+user, which in turn prompts the dialogue manager
+to update the user model with the new information            In addition to the adaptation accuracy mentioned
+that the user is ignorant of the particular expres-          in section 6.1, we also measure other parame-
+sion. It should be noted that using a jargon expres-         ters from the conversation in order to show how
+sion is an information seeking move which enables            learned adaptive policies compare with other poli-
+the REG module to estimate the user’s knowledge              cies on other dimensions. We calculate the time
+level. The same process is repeated for every dia-           taken (T ime) for the user to complete the dialogue
+logue instruction. At the end of the dialogue, the           task. This is calculated using a regression model
+system is rewarded based on its choices of refer-            from the corpus based on number of words, turns,
+ring expressions. If the system chooses jargon ex-           and mean user response time. We also measure
+pressions for novice users or descriptive expres-            the (normalised) learning gain (LG) produced by
+sions for expert users, penalties are incurred and if        using unknown jargon expressions. This is calcu-
+the system chooses REs appropriately, the reward             lated using the pre and post scores from the user
+is high. On the one hand, those actions that fetch           domain knowledge (DKu ) as follows.
+more reward are reinforced, and on the other hand,                                            P ost−P re
+the agent tries out new state-action combinations                     Learning Gain LG =        1−P re
+
+
+
+                                                        75
+
+
+7.2 Baseline REG policies
+In order to compare the performance of the learned
+policy with hand-coded REG policies, three sim-
+ple rule-based policies were built. These were
+built in the absence of expert domain knowledge
+and a expert-layperson corpus.
+
+  • Jargon: Uses jargon for all referents by de-
+    fault. Provides clarifications when requested.
+
+  • Descriptive: Uses descriptive expressions for
+    all referents by default.
+
+  • Switching: This policy starts with jargon
+    expressions and continues using them until                  Figure 3: Evaluation - Adaptation Accuracy
+    the user requests for clarification. It then
+    switches to descriptive expressions and con-
+                                                                   Policies         AA       Time T    LG
+    tinues to use them until the user complains.
+                                                                   Descriptive      46.15    7.44      0
+    In short, it switches between the two strate-
+                                                                   Jargon           74.54    9.15*     0.97*
+    gies based on the user’s responses.
+                                                                   Switching        62.47    7.48      0.30
+   All the policies exploit the user model in sub-                 Learned HS       69.67    7.52      0.33
+sequent references after the user’s knowledge of                   Learned DS       79.70*   8.08*     0.63*
+the expression has been set to either yes or no.                    *   Significantly different from all oth-
+Therefore, although these policies are simple, they                     ers (p < 0.05).
+do adapt to a certain extent, and are reasonable
+baselines for comparison in the absence of expert                   Table 3: Evaluation on 5 user types
+knowledge for building more sophisticated base-
+lines.
+                                                             over all different user types (see figure 3). It
+7.3 Results                                                  should also be noted that the it generalised well
+The policies were run under a testing condition              over user types (Int1 and Int3) which were un-
+(where there is no policy learning or exploration)           seen in training. Learned DS policy outperforms
+using a data-driven simulation calibrated to simu-           all other policies: Learned HS (Mean = 69.67, SD
+late 5 different user types. In addition to the three        = 14.18), Switching (Mean = 62.47, SD = 14.18),
+users - Novice, Expert and Int2, from the train-             Jargon (Mean = 74.54, SD = 17.9) and Descrip-
+ing simulations, two other intermediate users (Int1          tive (Mean = 46.15, SD = 33.29). The differences
+and Int3) were added to examine how well each                between the accuracy (AA) of the Learned DS pol-
+policy handles unseen user types. The REG mod-               icy and all other policies were statistically signif-
+ule was operated in evaluation mode to produce               icant with p < 0.05 (using a two-tailed paired t-
+around 200 dialogues per policy distributed over             test). Although Learned HS policy is similar to
+the 5 user groups.                                           the Learned DS policy, as shown in the learning
+   Overall performance of the different policies in          curves in figure 2, it does not perform as well
+terms of Adaptation Accuracy (AA), T ime and                 when confronted with users types that it did not
+Learning Gain (LG) are given in Table 3. Fig-                encounter during training. The Switching policy,
+ure 3 shows how each policy performs in terms of             on the other hand, quickly switches its strategy
+accuracy on the 5 types of users.                            (sometimes erroneously) based on the user’s clar-
+   We found that the Learned DS policy (i.e.                 ification requests but does not adapt appropriately
+learned with the data-driven user simulation) is             to evidence presented later during the conversa-
+the most accurate (Mean = 79.70, SD = 10.46)                 tion. Sometimes, this policy switches erroneously
+in terms of adaptation to each user’s initial state          because of the uncertain user behaviours. In con-
+of domain knowledge. Also, it is the only pol-               trast, learned policies continuously adapt to new
+icy that has more or less the same accuracy scores           evidence. The Jargon policy performs better than
+
+
+                                                        76
+
+
+the Learned HS and Switching policies. This be-               the learned policies are able to better adapt to users
+cause the system can learn more about the user                with different domain expertise.
+by using more jargon expressions and then use                    In addition to adaptation, learned policies learn
+that knowledge for adaptation for known referents.            to identify when to seek information from the user
+However, it is not possible for this policy to pre-           to populate the user model (which is initially set
+dict the user’s knowledge of unseen referents. The            to not sure). It should be noted that the sys-
+Learned DS policy performs better than the Jargon             tem cannot adapt unless it has some information
+policy, because it is able to accurately predict the          about the user and therefore needs to decisively
+user’s knowledge of referents unseen in the dia-              seek information by using jargon expressions. If
+logue so far.                                                 it seeks information all the time, it is not adapting
+   The learned policies are a little more time-               to the user. The learned policies therefore learn to
+consuming than the Switching and Descriptive                  trade-off between information seeking moves and
+policies but compared to the Jargon policy,                   adaptive moves in order to maximize the overall
+Learned DS takes 1.07 minutes less time. This is              adaptation accuracy score.
+because learned policies use a few jargon expres-
+sions (giving rise to clarification requests) to learn
+about the user. On the other hand, the Jargon pol-            8 Conclusion
+icy produces more user learning gain because of
+the use of more jargon expressions. Learned poli-             In this study, we have shown that user-adaptive
+cies compensate on time and learning gain in order            REG policies can be learned from a small cor-
+to predict and adapt well to the users’ knowledge             pus of non-adaptive dialogues between a dialogue
+patterns. This is because the training was opti-              system and users with different domain knowl-
+mized for accuracy of adaptation and not for learn-           edge levels. We have shown that such adaptive
+ing gain or time taken. The results show that using           REG policies learned using a RL framework adapt
+our RL framework, REG policies can be learned                 to unknown users better than simple hand-coded
+using data-driven simulations, and that such a pol-           policies built without much input from domain ex-
+icy can predict and adapt to a user’s knowledge               perts or from a corpus of expert-layperson adap-
+pattern more accurately than policies trained us-             tive dialogues. The learned, adaptive REG poli-
+ing hand-coded rule-based simulations and hand-               cies learn to trade off between adaptive moves and
+coded baseline policies.                                      information seeking moves automatically to max-
+                                                              imize the overall adaptation accuracy. Learned
+7.4 Discussion                                                policies start the conversation with information
+The learned policies explore the user’s expertise             seeking moves, learn a little about the user, and
+and predict their knowledge patterns, in order to             start adapting dynamically as the conversation
+better choose expressions for referents unseen in             progresses. We have also shown that a data-driven
+the dialogue so far. The system learns to iden-               statistical user simulation produces better policies
+tify the patterns of knowledge in the users with              than a simple hand-coded rule-based simulation,
+a little exploration (information seeking moves).             and that the learned policies generalise well to un-
+So, when it is provided with a piece of evidence              seen users.
+(e.g. the user knows “broadband filter”), it is able             In future work, we will evaluate the learned
+to accurately estimate unknown facts (e.g. the user           policies with real users to examine how well
+might know “broadband cable”). Sometimes, its                 they adapt, and examine how real users evalu-
+choices are wrong due to incorrect estimation of              ate them (subjectively) in comparison to baselines.
+the user’s expertise (due to stochastic behaviour             Whether the learned policies perform better or as
+of the users). In such cases, the incorrect adapta-           well as a hand-coded policy painstakingly crafted
+tion move can be considered to be an information              by a domain expert (or learned using supervised
+seeking move. This helps further adaptation us-               methods from an expert-layperson corpus) is an
+ing the new evidence. By continuously using this              interesting question that needs further exploration.
+“seek-predict-adapt” approach, the system adapts              Also, it would also be interesting to make the
+dynamically to different users. Therefore, with               learned policy account for the user’s learning be-
+a little information seeking and better prediction,           haviour and adapt accordingly.
+
+
+                                                         77
+
+
+Acknowledgements                                               S. Janarthanam and O. Lemon. 2009c. Learning Lexi-
+                                                                  cal Alignment Policies for Generating Referring Ex-
+The research leading to these results has received                pressions for Spoken Dialogue Systems. In Proc.
+funding from the European Community’s Seventh                     ENLG’09.
+Framework Programme (FP7/2007-2013) under                      O. Lemon. 2010. Learning what to say and how to say
+grant agreement no. 216594 (CLASSiC project                       it: joint optimization of spoken dialogue manage-
+www.classic-project.org) and from the                             ment and Natural Language Generation. Computer
+EPSRC, project no. EP/G069840/1.                                  Speech and Language. (to appear).
+                                                               E. Levin, R. Pieraccini, and W. Eckert. 1997. Learn-
+                                                                  ing Dialogue Strategies within the Markov Decision
+References                                                        Process Framework. In Proc. of ASRU97.
+H. Ai and D. Litman. 2007. Knowledge consistent                K. McKeown, J. Robin, and M. Tanenblatt. 1993. Tai-
+  user simulations for dialog systems. In Proceedings            loring Lexical Choice to the User’s Vocabulary in
+  of Interspeech 2007, Antwerp, Belgium.                         Multimedia Explanation Generation. In Proc. ACL
+                                                                 1993.
+T. Akiba and H. Tanaka. 1994. A Bayesian approach
+   for User Modelling in Dialogue Systems. In Pro-             C. L. Paris. 1987. The Use of Explicit User Models
+   ceedings of the 15th conference on Computational               in Text Generations: Tailoring to a User’s Level of
+   Linguistics - Volume 2, Kyoto.                                 Expertise. Ph.D. thesis, Columbia University.
+A. Bell. 1984. Language style as audience design.              E. Reiter. 1991. Generating Descriptions that Exploit a
+  Language in Society, 13(2):145–204.                             User’s Domain Knowledge. In R. Dale, C. Mellish,
+                                                                  and M. Zock, editors, Current Research in Natural
+A. Cawsey. 1993. User Modelling in Interactive Ex-                Language Generation, pages 257–285. Academic
+  planations. User Modeling and User-Adapted Inter-               Press.
+  action, 3(3):221–247.
+                                                               V. Rieser and O. Lemon. 2009. Natural Language
+H. H. Clark and G. L. Murphy. 1982. Audience de-                  Generation as Planning Under Uncertainty for Spo-
+  sign in meaning and reference. In J. F. LeNy and                ken Dialogue Systems. In Proc. EACL’09.
+  W. Kintsch, editors, Language and comprehension.
+  Amsterdam: North-Holland.                                    V. Rieser and O. Lemon. 2010. Optimising informa-
+                                                                  tion presentation for spoken dialogue systems. In
+H. Cuayahuitl. 2009. Hierarchical Reinforcement                   Proc. ACL. (to appear).
+  Learning for Spoken Dialogue Systems. Ph.D. the-
+  sis, University of Edinburgh, UK.                            J. Schatzmann, K. Weilhammer, M. N. Stuttle, and S. J.
+                                                                  Young. 2006. A Survey of Statistical User Sim-
+R. Dale. 1989. Cooking up referring expressions. In               ulation Techniques for Reinforcement Learning of
+   Proc. ACL-1989.                                                Dialogue Management Strategies. Knowledge Engi-
+                                                                  neering Review, pages 97–126.
+K. Georgila, J. Henderson, and O. Lemon. 2005.
+  Learning User Simulations for Information State              J. Schatzmann, B. Thomson, K. Weilhammer, H. Ye,
+  Update Dialogue Systems.      In Proc of Eu-                    and S. J. Young. 2007. Agenda-based User Simula-
+  rospeech/Interspeech.                                           tion for Bootstrapping a POMDP Dialogue System.
+                                                                  In Proc of HLT/NAACL 2007.
+F. Hernandez, E. Gaudioso, and J. G. Boticario. 2003.
+   A Multiagent Approach to Obtain Open and Flexible           D. Shapiro and P. Langley. 2002. Separating skills
+   User Models in Adaptive Learning Communities. In              from preference: Using learning to program by re-
+   User Modeling 2003, volume 2702/2003 of LNCS.                 ward. In Proc. ICML-02.
+   Springer, Berlin / Heidelberg.
+                                                               R. Sutton and A. Barto. 1998. Reinforcement Learn-
+E. A. Issacs and H. H. Clark. 1987. References in                 ing. MIT Press.
+   conversations between experts and novices. Journal
+   of Experimental Psychology: General, 116:26–37.
+
+S. Janarthanam and O. Lemon. 2009a. A Two-tier
+   User Simulation Model for Reinforcement Learning
+   of Adaptive Referring Expression Generation Poli-
+   cies. In Proc. SigDial’09.
+
+S. Janarthanam and O. Lemon. 2009b. A Wizard-of-
+   Oz environment to study Referring Expression Gen-
+   eration in a Situated Spoken Dialogue Task. In Proc.
+   ENLG’09.
+
+
+                                                          78
+

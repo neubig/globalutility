@@ -1,0 +1,728 @@
+ SystemT: An Algebraic Approach to Declarative Information Extraction
+
+            Laura Chiticariu    Rajasekar Krishnamurthy   Yunyao Li
+       Sriram Raghavan      Frederick R. Reiss  Shivakumar Vaithyanathan
+                             IBM Research – Almaden
+                                San Jose, CA, USA
+    {chiti,sekar,yunyaoli,rsriram,frreiss,vaithyan}@us.ibm.com
+
+
+                      Abstract                                 Common Pattern Specification Language (CPSL)
+                                                               specification (Appelt and Onyshkevych, 1998). In
+    As information extraction (IE) becomes                     CPSL, the input text is viewed as a sequence of an-
+    more central to enterprise applications,                   notations, and extraction rules are written as pat-
+    rule-based IE engines have become in-                      tern/action rules over the lexical features of these
+    creasingly important. In this paper, we                    annotations. In a single phase of the grammar, a
+    describe SystemT, a rule-based IE sys-                     set of rules are evaluated in a left-to-right fash-
+    tem whose basic design removes the ex-                     ion over the input annotations. Multiple grammar
+    pressivity and performance limitations of                  phases are cascaded together, with the evaluation
+    current systems based on cascading gram-                   proceeding in a bottom-up fashion.
+    mars. SystemT uses a declarative rule                         As demonstrated by prior work (Grishman and
+    language, AQL, and an optimizer that                       Sundheim, 1996), grammar-based IE systems can
+    generates high-performance algebraic ex-                   be effective in many scenarios. However, these
+    ecution plans for AQL rules. We com-                       systems suffer from two severe drawbacks. First,
+    pare SystemT’s approach against cascad-                    the expressivity of CPSL falls short when used
+    ing grammars, both theoretically and with                  for complex IE tasks over increasingly pervasive
+    a thorough experimental evaluation. Our                    informal text (emails, blogs, discussion forums
+    results show that SystemT can deliver re-                  etc.). To address this limitation, grammar-based
+    sult quality comparable to the state-of-the-               IE systems resort to significant amounts of user-
+    art and an order of magnitude higher an-                   defined code in the rules, combined with pre-
+    notation throughput.                                       and post-processing stages beyond the scope of
+                                                               CPSL (Cunningham et al., 2010). Second, the
+1 Introduction
+                                                               rigid evaluation order imposed in these systems
+In recent years, enterprises have seen the emer-               has significant performance implications.
+gence of important text analytics applications like               Three decades ago, the database community
+compliance and data redaction. This increase,                  faced similar expressivity and efficiency chal-
+combined with the inclusion of text into traditional           lenges in accessing structured information. The
+applications like Business Intelligence, has dra-              community addressed these problems by introduc-
+matically increased the use of information extrac-             ing a relational algebra formalism and an associ-
+tion (IE) within the enterprise. While the tradi-              ated declarative query language SQL. The ground-
+tional requirement of extraction quality remains               breaking work on System R (Chamberlin et al.,
+critical, enterprise applications also demand ef-              1981) demonstrated how the expressivity of SQL
+ficiency, transparency, customizability and main-              can be efficiently realized in practice by means of
+tainability. In recent years, these systemic require-          a query optimizer that translates an SQL query into
+ments have led to renewed interest in rule-based               an optimized query execution plan.
+IE systems (Doan et al., 2008; SAP, 2010; IBM,                    Borrowing ideas from the database community,
+2010; SAS, 2010).                                              we have developed SystemT, a declarative IE sys-
+   Until recently, rule-based IE systems (Cunning-             tem based on an algebraic framework, to address
+ham et al., 2000; Boguraev, 2003; Drozdzynski                  both expressivity and performance issues. In Sys-
+et al., 2004) were predominantly based on the                  temT, extraction rules are expressed in a declar-
+cascading grammar formalism exemplified by the                 ative language called AQL. At compilation time,
+
+
+                                                         128
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 128–137,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+ Gazetteers containing first names and last names
+                                                                                                                Document d1 … Tomorrow, we will meet Mark Scott, Howard Smith and …
+Phase      Types   RuleId                             Rule Patterns                           Priority
+
+                   P1R1     ({Lookup.majorType = FirstGaz}) : fn              :fn.First      50                                                                                               Legend
+P1       Input                                                                                                    (a)                     Last(P1R2)          Last(P1R2)
+         Lookup                                                                                                                                                                                Rule skipped
+                   P1R2     ({Lookup.majorType = LastGaz}) : ln               :ln.Last                          CPSL                                                                          due to priority
+         Token                                                                                50
+                                                                                                                 Phase P1   … Mark        Scott    ,            Howard         Smith …         semantics
+         Output    P1R3     ({Token.orth = upperInitial} |                                    10
+         First                                                                                                               First(P1R1) First(P1R1)           First(P1R1)   Last(P1R2)
+                                  {Token.orth = mixedCaps } ) :cw             :cw.Caps
+         Last
+                                                                                                                 CPSL                                      Person (P2R4)     Person (P2R5)      Rule fired
+         Caps
+                   P2R1                                                                        50
+                                                                                                                 Phase P2
+P2       Input              ({First} {Last} ) :full                     :full.Person
+                                                                                                                             … Mark        Scott       ,       Howard         Smith   …
+         First                                                                                                                                                                                 3 persons
+                   P2R2     ({Caps} {Last} ) :full                      :full.Person          20
+         Last                                                                                                               Person(P2R4) Person(P2R4)                Person(P2R1)              identified
+         Caps               ({Last} {Token.orth = comma} {Caps | First}) : reverse             10
+                   P2R3                                                                                           (b)
+         Token                                                  :reverse.Person                                            … Mark        Scott    ,            Howard         Smith …
+                                                                                                                 JAPE
+         Output    P2R4     ({First}) : fn                                :fn.Person          10                            First(P1R1) First(P1R1)          First(P1R1) Last(P1R2)
+                                                                                                                 Phase P1
+         Person                                                                                                  (Brill)    Caps(P1R3) Last(P1R2)              Last(P1R2) Caps(P1R3)
+                   P2R5     ({Last}) : ln                                :ln.Person           10
+                                                                                                                                        Caps(P1R3)            Caps(P1R3)
+                                                                                                                                                                                             Some discarded
+                                                                                                                                Person (P2R2)              Person (P2R4, P2R5)               matches omitted
+ Syntax:                        Rule part                                            Action part                 JAPE                                                                        for clarity
+                                                                                                                 Phase P2    … Mark        Scott       ,       Howard         Smith   …
+P2R3    ({Last} {Token.orth = comma} {Caps | First}) : reverse  :reverse.Person                                 (Appelt)                                                                     2 persons
+                                                                                                                                  Person(P2R1)                       Person(P2R1)             identified
+ Last followed by Token whose orth attribute has value                Bind match      Create Person
+ comma followed by Caps or First                                      to variables    annotation
+                                                                                                                        Figure 2: Sample output of CPSL and JAPE
+Figure 1: Cascading grammar for identifying Person names
+                                                                                                               enizer and gazetteer (input types Token and Lookup,
+SystemT translates AQL statements into an al-                                                                  respectively) to identify words that may be part of
+gebraic expression called an operator graph that                                                               a person name. The second phase, P2 , identifies
+implements the semantics of the statements. The                                                                complete names using the results of phase P1 .
+SystemT optimizer then picks a fast execution                                                                     Applying the above grammar to document d1
+plan from many logically equivalent plans. Sys-                                                                (Fig. 2), one would expect that to match “Mark
+temT is currently deployed in a multitude of real-                                                             Scott” and “Howard Smith” as Person. However,
+world applications and commercial products1 .                                                                  as shown in Fig. 2(a), the grammar actually finds
+   We formally demonstrate the superiority of                                                                  three Person annotations, instead of two. CPSL has
+AQL and SystemT in terms of both expressivity                                                                  several limitations that lead to such discrepancies:
+and efficiency (Section 4). Specifically, we show                                                              L1. Lossy sequencing. In a CPSL grammar,
+that 1) the expressivity of AQL is a strict superset                                                           each phase operates on a sequence of annotations
+of CPSL grammars not using external functions                                                                  from left to right. If the input annotations to a
+and 2) the search space explored by the SystemT                                                                phase may overlap with each other, the CPSL en-
+optimizer includes operator graphs correspond-                                                                 gine must drop some of them to create a non-
+ing to efficient finite state transducer implemen-                                                             overlapping sequence. For instance, in phase P1
+tations. Finally, we present an extensive experi-                                                              (Fig. 2(a)), “Scott” has both a Lookup and a To-
+mental evaluation that validates that high-quality                                                             ken annotation. The system has made an arbitrary
+annotators can be developed with SystemT, and                                                                  choice to retain the Lookup annotation and discard
+that their runtime performance is an order of mag-                                                             the Token annotation. Consequently, no Caps anno-
+nitude better when compared to annotators devel-                                                               tations are output by phase P1 .
+oped with a state-of-the-art grammar-based IE sys-                                                             L2. Rigid matching priority. CPSL specifies
+tem (Section 5).                                                                                               that, for each input annotation, only one rule can
+                                                                                                               actually match. When multiple rules match at the
+2 Grammar-based Systems and CPSL                                                                               same start position, the following tie-breaker con-
+                                                                                                               ditions are applied (in order): (a) the rule match-
+A cascading grammar consists of a sequence of                                                                  ing the most annotations in the input stream; (b)
+phases, each of which consists of one or more                                                                  the rule with highest priority; and (c) the rule de-
+rules. Each phase applies its rules from left to                                                               clared earlier in the grammar. This rigid match-
+right over an input sequence of annotations and                                                                ing priority can lead to mistakes. For instance,
+generates an output sequence of annotations that                                                               as illustrated in Fig. 2(a), phase P1 only identi-
+the next phase consumes. Most cascading gram-                                                                  fies “Scott” as a First. Matching priority causes
+mar systems today adhere to the CPSL standard.                                                                 the grammar to skip the corresponding match for
+    Fig. 1 shows a sample CPSL grammar that iden-                                                              “Scott” as a Last. Consequently, phase P2 fails to
+tifies person names from text in two phases. The                                                               identify “Mark Scott” as one single Person.
+first phase, P1 , operates over the results of the tok-                                                        L3. Limited expressivity in rule patterns. It is
+    1
+      A trial version is available at                                                                          not possible to express rules that compare annota-
+http://www.alphaworks.ibm.com/tech/systemt                                                                     tions overlapping with each other. E.g., “Identify
+
+
+                                                                                                         129
+
+
+                                                               of SystemT, starting with the algebraic formalism
+                                                               behind SystemT’s operators.
+                       Caps
+
+
+    Output Tuple 1   Document   Span 1
+                                                               3.1 Algebraic Foundation of SystemT
+                     Document   Span 2
+    Output Tuple 2
+                                      …
+                                                               SystemT executes IE rules using graphs of op-
+   [A-Z]{\w|-}+       Regex
+                                     we will meet Mark         erators. The formal definition of these operators
+      Input Tuple                    Scott, …                  takes the form of an algebra that is similar to the
+                     Document
+                                                               relational algebra, but with extensions for text pro-
+Figure 3: Regular Expression Extraction Operator
+                                                               cessing.
+                                                                  The algebra operates over a simple relational
+words that are both capitalized and present in the
+                                                               data model with three data types: span, tuple, and
+FirstGaz gazetteer” or “Identify Person annotations
+                                                               relation. In this data model, a span is a region of
+that occur within an EmailAddress”.
+                                                               text within a document identified by its “begin”
+Extensions to CPSL                                             and “end” positions; a tuple is a fixed-size list of
+                                                               spans. A relation is a multiset of tuples, where ev-
+In order to address the above limitations, several
+                                                               ery tuple in the relation must be of the same size.
+extensions to CPSL have been proposed in JAPE,
+                                                               Each operator in our algebra implements a single
+AFst and XTDL (Cunningham et al., 2000; Bogu-
+                                                               basic atomic IE operation, producing and consum-
+raev, 2003; Drozdzynski et al., 2004). The exten-
+                                                               ing sets of tuples.
+sions are summarized as below, where each solu-
+                                                                  Fig. 3 illustrates the regular expression ex-
+tion Si corresponds to limitation Li .
+                                                               traction operator in the algebra, which per-
+ • S1. Grammar rules are allowed to operate on                 forms character-level regular expression match-
+   graphs of input annotations in JAPE and AFst.               ing. Overall, the algebra contains 12 different op-
+ • S2. JAPE introduces more matching regimes                   erators, a full description of which can be found
+   besides the CPSL’s matching priority and thus               in (Reiss et al., 2008). The following four oper-
+   allows more flexibility when multiple rules                 ators are necessary to understand the examples in
+   match at the same starting position.                        this paper:
+ • S3. The rule part of a pattern has been ex-                  • The Extract operator (E) performs character-
+   panded to allow more expressivity in JAPE,                     level operations such as regular expression and
+   AFst and XTDL.                                                 dictionary matching over text, creating a tuple
+   Fig. 2(b) illustrates how the above extensions                 for each match.
+help in identifying the correct matches ‘Mark Scott’            • The Select operator (σ) takes as input a set of
+and ‘Howard Smith’ in JAPE. Phase P1 uses a match-                tuples and a predicate to apply to the tuples. It
+ing regime (denoted by Brill) that allows multiple                outputs all tuples that satisfy the predicate.
+rules to match at the same starting position, and               • The Join operator (⊲⊳) takes as input two sets
+phase P2 uses CPSL’s matching priority, Appelt.                   of tuples and a predicate to apply to pairs of
+                                                                  tuples from the input sets. It outputs all pairs
+3 SystemT                                                         of input tuples that satisfy the predicate.
+SystemT is a declarative IE system based on an                  • The consolidate operator (Ω) takes as input a
+algebraic framework. In SystemT, developers                       set of tuples and the index of a particular col-
+write rules in a language called AQL. The system                  umn in those tuples. It removes selected over-
+then generates a graph of operators that imple-                   lapping spans from the indicated column, ac-
+ment the semantics of the AQL rules. This decou-                  cording to the specified policy.
+pling allows for greater rule expressivity, because
+the rule language is not constrained by the need to            3.2 AQL
+compile to a finite state transducer. Likewise, the            Extraction rules in SystemT are written in AQL,
+decoupled approach leads to greater flexibility in             a declarative relational language similar in syn-
+choosing an efficient execution strategy, because              tax to the database language SQL. We chose SQL
+many possible operator graphs may exist for the                as a basis for our language due to its expres-
+same AQL annotator.                                            sivity and its familiarity. The expressivity of
+   In the rest of the section, we describe the parts           SQL, which consists of first-order logic predicates
+
+
+                                                         130
+
+
+                                                                                            Compiled
+                                                                  AQL         SystemT       Operator       SystemT
+                                                                              Optimizer      Graph         Runtime
+
+
+
+                                                                Figure 5: The compilation process in SystemT
+
+
+
+
+     Figure 4: Person annotator as AQL query
+                                                                Figure 6: Execution strategies for the CapsLast rule
+over sets of tuples, is well-documented and well-               in Fig. 4
+understood (Codd, 1990). As SQL is the pri-
+mary interface to most relational database sys-                    SystemT has built-in multilingual support in-
+tems, the language’s syntax and semantics are                   cluding tokenization, part of speech and gazetteer
+common knowledge among enterprise application                   matching for over 20 languages using Language-
+programmers. Similar to SQL terminology, we                     Ware (IBM, 2010). Rule developers can utilize
+call a collection of AQL rules an AQL query.                    the multilingual support via AQL without hav-
+   Fig. 4 shows portions of an AQL query. As                    ing to configure or manage any additional re-
+can be seen, the basic building block of AQL is                 sources. In addition, AQL allows user-defined
+a view: A logical description of a set of tuples in             functions to be used in a restricted context in or-
+terms of either the document text (denoted by a                 der to support operations such as validation (e.g.
+special view called Document) or the contents of                for extracted credit card numbers), or normaliza-
+other views. Every SystemT annotator consists                   tion (e.g., compute abbreviations of multi-token
+of at least one view. The output view statement in-             organization candidates that are useful in gener-
+dicates that the tuples in a view are part of the final         ating additional candidates). More details on AQL
+results of the annotator.                                       can be found in the AQL manual (SystemT, 2010).
+   Fig. 4 also illustrates three of the basic con-
+structs that can be used to define a view.                      3.3 Optimizer and Operator Graph
+ • The extract statement specifies basic                        Grammar-based IE engines place rigid restrictions
+   character-level extraction primitives to be                  on the order in which rules can be executed. Due
+   applied directly to a tuple.                                 to the semantics of the CPSL standard, systems
+                                                                that implement the standard must use a finite state
+ • The select statement is similar to the SQL
+                                                                transducer that evaluates each level of the cascade
+   select statement but it contains an additional
+                                                                with one or more left to right passes over the entire
+   consolidate on clause, along with an exten-
+                                                                token stream.
+   sive collection of text-specific predicates.
+                                                                   In contrast, SystemT places no explicit con-
+ • The union all statement merges the outputs
+                                                                straints on the order of rule evaluation, nor does
+   of one or more select or extract statements.
+                                                                it require that intermediate results of an annota-
+   To keep rules compact, AQL also provides a                   tor collapse to a fixed-size sequence. As shown in
+shorthand sequence pattern notation similar to the              Fig. 5, the SystemT engine does not execute AQL
+syntax of CPSL. For example, the CapsLast                       directly; instead, the SystemT optimizer compiles
+view in Figure 4 could have been written as:                    AQL into a graph of operators. By tying a collec-
+create view CapsLast as                                         tion of operators together by their inputs and out-
+extract pattern <C.name> <L.name>                               puts, the system can implement a wide variety of
+from Caps C, Last L;
+                                                                different execution strategies. Different execution
+   Internally, SystemT translates each of these ex-             strategies are associated with different evaluation
+tract pattern statements into one or more select                costs. The optimizer chooses the execution strat-
+and extract statements.                                         egy with the lowest estimated evaluation cost.
+
+
+                                                          131
+
+
+   Fig. 6 presents three possible execution strate-
+gies for the CapsLast rule in Fig. 4. If the opti-
+mizer estimates that the evaluation cost of Last is
+much lower than that of Caps, then it can deter-
+mine that Plan C has the lowest evaluation cost
+among the three, because Plan C only evaluates
+Caps in the “left” neighborhood for each instance
+of Last. More details of our algorithms for enumer-
+ating plans can be found in (Reiss et al., 2008).
+   The optimizer in SystemT chooses the best ex-
+ecution plan from a large number of different al-             Figure 7: Supporting Complex Rule Interactions
+gebra graphs available to it. Many of these graphs
+implement strategies that a transducer could not              used in SystemT, we now compare the two in
+express: such as evaluating rules from right to left,         terms of expressivity and performance.
+sharing work across different rules, or selectively           4.1 Expressivity
+skipping rule evaluations. Within this large search
+space, there generally exists an execution strategy           In Section 2, we described three expressivity lim-
+that implements the rule semantics far more effi-             itations of CPSL grammars: Lossy sequencing,
+ciently than the fastest transducer could. We refer           rigid matching priority, and limited expressivity in
+the reader to (Reiss et al., 2008) for a detailed de-         rule patterns. As we noted, cascading grammar
+scription of the types of plan the optimizer consid-          systems extend the CPSL specification in various
+ers, as well as an experimental analysis of the per-          ways to provide workarounds for these limitations.
+formance benefits of different parts of this search              In SystemT, the basic design of the AQL lan-
+space.                                                        guage eliminates these three problems without the
+   Several parallel efforts have been made recently           need for any special workaround. The key design
+to improve the efficiency of IE tasks by optimiz-             difference is that AQL views operate over sets of
+ing low-level feature extraction (Ramakrishnan et             tuples, not sequences of tokens. The input or out-
+al., 2006; Ramakrishnan et al., 2008; Chandel et              put tuples of a view can contain spans that overlap
+al., 2006) or by reordering operations at a macro-            in arbitrary ways, so the lossy sequencing prob-
+scopic level (Ipeirotis et al., 2006; Shen et al.,            lem never occurs. The annotator will retain these
+2007; Jain et al., 2009). However, to the best of             overlapping spans across any number of views un-
+our knowledge, SystemT is the only IE system                  til a view definition explicitly removes the over-
+in which the optimizer generates a full end-to-end            lap. Likewise, the tuples that a given view pro-
+plan, beginning with low-level extraction primi-              duces are in no way constrained by the outputs of
+tives and ending with the final output tuples.                other, unrelated views, so the rigid matching prior-
+                                                              ity problem never occurs. Finally, the select state-
+3.4   Deployment Scenarios                                    ment in AQL allows arbitrary predicates over the
+                                                              cross-product of its input tuple sets, eliminating
+SystemT is designed to be usable in various de-
+                                                              the limited expressivity in rule patterns problem.
+ployment scenarios. It can be used as a stand-
+                                                                 Beyond eliminating the major limitations of
+alone system with its own development and run-
+                                                              CPSL grammars, AQL provides a number of other
+time environment. Furthermore, SystemT ex-
+                                                              information extraction operations that even ex-
+poses a generic Java API that enables the integra-
+                                                              tended CPSL cannot express without custom code.
+tion of its runtime environment with other applica-
+                                                              Complex rule interactions. Consider an exam-
+tions. For example, a specific instantiation of this
+                                                              ple document from the Enron corpus (Minkov et
+API allows SystemT annotators to be seamlessly
+                                                              al., 2005), shown in Fig. 7, which contains a list
+embedded in applications using the UIMA analyt-
+                                                              of person names. Because the first person in the
+ics framework (UIMA, 2010).
+                                                              list (‘Skilling’) is referred to by only a last name,
+4 Grammar vs. Algebra                                         rule P2 R3 in Fig. 1 incorrectly identifies ‘Skilling,
+                                                              Cindy’ as a person. Consequently, the output of
+Having described both the traditional cascading               phase P2 of the cascading grammar contains sev-
+grammar approach and the declarative approach                 eral mistakes as shown in the figure. This problem
+
+
+                                                        132
+
+
+                                   ConcertMention               GenericReviewSnippet
+Informal Band Review
+                                                                                                       ing grammar. These examples naturally raise the
+ went to the Switchfoot concert at the Roxy. It was pretty fun,… The lead singer/guitarist
+ was really good, and even though there was another guitarist (an Asian guy), he ended up
+ playing most of the guitar parts, which was really impressive. The biggest surprise though is
+                                                                                                       question of whether similar cases exist where a
+ that I actually liked the opening bands. …I especially liked the first band
+                                                                                                       cascading grammar can express patterns that can-
+                                                              MusicReviewSnippet                       not be expressed in AQL.
+Example Rule                                Consecutive review snippets are within 25 tokens
+                                                                                                          It turns out that we can make a strong statement
+                 Start with
+                ConcertMention                                                                         that such examples do not exist. In the absence
+                                                                                                       of an escape to arbitrary procedural code, AQL is
+                                                                                                       strictly more expressive than a CPSL grammar. To
+Complete review is      At least 4 occurrences of MusicReviewSnippet or GenericReviewSnippet           state this relationship formally, we first introduce
+within 200 tokens       At least 3 of them should be MusicReviewSnippets
+                        Review ends with one of these.                                                 the following definitions.
+                                                                                                          We refer to a grammar conforming to the CPSL
+Figure 8: Extracting informal band reviews from web logs
+                                                                                                       specification as a CPSL grammar. When a CPSL
+                                                                                                       grammar contains no external functions, we refer
+occurs because CPSL only evaluates rules over
+                                                                                                       to it as a Code-free CPSL grammar. Finally, we
+the input sequence in a strict left-to-right fashion.
+                                                                                                       refer to a grammar that conforms to one of the
+On the other hand, the AQL query Q1 shown in
+                                                                                                       CPSL, JAPE, AFst and XTDL specifications as an
+the figure applies the following condition: “Al-
+                                                                                                       expanded CPSL grammar.
+ways discard matches to Rule P2 R3 if they overlap
+                                                                                                       Ambiguous Grammar Specification An ex-
+with matches to rules P2 R1 or P2 R2 ” (even if the
+                                                                                                       panded CPSL grammar may be under-specified in
+match to Rule P2 R3 starts earlier). Applying this
+                                                                                                       some cases. For example, a single rule contain-
+rule ensures that the person names in the list are
+                                                                                                       ing the disjunction operator (|) may match a given
+identified correctly. Obtaining the same effect in
+                                                                                                       region of text in multiple ways. Consider the eval-
+grammar-based systems would require the use of
+                                                                                                       uation of Rule P2 R3 over the text fragment “Scott,
+custom code (as recommended by (Cunningham
+                                                                                                       Howard” from document d1 (Fig. 1). If “Howard”
+et al., 2010)).
+                                                                                                       is identified both as Caps and First, then there are
+Counting and Aggregation. Complex extraction                                                           two evaluations for Rule P2 R3 over this text frag-
+tasks sometimes require operations such as count-                                                      ment. Since the system has to arbitrarily choose
+ing and aggregation that go beyond the expressiv-                                                      one evaluation, the results of the grammar can be
+ity of regular languages, and thus can be expressed                                                    non-deterministic (as pointed out in (Cunning-
+in CPSL only using external functions. One such                                                        ham et al., 2010)). We refer to a grammar G as
+task is that of identifying informal concert reviews                                                   an ambiguous grammar specification for a docu-
+embedded within blog entries. Fig. 8 describes, by                                                     ment collection D if the system makes an arbitrary
+example, how these reviews consist of reference                                                        choice while evaluating G over D.
+to a live concert followed by several review snip-
+pets, some specific to musical performances and                                                        Definition 1 (UnambigEquiv) A query Q is Un-
+others that are more general review expressions.                                                       ambigEquiv to a cascading grammar G if and only
+An example rule to identify informal reviews is                                                        if for every document collection D, where G is not
+also shown in the figure. Notice how implement-                                                        an ambiguous grammar specification for D, the
+ing this rule requires counting the number of Mu-                                                      results of the grammar invocation and the query
+sicReviewSnippet and GenericReviewSnippet annotations
+                                                                                                       evaluation are identical.
+within a region of text and aggregating this occur-                                                      We now formally compare the expressivity of
+rence count across the two review types. While                                                         AQL and expanded CPSL grammars. The detailed
+this rule can be written in AQL, it can only be ap-                                                    proof is omitted due to space limitations.
+proximated in CPSL grammars.                                                                           Theorem 1 The class of extraction tasks express-
+Character-Level Regular Expression CPSL                                                                ible as AQL queries is a strict superset of that ex-
+cannot specify character-level regular expressions                                                     pressible through expanded code-free CPSL gram-
+that span multiple tokens. In contrast, the extract                                                    mars. Specifically,
+regex statement in AQL fully supports these ex-                                                        (a) Every expanded code-free CPSL grammar can
+pressions.                                                                                             be expressed as an UnambigEquiv AQL query.
+   We have described above several cases where                                                         (b) AQL supports information extraction opera-
+AQL can express concepts that can only be ex-                                                          tions that cannot be expressed in expanded code-
+pressed through external functions in a cascad-                                                        free CPSL grammars.
+
+
+                                                                                                 133
+
+
+Proof Outline: (a) A single CPSL grammar can                  (Thompson, 1968)). This algorithm processes the
+be expressed in AQL as follows. First, each rule              input tokens from left to right, keeping track of the
+r in the grammar is translated into a set of AQL              set of states that are currently active.
+statements. If r does not contain the disjunct (|)
+                                                              Theorem 2 For any acyclic token-based finite
+operator, then it is translated into a single AQL
+                                                              state transducer T , there exists an UnambigEquiv
+select statement. Otherwise, a set of AQL state-
+                                                              operator graph G, such that evaluating G has the
+ments are generated, one for each disjunct opera-             same computational complexity as evaluating T
+tor in rule r, and the results merged using union             with Thompson’s algorithm starting from each to-
+all statements. Then, a union all statement is used           ken position in the input document.
+to combine the results of individual rules in the
+grammar phase. Finally, the AQL statements for                Proof Outline: The proof constructs G by struc-
+multiple phases are combined in the same order as             tural induction over the transducer T . The base
+the cascading grammar specification.                          case converts transitions out of the start state into
+   The main extensions to CPSL supported by ex-               Extract operators. The inductive case adds a Se-
+panded CPSL grammars (listed in Sec. 2) are han-              lect operator to G for each of the remaining state
+dled as follows. AQL queries operate on graphs                transitions, with each selection predicate being the
+on annotations just like expanded CPSL gram-                  same as the predicate that drives the corresponding
+mars. In addition, AQL supports different match-              state transition. For each state transition predicate
+ing regimes through consolidation operators, span             that T would evaluate when processing a given
+predicates through selection predicates and co-               document, G performs a constant amount of work
+references through join operators.                            on a single tuple.                                 2
+(b) Example operations supported in AQL that
+cannot be expressed in expanded code-free CPSL
+                                                              5 Experimental Evaluation
+grammars include (i) character-level regular ex-              In this section we present an extensive comparison
+pressions spanning multiple tokens, (ii) count-               study between SystemT and implementations of
+ing the number of annotations occurring within a              expanded CPSL grammar in terms of quality, run-
+given bounded window and (iii) deleting annota-               time performance and resource requirements.
+tions if they overlap with other annotations start-           Tasks We chose two tasks for our evaluation:
+ing later in the document.                       2             • NER : named-entity recognition for Person,
+4.2   Performance                                                Organization, Location, Address, PhoneNumber,
+                                                                 EmailAddress, URL and DateTime.
+For the annotators we test in our experiments
+(See Section 5), the SystemT optimizer is able to              • BandReview : identify informal reviews in
+choose algebraic plans that are faster than a com-               blogs (Fig. 8).
+parable transducer-based implementation. The                     We chose NER primarily because named-entity
+question arises as to whether there are other an-             recognition is a well-studied problem and standard
+notators for which the traditional transducer ap-             datasets are available for evaluation. For this task
+proach is superior. That is, for a given annota-              we use GATE and ANNIE for comparison3 . We
+tor, might there exist a finite state transducer that         chose BandReview to conduct performance evalu-
+is combinatorially faster than any possible algebra           ation for a more complex extraction task.
+graph? It turns out that this scenario is not possi-          Datasets. For quality evaluation, we use:
+ble, as the theorem below shows.                               • EnronMeetings (Minkov et al., 2005): collec-
+Definition 2 (Token-Based FST) A token-based                     tion of emails with meeting information from
+finite state transducer (FST) is a nondeterministic              the Enron corpus4 with Person labeled data;
+finite state machine in which state transitions are            • ACE (NIST, 2005): collection of newswire re-
+triggered by predicates on tokens. A token-based                 ports and broadcast news/conversations with
+FST is acyclic if its state graph does not contain               Person, Organization, Location labeled data5 .
+any cycles and has exactly one “accept” state.                     3
+                                                                     To the best of our knowledge, ANNIE (Cunningham et
+                                                              al., 2002) is the only publicly available NER library imple-
+Definition 3 (Thompson’s Algorithm)                           mented in a grammar-based system (JAPE in GATE).
+Thompson’s algorithm is a common strategy                          4
+                                                                     http://www.cs.cmu.edu/ enron/
+                                                                   5
+for evaluating a token-based FST (based on                           Only entities of type NAM have been considered.
+
+
+                                                        134
+
+
+                                             Table 1: Datasets for performance evaluation.
+  Dataset       Description of the Content                                                                                    Number of                  Document size
+                                                                                                                              documents                range           average
+  Enronx        Emails randomly sampled from the Enron corpus of average size xKB (0.5 < x < 100)2                               1000        xKB +/ − 10%                xKB
+  WebCrawl      Small to medium size web pages representing company news, with HTML tags removed                                 1931          68b - 388.6KB            8.8KB
+  FinanceM      Medium size financial regulatory filings                                                                          100         240KB - 0.9MB            401KB
+  FinanceL      Large size financial regulatory filings                                                                           30           1MB - 3.4MB            1.54MB
+
+
+
+
+                                                                                                                           a) Throughput on Enronx
+      Table 2: Quality of Person on test datasets.                                                       700
+
+
+
+
+                                                                                   Throughput (KB/sec)
+                                                                                                         600
+                 Precision (%)       Recall (%)      F1 measure (%)                                      500
+                (Exact/Partial)    (Exact/Partial)   (Exact/Partial)                                                                                        ANNIE
+                                                                                                         400
+                                                                                                                                                            ANNIE-Optimized
+                              EnronMeetings                                                              300                                                T-NE
+       ANNIE      57.05/76.84       48.59/65.46       52.48/70.69                                        200
+       T-NE       88.41/92.99       82.39/86.65       85.29/89.71
+                                                                                                         100
+       Minkov      81.1/NA            74.9/NA          77.9/NA
+                                                                                                           0
+                                  ACE                                                                          0      20             40          60            80         100
+       ANNIE      39.41/78.15       30.39/60.27       34.32/68.06                                                           Average document size (KB)
+       T-NE       93.90/95.82       90.90/92.76       92.38/94.27                                                    b) Memory Utilization on Enron x
+                                                                                                                                          Error bars show
+                                                                                                         600       ANNIE
+
+
+
+
+                                                                               Avg Heap size (MB)
+                                                                                                                                          25th and 75th
+                                                                                                                   ANNIE-Optimized        percentile
+
+
+   Table 1 lists the datasets used for performance                                                       400       T-NE
+
+
+evaluation. The size of FinanceL is purposely                                                            200
+small because GATE takes a significant amount of
+                                                                                                           0
+time processing large documents (see Sec. 5.2).                                                                0      20          40         60                80         100
+                                                                                                                            Average document size (KB)
+Set Up. The experiments were run on a server
+with two 2.4 GHz 4-core Intel Xeon CPUs and
+64GB of memory. We use GATE 5.1 (build 3431)                                 Figure 9: Throughput (a) and memory consump-
+and two configurations for ANNIE: 1) the default                             tion (b) comparisons on Enronx datasets.
+configuration, and 2) an optimized configuration
+where the Ontotext Japec Transducer6 replaces the                            can be observed for Organization and Location on
+default NE transducer for optimized performance.                             ACE (exact numbers omitted in interest of space).
+We refer to these configurations as ANNIE and                                    Clearly, considering the large gap between
+ANNIE-Optimized, respectively.                                               ANNIE’s F 1 and partial F 1 measures on both
+
+5.1      Quality Evaluation                                                  datasets, ANNIE’s quality can be improved via
+                                                                             dataset-specific tuning as demonstrated in (May-
+The goal of our quality evaluation is two-fold:                              nard et al., 2003). However, dataset-specific tun-
+to validate that annotators can be built in Sys-                             ing for ANNIE is beyond the scope of this paper.
+temT with quality comparable to those built in                               Based on the experimental results above and our
+a grammar-based system; and to ensure a fair                                 previous formal comparison in Sec. 4, we believe
+performance comparison between SystemT and                                   it is reasonable to conclude that annotators can be
+GATE by verifying that the annotators used in the                            built in SystemT of quality at least comparable to
+study are comparable.                                                        those built in a grammar-based system.
+   Table 2 shows results of our comparison study
+for Person annotators. We report the classical                               5.2 Performance Evaluation
+(exact) precision, recall, and F 1 measures that                             We now focus our attention on the throughput and
+credit only exact matches, and corresponding par-                            memory behavior of SystemT, and draw a com-
+tial measures that credit partial matches in a fash-                         parison with GATE. For this purpose, we have con-
+ion similar to (NIST, 2005). As can be seen, T-                              figured both ANNIE and T-NE to identify only the
+NE produced results of significantly higher quality
+                                                                             same eight types of entities listed for NER task.
+than ANNIE on both datasets, for the same Person
+                                                                             Throughput. Fig. 9(a) plots the throughput of
+extraction task. In fact, on EnronMeetings, the F 1
+                                                                             the two systems on multiple Enronx datasets with
+measure of T-NE is 7.4% higher than the best pub-
+                                                                             average document sizes of between 0.5KB and
+lished result (Minkov et al., 2005). Similar results
+                                                                             100KB. For this experiment, both systems ran
+   6
+       http://www.ontotext.com/gate/japec.html                               with a maximum Java heap size of 1GB.
+
+
+                                                                       135
+
+
+                                                                      uments of size up to 15KB, memory consumption
+     Table 3: Throughput and mean heap size.
+                                                                      is dominated by the fixed size of the data struc-
+               ANNIE        ANNIE-Optimized        T-NE
+ Dataset  ThroughputMemoryThroughput Memory ThroughputMemory          tures used (e.g., dictionaries, FST/operator graph),
+            (KB/s)   (MB)   (KB/s)    (MB)    (KB/s)    (MB)
+                                                                      and is comparable for both systems. As docu-
+ WebCrawl    23.9    212.6   42.8     201.8    498.9     77.2
+ FinanceM 18.82      715.1   26.3     601.8    703.5    143.7         ments get larger, memory consumption increases
+ FinanceL    19.2   2586.2   21.1    2683.5    954.5    189.6
+                                                                      for both systems. However, the increase is much
+                                                                      smaller for T-NE compared to that for both AN-
+                                                                      NIE and ANNIE-Optimized. A similar trend can be
+    As shown in Fig. 9(a), even though the through-                   observed on the other datasets as shown in Ta-
+put of ANNIE-Optimized (using the optimized trans-                    ble 3. In particular, for FinanceL , both ANNIE and
+ducer) increases two-fold compared to ANNIE un-                       ANNIE-Optimized required 8GB of Java heap size to
+der default configuration, T-NE is between 8 and                      achieve reasonable throughput7 , in contrast to T-
+24 times faster compared to ANNIE-Optimized. For                      NE which utilized at most 300MB out of the 2GB
+both systems, throughput varied with document                         of maximum Java heap size allocation.
+size. For T-NE, the relatively low throughput on
+                                                                         SystemT requires much less memory than
+very small document sizes (less than 1KB) is due
+                                                                      GATE in general due to its runtime, which monitors
+to fixed overhead in setting up operators to pro-
+                                                                      data dependencies between operators and clears
+cess a document. As document size increases, the
+                                                                      out low-level results when they are no longer
+overhead becomes less noticeable.
+                                                                      needed. Although a streaming CPSL implemen-
+    We have observed similar trends on the rest                       tation is theoretically possible, in practice mecha-
+of the test collections. Table 3 shows that T-                        nisms that allow an escape to custom code make it
+NE is at least an order of magnitude faster than
+                                                                      difficult to decide when an intermediate result will
+ANNIE-Optimized across all datasets. In partic-
+                                                                      no longer be used, hence GATE keeps most inter-
+ular, on FinanceL T-NE’s throughput remains                           mediate data in memory until it is done analyzing
+high, whereas the performance of both ANNIE and                       the current document.
+ANNIE-Optimized degraded significantly.
+                                                                      The BandReview Task. We conclude by briefly dis-
+    To ascertain whether the difference in perfor-                    cussing our experience with the BandReview task
+mance in the two systems is due to low-level com-                     from Fig. 8. We built two versions of this anno-
+ponents such as dictionary evaluation, we per-                        tator, one in AQL, and the other using expanded
+formed detailed profiling of the systems. The pro-                    CPSL grammar. The grammar implementation
+filing revealed that 8.2%, 16.2% and respectively                     processed a 4.5GB collection of 1.05 million blogs
+14.2% of the execution time was spent on aver-                        in 5.6 hours and output 280 reviews. In contrast,
+age on low-level components in the case of ANNIE,                     the SystemT version (85 AQL statements) ex-
+ANNIE-Optimized and T-NE, respectively, thus lead-
+                                                                      tracted 323 reviews in only 10 minutes!
+ing us to conclude that the observed differences
+are due to SystemT’s efficient use of resources at                    6 Conclusion
+a macroscopic level.
+Memory utilization. In theory, grammar based                          In this paper, we described SystemT, a declar-
+systems can stream tuples through each stage                          ative IE system based on an algebraic frame-
+for minimal memory consumption, whereas Sys-                          work. We presented both formal and empirical
+temT operator graphs may need to materialize in-                      arguments for the benefits of our approach to IE.
+termediate results for the full document at certain                   Our extensive experimental results show that high-
+points to evaluate the constraints in the original                    quality annotators can be built using SystemT,
+AQL. The goal of this study is to evaluate whether                    with an order of magnitude throughput improve-
+this potential problem does occur in practice.                        ment compared to state-of-the-art grammar-based
+    In this experiment we ran both systems with a                     systems. Going forward, SystemT opens up sev-
+maximum heap size of 2GB, and used the Java                           eral new areas of research, including implement-
+garbage collector’s built-in telemetry to measure                     ing better optimization strategies and augmenting
+the total quantity of live objects in the heap over                   the algebra with additional operators to support
+time while annotating the different test corpora.                     advanced features such as coreference resolution.
+Fig. 9(b) plots the minimum, maximum, and mean                           7
+                                                                           GATE ran out of memory when using less than 5GB of
+heap sizes with the Enronx datasets. On small doc-                    Java heap size, and thrashed when run with 5GB to 7GB
+
+
+                                                                136
+
+
+References                                                      Diana Maynard, Kalina Bontcheva, and Hamish Cun-
+                                                                  ningham. 2003. Towards a semantic extraction of
+Douglas E. Appelt and Boyan Onyshkevych. 1998.                    named entities. In Recent Advances in Natural Lan-
+  The common pattern specification language. In TIP-              guage Processing.
+  STER workshop.
+                                                                Einat Minkov, Richard C. Wang, and William W. Co-
+Branimir Boguraev. 2003. Annotation-based finite                  hen. 2005. Extracting personal names from emails:
+  state processing in a large-scale nlp arhitecture. In           Applying named entity recognition to informal text.
+  RANLP, pages 61–80.                                             In HLT/EMNLP.
+D. D. Chamberlin, A. M. Gilbert, and Robert A. Yost.            NIST. 2005. The ACE evaluation plan.
+  1981. A history of System R and SQL/data system.
+  In vldb.                                                      Ganesh Ramakrishnan, Sreeram Balakrishnan, and
+                                                                  Sachindra Joshi. 2006. Entity annotation based on
+Amit Chandel, P. C. Nagesh, and Sunita Sarawagi.                  inverse index operations. In EMNLP.
+ 2006. Efficient batch top-k search for dictionary-
+ based entity recognition. In ICDE.                             Ganesh Ramakrishnan, Sachindra Joshi, Sanjeet Khai-
+                                                                  tan, and Sreeram Balakrishnan. 2008. Optimization
+E. F. Codd. 1990. The relational model for database               issues in inverted index-based entity annotation. In
+   management: version 2. Addison-Wesley Longman                  InfoScale.
+   Publishing Co., Inc., Boston, MA, USA.
+                                                                Frederick Reiss, Sriram Raghavan, Rajasekar Kr-
+H. Cunningham, D. Maynard, and V. Tablan. 2000.                   ishnamurthy, Huaiyu Zhu, and Shivakumar
+  JAPE: a Java Annotation Patterns Engine (Sec-                   Vaithyanathan. 2008. An algebraic approach to
+  ond Edition). Research Memorandum CS–00–10,                     rule-based information extraction. In ICDE, pages
+  Department of Computer Science, University of                   933–942.
+  Sheffield, November.
+                                                                SAP. 2010. Inxight ThingFinder.
+H. Cunningham, D. Maynard, K. Bontcheva, and
+  V. Tablan. 2002. GATE: A framework and graphical              SAS. 2010. Text Mining with SAS Text Miner.
+  development environment for robust NLP tools and
+  applications. In Proceedings of the 40th Anniver-             Warren Shen, AnHai Doan, Jeffrey F. Naughton, and
+  sary Meeting of the Association for Computational               Raghu Ramakrishnan. 2007. Declarative informa-
+  Linguistics, pages 168 – 175.                                   tion extraction using datalog with embedded extrac-
+                                                                  tion predicates. In vldb.
+Hamish Cunningham, Diana Maynard, Kalina
+  Bontcheva, Valentin Tablan, Marin Dimitrov, Mike              SystemT.          2010.           AQL     Manual.
+  Dowman, Niraj Aswani, Ian Roberts, Yaoyong                      http://www.alphaworks.ibm.com/tech/systemt.
+  Li, and Adam Funk. 2010. Developing language
+                                                                Ken Thompson. 1968. Regular expression search al-
+  processing components with gate version 5 (a user
+                                                                  gorithm. pages 419–422.
+  guide).
+                                                                UIMA. 2010. Unstructured Information Management
+AnHai Doan, Luis Gravano, Raghu Ramakrishnan, and                 Architecture.
+  Shivakumar Vaithyanathan. 2008. Special issue on                http://uima.apache.org.
+  managing information extraction. SIGMOD Record,
+  37(4).
+
+Witold Drozdzynski, Hans-Ulrich Krieger, Jakub
+  Piskorski, Ulrich Schäfer, and Feiyu Xu. 2004.
+  Shallow processing with unification and typed fea-
+  ture structures — foundations and applications.
+  Künstliche Intelligenz, 1:17–23.
+
+Ralph Grishman and Beth Sundheim. 1996. Message
+  understanding conference - 6: A brief history. In
+  COLING, pages 466–471.
+
+IBM. 2010. IBM LanguageWare.
+
+P. G. Ipeirotis, E. Agichtein, P. Jain, and L. Gravano.
+   2006. To search or to crawl?: towards a query opti-
+   mizer for text-centric tasks. In SIGMOD.
+
+Alpa Jain, Panagiotis G. Ipeirotis, AnHai Doan, and
+  Luis Gravano. 2009. Join optimization of informa-
+  tion extraction output: Quality matters! In ICDE.
+
+
+                                                          137
+

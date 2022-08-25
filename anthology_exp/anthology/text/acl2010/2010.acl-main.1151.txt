@@ -1,0 +1,643 @@
+       A Transition-Based Parser for 2-Planar Dependency Structures
+
+              Carlos Gómez-Rodrı́guez                                  Joakim Nivre
+             Departamento de Computación                   Department of Linguistics and Philology
+             Universidade da Coruña, Spain                      Uppsala University, Sweden
+              carlos.gomez@udc.es                            joakim.nivre@lingfil.uu.se
+
+
+
+                      Abstract                                Kuhlmann and Nivre, 2006; Kuhlmann and Möhl,
+                                                              2007; Havelka, 2007). Although these proposals
+    Finding a class of structures that is rich                seem to have a very good fit with linguistic data,
+    enough for adequate linguistic represen-                  in the sense that they often cover 99% or more of
+    tation yet restricted enough for efficient                the structures found in existing treebanks, the de-
+    computational processing is an important                  velopment of efficient parsing algorithms for these
+    problem for dependency parsing. In this                   classes has met with more limited success. For
+    paper, we present a transition system for                 example, while both Kuhlmann and Satta (2009)
+    2-planar dependency trees – trees that can                and Gómez-Rodrı́guez et al. (2009) have shown
+    be decomposed into at most two planar                     how well-nested dependency trees with bounded
+    graphs – and show that it can be used                     gap degree can be parsed in polynomial time, the
+    to implement a classifier-based parser that               best time complexity for lexicalized parsing of this
+    runs in linear time and outperforms a state-              class remains a prohibitive O(n7 ), which makes
+    of-the-art transition-based parser on four                the practical usefulness questionable.
+    data sets from the CoNLL-X shared task.
+                                                                 In this paper, we explore another characteri-
+    In addition, we present an efficient method
+                                                              zation of mildly non-projective dependency trees
+    for determining whether an arbitrary tree
+                                                              based on the notion of multiplanarity. This was
+    is 2-planar and show that 99% or more of
+                                                              originally proposed by Yli-Jyrä (2003) but has so
+    the trees in existing treebanks are 2-planar.
+                                                              far played a marginal role in the dependency pars-
+1   Introduction                                              ing literature, because no algorithm was known
+                                                              for determining whether an arbitrary tree was m-
+Dependency-based syntactic parsing has become                 planar, and no parsing algorithm existed for any
+a widely used technique in natural language pro-              constant value of m. The contribution of this pa-
+cessing, and many different parsing models have               per is twofold. First, we present a procedure for
+been proposed in recent years (Yamada and Mat-                determining the minimal number m such that a
+sumoto, 2003; Nivre et al., 2004; McDonald et al.,            dependency tree is m-planar and use it to show
+2005a; Titov and Henderson, 2007; Martins et al.,             that the overwhelming majority of sentences in de-
+2009). One of the unresolved issues in this area              pendency treebanks have a tree that is at most 2-
+is the proper treatment of non-projective depen-              planar. Secondly, we present a transition-based
+dency trees, which seem to be required for an ad-             parsing algorithm for 2-planar dependency trees,
+equate representation of predicate-argument struc-            developed in two steps. We begin by showing how
+ture, but which undermine the efficiency of depen-            the stack-based algorithm of Nivre (2003) can be
+dency parsing (Neuhaus and Bröker, 1997; Buch-               generalized from projective to planar structures.
+Kromann, 2006; McDonald and Satta, 2007).                     We then extend the system by adding a second
+   Caught between the Scylla of linguistically in-            stack and show that the resulting system captures
+adequate projective trees and the Charybdis of                exactly the set of 2-planar structures. Although the
+computationally intractable non-projective trees,             contributions of this paper are mainly theoretical,
+some researchers have sought a middle ground by               we also present an empirical evaluation of the 2-
+exploring classes of mildly non-projective depen-             planar parser, showing that it outperforms the pro-
+dency structures that strike a better balance be-             jective parser on four data sets from the CoNLL-X
+tween expressivity and complexity (Nivre, 2006;               shared task (Buchholz and Marsi, 2006).
+
+
+                                                        1492
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1492–1501,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2       Preliminaries                                               Definition 3. A dependency forest G for a string
+                                                                    w1 . . . wn is projective iff bwi c is an interval for
+2.1      Dependency Graphs
+                                                                    every word wi ∈ [1, n].
+Let w = w1 . . . wn be an input string.1 An inter-
+val (with endpoints i and j) of the string w is a set               Projective dependency trees correspond to the set
+of the form [i, j] = {wk | i ≤ k ≤ j}.                              of structures that can be induced from lexicalised
+                                                                    context-free derivations (Kuhlmann, 2007; Gaif-
+Definition 1. A dependency graph for w is a di-                     man, 1965). Like context-free grammars, projec-
+rected graph G = (Vw , E), where Vw = [1, n] and                    tive dependency trees are not sufficient to repre-
+E ⊆ Vw × Vw .                                                       sent all the linguistic phenomena observed in natu-
+We call an edge (wi , wj ) in a dependency graph G                  ral languages, but they have the advantage of being
+a dependency link2 from wi to wj . We say that wi                   efficiently parsable: their parsing problem can be
+is the parent (or head) of wj and, conversely, that                 solved in cubic time with chart parsing techniques
+wj is a syntactic child (or dependent) of wi . For                  (Eisner, 1996; Gómez-Rodrı́guez et al., 2008),
+convenience, we write wi → wj ∈ E if the link                       while in the case of general non-projective depen-
+(wi , wj ) exists; wi ↔ wj ∈ E if there is a link                   dency forests, it is only tractable under strong in-
+from wi to wj or from wj to wi ; wi →∗ wj ∈ E if                    dependence assumptions (McDonald et al., 2005b;
+there is a (possibly empty) directed path from wi                   McDonald and Satta, 2007).
+to wj ; and wi ↔∗ wj ∈ E if there is a (possibly
+empty) path between wi and wj in the undirected                     2.3    Planarity
+graph underlying G (omitting reference to E when                    The concept of planarity (Sleator and Temperley,
+clear from the context). The projection of a node                   1993) is closely related to projectivity3 and can be
+wi , denoted bwi c, is the set of reflexive-transitive              informally defined as the property of a dependency
+dependents of wi : bwi c = {wj ∈ V | wi →∗ wj }.                    forest whose links can be drawn above the words
+   Most dependency representations do not allow                     without crossing.4 To define planarity more for-
+arbitrary dependency graphs but typically require                   mally, we first define crossing links as follows:
+graphs to be acyclic and have at most one head per                  let (wi , wk ) and (wj , wl ) be dependency links in
+node. Such a graph is called a dependency forest.                   a dependency graph G. Without loss of general-
+Definition 2. A dependency graph G for a string                     ity, we assume that min(i, k) ≤ min(j, l). Then,
+w1 . . . wn is said to be a forest iff it satisfies:                the links are said to be crossing if min(i, k) <
+ 1. Acyclicity: If wi →∗ wj , then not wj → wi .                    min(j, l) < max (i, k) < max (j, l).
+    2. Single-head: If wj → wi , then not wk → wi                   Definition 4. A dependency graph is planar iff it
+       (for every k 6= j).                                          does not contain a pair of crossing links.
+Nodes in a forest that do not have a head are called
+                                                                    2.4    Multiplanarity
+roots. Some frameworks require that dependency
+forests have a unique root (i.e., are connected).                   The concept of planarity on its own does not seem
+Such a forest is called a dependency tree.                          to be very relevant as an extension of projectiv-
+                                                                    ity for practical dependency parsing. According
+2.2      Projectivity                                               to the results by Kuhlmann and Nivre (2006), most
+For reasons of computational efficiency, many de-                   non-projective structures in dependency treebanks
+pendency parsers are restricted to work with pro-                   are also non-planar, so being able to parse planar
+jective dependency structures, that is, forests in                  structures will only give us a modest improvement
+which the projection of each node corresponds to                    in coverage with respect to a projective parser.
+a contiguous substring of the input:                                However, our interest in planarity is motivated by
+    1                                                               the fact that it can be generalised to multipla-
+      For notational convenience, we will assume throughout
+the paper that all symbols in an input string are distinct, i.e.,   narity (Yli-Jyrä, 2003):
+i 6= j ⇔ wi 6= wj . This can be guaranteed in practice by
+                                                                        3
+annotating each terminal symbol with its position in the input.           For dependency forests that are extended with a unique
+    2                                                               artificial root located at position 0, as is commonly done, the
+      In practice, dependency links are usually labeled, but to
+simplify the presentation we will ignore labels throughout          two notions are equivalent.
+                                                                        4
+most of the paper. However, all the results and algorithms                Planarity in the context of dependency structures is not to
+presented can be applied to labeled dependency graphs and           be confused with the homonymous concept in graph theory,
+will be so applied in the experimental evaluation.                  which does not restrict links to be drawn above the nodes.
+
+
+                                                                1493
+
+
+                                                         Figure 2: The crossings graph corresponding to
+                                                         the dependency structure of Figure 1.
+
+
+                                                         at most 2-planar, with a coverage comparable to
+Figure 1: A 2-planar dependency structure with           that of well-nestedness. The idea is to reduce
+two different ways of distributing its links into two    the problem of determining whether a dependency
+planes (represented by solid and dotted lines).          graph G = (V, E) is m-planar, for a given value
+                                                         of m, to a standard graph colouring problem. Con-
+                                                         sider first the following undirected graph:
+Definition 5. A dependency graph G = (V, E)
+is m-planar iff there exist planar dependency               U (G) = (E, C) where
+graphs G1 = (V, E1 ), . . . , Gm = (V, Em ) (called         C = {{ei , ej } | ei , ej are crossing links in G}
+planes) such that E = E1 ∪ · · · ∪ Em .
+Intuitively, we can associate planes with colours        This graph, which we call the crossings graph of
+and say that a dependency graph G is m-planar if it      G, has one node corresponding to each link in the
+is possible to assign one of m colours to each of its    dependency graph G, with an undirected link be-
+links in such a way that links with the same colour      tween two nodes if they correspond to crossing
+do not cross. Note that there may be multiple            links in G. Figure 2 shows the crossings graph
+ways of dividing an m-planar graph into planes,          of the 2-planar structure in Figure 1.
+as shown in the example of Figure 1.                        As noted in Section 2.4, a dependency graph G
+                                                         is m-planar if each of its links can be assigned
+3   Determining Multiplanarity                           one of m colours in such a way that links with the
+                                                         same colours do not cross. In terms of the cross-
+Several constraints on non-projective dependency         ings graph, this means that G is m-planar if each
+structures have been proposed recently that seek a       of the nodes of U (G) can be assigned one of m
+good balance between parsing efficiency and cov-         colours such that no two neighbours have the same
+erage of non-projective phenomena present in nat-        colour. This amounts to solving the well-known k-
+ural language treebanks. For example, Kuhlmann           colouring problem for U (G), where k = m.
+and Nivre (2006) and Havelka (2007) have shown              For k = 1 the problem is trivial: a graph is 1-
+that the vast majority of structures present in exist-   colourable only if it has no edges. For k = 2, the
+ing treebanks are well-nested and have a small gap       problem can be solved in time linear in the size of
+degree (Bodirsky et al., 2005), leading to an inter-     the graph by simple breadth-first search. Given a
+est in parsers for these kinds of structures (Gómez-    graph U = (V, E), we pick an arbitrary node v
+Rodrı́guez et al., 2009). No similar analysis has        and give it one of two colours. This forces us to
+been performed for m-planar structures, although         give the other colour to all its neighbours, the first
+Yli-Jyrä (2003) provides evidence that all except       colour to the neighbours’ neighbours, and so on.
+two structures in the Danish dependency treebank         This process continues until we have processed all
+are at most 3-planar. However, his analysis is           the nodes in the connected component of v. If this
+based on constraints that restrict the possible ways     has resulted in assigning two different colours to
+of assigning planes to dependency links, and he is       the same node, the graph is not 2-colourable. Oth-
+not guaranteed to find the minimal number m for          erwise, we have obtained a 2-colouring of the con-
+which a given structure is m-planar.                     nected component of U that contains v. If there
+   In this section, we provide a procedure for find-     are still unprocessed nodes, we repeat the process
+ing the minimal number m such that a dependency          by arbitrarily selecting one of them, continue with
+graph is m-planar and use it to show that the vast       the rest of the connected components, and in this
+majority of sentences in dependency treebanks are        way obtain a 2-colouring of the whole graph if it
+
+
+                                                     1494
+
+
+  Language      Structures     Non-Projective         Not Planar       Not 2-Planar    Not 3-Pl.    Not 4-pl.     Ill-nested
+     Arabic          2995       205 ( 6.84%)        158 ( 5.28%)         0 (0.00%)    0 (0.00%)    0 (0.00%)      1 (0.03%)
+      Czech         87889     20353 (23.16%)      16660 (18.96%)        82 (0.09%)    0 (0.00%)    0 (0.00%)     96 (0.11%)
+     Danish          5512       853 (15.48%)        827 (15.00%)         1 (0.02%)    1 (0.02%)    0 (0.00%)      6 (0.11%)
+      Dutch         13349      4865 (36.44%)       4115 (30.83%)       162 (1.21%)    1 (0.01%)    0 (0.00%)     15 (0.11%)
+    German          39573     10927 (27.61%)      10908 (27.56%)       671 (1.70%)    0 (0.00%)    0 (0.00%)    419 (1.06%)
+ Portuguese          9071      1718 (18.94%)       1713 (18.88%)         8 (0.09%)    0 (0.00%)    0 (0.00%)      7 (0.08%)
+   Swedish           6159       293 ( 4.76%)        280 ( 4.55%)         5 (0.08%)    0 (0.00%)    0 (0.00%)     14 (0.23%)
+    Turkish          5510       657 (11.92%)        657 (11.92%)        10 (0.18%)    0 (0.00%)    0 (0.00%)     20 (0.36%)
+
+Table 1: Proportion of dependency trees classified by projectivity, planarity, m-planarity and ill-
+nestedness in treebanks for Arabic (Hajič et al., 2004), Czech (Hajič et al., 2006), Danish (Kromann,
+2003), Dutch (van der Beek et al., 2002), German (Brants et al., 2002), Portuguese (Afonso et al., 2002),
+Swedish (Nilsson et al., 2005) and Turkish (Oflazer et al., 2003; Atalay et al., 2003).
+
+
+exists. Since this process can be completed by vis-                4     Parsing 1-Planar Structures
+iting each node and edge of the graph U once, its
+                                                                   In this section, we present a deterministic linear-
+complexity is O(V + E). The crossings graph of
+                                                                   time parser for planar dependency structures. The
+a dependency graph with n nodes can trivially be
+                                                                   parser is a variant of Nivre’s arc-eager projec-
+built in time O(n2 ) by checking each pair of de-
+                                                                   tive parser (Nivre, 2003), modified so that it can
+pendency links to determine if they cross, and can-
+                                                                   also handle graphs that are planar but not projec-
+not contain more than n2 edges, which means that
+                                                                   tive. As seen in Table 1, this only gives a modest
+we can check if the dependency graph for a sen-
+                                                                   improvement in coverage compared to projective
+tence of length n is 2-planar in O(n2 ) time.
+                                                                   parsing, so the main interest of this algorithm lies
+   For k > 2, the k-colouring problem is known
+                                                                   in the fact that it can be generalised to deal with
+to be NP-complete (Karp, 1972). However, we
+                                                                   2-planar structures, as shown in the next section.
+have found this not to be a problem when measur-
+ing multiplanarity in natural language treebanks,                  4.1    Transition Systems
+since the effective problem size can be reduced                    In the transition-based framework of Nivre (2008),
+by noting that each connected component of the                     a deterministic dependency parser is defined by a
+crossings graph can be treated separately, and that                non-deterministic transition system, specifying a
+nodes that are not part of a cycle need not be                     set of elementary operations that can be executed
+considered.5 Given that non-projective sentences                   during the parsing process, and an oracle that de-
+in natural language tend to have a small propor-                   terministically selects a single transition at each
+tion of non-projective links (Nivre and Nilsson,                   choice point of the parsing process.
+2005), the connected components of their cross-
+ings graphs are very small, and k-colourings for                   Definition 6. A transition system for dependency
+them can quickly be found by brute-force search.                   parsing is a quadruple S = (C, T, cs , Ct ) where
+   By applying these techniques to dependency                        1. C is a set of possible parser configurations,
+treebanks of several languages, we obtain the data                   2. T is a set of transitions, each of which is a
+shown in Table 1. As we can see, the coverage                           partial function t : C → C,
+provided by the 2-planarity constraint is compa-                     3. cs is a function that maps each input sentence
+rable to that of well-nestedness. In most of the                        w to an initial configuration cs (w) ∈ C,
+treebanks, well over 99% of the sentences are 2-                     4. Ct ⊆ C is a set of terminal configurations.
+planar, and 3-planarity has almost total coverage.
+As we will see below, the class of 2-planar depen-                 Definition 7. An oracle for a transition system
+dency structures not only has good coverage of lin-                S = (C, T, cs , Ct ) is a function o : C → T .
+guistic phenomena in existing treebanks but is also                An input sentence w can be parsed using a tran-
+efficiently parsable with transition-based parsing                 sition system S = (C, T, cs , Ct ) and an oracle o
+methods, making it a practically interesting sub-                  by starting in the initial configuration cs (w), call-
+class of non-projective dependency structures.                     ing the oracle function on the current configuration
+   5
+                                                                   c, and updating the configuration by applying the
+      If we have a valid colouring for all the cycles in the
+graph, the rest of the nodes can be safely coloured by breadth-    transition o(c) returned by the oracle. This pro-
+first search as in the k = 2 case.                                 cess is repeated until a terminal configuration is
+
+
+                                                              1495
+
+
+Initial configuration:                cs (w1 . . . wn ) = h[], [w1 . . . wn ], ∅i
+Terminal configurations:              Cf = {hΣ, [], Ai ∈ C}
+Transitions:           S HIFT         hΣ, wi |B, Ai ⇒ hΣ|wi , B, Ai
+                       R EDUCE        hΣ|wi , B, Ai ⇒ hΣ, B, Ai
+                       L EFT-A RC hΣ|wi , wj |B, Ai ⇒ hΣ|wi , wj |B, A ∪ {(wj , wi )}i
+                                      only if 6 ∃k|(wk , wi ) ∈ A (single-head) and not wi ↔∗ wj ∈ A (acyclicity).
+                       R IGHT-A RC hΣ|wi , wj |B, Ai ⇒ hΣ|wi , wj |B, A ∪ {(wi , wj )}i
+                                      only if 6 ∃k|(wk , wj ) ∈ A (single-head) and not wi ↔∗ wj ∈ A (acyclicity).
+
+
+                          Figure 3: Transition system for planar dependency parsing.
+
+
+reached, and the dependency analysis of the sen-                pending to be created. The system is shown in Fig-
+tence is defined by the terminal configuration.                 ure 3, where we use the notation Σ|wi for a stack
+   Each sequence of configurations that the parser              with top wi and tail Σ, and we invert the notation
+can traverse from an initial configuration to a ter-            for the buffer for clarity (i.e., wi |B is a buffer with
+minal configuration for some input w is called a                top wi and tail B).
+transition sequence. If we associate each config-                  The system reads the input from left to right and
+uration c of a transition system S = (C, T, cs , Ct )           creates links in a left-to-right order by executing
+with a dependency graph g(c), we can say that                   its four transitions:
+S is sound for a class of dependency graphs G
+if, for every sentence w and transition sequence                  1. S HIFT: pops the first (leftmost) word in the
+(cs (w), c1 , . . . , cf ) of S, g(cf ) is in G, and that S          buffer, and pushes it to the stack.
+is complete for G if, for every sentence w and de-                2. L EFT- ARC: adds a link from the first word in
+pendency graph G ∈ G for w, there is a transition                    the buffer to the top of the stack.
+sequence (cs (w), c1 , . . . , cf ) such that g(cf ) = G.         3. R IGHT- ARC: adds a link from the top of the
+A transition system that is sound and complete for                   stack to the first word in the buffer.
+G is said to be correct for G.                                    4. R EDUCE: pops the top word from the stack,
+   Note that, apart from a correct transition system,                implying that we have finished building links
+a practical parser needs a good oracle to achieve                    to or from it.
+the desired results, since a transition system only
+specifies how to reach all the possible dependency              Note that the planar parser’s transitions are more
+graphs that could be associated to a sentence, but              fine-grained than those of the arc-eager projective
+not how to select the correct one. Oracles for prac-            parser by Nivre (2003), which pops the stack as
+tical parsers can be obtained by training classifiers           part of its L EFT-A RC transition and shifts a word
+on treebank data (Nivre et al., 2004).                          as part of its R IGHT-A RC transition. Forcing these
+                                                                actions after creating dependency links rules out
+4.2   A Transition System for Planar                            structures whose root is covered by a dependency
+      Structures                                                link, which are planar but not projective. In order
+A correct transition system for the class of planar             to support these structures, we therefore simplify
+dependency forests can be obtained as a variant of              the A RC transitions (L EFT- ARC and R IGHT- ARC)
+the arc-eager projective system by Nivre (2003).                so that they only create an arc. For the same rea-
+As in that system, the set of configurations of the             son, we remove the constraint in Nivre’s parser by
+planar transition system is the set of all triples              which words without a head cannot be reduced.
+c = hΣ, B, Ai such that Σ and B are disjoint lists              This has the side effect of making the parser able
+of words from Vw (for some input w), and A is a                 to output cyclic graphs. Since we are interested
+set of dependency links over Vw . The list B, called            in planar dependency forests, which do not con-
+the buffer, is initialised to the input string and is           tain cycles, we only apply A RC transitions after
+used to hold the words that are still to be read from           checking that there is no undirected path between
+the input. The list Σ, called the stack, is initially           the nodes to be linked. This check can be done
+empty and holds words that have dependency links                without affecting the linear-time complexity of the
+
+
+                                                          1496
+
+
+parser by storing the weakly connected component              1. ∀a, b[a,b<j] [wa ↔ wb ∈ E ⇒ wa ↔ wb ∈ A]
+of each node in g(c).                                         2. [wi ↔ wj ∈ A ⇒
+   The fine-grained transitions used by this parser              ∀k[i<k<j] [wk ↔ wj ∈ E ⇒ wk ↔ wj ∈ A]]
+have also been used by Sagae and Tsujii (2008)                3. ∀k[k<j] [wk 6∈ Σ ⇒
+to parse DAGs. However, the latter parser differs                ∀l[l>k] [wk ↔ wl ∈ E ⇒ wk ↔ wl ∈ A]]
+from ours in the constraints, since it does not allow
+the reduction of words without a head (disallowing        We can show that each branch of the oracle func-
+forests with covered roots) and does not enforce          tion keeps these invariants true. When we reach a
+the acyclicity constraint (which is guaranteed by         terminal configuration (which always happens af-
+post-processing the graphs to break cycles).              ter a finite number of transitions, since every tran-
+                                                          sition generating a configuration c = hΣ, B, Ai
+4.3    Correctness and Complexity                         decreases the value of the variant function |E| +
+For reasons of space, we can only give a sketch           |Σ| + 2|B| − |A|), it can be deduced from the in-
+of the correctness proof. We wish to prove that           variant that A = E, which proves completeness.
+the planar transition system is sound and com-               The worst-case complexity of a deterministic
+plete for the set Fp of all planar dependency             transition-based parser is given by an upper bound
+forests. To prove soundness, we have to show              on transition sequence length (Nivre, 2008). For
+that, for every sentence w and transition sequence        the planar system, like its projective counterpart,
+(cs (w), c1 , . . . , cf ), the graph g(cf ) associated   the length is clearly O(n) (where n is the number
+with cf is in Fp . We take the graph associated           of input words), since there can be no more than
+with a configuration c = (Σ, B, A) to be g(c) =           n S HIFT transitions, n R EDUCE transitions, and n
+(Vw , A). With this, we prove the stronger claim          A RC transitions in a transition sequence.
+that g(c) ∈ Fp for every configuration c that be-
+                                                          5     Parsing 2-Planar Structures
+longs to some transition sequence starting with
+cs (w). This amounts to showing that in every con-        The planar parser introduced in the previous sec-
+figuration c reachable from cs (w), g(c) meets the        tion can be extended to parse all 2-planar depen-
+following three conditions that characterise a pla-       dency structures by adding a second stack to the
+nar dependency forest: (1) g(c) does not contain          system and making R EDUCE and A RC transitions
+nodes with more than one head; (2) g(c) is acyclic;       apply to only one of the stacks at a time. This
+and (3) g(c) contains no crossing links. (1) is triv-     means that the set of links created in the context
+ially guaranteed by the single-head constraint; (2)       of each individual stack will be planar, but pairs
+follows from (1) and the acyclicity constraint; and       of links created in different stacks are allowed to
+(3) can be established by proving that there is no        cross. In this way, the parser will build a 2-planar
+transition sequence that will invoke two A RC tran-       dependency forest by using each of the stacks to
+sitions on node pairs that would create crossing          construct one of its two planes.
+links. At the point when a link from wi to wj is             The 2-planar transition system, shown in Figure
+created, we know that all the words strictly located      4, has configurations of the form hΣ0 , Σ1 , B, Ai,
+between wi and wj are not in the stack or in the          where we call Σ0 the active stack and Σ1 the in-
+buffer, so no links can be created to or from them.       active stack, and the following transitions:
+   To prove completeness, we show that every                  1. S HIFT: pops the first (leftmost) word in the
+planar dependency forest G = (V, E) ∈ Fp                         buffer, and pushes it to both stacks.
+for a sentence w can be produced by apply-
+                                                              2. L EFT- ARC: adds a link from the first word in
+ing the oracle function that maps a configuration
+                                                                 the buffer to the top of the active stack.
+hΣ|wi , wj |B, Ai to:
+                                                              3. R IGHT- ARC: adds a link from the top of the
+  1.   L EFT-A RC if wj → wi ∈ (E \ A),                          active stack to the first word in the buffer.
+  2.   R IGHT-A RC if wi → wj ∈ (E \ A),                      4. R EDUCE: pops the top word from the active
+  3.   R EDUCE if ∃x[x<i] [wx ↔ wj ∈ (E \ A)],                   stack, implying that we have added all links
+  4.   S HIFT otherwise.                                         to or from it on the plane tied to that stack.
+We show completeness by setting the following in-             5. S WITCH: makes the active stack inactive and
+variants on transitions traversed by the application             vice versa, changing the plane the parser is
+of the oracle:                                                   working with.
+
+
+                                                      1497
+
+
+Initial configuration:                cs (w1 . . . wn ) = h[], [], [w1 . . . wn ], ∅i
+Terminal configurations:              Cf = {hΣ0 , Σ1 , [], Ai ∈ C}
+Transitions:          S HIFT          hΣ0 , Σ1 , wi |B, Ai ⇒ hΣ0 |wi , Σ1 |wi , B, Ai
+                      R EDUCE         hΣ0 |wi , Σ1 , B, Ai ⇒ hΣ0 , Σ1 , B, Ai
+                      L EFT-A RC hΣ0 |wi , Σ1 , wj |B, Ai ⇒ hΣ0 |wi , Σ1 , wj |B, A ∪ {(wj , wi )}i
+                                      only if 6 ∃k | (wk , wi ) ∈ A (single-head) and not wi ↔∗ wj ∈ A (acyclicity).
+                      R IGHT-A RC hΣ0 |wi , Σ1 , wj |B, Ai ⇒ hΣ0 |wi , Σ1 , wj |B, A ∪ {(wi , wj )}i
+                                      only if 6 ∃k|(wk , wj ) ∈ A (single-head) and not wi ↔∗ wj ∈ A (acyclicity).
+                      S WITCH         hΣ0 , Σ1 , B, Ai ⇒ hΣ1 , Σ0 , B, Ai
+
+                         Figure 4: Transition system for 2-planar dependency parsing.
+
+
+5.1   Correctness and Complexity                                Ex ,6 we have:
+As in the planar case, we provide a brief sketch                   3. ∀k[k<j] [wk 6∈ Σy ] ⇒
+of the proof that the transition system in Figure 4                   ∀l[l>k] [wk ↔ wl ∈ Ex ] ⇒ [wk ↔ wl ∈ A]
+is correct for the set F2p of 2-planar dependency
+forests. Soundness follows from a reasoning anal-               Since the presence of the flag p in configurations
+ogous to the planar case, but applying the proof                does not affect the set of dependency graphs gen-
+of planarity separately to each stack. In this way,             erated by the system, the completeness of the sys-
+we prove that the sets of dependency links cre-                 tem extended with the flag p implies that of the
+ated by linking to or from the top of each of the               system in Figure 4.
+two stacks are always planar graphs, and thus their                We can show that the complexity of the 2-planar
+union (which is the dependency graph stored in A)               system is O(n) by the same kind of reasoning as
+is 2-planar. This, together with the single-head and            for the 1-planar system, with the added complica-
+acyclicity constraints, guarantees that the depen-              tion that we must constrain the system to prevent
+dency graphs associated with reachable configura-               two adjacent S WITCH transitions. In fact, without
+tions are always 2-planar dependency forests.                   this restriction, the parser is not even guaranteed
+   For completeness, we assume an extended form                 to terminate.
+of the transition system where transitions take the
+                                                                5.2    Implementation
+form hΣ0 , Σ1 , B, A, pi, where p is a flag taking
+values in {0, 1} which equals 0 for initial config-             In practical settings, oracles for transition-based
+urations and gets flipped by each application of a              parsers can be approximated by classifiers trained
+S WITCH transition. Then we show that every 2-                  on treebank data (Nivre, 2008). To do this, we
+planar dependency forest G ∈ F2p , with planes                  need an oracle that will generate transition se-
+G0 = (V, E0 ) and G1 = (V, E1 ), can be produced                quences for gold-standard dependency graphs. In
+by this system by applying the oracle function that             the case of the planar parser of Section 4.2, the or-
+maps a configuration hΣ0 |wi , Σ1 , wj |B, A, pi to:            acle of 4.3 is suitable for this purpose. However,
+                                                                in the case of the 2-planar parser, the oracle used
+  1. L EFT-A RC if wj → wi ∈ (Ep \ A),                          for the completeness proof in Section 5.1 cannot
+  2. R IGHT-A RC if wi → wj ∈ (Ep \ A),                         be used directly, since it requires the gold-standard
+                                                                trees to be divided into two planes in order to gen-
+  3. R EDUCE if ∃x[x<i] [wx ↔ wj ∈ (Ep \ A) ∧
+                                                                erate a transition sequence.
+     ¬∃y[x<y≤i] [wy ↔ wj ∈ (Ep \ A)]],
+                                                                   Of course, it is possible to use the algorithm
+  4. S WITCH if ∃x < j : (wx , wj ) or (wj , wx ) ∈ (Ep\A),     presented in Section 3 to obtain a division of sen-
+  5. S HIFT otherwise.                                          tences into planes. However, for training purposes
+                                                                and to obtain a robust behaviour if non-2-planar
+This can be shown by employing invariants analo-
+                                                                   6
+gous to the planar case, with the difference that the                The plane corresponding to each stack in a configuration
+                                                                changes with each S WITCH transition: Σx is associated with
+third invariant applies to each stack and its corre-            Ex in configurations where p = 0, and with Ex in those
+sponding plane: if Σy is associated with the plane              where p = 1.
+
+
+                                                           1498
+
+
+                 Czech                 Danish               German               Portuguese
+Parser   LAS UAS NPP NPR LAS UAS NPP NPR LAS UAS NPP NPR LAS UAS NPP NPR
+2-planar 79.24 85.30 68.9 60.7 83.81 88.50 66.7 20.0 86.50 88.84 57.1 45.8 87.04 90.82 82.8 33.8
+Malt P   78.18 84.12 –     –   83.31 88.30 –     –   85.36 88.06 –     –   86.60 90.20 –     –
+Malt PP 79.80 85.70 76.7 56.1 83.67 88.52 41.7 25.0 85.76 88.66 58.1 40.7 87.08 90.66 83.3 46.2
+
+Table 2: Parsing accuracy for 2-planar parser in comparison to MaltParser with (PP) and without (P)
+pseudo-projective transformations. LAS = labeled attachment score; UAS = unlabeled attachment score;
+NPP = precision on non-projective arcs; NPR = recall on non-projective arcs.
+
+
+sentences are found, it is more convenient that              pendencies, we also report precision (NPP) and
+the oracle can distribute dependency links into the          recall (NPR) specifically on non-projective depen-
+planes incrementally, and that it produces a dis-            dency arcs. The results show that the 2-planar
+tribution of links that only uses S WITCH transi-            parser outperforms the strictly projective variant
+tions when it is strictly needed to account for non-         of MaltParser on all metrics for all languages,
+planarity. Thus we use a more complex version of             and that it performs on a par with the pseudo-
+the oracle which performs a search in the crossings          projective variant with respect to both overall at-
+graph to check if a dependency link can be built on          tachment score and precision and recall on non-
+the plane of the active stack, and only performs a           projective dependencies. These results look very
+switch when this is not possible. This has proved            promising in view of the fact that very little effort
+to work well in practice, as will be observed in the         has been spent on optimizing the training oracle
+results in the next section.                                 and feature model for the 2-planar parser so far.
+                                                                It is worth mentioning that the 2-planar parser
+6   Empirical Evaluation                                     has two advantages over the pseudo-projective
+                                                             parser. The first is simplicity, given that it is based
+In order to get a first estimate of the empirical ac-
+                                                             on a single transition system and makes a single
+curacy that can be obtained with transition-based
+                                                             pass over the input, whereas the pseudo-projective
+2-planar parsing, we have evaluated the parser
+                                                             parsing technique involves preprocessing of train-
+on four data sets from the CoNLL-X shared task
+                                                             ing data and post-processing of parser output
+(Buchholz and Marsi, 2006): Czech, Danish, Ger-
+                                                             (Nivre and Nilsson, 2005). The second is the fact
+man and Portuguese. As our baseline, we take
+                                                             that it parses a well-defined class of dependency
+the strictly projective arc-eager transition system
+                                                             structures, with known coverage8 , whereas no for-
+proposed by Nivre (2003), as implemented in the
+                                                             mal characterization exists of the class of struc-
+freely available MaltParser system (Nivre et al.,
+                                                             tures parsable by the pseudo-projective parser.
+2006a), with and without the pseudo-projective
+parsing technique for recovering non-projective              7       Conclusion
+dependencies (Nivre and Nilsson, 2005). For the
+two baseline systems, we use the parameter set-              In this paper, we have presented an efficient algo-
+tings used by Nivre et al. (2006b) in the original           rithm for deciding whether a dependency graph is
+shared task, where the pseudo-projective version             2-planar and a transition-based parsing algorithm
+of MaltParser was one of the two top performing              that is provably correct for 2-planar dependency
+systems (Buchholz and Marsi, 2006). For our 2-               forests, neither of which existed in the literature
+planar parser, we use the same kernelized SVM                before. In addition, we have presented empirical
+classifiers as MaltParser, using the LIBSVM pack-            results showing that the class of 2-planar depen-
+age (Chang and Lin, 2001), with feature models               dency forests includes the overwhelming majority
+that are similar to MaltParser but extended with             of structures found in existing treebanks and that
+features defined over the second stack.7                     a deterministic classifier-based implementation of
+   In Table 2, we report labeled (LAS) and un-               the 2-planar parser gives state-of-the-art accuracy
+labeled (UAS) attachment score on the four lan-              on four different languages.
+guages for all three systems. For the two systems                8
+                                                                  If more coverage is desired, the 2-planar parser can be
+that are capable of recovering non-projective de-            generalised to m-planar structures for larger values of m by
+                                                             adding additional stacks. However, this comes at the cost of
+    7
+      Complete information about experimental settings can   more complex training models, making the practical interest
+be found at http://stp.lingfil.uu.se/ nivre/exp/.            of increasing m beyond 2 dubious.
+
+
+                                                         1499
+
+
+Acknowledgments                                            Proceedings of the 16th International Conference
+                                                           on Computational Linguistics (COLING-96), pages
+The first author has been partially supported by           340–345, San Francisco, CA, USA, August. ACL /
+Ministerio de Educación y Ciencia and FEDER               Morgan Kaufmann.
+(HUM2007-66607-C04) and Xunta de Galicia
+                                                        Haim Gaifman. 1965. Dependency systems and
+(PGIDIT07SIN005206PR, Rede Galega de Proce-               phrase-structure systems. Information and Control,
+samento da Linguaxe e Recuperación de Infor-             8:304–337.
+mación, Rede Galega de Lingüı́stica de Corpus,
+Bolsas Estadı́as INCITE/FSE cofinanced).                Carlos Gómez-Rodrı́guez, John Carroll, and David
+                                                          Weir. 2008. A deductive approach to depen-
+                                                          dency parsing. In Proceedings of the 46th An-
+                                                          nual Meeting of the Association for Computa-
+References                                                tional Linguistics: Human Language Technologies
+Susana Afonso, Eckhard Bick, Renato Haber, and Di-        (ACL’08:HLT), pages 968–976, Morristown, NJ,
+  ana Santos. 2002. “Floresta sintá(c)tica”: a tree-     USA. Association for Computational Linguistics.
+  bank for Portuguese. In Proceedings of the 3rd In-
+  ternational Conference on Language Resources and      Carlos Gómez-Rodrı́guez, David Weir, and John Car-
+  Evaluation (LREC 2002), pages 1968–1703, Paris,         roll. 2009. Parsing mildly non-projective depen-
+  France. ELRA.                                           dency structures. In Proceedings of the 12th Con-
+                                                          ference of the European Chapter of the Association
+Nart B. Atalay, Kemal Oflazer, and Bilge Say. 2003.       for Computational Linguistics (EACL), pages 291–
+  The annotation process in the Turkish treebank.         299.
+  In Proceedings of EACL Workshop on Linguisti-
+  cally Interpreted Corpora (LINC-03), pages 243–       Jan Hajič, Otakar Smrž, Petr Zemánek, Jan Šnaidauf,
+  246, Morristown, NJ, USA. Association for Com-           and Emanuel Beška. 2004. Prague Arabic de-
+  putational Linguistics.                                  pendency treebank: Development in data and tools.
+                                                           In Proceedings of the NEMLAR International Con-
+Leonoor van der Beek, Gosse Bouma, Robert Malouf,          ference on Arabic Language Resources and Tools,
+  and Gertjan van Noord. 2002. The Alpino depen-           pages 110–117.
+  dency treebank. In Language and Computers, Com-
+  putational Linguistics in the Netherlands 2001. Se-   Jan Hajič, Jarmila Panevová, Eva Hajičová, Jarmila
+  lected Papers from the Twelfth CLIN Meeting, pages       Panevová, Petr Sgall, Petr Pajas, Jan Štěpánek,
+  8–22, Amsterdam, the Netherlands. Rodopi.                Jiřı́ Havelka, and Marie Mikulová.          2006.
+                                                           Prague Dependency Treebank 2.0.           CDROM
+Manuel Bodirsky, Marco Kuhlmann, and Mathias               CAT: LDC2006T01, ISBN 1-58563-370-4. Linguis-
+ Möhl. 2005. Well-nested drawings as models of            tic Data Consortium.
+ syntactic structure. In 10th Conference on Formal
+ Grammar and 9th Meeting on Mathematics of Lan-         Jiri Havelka. 2007. Beyond projectivity: Multilin-
+ guage, Edinburgh, Scotland, UK.                           gual evaluation of constraints and measures on non-
+                                                           projective structures. In Proceedings of the 45th An-
+Sabine Brants, Stefanie Dipper, Silvia Hansen, Wolf-       nual Meeting of the Association of Computational
+  gang Lezius, and George Smith. 2002. The tiger           Linguistics, pages 608–615.
+  treebank. In Proceedings of the Workshop on Tree-
+  banks and Linguistic Theories, September 20-21,       Richard M. Karp. 1972. Reducibility among combi-
+  Sozopol, Bulgaria.                                      natorial problems. In R. Miller and J. Thatcher, ed-
+                                                          itors, Complexity of Computer Computations, pages
+Matthias Buch-Kromann. 2006. Discontinuous Gram-
+                                                          85–103. Plenum Press.
+ mar: A Model of Human Parsing and Language
+ Acquisition. Ph.D. thesis, Copenhagen Business
+                                                        Matthias T. Kromann. 2003. The Danish dependency
+ School.
+                                                         treebank and the underlying linguistic theory. In
+Sabine Buchholz and Erwin Marsi. 2006. CoNLL-            Proceedings of the 2nd Workshop on Treebanks and
+  X shared task on multilingual dependency parsing.      Linguistic Theories (TLT), pages 217–220, Växjö,
+  In Proceedings of the 10th Conference on Computa-      Sweden. Växjö University Press.
+  tional Natural Language Learning (CoNLL), pages
+  149–164.                                              Marco Kuhlmann and Mathias Möhl. 2007. Mildly
+                                                         context-sensitive dependency languages. In Pro-
+Chih-Chung Chang and Chih-Jen Lin, 2001.                 ceedings of the 45th Annual Meeting of the Associa-
+  LIBSVM: A Library for Support Vec-                     tion of Computational Linguistics, pages 160–167.
+  tor Machines.            Software available at
+  http://www.csie.ntu.edu.tw/∼cjlin/libsvm.             Marco Kuhlmann and Joakim Nivre. 2006. Mildly
+                                                         non-projective dependency structures. In Proceed-
+Jason Eisner. 1996. Three new probabilistic mod-         ings of the COLING/ACL 2006 Main Conference
+   els for dependency parsing: An exploration. In        Poster Sessions, pages 507–514.
+
+
+                                                    1500
+
+
+Marco Kuhlmann and Giorgio Satta. 2009. Treebank          Joakim Nivre, Johan Hall, and Jens Nilsson. 2006a.
+ grammar techniques for non-projective dependency           MaltParser: A data-driven parser-generator for de-
+ parsing. In Proceedings of the 12th Conference of          pendency parsing. In Proceedings of the 5th In-
+ the European Chapter of the Association for Com-           ternational Conference on Language Resources and
+ putational Linguistics (EACL), pages 478–486.              Evaluation (LREC), pages 2216–2219.
+Marco Kuhlmann. 2007. Dependency Structures and           Joakim Nivre, Johan Hall, Jens Nilsson, Gülsen
+ Lexicalized Grammars. Doctoral dissertation, Saar-         Eryiğit, and Svetoslav Marinov. 2006b. Labeled
+ land University, Saarbrücken, Germany.                    pseudo-projective dependency parsing with support
+                                                            vector machines. In Proceedings of the 10th Confer-
+Andre Martins, Noah Smith, and Eric Xing. 2009.
+                                                            ence on Computational Natural Language Learning
+  Concise integer linear programming formulations
+                                                            (CoNLL), pages 221–225.
+  for dependency parsing. In Proceedings of the
+  Joint Conference of the 47th Annual Meeting of the      Joakim Nivre. 2003. An efficient algorithm for pro-
+  ACL and the 4th International Joint Conference on         jective dependency parsing. In Proceedings of the
+  Natural Language Processing of the AFNLP (ACL-            8th International Workshop on Parsing Technologies
+  IJCNLP), pages 342–350.                                   (IWPT), pages 149–160.
+Ryan McDonald and Giorgio Satta. 2007. On the com-        Joakim Nivre. 2006. Constraints on non-projective de-
+  plexity of non-projective data-driven dependency          pendency graphs. In Proceedings of the 11th Con-
+  parsing. In Proceedings of the 10th International         ference of the European Chapter of the Association
+  Conference on Parsing Technologies (IWPT), pages          for Computational Linguistics (EACL), pages 73–
+  122–131.                                                  80.
+Ryan McDonald, Koby Crammer, and Fernando
+                                                          Joakim Nivre. 2008. Algorithms for Deterministic In-
+  Pereira. 2005a. Online large-margin training of de-
+                                                            cremental Dependency Parsing. Computational Lin-
+  pendency parsers. In Proceedings of the 43rd An-
+                                                            guistics, 34(4):513–553.
+  nual Meeting of the Association for Computational
+  Linguistics (ACL), pages 91–98.                         Kemal Oflazer, Bilge Say, Dilek Zeynep Hakkani-Tür,
+Ryan McDonald, Fernando Pereira, Kiril Ribarov, and         and Gökhan Tür. 2003. Building a Turkish tree-
+  Jan Hajič. 2005b. Non-projective dependency pars-        bank. In A. Abeille (ed.), Building and Exploiting
+  ing using spanning tree algorithms. In HLT/EMNLP          Syntactically-annotated Corpora, pages 261–277,
+  2005: Proceedings of the conference on Human              Dordrecht, the Netherlands. Kluwer.
+  Language Technology and Empirical Methods in            Kenji Sagae and Jun’ichi Tsujii. 2008. Shift-reduce
+  Natural Language Processing, pages 523–530, Mor-          dependency DAG parsing. In COLING ’08: Pro-
+  ristown, NJ, USA. Association for Computational           ceedings of the 22nd International Conference on
+  Linguistics.                                              Computational Linguistics, pages 753–760, Morris-
+Peter Neuhaus and Norbert Bröker. 1997. The com-           town, NJ, USA. Association for Computational Lin-
+  plexity of recognition of linguistically adequate de-     guistics.
+  pendency grammars. In Proceedings of the 35th
+  Annual Meeting of the Association for Computa-          Daniel Sleator and Davy Temperley. 1993. Parsing
+  tional Linguistics (ACL) and the 8th Conference of        English with a Link Grammar. In Proceedings of the
+  the European Chapter of the Association for Com-          Third International Workshop on Parsing Technolo-
+  putational Linguistics (EACL), pages 337–343.             gies (IWPT’93), pages 277–292. ACL/SIGPARSE.
+
+Jens Nilsson, Johan Hall, and Joakim Nivre. 2005.         Ivan Titov and James Henderson. 2007. A latent vari-
+   MAMBA meets TIGER: Reconstructing a Swedish               able model for generative dependency parsing. In
+   treebank from antiquity. In Proceedings of NODAL-         Proceedings of the 10th International Conference on
+   IDA 2005 Special Session on Treebanks, pages 119–         Parsing Technologies (IWPT), pages 144–155.
+   132. Samfundslitteratur, Frederiksberg, Denmark,
+                                                          Hiroyasu Yamada and Yuji Matsumoto. 2003. Statis-
+   May.
+                                                            tical dependency analysis with support vector ma-
+Joakim Nivre and Jens Nilsson. 2005. Pseudo-                chines. In Proceedings of the 8th International
+  projective dependency parsing. In ACL ’05: Pro-           Workshop on Parsing Technologies (IWPT), pages
+  ceedings of the 43rd Annual Meeting of the Associa-       195–206.
+  tion for Computational Linguistics, pages 99–106,
+  Morristown, NJ, USA. Association for Computa-           Anssi Mikael Yli-Jyrä. 2003. Multiplanarity – a
+  tional Linguistics.                                       model for dependency structures in treebanks. In
+                                                            Joakim Nivre and Erhard Hinrichs, editors, TLT
+Joakim Nivre, Johan Hall, and Jens Nilsson. 2004.           2003. Proceedings of the Second Workshop on Tree-
+  Memory-based dependency parsing. In Proceed-              banks and Linguistic Theories, volume 9 of Mathe-
+  ings of the 8th Conference on Computational Nat-          matical Modelling in Physics, Engineering and Cog-
+  ural Language Learning (CoNLL-2004), pages 49–            nitive Sciences, pages 189–200, Växjö, Sweden, 14-
+  56, Morristown, NJ, USA. Association for Compu-           15 November. Växjö University Press.
+  tational Linguistics.
+
+
+                                                      1501
+

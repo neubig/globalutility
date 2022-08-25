@@ -1,0 +1,668 @@
+               Constituency to Dependency Translation with Forests
+                                      Haitao Mi and Qun Liu
+                         Key Laboratory of Intelligent Information Processing
+                                 Institute of Computing Technology
+                                   Chinese Academy of Sciences
+                               P.O. Box 2704, Beijing 100190, China
+                                  {htmi,liuqun}@ict.ac.cn
+
+
+                      Abstract
+                                                               tree on   examples (partial)    fast   gram.    BLEU
+    Tree-to-string systems (and their forest-                  source     Liu06, Huang06        +       -        +
+    based extensions) have gained steady pop-                   target    Galley06, Shen08       -      +        +
+                                                                 both      Ding05, Liu09        +       +        -
+    ularity thanks to their simplicity and effi-
+                                                                 both         our work          +       +        +
+    ciency, but there is a major limitation: they
+    are unable to guarantee the grammatical-
+    ity of the output, which is explicitly mod-               Table 1: A classification and comparison of lin-
+    eled in string-to-tree systems via target-                guistically syntax-based SMT systems, where
+    side syntax. We thus propose to com-                      gram. denotes grammaticality of the output.
+    bine the advantages of both, and present
+    a novel constituency-to-dependency trans-
+    lation model, which uses constituency                        On one hand, tree-to-string systems (Liu et al.,
+    forests on the source side to direct the                  2006; Huang et al., 2006) have gained significant
+    translation, and dependency trees on the                  popularity, especially after incorporating packed
+    target side (as a language model) to en-                  forests (Mi et al., 2008; Mi and Huang, 2008; Liu
+    sure grammaticality. Medium-scale exper-                  et al., 2009; Zhang et al., 2009). Compared with
+    iments show an absolute and statistically                 their string-based counterparts, tree-based systems
+    significant improvement of +0.7 BLEU                      are much faster in decoding (linear time vs. cu-
+    points over a state-of-the-art forest-based               bic time, see (Huang et al., 2006)), do not re-
+    tree-to-string system even with fewer                     quire a binary-branching grammar as in string-
+    rules. This is also the first time that a tree-           based models (Zhang et al., 2006; Huang et al.,
+    to-tree model can surpass tree-to-string                  2009), and can have separate grammars for pars-
+    counterparts.                                             ing and translation (Huang et al., 2006). However,
+                                                              they have a major limitation that they do not have a
+1   Introduction                                              principled mechanism to guarantee grammatical-
+Linguistically syntax-based statistical machine               ity on the target side, since there is no linguistic
+translation models have made promising progress               tree structure of the output.
+in recent years. By incorporating the syntactic an-              On the other hand, string-to-tree systems ex-
+notations of parse trees from both or either side(s)          plicitly model the grammaticality of the output
+of the bitext, they are believed better than phrase-          by using target syntactic trees. Both string-to-
+based counterparts in reorderings. Depending on               constituency system (e.g., (Galley et al., 2006;
+the type of input, these models can be broadly di-            Marcu et al., 2006)) and string-to-dependency
+vided into two categories (see Table 1): the string-          model (Shen et al., 2008) have achieved signif-
+based systems whose input is a string to be simul-            icant improvements over the state-of-the-art for-
+taneously parsed and translated by a synchronous              mally syntax-based system Hiero (Chiang, 2007).
+grammar, and the tree-based systems whose input               However, those systems also have some limita-
+is already a parse tree to be directly converted into         tions that they run slowly (in cubic time) (Huang
+a target tree or string. When we also take into ac-           et al., 2006), and do not utilize the useful syntactic
+count the type of output (tree or string), the tree-          information on the source side.
+based systems can be divided into tree-to-string                 We thus combine the advantages of both tree-to-
+and tree-to-tree efforts.                                     string and string-to-tree approaches, and propose
+
+
+                                                        1433
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1433–1442,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+a novel constituency-to-dependency model, which                     2.1 Constituency Forests on the Source Side
+uses constituency forests on the source side to di-                 A constituency forest (in Figure 1 left) is a com-
+rect translation, and dependency trees on the tar-                  pact representation of all the derivations (i.e.,
+get side to guarantee grammaticality of the out-                    parse trees) for a given sentence under a context-
+put. In contrast to conventional tree-to-tree ap-                   free grammar (Billot and Lang, 1989).
+proaches (Ding and Palmer, 2005; Quirk et al.,                         More formally, following Huang (2008), such
+2005; Xiong et al., 2007; Zhang et al., 2007;                       a constituency forest is a pair Fc = Gf =
+Liu et al., 2009), which only make use of a sin-                    hV f , H f i, where V f is the set of nodes, and H f
+gle type of trees, our model is able to combine                     the set of hyperedges. For a given source sen-
+two types of trees, outperforming both phrase-                      tence c1:m = c1 . . . cm , each node v f ∈ V f is
+based and tree-to-string systems. Current tree-to-                  in the form of X i,j , which denotes the recognition
+tree models (Xiong et al., 2007; Zhang et al., 2007;                of nonterminal X spanning the substring from po-
+Liu et al., 2009) still have not outperformed the                   sitions i through j (that is, ci+1 . . . cj ). Each hy-
+phrase-based system Moses (Koehn et al., 2007)                      peredge hf ∈ H f is a pair htails(hf ), head (hf )i,
+significantly even with the help of forests.1                       where head (hf ) ∈ V f is the consequent node in
+   Our new constituency-to-dependency model                         the deductive step, and tails(hf ) ∈ (V f )∗ is the
+(Section 2) extracts rules from word-aligned pairs                  list of antecedent nodes. For example, the hyper-
+of source constituency forests and target depen-                    edge hf0 in Figure 1 for deduction (*)
+dency trees (Section 3), and translates source con-
+stituency forests into target dependency trees with                               NPB0,1   CC1,2    NPB2,3
+a set of features (Section 4). Medium data exper-                                          NP0,3             ,         (*)
+iments (Section 5) show a statistically significant
+improvement of +0.7 BLEU points over a state-                       is notated:
+of-the-art forest-based tree-to-string system even
+                                                                            h(NPB0,1 , CC1,2 , NPB2,3 ), NP0,3 i.
+with less translation rules, this is also the first time
+that a tree-to-tree model can surpass tree-to-string                where
+counterparts.
+                                                                                  head(hf0 ) = {NP0,3 },
+                                                                                           and
+2       Model                                                            tails(hf0 ) = {NPB0,1 , CC1,2 , NPB2,3 }.
+
+Figure 1 shows a word-aligned source con-
+                                                                       The solid line in Figure 1 shows the best parse
+stituency forest Fc and target dependency tree De ,
+                                                                    tree, while the dashed one shows the second best
+our constituency to dependency translation model
+                                                                    tree. Note that common sub-derivations like those
+can be formalized as:
+                                                                    for the verb VPB3,5 are shared, which allows the
+                                X                                   forest to represent exponentially many parses in a
+            P(Fc , De ) =              P(Cc , De )                  compact structure.
+                              Cc ∈Fc
+                                 X X                                   We also denote IN (v f ) to be the set of in-
+                            =                P(O)            (1)    coming hyperedges of node v f , which represents
+                                Cc ∈Fc o∈O                          the different ways of deriving v f . Take node IP0,5
+                            X XY
+                       =                     P(r),                  in Figure 1 for example, IN (IP0,5 ) = {hf1 , hf2 }.
+                           Cc ∈Fc o∈O r∈o                           There is also a distinguished root node TOP in
+                                                                    each forest, denoting the goal item in parsing,
+where Cc is a constituency tree in Fc , o is a deriva-              which is simply S0,m where S is the start symbol
+tion that translates Cc to De , O is the set of deriva-             and m is the sentence length.
+tion, r is a constituency to dependency translation
+                                                                    2.2 Dependency Trees on the Target Side
+rule.
+                                                                    A dependency tree for a sentence represents each
+    1
+     According to the reports of Liu et al. (2009), their forest-   word and its syntactic dependents through directed
+based constituency-to-constituency system achieves a com-           arcs, as shown in the following examples. The
+parable performance against Moses (Koehn et al., 2007), but
+a significant improvement of +3.6 BLEU points over the 1-           main advantage of a dependency tree is that it can
+best tree-based constituency-to-constituency system.                explore the long distance dependency.
+
+
+                                                                1434
+
+
+  1:                  talk                                                       IP
+
+       blank      a     blan        blan                                   NP          x3 :VPB
+                                                                                             → (x1 ) x3 (with (x2 ))
+                                                                 x1 :NPB CC x2 :NPB
+  2:                         held                                          yǔ
+
+          Bush        bla     blk       talk        with         Figure 2: Example of the rule r1 . The Chinese con-
+                                                                 junction yǔ “and” is translated into English prepo-
+                                    a      bl   b    Sharon      sition “with”.
+
+                                                                 3 Rule Extraction
+   We use the lexicon dependency grammar (Hell-                  We extract constituency to dependency rules from
+wig, 2006) to express a projective dependency                    word-aligned source constituency forest and target
+tree. Take the dependency trees above for exam-                  dependency tree pairs (Figure 1). We mainly ex-
+ple, they will be expressed:                                     tend the tree-to-string rule extraction algorithm of
+                                                                 Mi and Huang (2008) to our scenario. In this sec-
+  1: ( a ) talk                                                  tion, we first formalize the constituency to string
+                                                                 translation rule (Section 3.1). Then we present
+  2: ( Bush ) held ( ( a ) talk ) ( with ( Sharon ) )            the restrictions for dependency structures as well
+                                                                 formed fragments (Section 3.2). Finally, we de-
+where the lexicons in brackets represent the de-                 scribe our rule extraction algorithm (Section 3.3),
+pendencies, while the lexicon out the brackets is                fractional counts computation and probabilities es-
+the head.                                                        timation (Section 3.4).
+   More formally, a dependency tree is also a pair
+De = Gd = hV d , H d i. For a given target sen-                  3.1 Constituency to Dependency Rule
+tence e1:n = e1 . . . en , each node v d ∈ V d is                More formally, a constituency to de-
+a word ei (1 6 i 6 n), each hyperedge hd ∈                       pendency translation rule r is a tuple
+H d is a directed arc hvid , vjd i from node vid to              hlhs(r), rhs(r), φ(r)i, where lhs(r) is the
+its head node vjd . Following the formalization of               source side tree fragment, whose internal nodes
+the constituency forest scenario, we denote a pair               are labeled by nonterminal symbols (like NP and
+htails(hd ), head (hd )i to be a hyperedge hd , where            VP), and whose frontier nodes are labeled by
+head (hd ) is the head node, tails(hd ) is the node              source language words ci (like “yǔ”) or variables
+where hd leaves from.                                            from a set X = {x1 , x2 , . . .}; rhs(r) is expressed
+   We also denote Ll (v d ) and Lr (v d ) to be the left         in the target language dependency structure with
+and right children sequence of node v d from the                 words ej (like “with”) and variables from the set
+nearest to the farthest respectively. Take the node              X ; and φ(r) is a mapping from X to nontermi-
+v2d = “held” for example:                                        nals. Each variable xi ∈ X occurs exactly once in
+                                                                 lhs(r) and exactly once in rhs(r). For example,
+                    Ll (v2d ) ={Bush},                           the rule r1 in Figure 2,
+                  Lr (v2d ) ={talk, with}.
+                                                                     lhs(r1 ) = IP(NP(x1 CC(yǔ) x2 ) x3 ),
+2.3 Hypergraph
+                                                                     rhs(r1 ) = (x1 ) x3 (with (x2 )),
+Actually, both the constituency forest and the de-                   φ(r1 ) = {x1 7→ NPB, x2 7→ NPB, x3 7→ VPB}.
+pendency tree can be formalized as a hypergraph
+G, a pair hV, Hi. We use Gf and Gd to distinguish
+them. For simplicity, we also use Fc and De to de-               3.2 Well Formed Dependency Fragment
+note a constituency forest and a dependency tree                 Following Shen et al. (2008), we also restrict
+respectively. Specifically, the size of tails(hd ) of            rhs(r) to be well formed dependency fragment.
+a hyperedge hd in a dependency tree is a constant                The main difference between us is that we use
+one.                                                             more flexible restrictions. Given a dependency
+
+
+                                                              1435
+
+
+                                        IP0,5
+                                  “(Bush) .. Sharon))”                                                             Minimal rules extracted
+                                hf1                 hf2                                         IP (NP(x1 :NPB x2 :CC x3 :NPB) x4 :VPB)
+                                                                                                                     → (x1 ) x4 (x2 (x3 ) )
+               NP0,3                                          VP1,5                                      IP (x 1 :NPB  x2 :VP) → (x1 ) x2
+       “(Bush) ⊔ (with (Sharon))”
+                                                                                                        VP (x1 :PP x2 :VPB) → x2 (x1 )
+                                                         “held .. Sharon))”
+                                                                                                           PP (x1 :P x2 :NPB) → x1 (x2 )
+                                             PP1,3                             VPB3,5                   VPB (VV(jǔxı́ngle)) x1 :NPB)
+                            hf0                                                                                           → held ((a) x1 )
+                                         “with (Sharon)”                     “held ((a) talk)”
+                                                                                                                    NPB (Bùshı́) → Bush
+NPB0,1          CC1,2                 P1,2          NPB2,3             VV3,4              NPB4,5                     NPB (huı̀tán) → talk
+  “Bush”         “with”               “with”         “Sharon”        “held ((a)*)”           “talk”
+                                                                                                                         CC (yǔ) → with
+                                                                                                                           P (yǔ) → with
+ Bùshı́                  yǔ                       Shālóng         jǔxı́ngle           huı̀tán            NPB (Shālóng) → Sharon
+
+  ( Bush )         held               ((a)           talk )    ( with         ( Sharon ) )
+
+                          Figure 1: Forest-based constituency to dependency rule extraction.
+
+
+fragment di:j composed by the words from i to j,                         3.3 Rule Extraction Algorithm
+two kinds of well formed structures are defined as                       The algorithm shown in this Section is mainly ex-
+follows:                                                                 tended from the forest-based tree-to-string extrac-
+                        d , fixed for short, if it
+   Fixed on one node vone                                                tion algorithm (Mi and Huang, 2008). We extract
+meets the following conditions:                                          rules from word-aligned source constituency for-
+                  d                                                      est and target dependency tree pairs (see Figure 1)
+  • the head of vone  is out of [i, j], i.e.: ∀hd , if
+                                                                         in three steps:
+    tails(hd ) = vone
+                  d ⇒ head (hd ) ∈   / ei:j .
+                                                                           (1) frontier set computation,
+  • the heads of other nodes except vone  d    are in
+    [i, j], i.e.: ∀k ∈ [i, j] and vk 6= vone , ∀hd if
+                                   d     d                                 (2) fragmentation,
+    tails(hd ) = vkd ⇒ head (hd ) ∈ ei:j .
+                                                                           (3) composition.
+  Floating with multi nodes M , floating for                                The frontier set (Galley et al., 2004) is the po-
+short, if it meets the following conditions:                             tential points to “cut” the forest and dependency
+                                                                         tree pair into fragments, each of which will form a
+  • all nodes in M have a same head node,
+                                                                         minimal rule (Galley et al., 2006).
+    i.e.: ∃x ∈/ [i, j], ∀hd if tails(hd ) ∈ M ⇒
+                                                                            However, not every fragment can be used for
+    head (hd ) = vxh .
+                                                                         rule extraction, since it may or may not respect
+  • the heads of other nodes not in M are in                             to the restrictions, such as word alignments and
+    [i, j], i.e.: ∀k ∈ [i, j] and vkd ∈
+                                      / M, ∀hd if                        well formed dependency structures. So we say a
+    tails(hd ) = vkd ⇒ head (hd ) ∈ ei:j .                               fragment is extractable if it respects to all re-
+                                                                         strictions. The root node of every extractable tree
+   Take the “ (Bush) held ((a) talk))(with (Sharon))                     fragment corresponds to a faithful structure on
+” for example: partial fixed examples are “ (Bush)                       the target side, in which case there is a “transla-
+held ” and “ held ((a) talk)”; while the partial float-                  tional equivalence” between the subtree rooted at
+ing examples are “ (talk) (with (Sharon)) ” and “                        the node and the corresponding target structure.
+((a) talk) (with (Sharon)) ”. Please note that the                       For example, in Figure 1, every node in the forest
+floating structure “ (talk) (with (Sharon)) ” can not                    is annotated with its corresponding English struc-
+be allowed in Shen et al. (2008)’s model.                                ture. The NP0,3 node maps to a non-contiguous
+   The dependency structure “ held ((a))” is not a                       structure “(Bush) ⊔ (with (Sharon))”, the VV3,4
+well formed structure, since the head of word “a”                        node maps to a contiguous but non-faithful struc-
+is out of scope of this structure.                                       ture “held ((a) *)”.
+
+
+                                                                    1436
+
+
+Algorithm 1 Forest-based constituency to dependency rule extraction.
+    Input: Source constituency forest Fc , target dependency tree De , and alignment a
+    Output: Minimal rule set R
+ 1: fs ← F RONTIER (Fc , De , a)                                                   ⊲ compute frontier set
+ 2: for each v f ∈ fs do
+ 3:     open ← {h∅, {v f }i}                                       ⊲ initial queue of growing fragments
+ 4:     while open 6= ∅ do
+ 5:        hhs, expsi ← open.pop()                                                   ⊲ extract a fragment
+ 6:        if exps = ∅ then                                                          ⊲ nothing to expand?
+ 7:             generate a rule r using fragment hs                                      ⊲ generate a rule
+ 8:             R.append(r)
+ 9:        else                                                              ⊲ incomplete: further expand
+10:              ′
+                v ← exps.pop()                                                      ⊲ a non-frontier node
+11:             for each hf ∈ IN (v ′ ) do
+12:                 newexps ← exps ∪ (tails(hf ) \ fs)                                            ⊲ expand
+13:                                        f
+                    open.append(hhs ∪ {h }, newexpsi)
+
+
+   Following Mi and Huang (2008), given a source                 tree fragments, each of which forms a rule with
+target sentence pair hc1:m , e1:n i with an alignment            variables matching the frontier descendant nodes.
+a, the span of node v f on source forest is the set              For example, the forest in Figure 1 is cut into 10
+of target words aligned to leaf nodes under v f :                pieces, each of which corresponds to a minimal
+span(v f ) , {ei ∈ e1:n | ∃cj ∈ yield (v f ), (cj , ei ) ∈ a}.   rule listed on the right.
+                                                                    Our rule extraction algorithm is formalized in
+ where the yield (v f ) is all the leaf nodes un-
+                                                                 Algorithm 1. After we compute the frontier set
+der v f . For each span(v f ), we also denote
+                                                                 fs (line 1). We visit each frontier node v f ∈ f s
+dep(v f ) to be its corresponding dependency struc-
+                                                                 on the source constituency forest Fc , and keep a
+ture, which represents the dependency struc-
+                                                                 queue open of growing fragments rooted at v f . We
+ture of all the words in span(v f ). Take the
+                                                                 keep expanding incomplete fragments from open,
+span(PP1,3 ) ={with, Sharon} for example, the
+                                                                 and extract a rule if a complete fragment is found
+corresponding dep(PP1,3 ) is “with (Sharon)”. A
+                                                                 (line 7). Each fragment hs in open is associated
+dep(v f ) is faithful structure to node v f if it meets
+                                                                 with a list of expansion sites (exps in line 5) being
+the following restrictions:
+                                                                 the subset of leaf nodes of the current fragment
+  • all words in span(v f ) form a continuous sub-               that are not in the frontier set. So each fragment
+    string ei:j ,                                                along hyperedge h is associated with
+  • every word in span(v f ) is only aligned to leaf
+    nodes of v f , i.e.: ∀ei ∈ span(v f ), (cj , ei ) ∈
+                                                                               exps = tails(hf ) \ fs.
+    a ⇒ cj ∈ yield (v f ),
+  • dep(v f ) is a well formed dependency struc-
+    ture.                                                        A fragment is complete if its expansion sites is
+                                                                 empty (line 6), otherwise we pop one expansion
+For example, node VV3,4 has a non-faithful
+                                                                 node v ′ to grow and spin-off new fragments by
+structure (crossed out in Figure 1), since its
+                                                                 following hyperedges of v ′ , adding new expansion
+dep(VV3,4 = “ held ((a) *)” is not a well formed
+                                                                 sites (lines 11-13), until all active fragments are
+structure, where the head of word “a” lies in the
+                                                                 complete and open queue is empty (line 4).
+outside of its words covered. Nodes with faithful
+structure form the frontier set (shaded nodes in                    After we get all the minimal rules, we glue them
+Figure 1) which serve as potential cut points for                together to form composed rules following Galley
+rule extraction.                                                 et al. (2006). For example, the composed rule r1
+   Given the frontier set, fragmentation step is to              in Figure 2 is glued by the following two minimal
+“cut” the forest at all frontier nodes and form                  rules:
+
+
+                                                             1437
+
+
+                                                                        a target side dependency tree De (o):
+ IP (NP(x1 :NPB x2 :CC x3 :NPB) x4 :VPB)
+                                                                r2
+                → (x1 ) x4 (x2 (x3 ) )                                          o∗ = arg       max        λ1 log P(o | Tc )
+                                                                                            Tc ∈Fc ,o∈O
+
+ CC (yǔ) → with                                                r3                                    +λ2 log Plm (e(o))
+                                                                                               +λ3 log PDLMw (De (o))              (6)
+where x2 :CC in r2 is replaced with r3 accordingly.                                             +λ4 log PDLMp (De (o))
+                                                                                                       +λ5 log P(Tc (o))
+3.4 Fractional Counts and Rule Probabilities                                            +λ6 ill(o) + λ7 |o| + λ8 |e(o)|,
+Following Mi and Huang (2008), we penalize a
+                                                                        where the first two terms are translation and lan-
+rule r by the posterior probability of the corre-
+                                                                        guage model probabilities, e(o) is the target string
+sponding constituent tree fragment lhs(r), which
+                                                                        (English sentence) for derivation o, the third and
+can be computed in an Inside-Outside fashion, be-
+                                                                        forth items are the dependency language model
+ing the product of the outside probability of its
+                                                                        probabilities on the target side computed with
+root node, the inside probabilities of its leaf nodes,
+                                                                        words and POS tags separately, De (o) is the target
+and the probabilities of hyperedges involved in the
+                                                                        dependency tree of o, the fifth one is the parsing
+fragment.
+                                                                        probability of the source side tree Tc (o) ∈ Fc , the
+                                                                        ill(o) is the penalty for the number of ill-formed
+    αβ(lhs(r)) =α(root(r))                                              dependency structures in o, and the last two terms
+                     Y
+                ·                   P(hf )                              are derivation and translation length penalties, re-
+                                                                        spectively. The conditional probability P(o | Tc )
+                      hf ∈ lhs(r)                                (2)
+                              Y                                         is decomposes into the product of rule probabili-
+                  ·                             β(v f )                 ties:                       Y
+                      v f ∈ leaves(lhs(r))                                             P(o | Tc ) =     P(r),             (7)
+                                                                                                          r∈o
+
+where root(r) is the root of the rule r, α(v) and                       where each P(r) is the product of five probabili-
+β(v) are the outside and inside probabilities of                        ties:
+node v, and leaves(lhs(r)) returns the leaf nodes
+                                                                            P(r) =P(r | lhs(r))λ9 · P(r | rhs(r))λ10
+of a tree fragment lhs(r).
+   We use fractional counts to compute three con-                                    · P(r | root(lhs(r)))λ11
+                                                                                                                                   (8)
+ditional probabilities for each rule, which will be                                  · Plex (lhs(r) | rhs(r))λ12
+used in the next section:
+                                                                                     · Plex (rhs(r) | lhs(r))λ13 ,
+                                   c(r)                                 where the first three are conditional probabilities
+     P(r | lhs(r)) = P                                  ,        (3)
+                          r ′ :lhs(r ′ )=lhs(r) c(r )
+                                                   ′
+                                                                        based on fractional counts of rules defined in Sec-
+                                                                        tion 3.4, and the last two are lexical probabilities.
+                                                                        When computing the lexical translation probabili-
+                                   c(r)                                 ties described in (Koehn et al., 2003), we only take
+    P(r | rhs(r)) = P                                      ,     (4)
+                          r ′ :rhs(r ′ )=rhs(r) c(r
+                                                      ′)
+                                                                        into accout the terminals in a rule. If there is no
+                                                                        terminal, we set the lexical probability to 1.
+                                                                           The decoding algorithm works in a bottom-up
+                                   c(r)
+    P(r | root(r)) = P                                         . (5)    search fashion by traversing each node in forest
+                          r ′ :root(r ′ )=root(r) c(r
+                                                        ′)
+                                                                        Fc . We first use pattern-matching algorithm of Mi
+                                                                        et al. (2008) to convert Fc into a translation for-
+4    Decoding                                                           est, each hyperedge of which is associated with a
+                                                                        constituency to dependency translation rule. How-
+Given a source forest Fc , the decoder searches for                     ever, pattern-matching failure2 at a node v f will
+the best derivation o∗ among the set of all possible                        2
+                                                                             Pattern-matching failure at a node v f means there is no
+derivations O, each of which forms a source side                        translation rule can be matched at v f or no translation hyper-
+constituent tree Tc (o), a target side string e(o), and                 edge can be constructed at v f .
+
+
+                                                                     1438
+
+
+cut the derivation path and lead to translation fail-       the POS tag information on the target side for each
+ure. To tackle this problem, we construct a pseudo          constituency-to-dependency rule. So we will also
+translation rule for each parse hyperedge hf ∈              generate a POS taged dependency tree simulta-
+IN (v f ) by mapping the CFG rule into a target de-         neously at the decoding time. We calculate this
+pendency tree using the head rules of Magerman              dependency language model by simply replacing
+(1995). Take the hyperedge hf0 in Figure1 for ex-           each ei in equation 9 with its tag t(ei ).
+ample, the corresponding pseudo translation rule
+is:                                                         5 Experiments
+  NP(x1 :NPB x2 :CC x3 :NPB) → (x1 ) (x2 ) x3 ,             5.1 Data Preparation
+since the x3 :NPB is the head word of the CFG               Our training corpus consists of 239K sentence
+rule: NP → NPB CC NPB.                                      pairs with about 6.9M/8.9M words in Chi-
+   After the translation forest is constructed, we          nese/English, respectively. We first word-align
+traverse each node in translation forest also in            them by GIZA++ (Och and Ney, 2000) with re-
+bottom-up fashion. For each node, we use the                finement option “grow-diag-and” (Koehn et al.,
+cube pruning technique (Chiang, 2007; Huang                 2003), and then parse the Chinese sentences using
+and Chiang, 2007) to produce partial hypotheses             the parser of Xiong et al. (2005) into parse forests,
+and compute all the feature scores including the            which are pruned into relatively small forests with
+dependency language model score (Section 4.1).              a pruning threshold 3. We also parse the English
+If all the nodes are visited, we trace back along           sentences using the parser of Charniak (2000) into
+the 1-best derivation at goal item S0,m and build           1-best constituency trees, which will be converted
+a target side dependency tree. For k-best search            into dependency trees using Magerman (1995)’s
+after getting 1-best derivation, we use the lazy Al-        head rules. We also store the POS tag informa-
+gorithm 3 of Huang and Chiang (2005) that works             tion for each word in dependency trees, and com-
+backwards from the root node, incrementally com-            pute two different dependency language models
+puting the second, third, through the kth best alter-       for words and POS tags in dependency tree sepa-
+natives.                                                    rately. Finally, we apply translation rule extraction
+                                                            algorithm described in Section 3. We use SRI Lan-
+4.1 Dependency Language Model Computing                     guage Modeling Toolkit (Stolcke, 2002) to train a
+We compute the score of a dependency language               4-gram language model with Kneser-Ney smooth-
+model for a dependency tree De in the same way              ing on the first 1/3 of the Xinhua portion of Giga-
+proposed by Shen et al. (2008). For each nonter-            word corpus. At the decoding step, we again parse
+minal node vhd = eh in De and its children se-              the input sentences into forests and prune them
+quences Ll = el1 , el2 ...eli and Lr = er1 , er2 ...erj ,   with a threshold 10, which will direct the trans-
+the probability of a trigram is computed as fol-            lation (Section 4).
+lows:                                                          We use the 2002 NIST MT Evaluation test set
+                                                            as our development set and the 2005 NIST MT
+ P(Ll , Lr | eh §) = P(Ll | eh §) · P(Lr | eh §), (9)       Evaluation test set as our test set. We evaluate the
+                                                            translation quality using the BLEU-4 metric (Pap-
+where the P(Ll | eh §) is decomposed to be:                 ineni et al., 2002), which is calculated by the script
+                                                            mteval-v11b.pl with its default setting which is
+     P(Ll | eh §) =P(ell | eh §)                            case-insensitive matching of n-grams. We use the
+                     · P(el2 | el1 , eh §)                  standard minimum error-rate training (Och, 2003)
+                                                    (10)
+                     ...                                    to tune the feature weights to maximize the sys-
+                     · P(eln | eln−1 , eln−2 ).             tem’s BLEU score on development set.
+
+We use the suffix “§” to distinguish the head               5.2 Results
+word and child words in the dependency language             Table 2 shows the results on the test set. Our
+model.                                                      baseline system is a state-of-the-art forest-based
+   In order to alleviate the problem of data sparse,        constituency-to-string model (Mi et al., 2008), or
+we also compute a dependency language model                 forest c2s for short, which translates a source for-
+for POS tages over a dependency tree. We store              est into a target string by pattern-matching the
+
+
+                                                        1439
+
+
+constituency-to-string (c2s) rules and the bilin-                                       Rule Set
+gual phrases (s2s). The baseline system extracts                     System                              BLEU
+                                                                                     Type      #
+31.9M c2s rules, 77.9M s2s rules respectively and
+                                                                                      c2s     31.9M
+achieves a BLEU score of 34.17 on the test set3 .                                                         34.17
+                                                                                      s2s     77.9M
+   At first, we investigate the influence of differ-
+                                                                                      c2d     13.8M
+ent rule sets on the performance of baseline sys-                    forest c2s                          32.48(↓1.7)
+                                                                                      s2d      9.0M
+tem. We first restrict the target side of transla-
+                                                                                      c2d     13.8M
+tion rules to be well-formed structures, and we                                                          34.03(↓0.1)
+                                                                                      s2s     77.9M
+extract 13.8M constituency-to-dependency (c2d)
+rules, which is 43% of c2s rules. We also extract                                     c2d     13.8M
+                                                                                                         33.25(↓0.9)
+9.0M string-to-dependency (s2d) rules, which is                                       s2d      9.0M
+                                                                     forest c2d
+only 11.6% of s2s rules. Then we convert c2d and                                      c2d     13.8M
+                                                                                                         34.88(↑0.7)
+s2d rules to c2s and s2s rules separately by re-                                    s2s-dep 77.9M
+moving the target-dependency structures and feed
+                                                                  Table 2: Statistics of different types of rules ex-
+them into the baseline system. As shown in the
+                                                                  tracted on training corpus and the BLEU scores
+third line in the column of BLEU score, the per-
+                                                                  on the test set.
+formance drops 1.7 BLEU points over baseline
+system due to the poorer rule coverage. However,
+when we further use all s2s rules instead of s2d                  Collins et al. (2005)). For the first time, a tree-to-
+rules in our next experiment, it achieves a BLEU                  tree model can surpass tree-to-string counterparts
+score of 34.03, which is very similar to the base-                significantly even with fewer rules.
+line system. Those results suggest that restrictions
+on c2s rules won’t hurt the performance, but re-                  6 Related Work
+strictions on s2s will hurt the translation quality
+badly. So we should utilize all the s2s rules in or-              The concept of packed forest has been used in
+der to preserve a good coverage of translation rule               machine translation for several years. For exam-
+set.                                                              ple, Huang and Chiang (2007) use forest to char-
+   The last two lines in Table 2 show the results of              acterize the search space of decoding with in-
+our new forest-based constituency-to-dependency                   tegrated language models. Mi et al. (2008) and
+model (forest c2d for short). When we only use                    Mi and Huang (2008) use forest to direct trans-
+c2d and s2d rules, our system achieves a BLEU                     lation and extract rules rather than 1-best tree in
+score of 33.25, which is lower than the baseline                  order to weaken the influence of parsing errors,
+system in the first line. But, with the same rule set,            this is also the first time to use forest directly
+our model still outperform the result in the sec-                 in machine translation. Following this direction,
+ond line. This suggests that using dependency lan-                Liu et al. (2009) and Zhang et al. (2009) apply
+guage model really improves the translation qual-                 forest into tree-to-tree (Zhang et al., 2007) and
+ity by less than 1 BLEU point.                                    tree-sequence-to-string models(Liu et al., 2007)
+   In order to utilize all the s2s rules and increase             respectively. Different from Liu et al. (2009), we
+the rule coverage, we parse the target strings of                 apply forest into a new constituency tree to de-
+the s2s rules into dependency fragments, and con-                 pendency tree translation model rather than con-
+struct the pseudo s2d rules (s2s-dep). Then we                    stituency tree-to-tree model.
+use c2d and s2s-dep rules to direct the translation.                 Shen et al. (2008) present a string-to-
+With the help of the dependency language model,                   dependency model. They define the well-formed
+our new model achieves a significant improvement                  dependency structures to reduce the size of
+of +0.7 BLEU points over the forest c2s baseline                  translation rule set, and integrate a dependency
+system (p < 0.05, using the sign-test suggested by                language model in decoding step to exploit long
+   3
+                                                                  distance word relations. This model shows a
+     According to the reports of Liu et al. (2009), with a more
+larger training corpus (FBIS plus 30K) but no name entity         significant improvement over the state-of-the-art
+translations (+1 BLEU points if it is used), their forest-based   hierarchical phrase-based system (Chiang, 2005).
+constituency-to-constituency model achieves a BLEU score          Compared with this work, we put fewer restric-
+of 30.6, which is similar to Moses (Koehn et al., 2007). So our
+baseline system is much better than the BLEU score (30.6+1)       tions on the definition of well-formed dependency
+of the constituency-to-constituency system and Moses.             structures in order to extract more rules; the
+
+
+                                                              1440
+
+
+other difference is that we can also extract more       Acknowledgement
+expressive constituency to dependency rules,
+                                                        The authors were supported by National Natural
+since the source side of our rule can encode
+                                                        Science Foundation of China, Contracts 60736014
+multi-level reordering and contain more variables
+                                                        and 90920004, and 863 State Key Project No.
+being larger than two; furthermore, our rules can
+                                                        2006AA010108. We thank the anonymous review-
+be pattern-matched at high level, which is more
+                                                        ers for their insightful comments. We are also
+reasonable than using glue rules in Shen et al.
+                                                        grateful to Liang Huang for his valuable sugges-
+(2008)’s scenario; finally, the most important one
+                                                        tions.
+is that our model runs very faster.
+   Liu et al. (2009) propose a forest-based
+constituency-to-constituency model, they put            References
+more emphasize on how to utilize parse forest
+                                                        Sylvie Billot and Bernard Lang. 1989. The structure of
+to increase the tree-to-tree rule coverage. By            shared forests in ambiguous parsing. In Proceedings
+contrast, we only use 1-best dependency trees             of ACL ’89, pages 143–151.
+on the target side to explore long distance rela-
+                                                        Eugene Charniak. 2000. A maximum-entropy inspired
+tions and extract translation rules. Theoretically,       parser. In Proceedings of NAACL, pages 132–139.
+we can extract more rules since dependency
+tree has the best inter-lingual phrasal cohesion        David Chiang. 2005. A hierarchical phrase-based
+                                                          model for statistical machine translation. In Pro-
+properties (Fox, 2002).
+                                                          ceedings of ACL, pages 263–270, Ann Arbor, Michi-
+                                                          gan, June.
+7   Conclusion and Future Work
+                                                        David Chiang. 2007. Hierarchical phrase-based trans-
+In this paper, we presented a novel forest-based          lation. Comput. Linguist., 33(2):201–228.
+constituency-to-dependency translation model,           Michael Collins, Philipp Koehn, and Ivona Kucerova.
+which combines the advantages of both tree-to-            2005. Clause restructuring for statistical machine
+string and string-to-tree systems, runs fast and          translation. In Proceedings of ACL, pages 531–540.
+guarantees grammaticality of the output. To learn       Yuan Ding and Martha Palmer. 2005. Machine trans-
+the constituency-to-dependency translation rules,         lation using probabilistic synchronous dependency
+we first identify the frontier set for all the            insertion grammars. In Proceedings of ACL, pages
+nodes in the constituency forest on the source            541–548, June.
+side. Then we fragment them and extract mini-           Heidi J. Fox. 2002. Phrasal cohesion and statistical
+mal rules. Finally, we glue them together to be           machine translation. In In Proceedings of EMNLP-
+composed rules. At the decoding step, we first            02.
+parse the input sentence into a constituency for-       Michel Galley, Mark Hopkins, Kevin Knight, and
+est. Then we convert it into a translation for-           Daniel Marcu. 2004. What’s in a translation rule?
+est by patter-matching the constituency to string         In Proceedings of HLT/NAACL.
+rules. Finally, we traverse the translation forest      Michel Galley, Jonathan Graehl, Kevin Knight, Daniel
+in a bottom-up fashion and translate it into a tar-       Marcu, Steve DeNeefe, Wei Wang, and Ignacio
+get dependency tree by incorporating string-based         Thayer. 2006. Scalable inference and training of
+and dependency-based language models. Using all           context-rich syntactic translation models. In Pro-
+                                                          ceedings of COLING-ACL, pages 961–968, July.
+constituency-to-dependency translation rules and
+bilingual phrases, our model achieves +0.7 points       Peter Hellwig. 2006. Parsing with Dependency Gram-
+improvement in BLEU score significantly over a            mars, volume II. An International Handbook of
+state-of-the-art forest-based tree-to-string system.      Contemporary Research.
+This is also the first time that a tree-to-tree model   Liang Huang and David Chiang. 2005. Better k-best
+can surpass tree-to-string counterparts.                  parsing. In Proceedings of IWPT.
+   In the future, we will do more experiments           Liang Huang and David Chiang. 2007. Forest rescor-
+on rule coverage to compare the constituency-to-          ing: Faster decoding with integrated language mod-
+constituency model with our model. Furthermore,           els. In Proceedings of ACL, pages 144–151, June.
+we will replace 1-best dependency trees on the          Liang Huang, Kevin Knight, and Aravind Joshi. 2006.
+target side with dependency forests to further in-        Statistical syntax-directed translation with extended
+crease the rule coverage.                                 domain of locality. In Proceedings of AMTA.
+
+
+                                                    1441
+
+
+Liang Huang, Hao Zhang, Daniel Gildea, , and Kevin           Libin Shen, Jinxi Xu, and Ralph Weischedel. 2008. A
+  Knight. 2009. Binarization of synchronous context-           new string-to-dependency machine translation algo-
+  free grammars. Comput. Linguist.                             rithm with a target dependency language model. In
+                                                               Proceedings of ACL-08: HLT, June.
+Liang Huang. 2008. Forest reranking: Discriminative
+  parsing with non-local features. In Proceedings of         Andreas Stolcke. 2002. SRILM - an extensible lan-
+  ACL.                                                         guage modeling toolkit. In Proceedings of ICSLP,
+                                                               volume 30, pages 901–904.
+Philipp Koehn, Franz Joseph Och, and Daniel Marcu.
+  2003. Statistical phrase-based translation. In Pro-        Deyi Xiong, Shuanglong Li, Qun Liu, and Shouxun
+  ceedings of HLT-NAACL, pages 127–133, Edmon-                 Lin. 2005. Parsing the Penn Chinese Treebank with
+  ton, Canada, May.                                            Semantic Knowledge. In Proceedings of IJCNLP
+                                                               2005, pages 70–81.
+Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris
+  Callison-Burch, Marcello Federico, Nicola Bertoldi,        Deyi Xiong, Qun Liu, and Shouxun Lin. 2007. A
+  Brooke Cowan, Wade Shen, Christine Moran,                    dependency treelet string correspondence model for
+  Richard Zens, Chris Dyer, Ondrej Bojar, Alexandra            statistical machine translation. In Proceedings of
+  Constantin, and Evan Herbst. 2007. Moses: Open               SMT, pages 40–47.
+  source toolkit for statistical machine translation. In
+  Proceedings of ACL, pages 177–180, June.                   Hao Zhang, Liang Huang, Daniel Gildea, and Kevin
+                                                               Knight. 2006. Synchronous binarization for ma-
+Yang Liu, Qun Liu, and Shouxun Lin. 2006. Tree-                chine translation. In Proc. of HLT-NAACL.
+  to-string alignment template for statistical machine
+  translation. In Proceedings of COLING-ACL, pages           Min Zhang, Hongfei Jiang, Aiti Aw, Jun Sun, Sheng Li,
+  609–616, Sydney, Australia, July.                            and Chew Lim Tan. 2007. A tree-to-tree alignment-
+Yang Liu, Yun Huang, Qun Liu, and Shouxun Lin.                 based model for statistical machine translation. In
+  2007. Forest-to-string statistical translation rules. In     Proceedings of MT-Summit.
+  Proceedings of ACL, pages 704–711, June.                   Hui Zhang, Min Zhang, Haizhou Li, Aiti Aw, and
+Yang Liu, Yajuan Lü, and Qun Liu. 2009. Improving             Chew Lim Tan. 2009. Forest-based tree sequence
+  tree-to-tree translation with packed forests. In Pro-        to string translation model. In Proceedings of the
+  ceedings of ACL/IJCNLP, August.                              ACL/IJCNLP 2009.
+
+David M. Magerman. 1995. Statistical decision-tree
+  models for parsing. In Proceedings of ACL, pages
+  276–283, June.
+Daniel Marcu, Wei Wang, Abdessamad Echihabi, and
+  Kevin Knight. 2006. Spmt: Statistical machine
+  translation with syntactified target language phrases.
+  In Proceedings of EMNLP, pages 44–52, July.
+Haitao Mi and Liang Huang. 2008. Forest-based trans-
+  lation rule extraction. In Proceedings of EMNLP
+  2008, pages 206–214, Honolulu, Hawaii, October.
+Haitao Mi, Liang Huang, and Qun Liu. 2008. Forest-
+  based translation. In Proceedings of ACL-08:HLT,
+  pages 192–199, Columbus, Ohio, June.
+Franz J. Och and Hermann Ney. 2000. Improved sta-
+  tistical alignment models. In Proceedings of ACL,
+  pages 440–447.
+Franz J. Och. 2003. Minimum error rate training in
+  statistical machine translation. In Proceedings of
+  ACL, pages 160–167.
+Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+  Jing Zhu. 2002. BLEU: a method for automatic
+  evaluation of machine translation. In Proceedings
+  of ACL, pages 311–318, Philadephia, USA, July.
+Chris Quirk, Arul Menezes, and Colin Cherry. 2005.
+  Dependency treelet translation: Syntactically in-
+  formed phrasal SMT. In Proceedings of ACL, pages
+  271–279, June.
+
+
+                                                         1442
+

@@ -1,0 +1,610 @@
+          Discriminative Pruning for Discriminative ITG Alignment
+                                  Shujie Liu†, Chi-Ho Li‡ and Ming Zhou‡
+                              †
+                               School of Computer Science and Technology
+                              Harbin Institute of Technology, Harbin, China
+                                       shujieliu@mtlab.hit.edu.cn
+                                ‡
+                                 Microsoft Research Asia, Beijing, China
+                                     {chl, mingzhou}@microsoft.com
+
+
+                                                             pose a novel discriminative pruning framework
+                      Abstract                               for discriminative ITG. The pruning model uses
+                                                             no more training data than the discriminative ITG
+    While Inversion Transduction Grammar (ITG)               parser itself, and it uses a log-linear model to in-
+    has regained more and more attention in recent           tegrate all features that help identify the correct
+    years, it still suffers from the major obstacle of       span pair (like Model 1 probability and HMM
+    speed. We propose a discriminative ITG prun-             posterior). On top of the discriminative pruning
+    ing framework using Minimum Error Rate
+                                                             method, we also propose a discriminative ITG
+    Training and various features from previous
+    work on ITG alignment. Experiment results                alignment system using hierarchical phrase pairs.
+    show that it is superior to all existing heuristics         In the following, some basic details on the ITG
+    in ITG pruning. On top of the pruning frame-             formalism and ITG parsing are first reviewed
+    work, we also propose a discriminative ITG               (Sections 2 and 3), followed by the definition of
+    alignment model using hierarchical phrase                pruning in ITG (Section 4). The “Discriminative
+    pairs, which improves both F-score and Bleu              Pruning for Discriminative ITG” model (DPDI)
+    score over the baseline alignment system of              and our discriminative ITG (DITG) parsers will
+    GIZA++.                                                  be elaborated in Sections 5 and 6 respectively.
+                                                             The merits of DPDI and DITG are illustrated
+1    Introduction                                            with the experiments described in Section 7.
+Inversion transduction grammar (ITG) (Wu, 1997)
+                                                             2     Basics of ITG
+is an adaptation of SCFG to bilingual parsing. It
+does synchronous parsing of two languages with               The simplest formulation of ITG contains three
+phrasal and word-level alignment as by-product.              types of rules: terminal unary rules 𝑋 → 𝑒/𝑓 ,
+For this reason ITG has gained more and more                 where 𝑒 and 𝑓 represent words (possibly a null
+attention recently in the word alignment commu-              word, ε) in the English and foreign language
+nity (Zhang and Gildea, 2005; Cherry and Lin,                respectively, and the binary rules 𝑋 → 𝑋, 𝑋 and
+2006; Haghighi et al., 2009).                                𝑋 → 𝑋, 𝑋 , which refer to that the component
+   A major obstacle in ITG alignment is speed.               English and foreign phrases are combined in the
+The original (unsupervised) ITG algorithm has                same and inverted order respectively.
+complexity of O(n6). When extended to super-                    From the viewpoint of word alignment, the
+vised/discriminative framework, ITG runs even                terminal unary rules provide the links of word
+more slowly. Therefore all attempts to ITG                   pairs, whereas the binary rules represent the reor-
+alignment come with some pruning method. For                 dering factor. One of the merits of ITG is that it
+example, Haghighi et al. (2009) do pruning based             is less biased towards short-distance reordering.
+on the probabilities of links from a simpler                    Such a formulation has two drawbacks. First of
+alignment model (viz. HMM); Zhang and Gildea                 all, it imposes a 1-to-1 constraint in word align-
+(2005) propose Tic-tac-toe pruning, which is                 ment. That is, a word is not allowed to align to
+based on the Model 1 probabilities of word pairs             more than one word. This is a strong limitation as
+inside and outside a pair of spans.                          no idiom or multi-word expression is allowed to
+   As all the principles behind these techniques             align to a single word on the other side. In fact
+have certain contribution in making good pruning             there have been various attempts in relaxing the
+decision, it is tempting to incorporate all these            1-to-1 constraint. Both ITG alignment
+features in ITG pruning. In this paper, we pro-
+
+                                                          316
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 316–324,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                    A:[e1,e3]/[f1,f3]                                                       A:[e1,e3]/[f1,f3]
+                                                                                                        {e1/f2,e2/f1,e3/f3} ,
+                                   {e1/f2,e2/f1,e3/f3}
+                                                                                                         {e1/f1,e2/f2,e3,f3}
+                                                                                                  A→[B,C]                    A→[A,C]
+
+
+                    B:[e1,e2]/[f1,f2]           C:[e3,e3]/[f3,f3]                       B:[e1,e2]/[f1,f2]                         A:[e1,e2]/[f1,f2]
+                       {e1/f2,e2/f1}                    {e3/f3}                              {e1/f2}                                   {e2/f2}
+
+                                                                                           B→<C,C>                                    A→[C,C]
+
+
+         C:[e1,e1]/[f2,f2]           C:[e2,e2]/[f1,f1]              C:[e1,e1]/[f2,f2]   C:[e2,e2]/[f1,f1]     C:[e3,e3]/[f3,f3]       C:[e1,e1]/[f1,f1]   C:[e2,e2]/[f2,f2]
+
+             {e1/f2}                      {e2/f1}                       {e1/f2}             {e2/f1}                {e3/f3}                {e1/f1}             {e2/f2}
+
+                             (a)                                                                                                (b)
+
+
+                               Figure 1: Example ITG parses in graph (a) and hypergraph (b).
+approaches with and without this constraint will                                             1(b)). Due to the use of normal form, the hypo-
+be elaborated in Section 6.                                                                  theses of a span pair are different from each other.
+   Secondly, the simple ITG leads to redundancy
+if word alignment is the sole purpose of applying                                            4         Pruning in ITG Parsing
+ITG. For instance, there are two parses for three
+                                                    The ITG parsing framework has three levels of
+consecutive word pairs, viz. [𝑎/𝑎’ [𝑏/𝑏’ 𝑐/
+                                                    pruning:
+𝑐’] ] and [[𝑎/𝑎’ 𝑏/𝑏’] 𝑐/𝑐’] . The problem of re-
+                                                      1) To discard some unpromising span pairs;
+dundancy is fixed by adopting ITG normal form.
+                                                      2) To discard some unpromising F-spans
+In fact, normal form is the very first key to speed-
+                                                          and/or E-spans;
+ing up ITG. The ITG normal form grammar as
+                                                      3) To discard some unpromising alignment
+used in this paper is described in Appendix A.
+                                                          hypotheses for a particular span pair.
+3 Basics of ITG Parsing                                The  second type of pruning (used in Zhang et.
+                                                    al. (2008)) is very radical as it implies discarding
+Based on the rules in normal form, ITG word too many span pairs. It is empirically found to be
+alignment is done in a similar way to chart pars- highly harmful to alignment performance and
+ing (Wu, 1997). The base step applies all relevant therefore not adopted in this paper.
+terminal unary rules to establish the links of word    The third type of pruning is equivalent to mi-
+pairs. The word pairs are then combined into nimizing the beam size of alignment hypotheses
+span pairs in all possible ways. Larger and larger in each hypernode. It is found to be well handled
+span pairs are recursively built until the sentence by the K-Best parsing method in Huang and
+pair is built.                                      Chiang (2005). That is, during the bottom-up
+   Figure 1(a) shows one possible derivation for a construction of the span pair repertoire, each span
+toy example sentence pair with three words in pair keeps only the best alignment hypothesis.
+each sentence. Each node (rectangle) represents a Once the complete parse tree is built, the k-best
+pair, marked with certain phrase category, of for- list of the topmost span is obtained by minimally
+eign span (F-span) and English span (E-span) expanding the list of alignment hypotheses of
+(the upper half of the rectangle) and the asso- minimal number of span pairs.
+ciated alignment hypothesis (the lower half).          The first type of pruning is equivalent to mi-
+Each graph like Figure 1(a) shows only one deri- nimizing the number of hypernodes in a hyper-
+vation and also only one alignment hypothesis.      graph. The task of ITG pruning is defined in this
+   The various derivations in ITG parsing can be paper as the first type of pruning; i.e. the search
+compactly represented in hypergraph (Klein and for, given an F-span, the minimal number of E-
+Manning, 2001) like Figure 1(b). Each hypernode spans which are the most likely counterpart of
+                                                                 1
+(rectangle) comprises both a span pair (upper half) that F-span. The pruning method should main-
+and the list of possible alignment hypotheses tain a balance between efficiency (run as quickly
+(lower half) for that span pair. The hyperedges as possible) and performance (keep as many cor-
+show how larger span pairs are derived from rect span pairs as possible).
+smaller span pairs. Note that a hypernode may
+have more than one alignment hypothesis, since a
+hypernode may be derived through more than one 1 Alternatively it can be defined as the search of the minimal
+hyperedge (e.g. the topmost hypernode in Figure number of E-spans per F-span. That is simply an arbitrary
+                                                                                             decision on how the data are organized in the ITG parser.
+
+
+                                                                                        317
+
+
+  A naïve approach is that the required pruning          hypothesis of the span pair, based on the proba-
+method outputs a score given a span pair. This           bilities of the links from some simpler alignment
+score is used to rank all E-spans for a particular       model2. The E-span with the most probable hypo-
+F-span, and the score of the correct E-span              thesis is selected as the alignment of the F-span.
+should be in general higher than most of the in-                                            A:
+correct ones.                                                                          [e1,e3]/[f1,f2]
+                                                                                 {e1/f1,e3/f2},{e2/f1,e3/f2}
+
+5    The DPDI Framework                                                            A→[C,C]     A→[C,C]
+
+
+DPDI, the discriminative pruning model pro-
+posed in this paper, assigns score to a span pair                                 C:                   C:
+                                                                             [e1,e2]/[f1,f1]      [e2,e3]/[f2,f2]
+ 𝑓 , 𝑒 as probability from a log-linear model:                                  {e2/f1}              {e3/f2}
+                                                                                                                                                [e1,e1]
+               𝑒𝑥𝑝( 𝑖 𝜆𝑖 𝛹𝑖 𝑓 , 𝑒 )                                           C→ [Ce,Cw]             C→ [Ce,Cw]                       [f1,f1]   [e1,e2]
+    𝑃 𝑒𝑓 =                                         (1)                                                                                          [e2,e2]
+           𝑒 ′ ∈𝐸 𝑒𝑥𝑝( 𝑖 𝜆𝑖 𝛹𝑖 (𝑓 , 𝑒 ′))                                                                                                       [e2,e3]
+                                                                Cw:             Ce:         Cw:            Ce:           Cw:          [f2,f2]
+                                                           [e1,e1]/[f1,f1]    [e1]/ε   [e2,e2]/[f1,f1]   [e2]/ε     [e3,e3]/[f2,f2]             [e3,e3]
+where each 𝛹𝑖 (𝑓, 𝑒) is some feature about the                {e1/f1}                     {e1/f1}[f1,f2] [e1,e3]       {e1/f1}
+span pair, and each 𝜆 is the weight of the corres-                        (a)                            (b)
+
+ponding feature. There are three major questions            Figure 2: Training sample collection.
+to this model:
+  1) How to acquire training samples? (Section Table (b) lists, for the hypergraph in (a), the candidate
+                                                    E-spans for each F-span.
+      5.1)
+  2) How to train the parameters 𝜆 ? (Section 5.2)     It should be noted that this automatic span pair
+  3) What are the features? (Section 5.3)           annotation may violate some of the links in the
+                                                    original sentence-level alignment annotation. We
+5.1 Training Samples                                have already seen how the 1-to-1 constraint in
+Discriminative approaches to word alignment use ITG leads to the violation. Another situation is
+manually annotated alignment for sentence pairs. the „inside-out‟ alignment pattern (c.f. Figure 3).
+Discriminative pruning, however, handles not The ITG reordering constraint cannot be satisfied
+only a sentence pair but every possible span pair. unless one of the links in this pattern is removed.
+The required training samples consist of various                       f1     f2  f3 f4
+F-spans and their corresponding E-spans.
+   Rather than recruiting annotators for marking
+span pairs, we modify the parsing algorithm in
+                                                                      e1 e2      e3  e4
+Section 3 so as to produce span pair annotation
+out of sentence-level annotation. In the base step,   Figure 3: An example of inside-out alignment
+only the word pairs listed in sentence-level anno-
+tation are inserted in the hypergraph, and the re-     The training samples thus obtained are positive
+cursive steps are just the same as usual.           training samples. If we apply some classifier for
+   If the sentence-level annotation satisfies the parameter training, then negative samples are
+alignment constraints of ITG, then each F-span also needed. Fortunately, our parameter training
+will have only one E-span in the parse tree. How- does not rely on any negative samples.
+ever, in reality there are often the cases where a 5.2 MERT for Pruning
+foreign word aligns to more than one English
+word. In such cases the F-span covering that for- Parameter training of DPDI is based on Mini-
+eign word has more than one corresponding E- mum Error Rate Training (MERT) (Och, 2003), a
+spans. Consider the example in Figure 2, where widely used method in SMT. MERT for SMT
+the golden links in the alignment annotation are estimates model parameters with the objective of
+𝑒1/𝑓1, 𝑒2/𝑓1, and 𝑒3/𝑓2; i.e. the foreign word minimizing certain measure of translation errors
+𝑓1 aligns to both the English words 𝑒1 and 𝑒2. (or maximizing certain performance measure of
+Therefore the F-span 𝑓1, 𝑓1 aligns to the E- translation quality) for a development corpus.
+span 𝑒1, 𝑒1 in one hypernode and to the E-span Given an SMT system which produces, with
+ 𝑒2, 𝑒2 in another hypernode. When such situa-
+tion happens, we calculate the product of the in- 2 The formulae of the inside and outside probability of a
+side and outside probability of each alignment span pair will be elaborated in Section 5.3. The simpler
+                                                         alignment model we used is HMM.
+
+
+                                                     318
+
+
+model parameters 𝜆1𝑀 , the K-best candidate trans-                     4(d)). All other steps in MERT for DPDI are the
+lations 𝑒(𝑓𝑠 ; 𝜆1𝑀 ) for a source sentence 𝑓𝑠 , and an                 same as that for SMT.
+error measure 𝐸(𝑟𝑠 , 𝑒𝑠,𝑘 ) of a particular candidate
+𝑒𝑠,𝑘 with respect to the reference translation 𝑟𝑠 ,
+                                                                                       Σλmfm
+the optimal parameter values will be:                                            (a)
+                     𝑆
+
+𝜆𝑀
+ 1   = 𝑎𝑟𝑔𝑚𝑖𝑛             𝐸 𝑟𝑠 , 𝑒 𝑓𝑠 ; 𝜆𝑀
+                                         1                                                                               λk
+         𝜆𝑀
+          1         𝑠=1
+                    𝑆     𝐾                                                            Σλmfm
+     = 𝑎𝑟𝑔𝑚𝑖𝑛                 𝐸 𝑟𝑠 , 𝑒𝑠,𝑘 𝛿(𝑒 𝑓𝑠 ; 𝜆𝑀
+                                                    1 , 𝑒𝑠,𝑘 )
+                                                                                 (b)
+                                                                                                                        gold
+         𝜆𝑀
+          1     𝑠=1 𝑘=1
+                                                                                                                         λk
+   DPDI applies the same equation for parameter
+                                                                                       -index
+tuning, with different interpretation of the com-                                (c)        -8
+ponents in the equation. Instead of a development                                           -9
+corpus with reference translations, we have a col-                                         -10
+
+lection of training samples, each of which is a                                                                          λk
+                                                                                           loss
+pair of F-span (𝑓𝑠 ) and its corresponding E-span                                (d)
+(𝑟𝑠 ). These samples are acquired from some ma-                                             -8
+                                                                                            -9
+nually aligned dataset by the method elaborated
+in Section 5.1. The ITG parser outputs for each fs                                                                       λk
+                                                                                   -100,000
+a K-best list of E-spans 𝑒 𝑓𝑠 ; 𝜆1𝑀 based on the
+current parameter values 𝜆1𝑀 .                                                         Figure 4: MERT for DPDI
+   The error function is based on the presence and                     Part (a) shows how intervals are defined for SMT and
+the rank of the correct E-span in the K-best list:                     part (b) for DPDI. Part (c) obtains the rank of correct
+                                                                       E-spans in each interval and part (d) the error measure.
+                              −𝑟𝑎𝑛𝑘 𝑟𝑠 𝑖𝑓 𝑟𝑠 ∈ 𝑒 𝑓𝑠 ; 𝜆1𝑀              Note that the beam size (max number of E-spans) for
+𝐸 𝑟𝑠 , 𝑒 𝑓𝑠 ; 𝜆1𝑀        =
+                              𝑝𝑒𝑛𝑎𝑙𝑡𝑦 𝑜𝑡𝑕𝑒𝑟𝑤𝑖𝑠𝑒                        each F-span is 10.
+                                                                 (2)
+                                                                       5.3     Features
+where 𝑟𝑎𝑛𝑘 𝑟𝑠 is the (0-based) rank of the cor-
+rect E-span 𝑟𝑠 in the K-best list 𝑒 𝑓𝑠 ; 𝜆1𝑀 . If 𝑟𝑠 is                The features used in DPDI are divided into three
+not in the K-best list at all, then the error is de-                   categories:
+fined to be 𝑝𝑒𝑛𝑎𝑙𝑡𝑦, which is set as -100000 in                        1) Model 1-based probabilities. Zhang and Gil-
+our experiments. The rationale underlying this                             dea (2005) show that Model 1 (Brown et al.,
+error function is to keep as many correct E-spans                          1993; Och and Ney., 2000) probabilities of
+as possible in the K-best lists of E-spans, and                            the word pairs inside and outside a span pair
+push the correct E-spans upward as much as                                 ( 𝑒𝑖1 , 𝑒𝑖2 /[𝑓𝑗 1 , 𝑓𝑗 2 ]) are useful. Hence these
+possible in the K-best lists.                                              two features:
+   This new error measure leads to a change in                             a) Inside probability (i.e. probability of
+details of the training algorithm. In MERT for                                 word pairs within the span pair):
+SMT, the interval boundaries at which the per-                                         𝑝𝑖𝑛𝑐 𝑒𝑖1,𝑖2 𝑓𝑗 1,𝑗 2
+formance or error measure changes are defined                                                                         1
+by the upper envelope (illustrated by the dash                                         =                                   𝑝 𝑒 𝑓
+                                                                                                                   𝑗2 − 𝑗1 𝑀1 𝑖 𝑗
+line in Figure 4(a)), since the performance/error                                           𝑖∈ 𝑖1,𝑖2 𝑗 ∈ 𝑗 1,𝑗 2
+measure depends on the best candidate transla-                               b) Outside probability (i.e. probability of
+tion. In MERT for DPDI, however, the error                                      the word pairs outside the span pair):
+measure depends on the correct E-span rather
+than the E-span leading to the highest system                                     𝑝𝑜𝑢𝑡 𝑒𝑖1,𝑖2 𝑓𝑗 1,𝑗 2
+score. Thus the interval boundaries are the inter-                                                                  1
+                                                                                  =                                        𝑝 𝑒 𝑓
+sections between the correct E-span and all other                                                              𝐽 − 𝑗2 + 𝑗1 𝑀1 𝑖 𝑗
+                                                                                       𝑖∉ 𝑖1,𝑖2 𝑗 ∉ 𝑗 1,𝑗 2
+candidate E-spans (as shown in Figure 4(b)). The                              where 𝐽 is the length of the foreign sen-
+rank of the correct E-span in each interval can                               tence.
+then be figured out as shown in Figure 4(c). Fi-                       2) Heuristics. There are four features in this cat-
+nally, the error measure in each interval can be                          egory. The features are explained with the
+calculated by Equation (2) (as shown in Figure
+
+                                                                   319
+
+
+     example of Figure 5, in which the span pair                         the example is |(1+2)/(2*4)-(2+3)/(2*4)|
+     in interest is 𝑒2, 𝑒3 /[𝑓1, 𝑓2]. The four links                     =0.25.
+     are produced by some simpler alignment                       3) HMM-based probabilities. Haghighi et al.
+     model like HMM. The word pair 𝑒2/𝑓1 is                          (2009) show that posterior probabilities from
+     the only link in the span pair. The links                       the HMM alignment model is useful for
+     𝑒4/𝑓2 and 𝑒3/𝑓3 are inconsistent with the                       pruning. Therefore, we design two new fea-
+     span pair.3                                                     tures by replacing the link count in link ratio
+                                                                     and inconsistent link ratio with the sum of the
+                        f1      f2     f3      f4                    link‟s posterior probability.
+
+                                                                  6     The DITG Models
+                       e1      e2      e3      e4
+                                                                  The discriminative ITG alignment can be con-
+      Figure 5: Example for heuristic features                    ceived as a two-staged process. In the first stage
+                                                                  DPDI selects good span pairs. In the second stage
+                        2×#𝑙𝑖𝑛𝑘𝑠
+     a) Link ratio:                                               good alignment hypotheses are assigned to the
+                       𝑓𝑙𝑒𝑛 +𝑒𝑙𝑒𝑛                                 span pairs selected by DPDI. Two discriminative
+          where #𝑙𝑖𝑛𝑘𝑠 is the number of links in                  ITG (DITG) models are investigated. One is
+          the span pair, and 𝑓𝑙𝑒𝑛 and 𝑒𝑙𝑒𝑛 are the                word-to-word DITG (henceforth W-DITG),
+          length of the foreign and English spans                 which observes the 1-to-1 constraint on align-
+          respectively. The feature value of the ex-              ment. Another is DITG with hierarchical phrase
+          ample span pair is (2*1)/(2+2)=0.5.                     pairs (henceforth HP-DITG), which relaxes the 1-
+                                       2×#𝑙𝑖𝑛𝑘𝑠 𝑖𝑛𝑐𝑜𝑛
+     b) inconsistent link ratio:                                  to-1 constraint by adopting hierarchical phrase
+                                            𝑓𝑙𝑒𝑛 +𝑒𝑙𝑒𝑛            pairs in Chiang (2007).
+          where #𝑙𝑖𝑛𝑘𝑠𝑖𝑛𝑐𝑜𝑛 is the number of links                   Each model selects the best alignment hypo-
+          which are inconsistent with the phrase                  theses of each span pair, given a set of features.
+          pair according to some simpler alignment                The contributions of these features are integrated
+          model (e.g. HMM). The feature value of                  through a log linear model (similar to Liu et al.,
+          the example is (2*2)/(2+2) =1.0.                        2005; Moore, 2005) like Equation (1). The dis-
+                            𝑓𝑙𝑒𝑛
+     c) Length ratio:               − 𝑟𝑎𝑡𝑖𝑜𝑎𝑣𝑔                    criminative training of the feature weights is
+                             𝑒𝑙𝑒𝑛
+                                                                  again MERT (Och, 2003). The MERT module
+        where 𝑟𝑎𝑡𝑖𝑜𝑎𝑣𝑔 is defined as the average
+                                                                  for DITG takes alignment F-score of a sentence
+        ratio of foreign sentence length to Eng-                  pair as the performance measure. Given an input
+        lish sentence length, and it is estimated to              sentence pair and the reference annotated align-
+        be around 1.15 in our training dataset.                   ment, MERT aims to maximize the F-score of
+        The rationale underlying this feature is
+                                                                  DITG-produced alignment. Like SMT (and un-
+        that the ratio of span length should not be               like DPDI), it is the upper envelope which de-
+        too deviated from the average ratio of
+                                                                  fines the intervals where the performance meas-
+        sentence length. The feature value for the                ure changes.
+        example is |2/2-1.15|=0.15.
+     d) Position Deviation: 𝑝𝑜𝑠𝑓 − 𝑝𝑜𝑠𝑒                           6.1    Word-to-word DITG
+        where 𝑝𝑜𝑠𝑓 refers to the position of the                  The following features about alignment link are
+        F-span in the entire foreign sentence, and                used in W-DITG:
+                              1
+        it is defined as 2𝐽 𝑠𝑡𝑎𝑟𝑡𝑓 + 𝑒𝑛𝑑𝑓 ,                         1) Word pair translation probabilities trained
+                                                                         from HMM model (Vogel, et.al., 1996)
+          𝑠𝑡𝑎𝑟𝑡𝑓 / 𝑒𝑛𝑑𝑓 being the position of the
+                                                                         and IBM model 4 (Brown et.al., 1993;
+          first/last word of the F-span in the for-                      Och and Ney, 2000).
+          eign sentence. 𝑝𝑜𝑠𝑒 is defined similarly.                 2) Conditional link probability (Moore, 2005).
+          The rationale behind this feature is the                  3) Association score rank features (Moore et
+          monotonic assumption, i.e. a phrase of                         al., 2006).
+          the foreign sentence usually occupies                     4) Distortion features: counts of inversion
+          roughly the same position of the equiva-                       and concatenation.
+          lent English phrase. The feature value for                5) Difference between the relative positions
+                                                                         of the words. The relative position of a
+3
+  An inconsistent link connects a word within the phrase pair            word in a sentence is defined as the posi-
+to some word outside the phrase pair. C.f. Deng et al. (2008)
+
+
+                                                                320
+
+
+     tion of the word divided by sentence               extraction as stated in Chiang (2007). The rule
+     length.                                            probabilities and lexical weights in both English-
+  6) Boolean features like whether a word in            to-foreign and foreign-to-English directions are
+     the word pair is a stop word.                      estimated and taken as features, in addition to
+                                                        those features in W-DITG, in the discriminative
+6.2   DITG with Hierarchical Phrase Pairs               model of alignment hypothesis selection.
+The 1-to-1 assumption in ITG is a serious limita-
+tion as in reality there are always segmentation or     7     Evaluation
+tokenization errors as well as idiomatic expres-        DPDI is evaluated against the baselines of Tic-
+sions. Wu (1997) proposes a bilingual segmenta-         tac-toe (TTT) pruning (Zhang and Gildea, 2005)
+tion grammar extending the terminal rules by            and Dynamic Program (DP) pruning (Haghighi et
+including phrase pairs. Cherry and Lin (2007)           al., 2009; DeNero et al., 2009) with respect to
+incorporate phrase pairs in phrase-based SMT            Chinese-to-English alignment and translation.
+into ITG, and Haghighi et al. (2009) introduce          Based on DPDI, HP-DITG is evaluated against
+Block ITG (BITG), which adds 1-to-many or               the alignment systems GIZA++ and BITG.
+many-to-1 terminal unary rules.
+    It is interesting to see if DPDI can benefit the    7.1      Evaluation Criteria
+parsing of a more realistic ITG. HP-DITG ex-
+                                                        Four evaluation criteria are used in addition to
+tends Cherry and Lin‟s approach by not only em-
+                                                        the time spent on ITG parsing. We will first eva-
+ploying simple phrase pairs but also hierarchical
+                                                        luate pruning regarding the pruning decisions
+phrase pairs (Chiang, 2007). The grammar is
+                                                        themselves. That is, the first evaluation metric,
+enriched with rules of the format: 𝑋  𝑒𝑖 /𝑓𝑖           pruning error rate (henceforth PER), measures
+where 𝑒𝑖 and 𝑓𝑖 refer to the English and foreign        how many correct E-spans are discarded. The
+side of the i-th (simple/hierarchical) phrase pair      major drawback of PER is that not all decisions
+respectively.                                           in pruning would impact on alignment quality,
+    As example, if there is a simple phrase pair        since certain F-spans are of little use to the entire
+𝑋  𝑁𝑜𝑟𝑡𝑕 𝐾𝑜𝑟𝑒𝑎, 北 朝鲜 , then it is trans-               ITG parse tree.
+formed into the ITG rule 𝐶  "North Korea"/                An alternative criterion is the upper bound on
+"北 朝鲜". During parsing, each span pair does             alignment F-score, which essentially measures
+not only examine all possible combinations of           how many links in annotated alignment can be
+sub-span pairs using binary rules, but also checks      kept in ITG parse. The calculation of F-score up-
+if the yield of that span pair is exactly the same as   per bound is done in a bottom-up way like ITG
+that phrase pair. If so, then the alignment links       parsing. All leaf hypernodes which contain a cor-
+within the phrase pair (which are obtained in           rect link are assigned a score (known as hit) of 1.
+standard phrase pair extraction procedure) are          The hit of a non-leaf hypernode is based on the
+taken as an alternative alignment hypothesis of         sum of hits of its daughter hypernodes. The max-
+that span pair.                                         imal sum among all hyperedges of a hypernode is
+    For a hierarchical phrase pair like                 assigned to that hypernode. Formally,
+𝑋  𝑋1 𝑜𝑓 𝑋2 , 𝑋2 的 𝑋1 , it is transformed into         𝑕𝑖𝑡 𝑋 𝑓 , 𝑒 =
+the ITG rule 𝐶  "𝑋1 𝑜𝑓 𝑋2 "/"𝑋2 的 𝑋1 " during                 𝑚𝑎𝑥 (𝑕𝑖𝑡 𝑌 𝑓1 , 𝑒1             + 𝑕𝑖𝑡[𝑓2 , 𝑒2 ])
+                                                              𝑌,𝑍,𝑓1 ,𝑒1 ,𝑓2 ,𝑒2
+parsing, each span pair checks if it contains the
+lexical anchors "of" and "的", and if the remain-        𝑕𝑖𝑡 𝐶𝑤 𝑢, 𝑣           =
+                                                                                   1   𝑖𝑓 𝑢, 𝑣 ∈ 𝑅
+ing words in its yield can form two sub-span                                       0    𝑜𝑡𝑕𝑒𝑟𝑤𝑖𝑠𝑒
+pairs which fit the reordering constraint among         𝑕𝑖𝑡 𝐶𝑒 = 0; 𝑕𝑖𝑡 𝐶𝑓 = 0
+𝑋1 and 𝑋2 . (Note that span pairs of any category
+in the ITG normal form grammar can substitute           where 𝑋, 𝑌, 𝑍 are variables for the categories in
+for 𝑋1 or 𝑋2 .) If both conditions hold, then the       ITG grammar, and 𝑅 comprises the golden links
+span pair is assigned an alignment hypothesis           in annotated alignment. 𝐶𝑤 , 𝐶𝑒 , 𝐶𝑓 are defined in
+which combines the alignment links among the            Appendix A.
+lexical anchors (𝑙𝑖𝑘𝑒 𝑜𝑓/的) and those links                Figure 6 illustrates the calculation of the hit
+among the sub-span pairs.                               score for the example in Section 5.1/Figure 2.
+    HP-ITG acquires the rules from HMM-based            The upper bound of recall is the hit score divided
+word-aligned corpus using standard phrase pair          by the total number of golden links. The upper
+
+
+                                                    321
+
+
+  ID          pruning                  beam size                     pruning/total time cost           PER        F-UB        F-score
+   1           DPDI                       10                              72‟‟/3‟03‟‟                 4.9%        88.5%       82.5%
+   2           TTT                        10                              58’’/2’38’’                  8.6%       87.5%       81.1%
+   3           TTT                        20                              53‟‟/6‟55‟‟                  5.2%       88.6%       82.4%
+   4            DP                        --                              11‟‟/6‟01‟‟                 12.1%       86.1%       80.5%
+   Table 1: Evaluation of DPDI against TTT (Tic-tac-toe) and DP (Dynamic Program) for W-DITG
+  ID           pruning                     beam size                  pruning/total time cost         PER        F-UB        F-score
+   1            DPDI                          10                               72‟‟/5‟18‟‟           4.9%        93.9%       87.0%
+   2            TTT                           10                               58’’/4’51’’            8.6%       93.0%       84.8%
+   3            TTT                           20                               53‟‟/12‟5‟‟            5.2%       94.0%       86.5%
+   4             DP                           --                              11‟‟/15‟39‟‟           12.1%       91.4%       83.6%
+  Table 2: Evaluation of DPDI against TTT (Tic-tac-toe) and DP (Dynamic Program) for HP-DITG.
+bound of precision, which should be defined as                                        Kong Law and Hong Kong Hansard, and our 5-
+the hit score divided by the number of links pro-                                     gram language model is trained from the Xinhua
+duced by the system, is almost always 1.0 in                                          section of the Gigaword corpus. The NIST‟03
+practice. The upper bound of alignment F-score                                        test set is used as our development corpus and the
+can thus be calculated as well.                                                       NIST‟05 and NIST‟08 test sets are our test sets.
+                                         A:
+                                    [e1,e3]/[f1,f2]                                   7.3    Small-scale Evaluation
+                                hit=max{1+1,1+1}=2
+                                                                                      The first set of experiments evaluates the perfor-
+                                                                                      mance of the three pruning methods using the
+                               A→[C,C]       A→[C,C]
+                                                                                      small 241-sentence set. Each pruning method is
+                                                                                      plugged in both W-DITG and HP-DITG. IBM
+                              C:                    C:
+                                                                                      Model 1 and HMM alignment model are re-
+                         [e1,e2]/[f1,f1]       [e2,e3]/[f2,f2]                        implemented as they are required by the three
+                        hit=max{0+1}=1        hit=max{0+1}=1                          ITG pruning methods.
+                                                                                         The results for W-DITG are listed in Table 1.
+                           C→ [Ce,Cw]             C→ [Ce,Cw]
+                                                                                      Tests 1 and 2 show that with the same beam size
+                                                                                      (i.e. number of E-spans per F-span), although
+           Cw:               Ce:         Cw:            Ce:           Cw:             DPDI spends a bit more time (due to the more
+      [e1,e1]/[f1,f1]      [e1]/ε   [e2,e2]/[f1,f1]   [e2]/ε     [e3,e3]/[f2,f2]
+          hit=1            hit=0        hit=1         hit=0          hit=1            complicated model), DPDI makes far less incor-
+                                                                                      rect pruning decisions than the TTT. In terms of
+       Figure 6: Recall Upper Bound Calculation                                       F-score upper bound, DPDI is 1 percent higher.
+   Finally, we also do end-to-end evaluation us-                                      DPDI achieves even larger improvement in ac-
+ing both F-score in alignment and Bleu score in                                       tual F-score.
+translation. We use our implementation of hierar-                                        To enable TTT achieving similar F-score or F-
+chical phrase-based SMT (Chiang, 2007), with                                          score upper bound, the beam size has to be
+standard features, for the SMT experiments.                                           doubled and the time cost is more than twice the
+                                                                                      original (c.f. Tests 1 and 3 in Table 1) .
+7.2       Experiment Data                                                                The DP pruning in Haghighi et.al. (2009) per-
+                                                                                      forms much poorer than the other two pruning
+Both discriminative pruning and alignment need
+                                                                                      methods. In fact, we fail to enable DP achieve the
+training data and test data. We use the manually
+                                                                                      same F-score upper bound as the other two me-
+aligned Chinese-English dataset as used in Hag-
+                                                                                      thods before DP leads to intolerable memory
+highi et al. (2009). The 491 sentence pairs in this
+                                                                                      consumption. This may be due to the use of dif-
+dataset are adapted to our own Chinese word
+                                                                                      ferent HMM model implementations between our
+segmentation standard. 250 sentence pairs are
+                                                                                      work and Haghighi et.al. (2009).
+used as training data and the other 241 are test
+                                                                                         Table 2 lists the results for HP-DITG. Roughly
+data. The corresponding numbers of F-spans in
+                                                                                      the same observation as in W-DITG can be made.
+training and test data are 4590 and 3951 respec-
+                                                                                      In addition to the superiority of DPDI, it can also
+tively.
+                                                                                      be noted that HP-DITG achieves much higher F-
+   In SMT experiments, the bilingual training da-
+                                                                                      score and F-score upper bound. This shows that
+taset is the NIST training set excluding the Hong
+
+                                                                                   322
+
+
+hierarchical phrase is a powerful tool in rectify-       8       Conclusion and Future Work
+ing the 1-to-1 constraint in ITG.
+   Note also that while TTT in Test 3 gets rough-        This paper reviews word alignment through ITG
+ly the same F-score upper bound as DPDI in Test          parsing, and clarifies the problem of ITG pruning.
+1, the corresponding F-score is slightly worse. A        A discriminative pruning model and two discri-
+possible explanation is that better pruning not          minative ITG alignments systems are proposed.
+only speeds up the parsing/alignment process but         The pruning model is shown to be superior to all
+also guides the search process to focus on the           existing ITG pruning methods, and the HP-DITG
+most promising region of the search space.               alignment system is shown to improve state-of-
+                                                         the-art alignment and translation quality.
+7.4   Large-scale End-to-End Experiment                     The current DPDI model employs a very li-
+ID     Prun-     beam       time     Bleu-     Bleu-     mited set of features. Many features are related
+        ing       size      cost      05        08       only to probabilities of word pairs. As the success
+                                                         of HP-DITG illustrates the merit of hierarchical
+ 1     DPDI        10      1092h     38.57     28.31
+                                                         phrase pair, in future we should investigate more
+ 2     TTT         10      972h      37.96     27.37
+                                                         features on the relationship between span pair
+ 3     TTT         20      2376h     38.13     27.58
+                                                         and hierarchical phrase pair.
+ 4      DP         --      2068h     37.43     27.12
+Table 3: Evaluation of DPDI against TTT and              Appendix A. The Normal Form Grammar
+DP for HP-DITG
+                                                            Table 5 lists the ITG rules in normal form as
+ID      WA-         F-Score    Bleu-05       Bleu-08     used in this paper, which extend the normal form
+       Model                                             in Wu (1997) so as to handle the case of align-
+1      HMM          80.1%        36.91        26.86      ment to null.
+2      Giza++       84.2%        37.70        27.33
+3      BITG         85.9%        37.92        27.85          1 𝑆 → 𝐴|𝐵|𝐶
+4     HP-DITG       87.0%        38.57        28.31          2 𝐴 → 𝐴𝐵 | 𝐴𝐶 | 𝐵𝐵          | 𝐵𝐶 | 𝐶 𝐵 | 𝐶 𝐶
+                                                             3 𝐵 → 𝐴𝐴 | 𝐴𝐶 | 𝐵𝐴          | 𝐵𝐶
+Table 4: Evaluation of DPDI against HMM, Gi-                   𝐵 → 𝐶𝐴 | 𝐶𝐶
+  za++ and BITG                                              4 𝐶 → 𝐶𝑤 |𝐶𝑓𝑤 |𝐶𝑒𝑤
+   Table 3 lists the word alignment time cost and            5 𝐶 → 𝐶𝑒𝑤 𝐶𝑓𝑤
+SMT performance of different pruning methods.                6 𝐶𝑤 → 𝑢/𝑣
+HP-DITG using DPDI achieves the best Bleu                    7 𝐶𝑒 → 𝜀/𝑣; 𝐶𝑓 → 𝑢/𝜀
+score with acceptable time cost. Table 4 com-                8 𝐶𝑒𝑚 → 𝐶𝑒 | 𝐶𝑒𝑚 𝐶𝑒 ; 𝐶𝑓𝑚   → 𝐶𝑓 | 𝐶𝑓𝑚 𝐶𝑓
+pares HP-DITG to HMM (Vogel, et al., 1996),                  9 𝐶𝑒𝑤 → 𝐶𝑒𝑚 𝐶𝑤 ; 𝐶𝑓𝑤 →      𝐶𝑓𝑚 𝐶𝑤
+GIZA++ (Och and Ney, 2000) and BITG (Hag-
+highi et al., 2009). It shows that HP-DITG (with                   Table 5: ITG Rules in Normal Form
+DPDI) is better than the three baselines both in            In these rules, 𝑆 is the Start symbol; 𝐴 is the
+alignment F-score and Bleu score. Note that the          category for concatenating combination whereas
+Bleu score differences between HP-DITG and the           𝐵 for inverted combination. Rules (2) and (3) are
+three baselines are statistically significant (Koehn,    inherited from Wu (1997). Rules (4) divide the
+2004).                                                   terminal category 𝐶 into subcategories. Rule
+   An explanation of the better performance by           schema (6) subsumes all terminal unary rules for
+HP-DITG is the better phrase pair extraction due         some English word 𝑢 and foreign word 𝑣 , and
+to DPDI. On the one hand, a good phrase pair             rule schemas (7) are unary rules for alignment to
+often fails to be extracted due to a link inconsis-      null. Rules (8) ensure all words linked to null are
+tent with the pair. On the other hand, ITG prun-         combined in left branching manner, while rules
+ing can be considered as phrase pair selection,          (9) ensure those words linked to null combine
+and good ITG pruning like DPDI guides the sub-           with some following, rather than preceding, word
+sequent ITG alignment process so that less links         pair. (Note: Accordingly, all sentences must be
+inconsistent to good phrase pairs are produced.          ended by a special token 𝑒𝑛𝑑 , otherwise the
+This also explains (in Tables 2 and 3) why DPDI          last word(s) of a sentence cannot be linked to
+with beam size 10 leads to higher Bleu than TTT          null.) If there are both English and foreign words
+with beam size 20, even though both pruning me-          linked to null, rule (5) ensures that those English
+thods lead to roughly the same alignment F-score.
+
+
+                                                       323
+
+
+words linked to null precede those foreign words      Robert Moore. 2005. A Discriminative Framework
+linked to null.                                         for Bilingual Word Alignment. In Proceedings of
+                                                        EMNLP 2005, Pages: 81-88.
+References                                            Robert Moore, Wen-tau Yih, and Andreas Bode. 2006.
+Peter F. Brown, Stephen A. Della Pietra, Vincent J.     Improved Discriminative Bilingual Word
+  Della Peitra, Robert L. Mercer. 1993. The Mathe-      Alignment. In Proceedings of ACL, Pages: 513-
+  matics of Statistical Machine Translation: Pa-        520.
+  rameter Estimation. Computational Linguistics,      Stephan Vogel, Hermann Ney, and Christoph Till-
+  19(2):263-311.                                         mann. 1996. HMM-based word alignment in
+Colin Cherry and Dekang Lin. 2006. Soft Syntactic        statistical translation. In Proceedings of COL-
+  Constraints for Word Alignment through Dis-            ING, Pages: 836-841.
+  criminative Training. In Proceedings of ACL-        Stephan Vogel. 2005. PESA: Phrase Pair Extrac-
+  COLING.                                                tion as Sentence Splitting. In Proceedings of MT
+Colin Cherry and Dekang Lin. 2007. Inversion             Summit.
+  Transduction Grammar for Joint Phrasal              Dekai Wu. 1997. Stochastic Inversion Transduc-
+  Translation Modeling. In Proceedings of SSST,         tion Grammars and Bilingual Parsing of Pa-
+  NAACL-HLT, Pages:17-24.                               rallel Corpora. Computational Linguistics, 23(3).
+David Chiang. 2007. Hierarchical Phrase-based         Hao Zhang and Daniel Gildea. 2005. Stochastic Lex-
+  Translation. Computational Linguistics, 33(2).        icalized Inversion Transduction Grammar for
+John DeNero, Mohit Bansal, Adam Pauls, and Dan          Alignment. In Proceedings of ACL.
+  Klein. 2009. Efficient Parsing for Transducer       Hao Zhang, Chris Quirk, Robert Moore, and Daniel
+  Grammars. In Proceedings of NAACL, Pag-               Gildea. 2008. Bayesian learning of non-
+  es:227-235.                                           compositional phrases with synchronous pars-
+Alexander Fraser and Daniel Marcu. 2006. Semi-          ing. In Proceedings of ACL, Pages: 314-323.
+  Supervised Training for StatisticalWord
+  Alignment. In Proceedings of ACL, Pages:769-
+  776.
+Aria Haghighi, John Blitzer, John DeNero, and Dan
+  Klein. 2009. Better Word Alignments with Su-
+  pervised ITG Models. In Proceedings of ACL,
+  Pages: 923-931.
+Liang Huang and David Chiang. 2005. Better k-best
+   Parsing. In Proceedings of IWPT 2005, Pag-
+   es:173-180.
+Franz Josef Och and Hermann Ney. 2000. Improved
+   statistical alignment models. In Proceedings of
+   ACL. Pages: 440-447
+Franz Josef Och. 2003. Minimum error rate train-
+   ing in statistical machine translation. In Pro-
+   ceedings of ACL, Pages:160-167.
+Dan Klein and Christopher D. Manning. 2001. Pars-
+  ing and Hypergraphs. In Proceedings of IWPT,
+  Pages:17-19
+Philipp Koehn. 2004. Statistical Significance Tests
+  for Machine Translation Evaluation. In Pro-
+  ceedings of EMNLP, Pages: 388-395.
+Yang Liu, Qun Liu and Shouxun Lin. 2005. Log-
+  linear models for word alignment. In Proceed-
+  ings of ACL, Pages: 81-88.
+
+
+
+                                                  324
+

@@ -1,0 +1,387 @@
+    Event-based Hyperspace Analogue to Language for Query Expansion
+                    Tingxu Yan                                          Tamsin Maxwell
+                 Tianjin University                                  University of Edinburgh
+                   Tianjin, China                                  Edinburgh, United Kingdom
+            sunriser2008@gmail.com                                  t.maxwell@ed.ac.uk
+
+          Dawei Song                           Yuexian Hou                             Peng Zhang
+    Robert Gordon University                 Tianjin University                  Robert Gordon University
+    Aberdeen, United Kingdom                   Tianjin, China                   Aberdeen, United Kingdom.
+     d.song@rgu.ac.uk                      yxhou@tju.edu.cn                     p.zhang1@rgu.ac.uk
+
+                     Abstract                                 dependence language model for IR (Gao et al.,
+                                                              2004), which incorporates linguistic relations be-
+     Bag-of-words approaches to information                   tween non-adjacent words while limiting the gen-
+     retrieval (IR) are effective but assume in-              eration of meaningless phrases, and the Markov
+     dependence between words. The Hy-                        Random Field (MRF) model, which captures short
+     perspace Analogue to Language (HAL)                      and long range term dependencies (Metzler and
+     is a cognitively motivated and validated                 Croft, 2005; Metzler and Croft, 2007), con-
+     semantic space model that captures sta-                  sistently outperform a unigram language mod-
+     tistical dependencies between words by                   elling approach but are closely approximated by
+     considering their co-occurrences in a sur-               a bigram language model that uses no linguis-
+     rounding window of text. HAL has been                    tic knowledge. Improving retrieval performance
+     successfully applied to query expansion in               through application of semantic and syntactic in-
+     IR, but has several limitations, including               formation beyond proximity and co-occurrence
+     high processing cost and use of distribu-                features is a difficult task but remains a tantalising
+     tional statistics that do not exploit syn-               prospect.
+     tax. In this paper, we pursue two methods                   Our approach is like that of Gao et al. (2004)
+     for incorporating syntactic-semantic infor-              in that it considers semantic-syntactically deter-
+     mation from textual ‘events’ into HAL.                   mined relationships between words at the sentence
+     We build the HAL space directly from                     level, but allows words to have more than one
+     events to investigate whether processing                 role, such as predicate and argument for differ-
+     costs can be reduced through more careful                ent events, while link grammar (Sleator and Tem-
+     definition of word co-occurrence, and im-                perley, 1991) dictates that a word can only sat-
+     prove the quality of the pseudo-relevance                isfy one connector in a disjunctive set. Compared
+     feedback by applying event information                   to the MRF model, our approach is unsupervised
+     as a constraint during HAL construction.                 where MRFs require the training of parameters us-
+     Both methods significantly improve per-                  ing relevance judgments that are often unavailable
+     formance results in comparison with orig-                in practical conditions.
+     inal HAL, and interpolation of HAL and                      Other work incorporating syntactic and linguis-
+     relevance model expansion outperforms                    tic information into IR includes early research by
+     either method alone.                                     (Smeaton, O’Donnell and Kelledy, 1995), who
+                                                              employed tree structured analytics (TSAs) resem-
+1    Introduction
+                                                              bling dependency trees, the use of syntax to de-
+Despite its intuitive appeal, the incorporation of            tect paraphrases for question answering (QA) (Lin
+linguistic and semantic word dependencies in IR               and Pantel, 2001), and semantic role labelling in
+has not been shown to significantly improve over              QA (Shen and Lapata, 2007).
+a bigram language modeling approach (Song and                    Independent from IR, Pado and Lapata (2007)
+Croft, 1999) that encodes word dependencies as-               proposed a general framework for the construc-
+sumed from mere syntactic adjacency. Both the                 tion of a semantic space endowed with syntactic
+
+
+                                                        120
+                       Proceedings of the ACL 2010 Conference Short Papers, pages 120–125,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+information. This was represented by an undi-                compatibility with human information processing.
+rected graph, where nodes stood for words, de-               Recently, they have also been applied in IR, such
+pendency edges stood for syntactical relations, and          as LSA for latent semantic indexing, and HAL for
+sequences of dependency edges formed paths that              query expansion. For the purpose of this paper, we
+were weighted for each target word. Our work is              focus on HAL, which encodes word co-occurrence
+in line with Pado and Lapata (2007) in construct-            information explicitly and thus can be applied to
+ing a semantic space with syntactic information,             query expansion in a straightforward way.
+but builds our space from events, states and attri-             HAL is premised on context surrounding a word
+butions as defined linguistically by Bach (1986).            providing important information about its mean-
+We call these simply events, and extract them auto-          ing (Harris, 1968). To be specific, an L-size
+matically from predicate-argument structures and             sliding window moves across a large text corpus
+a dependency parse. We will use this space to per-           word-by-word. Any two words in the same win-
+form query expansion in IR, a task that aims to find         dow are treated as co-occurring with each other
+additional words related to original query terms,            with a weight that is inversely proportional to their
+such that an expanded query including these words            separation distance in the text. By accumulating
+better expresses the information need. To our                co-occurrence information over a corpus, a word-
+knowledge, the notion of events has not been ap-             by-word matrix is constructed, a simple illustra-
+plied to query expansion before.                             tion of which is given in Table 1. A single word is
+   This paper will outline the original HAL al-              represented by a row vector and a column vector
+gorithm which serves as our baseline, and the                that capture the information before and after the
+event extraction process. We then propose two                word, respectively. In some applications, direc-
+methods to arm HAL with event information: di-               tion sensitivity is ignored to obtain a single vector
+rect construction of HAL from events (eHAL-1),               representation of a word by adding corresponding
+and treating events as constraints on HAL con-               row and column vectors (Bai et al., 2005).
+struction from the corpus (eHAL-2). Evaluation
+will compare results using original HAL, eHAL-                            w1    w2   w3    w4    w5    w6
+1 and eHAL-2 with a widely used unigram lan-                        w1
+guage model (LM) for IR and a state of the art                      w2    5
+query expansion method, namely the Relevance                        w3    4     5
+Model (RM) (Lavrenko and Croft, 2001). We also                      w4    3     4     5
+explore whether a complementary effect can be                       w5    2     3     4     5
+achieved by combining HAL-based dependency                          w6          2     3     4     5
+modelling with the unigram-based RM.
+                                                             Table 1: A HAL space for the text “w1 w2 w3 w4
+2   HAL Construction                                         w5 w6 ” using a 5-word sliding window (L = 5).
+
+Semantic space models aim to capture the mean-                  HAL has been successfully applied to query ex-
+ings of words using co-occurrence information                pansion and can be incorporated into this task di-
+in a text corpus. Two examples are the Hyper-                rectly (Bai et al., 2005) or indirectly, as with the
+space Analogue to Language (HAL) (Lund and                   Information Flow method based on HAL (Bruza
+Burgess, 1996), in which a word is represented               and Song, 2002). However, to date it has used
+by a vector of other words co-occurring with it              only statistical information from co-occurrence
+in a sliding window, and Latent Semantic Anal-               patterns. We extend HAL to incorporate syntactic-
+ysis (LSA) (Deerwester, Dumais, Furnas, Lan-                 semantic information.
+dauer and Harshman, 1990; Landauer, Foltz and
+Laham, 1998), in which a word is expressed as                3 Event Extraction
+a vector of documents (or any other syntacti-
+cal units such as sentences) containing the word.            Prior to event extraction, predicates, arguments,
+In these semantic spaces, vector-based represen-             part of speech (POS) information and syntac-
+tations facilitate measurement of similarities be-           tic dependencies are annotated using the best-
+tween words. Semantic space models have been                 performing joint syntactic-semantic parser from
+validated through various studies and demonstrate            the CoNNL 2008 Shared Task (Johansson and
+
+
+                                                       121
+
+
+Nugues, 2008), trained on PropBank and Nom-                             be built in a similar manner to the original HAL.
+Bank data. The event extraction algorithm then                          We ignore the parameter of window length (L)
+instantiates the template REL [modREL] Arg0                             and treat every event as a single window of length
+[modArg0] ...ArgN [modArgN], where REL is the                           equal to the number of words in the event. Every
+predicate relation (or root verb if no predicates                       pair of words in an event is considered to be co-
+are identified), and Arg0...ArgN are its arguments.                     occurrent with each other. The weight assigned to
+Modifiers (mod) are identified by tracing from                          the association between each pair is simply set to
+predicate and argument heads along the depen-                           one. With this scheme, all the events are traversed
+dency tree. All predicates are associated with at                       and the event-based HAL is constructed.
+least one event unless both Arg0 and Arg1 are not                           The advantage of this method is that it sub-
+identified, or the only argument is not a noun.                         stantially reduces the processing time during HAL
+    The algorithm checks for modifiers based on                         construction because only events are involved and
+POS tag1 , tracing up and down the dependency                           there is no need to calculate weights per occur-
+tree, skipping over prepositions, coordinating con-                     rence. Additional processing time is incurred in
+junctions and words indicating apportionment,                           semantic role labelling (SRL) during event iden-
+such as ‘sample (of)’. However, to constrain out-                       tification. However, the naive approach to extrac-
+put the search is limited to a depth of one (with                       tion might be simulated with a combination of less
+the exception of skipping). For example, given                          costly chunking and dependency parsing, given
+the phrase ‘apples from the store nearby’ and an                        that the word ordering information available with
+argument head apples, the first dependent, store,                       SRL is not utilised.
+will be extracted but not nearby, which is the de-                          eHAL-1 combines syntactical and statistical in-
+pendent of store. This can be detrimental when                          formation, but has a potential drawback in that
+encountering compound nouns but does focus on                           only events are used during construction so some
+core information. For verbs, modal dependents are                       information existing in the co-occurrence patterns
+not included in output.                                                 of the original text may be lost. This motivates the
+    Available paths up and down the dependency                          second method.
+tree are followed until all branches are exhausted,
+given the rules outlined above. Tracing can re-                         4.2 eHAL-2: Event-Based Filtering
+sult in multiple extracted events for one predicate                     This method attempts to include more statistical
+and predicates may also appear as arguments in                          information in eHAL construction. The key idea
+a different event, or be part of argument phrases.                      is to decide whether a text segment in a corpus
+For this reason, events are constrained to cover                        should be used for the HAL construction, based
+only detail appearing above subsequent predicates                       on how much event information it covers. Given a
+in the tree, which simplifies the event structure.                      corpus of text and the events extracted from it, the
+For example, the sentence “Baghdad already has                          eHAL-2 method runs as follows:
+the facilities to continue producing massive quan-
+tities of its own biological and chemical weapons”                        1. Select the events of length M or more and
+results in the event output: (1) has Baghdad al-                             discard the others for efficiency;
+ready facilities continue producing; (2) continue
+                                                                          2. Set an “inclusion criterion”, which decides if
+quantities producing massive; (3) producing quan-
+                                                                             a text segment, defined as a word sequence
+tities massive weapons biological; (4) quantities
+                                                                             within an L-size sliding window, contains an
+weapons biological massive.
+                                                                             event. For example, if 80% of the words in an
+4 HAL With Events                                                            event are contained in a text segment, it could
+                                                                             be considered to “include” the event;
+4.1 eHAL-1: Construction From Events
+Since events are extracted from documents, they                           3. Move across the whole corpus word-by-word
+form a reduced text corpus from which HAL can                                with an L-size sliding window. For each win-
+                                                                             dow, complete Steps 4-7;
+   1
+     To be specific, the modifiers include negation, as well as
+adverbs or particles for verbal heads, adjectives and nominal             4. For the current L-size text segment, check
+modifiers for nominal heads, and verbal or nominal depen-
+dents of modifiers, provided modifiers are not also identified               whether it includes an event according to the
+as arguments elsewhere in the event.                                         “inclusion criterion” (Step 2);
+
+
+                                                                  122
+
+
+    5. If an event is included in the current text                      based LM smoothed using Dirichlet prior with µ
+       segment, check the following segments for                        set to 1000 as appropriate for TREC style title
+       a consecutive sequence of segments that also                     queries (Lavrenko, 2004). The top 50 returned
+       include this event. If the current segment in-                   documents form the basis for all pseudo-relevance
+       cludes more than one event, find the longest                     feedback, with other parameters tuned separately
+       sequence of related text segments. An illus-                     for the RM and HAL methods.
+       tration is given in Figure 1 in which dark                          For each dataset, the number of feedback terms
+       nodes stand for the words in a specific event                    for each method is selected optimally among 20,
+       and an 80% inclusion criterion is used.                          40, 60, 804 and the interpolation and smoothing
+                                                                        coefficient is set to be optimal in [0,1] with in-
+   Text
+ Segment K                                                              terval 0.1. For RM, we choose the first relevance
+Segment K+1                                                             model in Lavrenko and Croft (2001) with the doc-
+Segment K+2
+Segment K+3
+                                                                        ument model smoothing parameter optimally set
+                                                                        at 0.8. The number of feedback terms is fixed at
+    Figure 1: Consecutive segments for an event                         60 (for AP89 and WSJ9092) and 80 (for AP8889),
+                                                                        and interpolation between the query and relevance
+                                                                        models is set at 0.7 (for WSJ9092) and 0.9 (for
+    6. Extract the full span of consecutive segments
+                                                                        AP89 and AP8889). The HAL-based query ex-
+       just identified and go to the next available text
+                                                                        pansion methods add the top 80 expansion terms
+       segment. Repeat Step 3;
+                                                                        to the query with interpolation coefficient 0.9 for
+    7. When the scanning is done, construct HAL                         WSJ9092 and 1 (that is, no interpolation) for AP89
+       using the original HAL method over all ex-                       and AP8889. The other HAL-based parameters
+       tracted sequences.                                               are set as follows: shortest event length M = 5,
+                                                                        for eHAL-2 the “inclusion criterion” is 75% of
+   With the guidance of event information, the pro-                     words in an event, and for HAL and eHAL-2, win-
+cedure above keeps only those segments of text                          dow size L = 8. Top expansion terms are selected
+that include at least one event and discards the rest.                  according to the formula:
+It makes use of more statistical co-occurrence in-
+formation than eHAL-1 by applying weights that                                                     HAL(tj | ⊕ q)
+                                                                                PHAL (tj | ⊕ t) = P
+are proportional to word separation distance. It                                                    HAL(ti | ⊕ q)
+                                                                                                      ti
+also alleviates the identified drawback of eHAL-1
+by using the full text surrounding events. A trade-                     where HAL(tj |⊕q) is the weight of tj in the com-
+off is that not all the events are included by the                      bined HAL vector ⊕q (Bruza and Song, 2002)
+selected text segments, and thus some syntactical                       of original query terms. Mean Average Precision
+information may be lost. In addition, the paramet-                      (MAP) is the performance indicator, and t-test (at
+ric complexity and computational complexity are                         the level of 0.05) is performed to measure the sta-
+also higher than eHAL-1.                                                tistical significance of results.
+                                                                           Table 2 lists the experimental results5 . It can
+5       Evaluation                                                      be observed that all the three HAL-based query
+                                                                        expansion methods improve performance over the
+We empirically test whether our event-based
+                                                                        LM and both eHALs achieve better performance
+HALs perform better than the original HAL, and
+                                                                        than original HAL, indicating that the incorpora-
+standard LM and RM, using three TREC2 col-
+                                                                        tion of event information is beneficial. In addition,
+lections: AP89 with Topics 1-50 (title field),
+                                                                        eHAL-2 leads to better performance than eHAL-
+AP8889 with Topics 101-150 (title field) and
+                                                                        1, suggesting that use of linguistic information as
+WSJ9092 with Topics 201-250 (description field).
+                                                                        a constraint on statistical processing, rather than
+All the collections are stemmed, and stop words
+                                                                        the focus of extraction, is a more effective strat-
+are removed, prior to retrieval using the Lemur
+                                                                        egy. The results are still short of those achieved
+Toolkit Version 4.113 . Initial retrieval is iden-
+                                                                           4
+tical for all models evaluated: KL-divergence                                For RM, feedback terms were also tested on larger num-
+                                                                        bers up to 1000 but only comparable result was observed.
+    2                                                                      5
+     TREC stands for the Text REtrieval Conference series                    In Table 2, brackets show percent improvement of
+run by NIST. Please refer to http://trec.nist.gov/ for details.         eHALs / RM over HAL / eHAL-2 respectively and * and #
+   3
+     Available at http://www.lemurproject.org/                          indicate the corresponding statistical significance.
+
+
+                                                                  123
+
+
+ Method          AP89          AP8889        WSJ9092                Method       AP89        AP8889      WSJ9092
+   LM           0.2015          0.2290         0.2242                RM         0.2611       0.3178       0.2676
+  HAL           0.2299          0.2738         0.2346               eRM-1       0.2554       0.3150       0.2555
+ eHAL-1         0.2364          0.2829         0.2409                          (-2.18%)     (-0.88%)     (-4.52%)
+               (+2.83%)       (+3.32%*)       (+2.69%)               eRM-2      0.2605       0.3167       0.2626
+ eHAL-2         0.2427          0.2850         0.2460                          (-0.23%)     (-0.35%)     (-1.87%)
+              (+5.57%*)       (+4.09%*)      (+4.86%*)               HAL        0.2640       0.3186       0.2727
+    RM          0.2611          0.3178         0.2676                +RM       (+1.11%)     (+0.25%)     (+1.19%)
+              (+7.58%#)       (+11.5%#)      (+8.78%#)              eHAL-1      0.2600       0.3210       0.2734
+                                                                     +RM       (-0.42%)     (+1.01%)     (+2.17%)
+Table 2: Performance (MAP) comparison of query                      eHAL-2      0.2636       0.3191       0.2735
+expansion using different HALs                                       +RM       (+0.96%)     (+0.41%)     (+2.20%)
+
+                                                                   Table 3: Performance (MAP) comparison of query
+with RM, but the gap is significantly reduced by
+                                                                   expansion using the combination of RM and term
+incorporating event information here, suggesting
+                                                                   dependencies
+this is a promising line of work. In addition, as
+shown in (Bai et al., 2005), the Information Flow
+method built upon the original HAL largely out-                    the occurrence frequencies of individual words
+performed RM. We expect that eHAL would pro-                       into account, which is not well-captured by the
+vide an even better basis for Information Flow, but                events. In contrast, the performance of Scheme 2
+this possibility is yet to be explored.                            is more promising. The three methods outperform
+   As is known, RM is a pure unigram model while                   the original RM in most cases, but the improve-
+HAL methods are dependency-based. They cap-                        ment is not significant and it is also observed that
+ture different information, hence it is natural to                 there is little difference shown between RM with
+consider if their strengths might complement each                  HAL and eHALs. The phenomenon implies more
+other in a combined model. For this purpose, we                    effective methods may be invented to complement
+design the following two schemes:                                  the unigram models with the syntactical and sta-
+                                                                   tistical dependency information.
+  1. Apply RM to the feedback documents (orig-
+     inal RM), the events extracted from these                     6 Conclusions
+     documents (eRM-1), and the text segments
+                                                                   The application of original HAL to query expan-
+     around each event (eRM-2), where the three
+                                                                   sion attempted to incorporate statistical word as-
+     sources are the same as used to produce HAL,
+                                                                   sociation information, but did not take into ac-
+     eHAL-1 and eHAL-2 respectively;
+                                                                   count the syntactical dependencies and had a
+  2. Interpolate the expanded query model by                       high processing cost. By utilising syntactic-
+     RM with the ones generated by each HAL,                       semantic knowledge from event modelling of
+     represented by HAL+RM, eHAL-1+RM and                          pseudo-relevance feedback documents prior to
+     eHAL-2+RM. The interpolation coefficient is                   computing the HAL space, we showed that pro-
+     again selected to achieve the optimal MAP.                    cessing costs might be reduced through more care-
+                                                                   ful selection of word co-occurrences and that per-
+   The MAP comparison between the original RM                      formance may be enhanced by effectively improv-
+and these new models are demonstrated in Ta-                       ing the quality of pseudo-relevance feedback doc-
+ble 36 . From the first three lines (Scheme 1), we                 uments. Both methods improved over original
+can observe that in most cases the performance                     HAL query expansion. In addition, interpolation
+generally deteriorates when RM is directly run                     of HAL and RM expansion improved results over
+over the events and the text segments. The event                   those achieved by either method alone.
+information is more effective to express the infor-
+mation about the term dependencies while the un-                   Acknowledgments
+igram RM ignores this information and only takes                   This research is funded in part by the UK’s Engi-
+   6
+     For rows in Table 3, brackets show percent difference         neering and Physical Sciences Research Council,
+from original RM.                                                  grant number: EP/F014708/2.
+
+
+                                                             124
+
+
+References                                                       SIGIR conference on Research and development in
+                                                                 information retrieval, pp. 472–479, New York, NY,
+Bach E. The Algebra of Events. 1986. Linguistics and             USA. ACM.
+  Philosophy, 9(1): pp. 5–16.
+                                                               Metzler D. and Bruce W. B. Latent Concept Expan-
+Bai J. and Song D. and Bruza P. and Nie J.-Y. and Cao           sion using Markov Random Fields 2007. In: SIGIR
+  G. Query Expansion using Term Relationships in                ’07: Proceedings of the 30th Annual International
+  Language Models for Information Retrieval 2005.               ACM SIGIR Conference on Research and Develop-
+  In: Proceedings of the 14th International ACM Con-            ment in Information Retrieval, pp. 311–318, ACM,
+  ference on Information and Knowledge Manage-                  New York, NY, USA.
+  ment, pp. 688–695.
+                                                               Pado S. and Lapata M. Dependency-Based Construc-
+Bruza P. and Song D. Inferring Query Models by Com-              tion of Semantic Space Models. 2007. Computa-
+  puting Information Flow. 2002. In: Proceedings of              tional Linguistics, 33: pp. 161–199.
+  the 11th International ACM Conference on Informa-
+  tion and Knowledge Management, pp. 206–269.                  Shen D. and Lapata M. Using Semantic Roles to Im-
+                                                                 prove Question Answering. 2007. In: Proceedings
+Deerwester S., Dumais S., Furnas G., Landauer T. and             of the 2007 Joint Conference on Empirical Methods
+  Harshman R. Indexing by latent semantic analysis.              in Natural Language Processing and Computational
+  1990. Journal of the American Sociaty for Informa-             Natural Language Learning, pp. 12–21.
+  tion Science, 41(6): pp. 391–407.
+                                                               Sleator D. D. and Temperley D. Parsing English with
+Gao J. and Nie J. and Wu G. and Cao G. Dependence                 a Link Grammar 1991. Technical Report CMU-CS-
+  Language Model for Information Retrieval. 2004.                 91-196, Department of Computer Science, Carnegie
+  In: Proceedings of the 27th Annual International                Mellon University.
+  ACM SIGIR Conference on Research and Develop-
+  ment in Information Retrieval, pp. 170–177.                  Smeaton A. F., O’Donnell R. and Kelledy F. Indexing
+                                                                 Structures Derived from Syntax in TREC-3: System
+Harris Z. 1968. Mathematical Structures of Lan-                  Description. 1995. In: The Third Text REtrieval
+  guage.. Wiley, New York.                                       Conference (TREC-3), pp. 55–67.
+Johansson R. and Nugues P.      Dependency-based               Song F. and Croft W. B. A General Language Model
+  Syntactic-semantic Analysis with PropBank and                  for Information Retrieval. 1999. In: CIKM ’99:
+  NomBank. 2008. In: CoNLL ’08: Proceedings of                   Proceedings of the Eighth International Confer-
+  the Twelfth Conference on Computational Natural                ence on Information and Knowledge Management,
+  Language Learning, pp. 183–187.                                pp. 316–321, New York, NY, USA, ACM.
+Landauer T., Foltz P. and Laham D. Introduction to La-
+  tent Semantic Analysis. 1998. Discourse Processes,
+  25: pp. 259–284.
+
+Lavrenko V. 2004. A Generative Theory of Relevance,
+  PhD thesis, University of Massachusetts, Amherst.
+
+Lavrenko V. and Croft W. B. Relevance Based Lan-
+  guage Models. 2001. In: SIGIR ’01: Proceedings
+  of the 24th Annual International ACM SIGIR Con-
+  ference on Research and Development in Informa-
+  tion Retrieval, pp. 120–127, New York, NY, USA,
+  2001. ACM.
+
+Lin D. and Pantel P. DIRT - Discovery of Inference
+  Rules from Text. 2001. In: KDD ’01: Proceedings
+  of the Seventh ACM SIGKDD International Confer-
+  ence on Knowledge Discovery and Data Mining, pp.
+  323–328, New York, NY, USA.
+
+Lund K. and Burgess C. Producing High-dimensional
+  Semantic Spaces from Lexical Co-occurrence.
+  1996. Behavior Research Methods, Instruments &
+  Computers, 28: pp. 203–208. Prentice-Hall, Engle-
+  wood Cliffs, NJ.
+
+Metzler D. and Bruce W. B. A Markov Random Field
+ Model for Term Dependencies 2005. In: SIGIR ’05:
+ Proceedings of the 28th annual international ACM
+
+
+                                                         125
+

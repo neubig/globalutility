@@ -1,0 +1,641 @@
+                 Improving the Use of Pseudo-Words for Evaluating
+                              Selectional Preferences
+
+
+                                Nathanael Chambers and Dan Jurafsky
+                                   Department of Computer Science
+                                          Stanford University
+                                {natec,jurafsky}@stanford.edu
+
+
+
+
+                      Abstract                                 1992; Schutze, 1992). While pseudo-words are
+                                                               now less often used for word sense disambigation,
+    This paper improves the use of pseudo-                     they are a common way to evaluate selectional
+    words as an evaluation framework for                       preferences, models that measure the strength of
+    selectional preferences. While pseudo-                     association between a predicate and its argument
+    words originally evaluated word sense                      filler, e.g., that the noun lunch is a likely object
+    disambiguation, they are now commonly                      of eat. Selectional preferences are useful for NLP
+    used to evaluate selectional preferences. A                tasks such as parsing and semantic role labeling
+    selectional preference model ranks a set of                (Zapirain et al., 2009). Since evaluating them in
+    possible arguments for a verb by their se-                 isolation is difficult without labeled data, pseudo-
+    mantic fit to the verb. Pseudo-words serve                 word evaluations can be an attractive evaluation
+    as a proxy evaluation for these decisions.                 framework.
+    The evaluation takes an argument of a verb                     Pseudo-word evaluations are currently used to
+    like drive (e.g. car), pairs it with an al-                evaluate a variety of language modeling tasks
+    ternative word (e.g. car/rock), and asks a                 (Erk, 2007; Bergsma et al., 2008). However,
+    model to identify the original. This pa-                   evaluation design varies across research groups.
+    per studies two main aspects of pseudo-                    This paper studies the evaluation itself, showing
+    word creation that affect performance re-                  how choices can lead to overly optimistic results
+    sults. (1) Pseudo-word evaluations often                   if the evaluation is not designed carefully. We
+    evaluate only a subset of the words. We                    show in this paper that current methods of apply-
+    show that selectional preferences should                   ing pseudo-words to selectional preferences vary
+    instead be evaluated on the data in its en-                greatly, and suggest improvements.
+    tirety. (2) Different approaches to select-                    A pseudo-word is the concatenation of two
+    ing partner words can produce overly op-                   words (e.g. house/car). One word is the orig-
+    timistic evaluations. We offer suggestions                 inal in a document, and the second is the con-
+    to address these factors and present a sim-                founder. Consider the following example of ap-
+    ple baseline that outperforms the state-of-                plying pseudo-words to the selectional restrictions
+    the-art by 13% absolute on a newspaper                     of the verb focus:
+    domain.
+                                                                 Original: This story focuses on the campaign.
+1   Introduction                                                 Test: This story/part focuses on the campaign/meeting.
+
+For many natural language processing (NLP)                     In the original sentence, focus has two arguments:
+tasks, particularly those involving meaning, cre-              a subject story and an object campaign. In the test
+ating labeled test data is difficult or expensive.             sentence, each argument of the verb is replaced by
+One way to mitigate this problem is with pseudo-               pseudo-words. A model is evaluated by its success
+words, a method for automatically creating test                at determining which of the two arguments is the
+corpora without human labeling, originally pro-                original word.
+posed for word sense disambiguation (Gale et al.,                 Two problems exist in the current use of
+
+
+                                                         445
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 445–453,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+pseudo-words to evaluate selectional preferences.              was the correct predicate for a given noun object.
+First, selectional preferences historically focus on           One verb v was the original from the source doc-
+subsets of data such as unseen words or words in               ument, and the other v 0 was randomly generated.
+certain frequency ranges. While work on unseen                 This was the first use of such verb-noun pairs, as
+data is important, evaluating on the entire dataset            well as the first to test only on unseen pairs.
+provides an accurate picture of a model’s overall                   Several papers followed with differing methods
+performance. Most other NLP tasks today evalu-                 of choosing a test pair (v, n) and its confounder
+ate all test examples in a corpus. We will show                v 0 . Dagan et al. (1999) tested all unseen (v, n)
+that seen arguments actually dominate newspaper                occurrences of the most frequent 1000 verbs in
+articles, and thus propose creating test sets that in-         his corpus. They then sorted verbs by corpus fre-
+clude all verb-argument examples to avoid artifi-              quency and chose the neighboring verb v 0 of v
+cial evaluations.                                              as the confounder to ensure the closest frequency
+   Second, pseudo-word evaluations vary in how                 match possible. Rooth et al. (1999) tested 3000
+they choose confounders. Previous work has at-                 random (v, n) pairs, but required the verbs and
+tempted to maintain a similar corpus frequency                 nouns to appear between 30 and 3000 times in
+to the original, but it is not clear how best to do            training. They also chose confounders randomly
+this, nor how it affects the task’s difficulty. We             so that the new pair was unseen.
+argue in favor of using nearest-neighbor frequen-                   Keller and Lapata (2003) specifically addressed
+cies and show how using random confounders pro-                the impact of unseen data by using the web to first
+duces overly optimistic results.                               ‘see’ the data. They evaluated unseen pseudo-
+   Finally, we present a surprisingly simple base-             words by attempting to first observe them in a
+line that outperforms the state-of-the-art and is far          larger corpus (the Web). One modeling difference
+less memory and computationally intensive. It                  was to disambiguate the nouns as selectional pref-
+outperforms current similarity-based approaches                erences instead of the verbs. Given a test pair
+by over 13% when the test set includes all of the              (v, n) and its confounder (v, n0 ), they used web
+data. We conclude with a suggested backoff model               searches such as “v Det n” to make the decision.
+based on this baseline.                                        Results beat or matched current results at the time.
+                                                               We present a similarly motivated, but new web-
+2   History of Pseudo-Word                                     based approach later.
+    Disambiguation                                                  Very recent work with pseudo-words (Erk,
+                                                               2007; Bergsma et al., 2008) further blurs the lines
+Pseudo-words were introduced simultaneously by                 between what is included in training and test data,
+two papers studying statistical approaches to word             using frequency-based and semantic-based rea-
+sense disambiguation (WSD). Schütze (1992)                    sons for deciding what is included. We discuss
+simply called the words, ‘artificial ambiguous                 this further in section 5.
+words’, but Gale et al. (1992) proposed the suc-
+                                                                    As can be seen, there are two main factors when
+cinct name, pseudo-word. Both papers cited the
+                                                               devising a pseudo-word evaluation for selectional
+sparsity and difficulty of creating large labeled
+                                                               preferences: (1) choosing (v, n) pairs from the test
+datasets as the motivation behind pseudo-words.
+                                                               set, and (2) choosing the confounding n0 (or v 0 ).
+Gale et al. selected unambiguous words from the
+                                                               The confounder has not been looked at in detail
+corpus and paired them with random words from
+                                                               and as best we can tell, these factors have var-
+different thesaurus categories. Schütze paired his
+                                                               ied significantly. Many times the choices are well
+words with confounders that were ‘comparable in
+                                                               motivated based on the paper’s goals, but in other
+frequency’ and ‘distinct semantically’. Gale et
+                                                               cases the motivation is unclear.
+al.’s pseudo-word term continues today, as does
+Schütze’s frequency approach to selecting the con-            3   How Frequent is Unseen Data?
+founder.
+   Pereira et al. (1993) soon followed with a selec-           Most NLP tasks evaluate their entire datasets, but
+tional preference proposal that focused on a lan-              as described above, most selectional preference
+guage model’s effectiveness on unseen data. The                evaluations have focused only on unseen data.
+work studied clustering approaches to assist in                This section investigates the extent of unseen ex-
+similarity decisions, predicting which of two verbs            amples in a typical training/testing environment
+
+
+                                                         446
+
+
+of newspaper articles. The results show that even
+with a small training size, seen examples dominate
+the data. We argue that, absent a system’s need for
+                                                                                                     Unseen Arguments in NYT Dev
+specialized performance on unseen data, a repre-                                         45
+                                                                                                                                                BNC
+sentative test set should include the dataset in its                                                                                            AP
+                                                                                         40
+entirety.                                                                                                                                       NYT
+                                                                                                                                                Google
+                                                                                         35
+3.1    Unseen Data Experiment                                                            30
+
+
+
+
+                                                                        Percent Unseen
+We use the New York Times (NYT) and Associ-                                              25
+ated Press (APW) sections of the Gigaword Cor-
+                                                                                         20
+pus (Graff, 2002), as well as the British National
+Corpus (BNC) (Burnard, 1995) for our analysis.                                           15
+
+Parsing and SRL evaluations often focus on news-                                         10
+paper articles and Gigaword is large enough to
+                                                                                          5
+facilitate analysis over varying amounts of train-
+ing data. We parsed the data with the Stan-                                               0
+                                                                                              0    2        4         6          8       10         12
+ford Parser1 into dependency graphs. Let (vd , n)                                                 Number of Tokens in Training (hundred millions)
+
+be a verb v with grammatical dependency d ∈
+{subject, object, prep} filled by noun n. Pairs                         Figure 1: Percentage of NYT development set
+(vd , n) are chosen by extracting every such depen-                     that is unseen when trained on varying amounts of
+dency in the graphs, setting the head predicate as                      data. The two lines represent training with NYT or
+v and the head word of the dependent d as n. All                        APW data. The APW set is smaller in size from
+prepositions are condensed into prep.                                   the NYT. The dotted line uses Google n-grams as
+   We randomly selected documents from the year                         training. The x-axis represents tokens × 108 .
+2001 in the NYT portion of the corpus as devel-
+opment and test sets. Training data for APW and
+NYT include all years 1994-2006 (minus NYT de-
+velopment and test documents). We also identified
+and removed duplicate documents2 . The BNC in
+its entirety is also used for training as a single data                                                 Unseen Arguments by Type
+point. We then record every seen (vd , n) pair dur-
+                                                                                         40                                                    Preps
+ing training that is seen two or more times3 and                                                                                               Subjects
+                                                                                                                                               Objects
+then count the number of unseen pairs in the NYT                                         35
+development set (1455 tests).                                                            30
+   Figure 1 plots the percentage of unseen argu-
+                                                                        Percent Unseen
+
+
+
+
+ments against training size when trained on either                                       25
+
+NYT or APW (the APW portion is smaller in total                                          20
+size, and the smaller BNC is provided for com-
+                                                                                         15
+parison). The first point on each line (the high-
+est points) contains approximately the same num-                                         10
+ber of words as the BNC (100 million). Initially,                                         5
+about one third of the arguments are unseen, but
+that percentage quickly falls close to 10% as ad-                                         0
+                                                                                              0    2        4         6          8       10         12
+ditional training is included. This suggests that an                                              Number of Tokens in Training (hundred millions)
+
+evaluation focusing only on unseen data is not rep-
+resentative, potentially missing up to 90% of the                       Figure 2: Percentage of subject/object/preposition
+data.                                                                   arguments in the NYT development set that is un-
+   1
+                                                                        seen when trained on varying amounts of NYT
+     http://nlp.stanford.edu/software/lex-parser.shtml
+   2                                                                    data. The x-axis represents tokens × 108 .
+     Any two documents whose first two paragraphs in the
+corpus files are identical.
+   3
+     Our results are thus conservative, as including all single
+occurrences would achieve even smaller unseen percentages.
+
+
+                                                                  447
+
+
+   The third line across the bottom of the figure is                                       Distribution of Rare Verbs and Nouns in Tests
+the number of unseen pairs using Google n-gram
+
+
+
+
+                                                                                  30
+data as proxy argument counts. Creating argu-                                                                                     Unseen Tests
+                                                                                                                                  Seen Tests
+ment counts from n-gram counts is described in
+
+
+
+
+                                                                                  25
+detail below in section 5.2. We include these Web
+counts to illustrate how an openly available source
+
+
+
+
+                                                                                  20
+of counts affects unseen arguments. Finally, fig-
+
+
+
+
+                                                             Percent Rare Words
+ure 2 compares which dependency types are seen
+
+
+
+
+                                                                                  15
+the least in training. Prepositions have the largest
+unseen percentage, but not surprisingly, also make
+
+
+
+
+                                                                                  10
+up less of the training examples overall.
+   In order to analyze why pairs are unseen, we an-
+
+
+
+
+                                                                                  5
+alyzed the distribution of rare words across unseen
+and seen examples. To define rare nouns, we order
+head words by their individual corpus frequencies.
+
+
+
+
+                                                                                  0
+                                                                                               verbs                           nouns
+A noun is rare if it occurs in the lowest 10% of the
+list. We similarly define rare verbs over their or-
+dered frequencies (we count verb lemmas, and do
+not include the syntactic relations). Corpus counts          Figure 3: Comparison between seen and unseen
+covered 2 years of the AP section, and we used               tests (verb,relation,noun). 24.6% of unseen tests
+the development set of the NYT section to extract            have rare verbs, compared to just 4.5% in seen
+the seen and unseen pairs. Figure 3 shows the per-           tests. The rare nouns are more evenly distributed
+centage of rare nouns and verbs that occur in un-            across the tests.
+seen and seen pairs. 24.6% of the verbs in un-
+seen pairs are rare, compared to only 4.5% in seen
+pairs. The distribution of rare nouns is less con-           quency: (1) choose a random noun, (2) choose a
+trastive: 13.3% vs 8.9%. This suggests that many             random noun from a frequency bucket similar to
+unseen pairs are unseen mainly because they con-             the original noun’s frequency, and (3) select the
+tain low-frequency verbs, rather than because of             nearest neighbor, the noun with frequency clos-
+containing low-frequency argument heads.                     est to the original. These methods evaluate the
+                                                             range of choices used in previous work. Our ex-
+   Given the large amount of seen data, we be-
+                                                             periments compare the three.
+lieve evaluations should include all data examples
+to best represent the corpus. We describe our full
+evaluation results and include a comparison of dif-          5                        Models
+ferent training sizes below.
+                                                             5.1                       A New Baseline
+4   How to Select a Confounder
+                                                             The analysis of unseen slots suggests a baseline
+Given a test set S of pairs (vd , n) ∈ S, we now ad-         that is surprisingly obvious, yet to our knowledge,
+dress how best to select a confounder n0 . Work in           has not yet been evaluated. Part of the reason
+WSD has shown that confounder choice can make                is that early work in pseudo-word disambiguation
+the pseudo-disambiguation task significantly eas-            explicitly tested only unseen pairs4 . Our evalua-
+ier. Gaustad (2001) showed that human-generated              tion will include seen data, and since our analysis
+pseudo-words are more difficult to classify than             suggests that up to 90% is seen, a strong baseline
+random choices. Nakov and Hearst (2003) further              should address this seen portion.
+illustrated how random confounders are easier to
+identify than those selected from semantically am-                                4
+                                                                  Recent work does include some seen data. Bergsma et
+biguous, yet related concepts. Our approach eval-            al. (2008) test pairs that fall below a mutual information
+uates selectional preferences, not WSD, but our re-          threshold (might include some seen pairs), and Erk (2007)
+sults complement these findings.                             selects a subset of roles in FrameNet (Baker et al., 1998) to
+                                                             test and uses all labeled instances within this subset (unclear
+   We identified three methods of confounder se-             what portion of subset of data is seen). Neither evaluates all
+lection based on varying levels of corpus fre-               of the seen data, however.
+
+
+                                                       448
+
+
+  We propose a conditional probability baseline:              C(vd , n) as the number of times v and n (ignoring
+                (                                             d) appear in the same n-gram.
+                    C(vd ,n)
+                    C(vd ,∗)if C(vd , n) > 0
+  P (n|vd ) =                                                 5.3    Smoothing Model
+                          0 otherwise
+                                                              We implemented the current state-of-the-art
+where C(vd , n) is the number of times the head               smoothing model of Erk (2007). The model is
+word n was seen as an argument to the pred-                   based on the idea that the arguments of a particular
+icate v, and C(vd , ∗) is the number of times                 verb slot tend to be similar to each other. Given
+vd was seen with any argument. Given a test                   two potential arguments for a verb, the correct
+(vd , n) and its confounder (vd , n0 ), choose n if           one should correlate higher with the arguments ob-
+P (n|vd ) > P (n0 |vd ), and n0 otherwise. If                 served with the verb during training.
+P (n|vd ) = P (n0 |vd ), randomly choose one.                    Formally, given a verb v and a grammatical de-
+   Lapata et al. (1999) showed that corpus fre-               pendency d, the score for a noun n is defined:
+quency and conditional probability correlate with
+                                                                                 X
+human decisions of adjective-noun plausibility,                   Svd (n) =                 sim(n, w) ∗ C(vd , w) (1)
+and Dagan et al. (1999) appear to propose a very                              w∈Seen(vd )
+similar baseline for verb-noun selectional prefer-
+ences, but the paper evaluates unseen data, and so            where sim(n, w) is a noun-noun similarity score,
+the conditional probability model is not studied.             Seen(vd ) is the set of seen head words filling the
+   We later analyze this baseline against a more              slot vd during training, and C(vd , n) is the num-
+complicated smoothing approach.                               ber of times the noun n was seen filling the slot vd
+                                                              The similarity score sim(n, w) can thus be one of
+5.2   A Web Baseline                                          many vector-based similarity metrics5 . We eval-
+If conditional probability is a reasonable baseline,          uate both Jaccard and Cosine similarity scores in
+better performance may just require more data.                this paper, but the difference between the two is
+Keller and Lapata (2003) proposed using the web               small.
+for this task, querying for specific phrases like
+‘Verb Det N’ to find syntactic objects. Such a web            6     Experiments
+corpus would be attractive, but we’d like to find             Our training data is the NYT section of the Gi-
+subjects and prepositional objects as well as ob-             gaword Corpus, parsed into dependency graphs.
+jects, and also ideally we don’t want to limit our-           We extract all (vd , n) pairs from the graph, as de-
+selves to patterns. Since parsing the web is unre-            scribed in section 3. We randomly chose 9 docu-
+alistic, a reasonable compromise is to make rough             ments from the year 2001 for a development set,
+counts when pairs of words occur in close proxim-             and 41 documents for testing. The test set con-
+ity to each other.                                            sisted of 6767 (vd , n) pairs. All verbs and nouns
+   Using the Google n-gram corpus, we recorded                are stemmed, and the development and test docu-
+all verb-noun co-occurrences, defined by appear-              ments were isolated from training.
+ing in any order in the same n-gram, up to and
+including 5-grams. For instance, the test pair                6.1    Varying Training Size
+(throwsubject , ball) is considered seen if there ex-
+                                                              We repeated the experiments with three different
+ists an n-gram such that throw and ball are both
+                                                              training sizes to analyze the effect data size has on
+included. We count all such occurrences for all
+                                                              performance:
+verb-noun pairs. We also avoided over-counting
+co-occurrences in lower order n-grams that appear                 • Train x1: Year 2001 of the NYT portion of
+again in 4 or 5-grams. This crude method of count-                  the Gigaword Corpus. After removing du-
+ing has obvious drawbacks. Subjects are not dis-                    plicate documents, it contains approximately
+tinguished from objects and nouns may not be ac-                    110 million tokens, comparable to the 100
+tual arguments of the verb. However, it is a simple                 million tokens in the BNC corpus.
+baseline to implement with these freely available
+                                                                   5
+counts.                                                              A similar type of smoothing was proposed in earlier
+                                                              work by Dagan et al. (1999). A noun is represented by a
+   Thus, we use conditional probability as de-                vector of verb slots and the number of times it is observed
+fined in the previous section, but define the count           filling each slot.
+
+
+                                                        449
+
+
+  • Train x2: Years 2001 and 2002 of the NYT                   trim their vectors, but also important to do so for
+    portion of the Gigaword Corpus, containing                 best performance. A noun’s representative vector
+    approximately 225 million tokens.                          consists of verb slots and the number of times the
+                                                               noun was seen in each slot. We removed any verb
+  • Train x10: The entire NYT portion of Giga-
+                                                               slot not seen more than x times, where x varied
+    word (approximately 1.2 billion tokens). It is
+                                                               based on all three factors: the dataset, confounder
+    an order of magnitude larger than Train x1.
+                                                               choice, and similarity metric. We optimized x
+6.2    Varying the Confounder                                  on the development data with a linear search, and
+We generated three different confounder sets                   used that cutoff on each test. Finally, we trimmed
+based on word corpus frequency from the 41 test                any vectors over 2000 in size to reduce the com-
+documents. Frequency was determined by count-                  putational complexity. Removing this strict cutoff
+ing all tokens with noun POS tags. As motivated                appears to have little effect on the results.
+in section 4, we use the following approaches:                    Finally, we report backoff scores for Google and
+  • Random: choose a random confounder from                    Erk. These consist of always choosing the Base-
+    the set of nouns that fall within some broad               line if it returns an answer (not a guessed unseen
+    corpus frequency range. We set our range to                answer), and then backing off to the Google/Erk
+    eliminate (approximately) the top 100 most                 result for Baseline unknowns. These are labeled
+    frequent nouns, but otherwise arbitrarily set              Backoff Google and Backoff Erk.
+    the lower range as previous work seems to
+    do. The final range was [30, 400000].
+                                                               7   Results
+
+  • Buckets: all nouns are bucketed based on                   Results are given for the two dimensions: con-
+    their corpus frequencies6 . Given a test pair              founder choice and training size. Statistical sig-
+    (vd , n), choose the bucket in which n belongs             nificance tests were calculated using the approx-
+    and randomly select a confounder n0 from                   imate randomization test (Yeh, 2000) with 1000
+    that bucket.                                               iterations.
+                                                                  Figure 4 shows the performance change over the
+  • Neighbor: sort all seen nouns by frequency                 different confounder methods. Train x2 was used
+    and choose the confounder n0 that is the near-             for training. Each model follows the same pro-
+    est neighbor of n with greater frequency.                  gression: it performs extremely well on the ran-
+6.3    Model Implementation                                    dom test set, worse on buckets, and the lowest on
+None of the models can make a decision if they                 the nearest neighbor. The conditional probability
+identically score both potential arguments (most               Baseline falls from 91.5 to 79.5, a 12% absolute
+often true when both arguments were not seen with              drop from completely random to neighboring fre-
+the verb in training). As a result, we extend all              quency. The Erk smoothing model falls 27% from
+models to randomly guess (50% performance) on                  93.9 to 68.1. The Google model generally per-
+pairs they cannot answer.                                      forms the worst on all sets, but its 74.3% perfor-
+   The conditional probability is reported as Base-            mance with random confounders is significantly
+line. For the web baseline (reported as Google),               better than a 50-50 random choice. This is no-
+we stemmed all words in the Google n-grams and                 table since the Google model only requires n-gram
+counted every verb v and noun n that appear in                 counts to implement. The Backoff Erk model is
+Gigaword. Given two nouns, the noun with the                   the best, using the Baseline for the majority of
+higher co-occurrence count with the verb is cho-               decisions and backing off to the Erk smoothing
+sen. As with the other models, if the two nouns                model when the Baseline cannot answer.
+have the same counts, it randomly guesses.                        Figure 5 (shown on the next page) varies the
+   The smoothing model is named Erk in the re-                 training size. We show results for both Bucket Fre-
+sults with both Jaccard and Cosine as the simi-                quencies and Neighbor Frequencies. The only dif-
+larity metric. Due to the large vector representa-             ference between columns is the amount of training
+tions of the nouns, it is computationally wise to              data. As expected, the Baseline improves as the
+   6
+                                                               training size is increased. The Erk model, some-
+    We used frequency buckets of 4, 10, 25, 200, 1000,
+>1000. Adding more buckets moves the evaluation closer         what surprisingly, shows no continual gain with
+to Neighbor, less is closer to Random.                         more training data. The Jaccard and Cosine simi-
+
+
+                                                         450
+
+
+        Varying the Confounder Frequency                      founders. This is consistent with findings for
+                   Random    Buckets    Neighbor              WSD that corpus frequency choices alter the task
+    Baseline         91.5     89.1        79.5                (Gaustad, 2001; Nakov and Hearst, 2003). Our
+    Erk-Jaccard     93.9*     82.7*      68.1*                results show the gradation of performance as one
+    Erk-Cosine       91.2     81.8*      65.3*                moves across the spectrum from completely ran-
+    Google          74.3*     70.4*      59.4*                dom to closest in frequency. The Erk model
+    Backoff Erk     96.6*     91.8*      80.8*                dropped 27%, Google 15%, and our baseline 12%.
+                                                              The overly optimistic performance on random data
+    Backoff Goog    92.7†     89.7        79.8
+                                                              suggests using the nearest neighbor approach for
+Figure 4: Trained on two years of NYT data (Train             experiments. Nearest neighbor avoids evaluating
+x2). Accuracy of the models on the same NYT test              on ‘easy’ datasets, and our baseline (at 79.5%)
+documents, but with three different ways of choos-            still provides room for improvement. But perhaps
+ing the confounders. * indicates statistical signifi-         just as important, the nearest neighbor approach
+cance with the column’s Baseline at the p < 0.01              facilitates the most reproducibile results in exper-
+level, † at p < 0.05. Random is overly optimistic,            iments since there is little ambiguity in how the
+reporting performance far above more conserva-                confounder is selected.
+tive (selective) confounder choices.                             Realistic Confounders: Despite its over-
+                                                              optimism, the random approach to confounder se-
+                 Baseline Details
+                                                              lection may be the correct approach in some cir-
+                   Train Train x2       Train x10             cumstances. For some tasks that need selectional
+    Precision      96.1     95.5*         95.0†               preferences, random confounders may be more re-
+    Accuracy       78.2     82.0*         88.1*               alistic. It’s possible, for example, that the options
+    Accuracy +50% 87.5      89.1*         91.7*               in a PP-attachment task might be distributed more
+                                                              like the random rather than nearest neighbor mod-
+Figure 6: Results from the buckets confounder test
+                                                              els. In any case, this is difficult to decide without
+set. Baseline precision, accuracy (the same as re-
+                                                              a specific application in mind. Absent such spe-
+call), and accuracy when you randomly guess the
+                                                              cific motiviation, a nearest neighbor approach is
+tests that Baseline does not answer. All numbers
+                                                              the most conservative, and has the advantage of
+are statistically significant * with p-value < 0.01
+                                                              creating a reproducible experiment, whereas ran-
+from the number to their left.
+                                                              dom choice can vary across design.
+                                                                 Training Size: Training data improves the con-
+larity scores perform similarly in their model. The
+                                                              ditional probability baseline, but does not help the
+Baseline achieves the highest accuracies (91.7%
+                                                              smoothing model. Figure 5 shows a lack of im-
+and 81.2%) with Train x10, outperforming the best
+                                                              provement across training sizes for both jaccard
+Erk model by 5.2% and 13.1% absolute on buck-
+                                                              and cosine implementations of the Erk model. The
+ets and nearest neighbor respectively. The back-
+                                                              Train x1 size is approximately the same size used
+off models improve the baseline by just under 1%.
+                                                              in Erk (2007), although on a different corpus. We
+The Google n-gram backoff model is almost as
+                                                              optimized argument cutoffs for each training size,
+good as backing off to the Erk smoothing model.
+                                                              but the model still appears to suffer from addi-
+   Finally, figure 6 shows the Baseline’s precision           tional noise that the conditional probability base-
+and overall accuracy. Accuracy is the same as                 line does not. This may suggest that observing a
+recall when the model does not guess between                  test argument with a verb in training is more re-
+pseudo words that have the same conditional prob-             liable than a smoothing model that compares all
+abilities. Accuracy +50% (the full Baseline in                training arguments against that test example.
+all other figures) shows the gain from randomly
+choosing one of the two words when uncertain.                    High Precision Baseline: Our conditional
+Precision is extremely high.                                  probability baseline is very precise. It outper-
+                                                              forms the smoothed similarity based Erk model
+8     Discussion                                              and gives high results across tests. The only com-
+                                                              bination when Erk is better is when the training
+Confounder Choice: Performance is strongly in-                data includes just one year (one twelfth of the
+fluenced by the method used when choosing con-                NYT section) and the confounder is chosen com-
+
+
+                                                        451
+
+
+                                       Varying the Training Size
+                                   Bucket Frequency                         Neighbor Frequency
+                            Train x1 Train x2 Train x10               Train x1 Train x2 Train x10
+         Baseline             87.5      89.1       91.7                 78.4       79.5     81.2
+         Erk-Jaccard         86.5*     82.7*      83.1*                66.8*      68.1*     65.5*
+         Erk-Cosine          82.1*     81.8*      81.1*                66.1*      65.3*     65.7*
+         Google                 -         -       70.4*                   -         -       59.4*
+         Backoff Erk         92.6*     91.8*      92.6*                79.4*      80.8*     81.7*
+         Backoff Google       88.6      89.7      91.9†                 78.7       79.8     81.2
+
+Figure 5: Accuracy of varying NYT training sizes. The left and right tables represent two confounder
+choices: choose the confounder with frequency buckets, and choose by nearest frequency neighbor.
+Trainx1 starts with year 2001 of NYT data, Trainx2 doubles the size, and Trainx10 is 10 times larger. *
+indicates statistical significance with the column’s Baseline at the p < 0.01 level, † at p < 0.05.
+
+
+pletely randomly. These results appear consistent            9   Conclusion
+with Erk (2007) because that work used the BNC
+corpus (the same size as one year of our data) and           Current performance on various natural language
+Erk chose confounders randomly within a broad                tasks is being judged and published based on
+frequency range. Our reported results include ev-            pseudo-word evaluations. It is thus important
+ery (vd , n) in the data, not a subset of particu-           to have a clear understanding of the evaluation’s
+lar semantic roles. Our reported 93.9% for Erk-              characteristics. We have shown that the evalu-
+Jaccard is also significantly higher than their re-          ation is strongly affected by confounder choice,
+ported 81.4%, but this could be due to the random            suggesting a nearest frequency neighbor approach
+choices we made for confounders, or most likely              to provide the most reproducible performance and
+corpus differences between Gigaword and the sub-             avoid overly optimistic results. We have shown
+set of FrameNet they evaluated.                              that evaluating entire documents instead of sub-
+                                                             sets of the data produces vastly different results.
+   Ultimately we have found that complex models              We presented a conditional probability baseline
+for selectional preferences may not be necessary,            that is both novel to the pseudo-word disambigua-
+depending on the task. The higher computational              tion task and strongly outperforms state-of-the-art
+needs of smoothing approaches are best for back-             models on entire documents. We hope this pro-
+ing off when unseen data is encountered. Condi-              vides a new reference point to the pseudo-word
+tional probability is the best choice for seen exam-         disambiguation task, and enables selectional pref-
+ples. Further, analysis of the data shows that as            erence models whose performance on the task
+more training data is made available, the seen ex-           similarly transfers to larger NLP applications.
+amples make up a much larger portion of the test
+data. Conditional probability is thus a very strong
+starting point if selectional preferences are an in-         Acknowledgments
+ternal piece to a larger application, such as seman-
+tic role labeling or parsing.                                This work was supported by the National Science
+                                                             Foundation IIS-0811974, and the Air Force Re-
+  Perhaps most important, these results illustrate           search Laboratory (AFRL) under prime contract
+the disparity in performance that can come about             no. FA8750-09-C-0181. Any opinions, ndings,
+when designing a pseudo-word disambiguation                  and conclusion or recommendations expressed in
+evaluation. It is crucially important to be clear            this material are those of the authors and do not
+during evaluations about how the confounder was              necessarily reect the view of the AFRL. Thanks
+generated. We suggest the approach of sorting                to Sebastian Padó, the Stanford NLP Group, and
+nouns by frequency and using a neighbor as the               the anonymous reviewers for very helpful sugges-
+confounder. This will also help avoid evaluations            tions.
+that produce overly optimistic results.
+
+
+                                                       452
+
+
+References                                                      Mats Rooth, Stefan Riezler, Detlef Prescher, Glenn
+                                                                 Carroll, and Franz Beil. 1999. Inducing a semanti-
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.          cally annotated lexicon via em-based clustering. In
+  1998. The Berkeley FrameNet project. In Christian              37th Annual Meeting of the Association for Compu-
+  Boitet and Pete Whitelock, editors, ACL-98, pages              tational Linguistics, pages 104–111.
+  86–90, San Francisco, California. Morgan Kauf-
+  mann Publishers.                                              Hinrich Schutze. 1992. Context space. In AAAI Fall
+                                                                  Symposium on Probabilistic Approaches to Natural
+Shane Bergsma, Dekang Lin, and Randy Goebel.                      Language, pages 113–120.
+  2008. Discriminative learning of selectional prefer-
+  ence from unlabeled text. In Empirical Methods in             Alexander Yeh. 2000. More accurate tests for the sta-
+  Natural Language Processing, pages 59–68, Hon-                  tistical significance of result differences. In Inter-
+  olulu, Hawaii.                                                  national Conference on Computational Linguistics
+                                                                  (COLING).
+Lou Burnard. 1995. User Reference Guide for the
+                                                                Beat Zapirain, Eneko Agirre, and Llus Mrquez. 2009.
+  British National Corpus. Oxford University Press,
+                                                                  Generalizing over lexical features: Selectional pref-
+  Oxford.
+                                                                  erences for semantic role classification. In Joint
+                                                                  Conference of the 47th Annual Meeting of the As-
+Ido Dagan, Lillian Lee, and Fernando C. N. Pereira.               sociation for Computational Linguistics and the
+   1999. Similarity-based models of word cooccur-                 4th International Joint Conference on Natural Lan-
+   rence probabilities. Machine Learning, 34(1):43–               guage Processing, Singapore.
+   69.
+
+Katrin Erk. 2007. A simple, similarity-based model
+  for selectional preferences. In 45th Annual Meet-
+  ing of the Association for Computational Linguis-
+  tics, Prague, Czech Republic.
+
+William A. Gale, Kenneth W. Church, and David
+  Yarowsky. 1992. Work on statistical methods for
+  word sense disambiguation. In AAAI Fall Sympo-
+  sium on Probabilistic Approaches to Natural Lan-
+  guage, pages 54–60.
+
+Tanja Gaustad. 2001. Statistical corpus-based word
+  sense disambiguation: Pseudowords vs. real am-
+  biguous words. In 39th Annual Meeting of the Asso-
+  ciation for Computational Linguistics - Student Re-
+  search Workshop.
+
+David Graff. 2002. English Gigaword. Linguistic
+  Data Consortium.
+
+Frank Keller and Mirella Lapata. 2003. Using the web
+  to obtain frequencies for unseen bigrams. Computa-
+  tional Linguistics, 29(3):459–484.
+
+Maria Lapata, Scott McDonald, and Frank Keller.
+ 1999. Determinants of adjective-noun plausibility.
+ In European Chapter of the Association for Compu-
+ tational Linguistics (EACL).
+
+Preslav I. Nakov and Marti A. Hearst. 2003. Category-
+  based pseudowords. In Conference of the North
+  American Chapter of the Association for Computa-
+  tional Linguistics on Human Language Technology,
+  pages 67–69, Edmonton, Canada.
+
+Fernando Pereira, Naftali Tishby, and Lillian Lee.
+  1993. Distributional clustering of english words. In
+  31st Annual Meeting of the Association for Com-
+  putational Linguistics, pages 183–190, Columbus,
+  Ohio.
+
+
+                                                          453
+

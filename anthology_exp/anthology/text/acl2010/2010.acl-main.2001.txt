@@ -1,0 +1,340 @@
+              Paraphrase Lattice for Statistical Machine Translation
+
+               Takashi Onishi and Masao Utiyama and Eiichiro Sumita
+                      Language Translation Group, MASTAR Project
+             National Institute of Information and Communications Technology
+              3-5 Hikaridai, Keihanna Science City, Kyoto, 619-0289, JAPAN
+         {takashi.onishi,mutiyama,eiichiro.sumita}@nict.go.jp
+
+
+                    Abstract                                we propose a novel method that can handle in-
+                                                            put variations using paraphrases and lattice decod-
+    Lattice decoding in statistical machine                 ing. In the proposed method, we regard a given
+    translation (SMT) is useful in speech                   source sentence as one of many variations (1-best).
+    translation and in the translation of Ger-              Given an input sentence, we build a paraphrase lat-
+    man because it can handle input ambigu-                 tice which represents paraphrases of the input sen-
+    ities such as speech recognition ambigui-               tence. Then, we give the paraphrase lattice as an
+    ties and German word segmentation ambi-                 input to the Moses decoder (Koehn et al., 2007).
+    guities. We show that lattice decoding is               Moses selects the best path for decoding. By using
+    also useful for handling input variations.              paraphrases of source sentences, we can translate
+    Given an input sentence, we build a lattice             expressions which are not found in a training cor-
+    which represents paraphrases of the input               pus on the condition that paraphrases of them are
+    sentence. We call this a paraphrase lattice.            found in the training corpus. Moreover, by using
+    Then, we give the paraphrase lattice as an              lattice decoding, we can employ the source-side
+    input to the lattice decoder. The decoder               language model as a decoding feature. Since this
+    selects the best path for decoding. Us-                 feature is affected by the source-side context, the
+    ing these paraphrase lattices as inputs, we             decoder can choose a proper paraphrase and trans-
+    obtained significant gains in BLEU scores               late correctly.
+    for IWSLT and Europarl datasets.                           This paper is organized as follows: Related
+                                                            works on lattice decoding and paraphrasing are
+1   Introduction                                            presented in Section 2. The proposed method is
+Lattice decoding in SMT is useful in speech trans-          described in Section 3. Experimental results for
+lation and in the translation of German (Bertoldi           IWSLT and Europarl dataset are presented in Sec-
+et al., 2007; Dyer, 2009). In speech translation,           tion 4. Finally, the paper is concluded with a sum-
+by using lattices that represent not only 1-best re-        mary and a few directions for future work in Sec-
+sult but also other possibilities of speech recogni-        tion 5.
+tion, we can take into account the ambiguities of
+                                                            2 Related Work
+speech recognition. Thus, the translation quality
+for lattice inputs is better than the quality for 1-        Lattice decoding has been used to handle ambigu-
+best inputs.                                                ities of preprocessing. Bertoldi et al. (2007) em-
+   In this paper, we show that lattice decoding is          ployed a confusion network, which is a kind of lat-
+also useful for handling input variations. “Input           tice and represents speech recognition hypotheses
+variations” refers to the differences of input texts        in speech translation. Dyer (2009) also employed
+with the same meaning. For example, “Is there               a segmentation lattice, which represents ambigui-
+a beauty salon?” and “Is there a beauty par-                ties of compound word segmentation in German,
+lor?” have the same meaning with variations in              Hungarian and Turkish translation. However, to
+“beauty salon” and “beauty parlor”. Since these             the best of our knowledge, there is no work which
+variations are frequently found in natural language         employed a lattice representing paraphrases of an
+texts, a mismatch of the expressions in source sen-         input sentence.
+tences and the expressions in training corpus leads            On the other hand, paraphrasing has been used
+to a decrease in translation quality. Therefore,            to enrich the SMT model. Callison-Burch et
+
+
+                                                        1
+                         Proceedings of the ACL 2010 Conference Short Papers, pages 1–5,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                 Input sentence
+                                                                   phrase table and keep only appropriate phrase
+ Parallel Corpus   Paraphrase
+                                                                   pairs using the sigtest-filter (Johnson et al.,
+(for paraphrase)                       Paraphrasing
+                      List                                         2007).
+                                 Paraphrase Lattice             3. Calculate the paraphrase probability.
+                                                                   Calculate the paraphrase probability p(e2 |e1 )
+                                                                   if e2 is hypothesized to be a paraphrase of e1 .
+Parallel Corpus
+ (for training)    SMT model           Lattice Decoding                                  ∑
+                                                                          p(e2 |e1 ) =       P (c|e1 )P (e2 |c)
+                                 Output sentence                                         c
+
+
+    Figure 1: Overview of the proposed method.                     where P (·|·) is phrase translation probability.
+                                                                4. Acquire a paraphrase pair.
+                                                                   Acquire (e1 , e2 ) as a paraphrase pair if
+al. (2006) and Marton et al. (2009) augmented                      p(e2 |e1 ) > p(e1 |e1 ). The purpose of this
+the translation phrase table with paraphrases to                   threshold is to keep highly-accurate para-
+translate unknown phrases. Bond et al. (2008)                      phrase pairs. In experiments, more than 80%
+and Nakov (2008) augmented the training data by                    of paraphrase pairs were eliminated by this
+paraphrasing. However, there is no work which                      threshold.
+augments input sentences by paraphrasing and
+represents them in lattices.                                  3.2 Building paraphrase lattice
+
+3     Paraphrase Lattice for SMT                              An input sentence is paraphrased using the para-
+                                                              phrase list and transformed into a paraphrase lat-
+Overview of the proposed method is shown in Fig-              tice. The paraphrase lattice is a lattice which rep-
+ure 1. In advance, we automatically acquire a                 resents paraphrases of the input sentence. An ex-
+paraphrase list from a parallel corpus. In order to           ample of a paraphrase lattice is shown in Figure 2.
+acquire paraphrases of unknown phrases, this par-             In this example, an input sentence is “is there a
+allel corpus is different from the parallel corpus            beauty salon ?”. This paraphrase lattice contains
+for training.                                                 two paraphrase pairs “beauty salon” = “beauty
+   Given an input sentence, we build a lattice                parlor” and “beauty salon” = “salon”, and rep-
+which represents paraphrases of the input sentence            resents following three sentences.
+using the paraphrase list. We call this lattice a
+paraphrase lattice. Then, we give the paraphrase                • is there a beauty salon ?
+lattice to the lattice decoder.                                 • is there a beauty parlor ?
+3.1 Acquiring the paraphrase list                               • is there a salon ?
+
+We acquire a paraphrase list using Bannard and                   In the paraphrase lattice, each node consists of
+Callison-Burch (2005)’s method. Their idea is, if             a token, the distance to the next node and features
+two different phrases e1 , e2 in one language are             for lattice decoding. We use following four fea-
+aligned to the same phrase c in another language,             tures for lattice decoding.
+they are hypothesized to be paraphrases of each
+other. Our paraphrase list is acquired in the same              • Paraphrase probability (p)
+way.
+                                                                   A paraphrase probability p(e2 |e1 ) calculated
+   The procedure is as follows:
+                                                                   when acquiring the paraphrase.
+    1. Build a phrase table.                                          hp = p(e2 |e1 )
+       Build a phrase table from parallel corpus us-            • Language model score (l)
+       ing standard SMT techniques.                                A ratio between the language model proba-
+    2. Filter the phrase table by the sigtest-filter.              bility of the paraphrased sentence (para) and
+       The phrase table built in 1 has many inappro-               that of the original sentence (orig).
+                                                                             lm(para)
+       priate phrase pairs. Therefore, we filter the                  hl =   lm(orig)
+
+
+                                                          2
+
+
+        0 -- ("is"     , 1, 1, 1, 1)
+
+        1 -- ("there" , 1, 1, 1, 1)
+
+        2 -- ("a"      , 1, 1, 1, 1)   Token        Distance to the next node    Features for lattice decoding
+
+        3 -- ("beauty" , 1, 1, 1, 2) ("beauty" , 0.250, 1.172, 1, 1) ("salon" , 0.133, 0.537, 0.367, 3)
+
+        4 -- ("parlor" , 1, 1, 1, 2)
+                                                              Paraphrase probability (p)
+        5 -- ("salon" , 1, 1, 1, 1)
+                                                                         Language model score (l)
+        6 -- ("?"      , 1, 1, 1, 1)                                                   Paraphrase length (d)
+
+
+         Figure 2: An example of a paraphrase lattice, which contains three features of (p, l, d).
+
+
+  • Normalized language model score (L)                       SMT system which allows lattice decoding. In
+      A language model score where the language               lattice decoding, Moses selects the best path and
+      model probability is normalized by the sen-             the best translation according to features added in
+      tence length. The sentence length is calcu-             each node and other SMT features. These weights
+      lated as the number of tokens.                          are optimized using Minimum Error Rate Training
+                LM (para)                                     (MERT) (Och, 2003).
+         hL =   LM (orig) ,
+                                                1
+         where LM (sent) = lm(sent) length(sent)              4 Experiments
+  • Paraphrase length (d)                                     In order to evaluate the proposed method, we
+      The difference between the original sentence            conducted English-to-Japanese and English-to-
+      length and the paraphrased sentence length.             Chinese translation experiments using IWSLT
+                                                              2007 (Fordyce, 2007) dataset. This dataset con-
+         hd = exp(length(para) − length(orig))
+                                                              tains EJ and EC parallel corpus for the travel
+   The values of these features are calculated only           domain and consists of 40k sentences for train-
+if the node is the first node of the paraphrase, for          ing and about 500 sentences sets (dev1, dev2
+example the second “beauty” and “salon” in line               and dev3) for development and testing. We used
+3 of Figure 2. In other nodes, for example “par-              the dev1 set for parameter tuning, the dev2 set
+lor” in line 4 and original nodes, we use 1 as the            for choosing the setting of the proposed method,
+values of features.                                           which is described below, and the dev3 set for test-
+   The features related to the language model, such           ing.
+as (l) and (L), are affected by the context of source            The English-English paraphrase list was ac-
+sentences even if the same paraphrase pair is ap-             quired from the EC corpus for EJ translation and
+plied. As these features can penalize paraphrases             53K pairs were acquired. Similarly, 47K pairs
+which are not appropriate to the context, appropri-           were acquired from the EJ corpus for EC trans-
+ate paraphrases are chosen and appropriate trans-             lation.
+lations are output in lattice decoding. The features
+related to the sentence length, such as (L) and (d),          4.1 Baseline
+are added to penalize the language model score                As baselines, we used Moses and Callison-Burch
+in case the paraphrased sentence length is shorter            et al. (2006)’s method (hereafter CCB). In Moses,
+than the original sentence length and the language            we used default settings without paraphrases. In
+model score is unreasonably low.                              CCB, we paraphrased the phrase table using the
+   In experiments, we use four combinations of                automatically acquired paraphrase list. Then,
+these features, (p), (p, l), (p, L) and (p, l, d).            we augmented the phrase table with paraphrased
+                                                              phrases which were not found in the original
+3.3   Lattice decoding                                        phrase table. Moreover, we used an additional fea-
+We use Moses (Koehn et al., 2007) as a decoder                ture whose value was the paraphrase probability
+for lattice decoding. Moses is an open source                 (p) if the entry was generated by paraphrasing and
+
+
+                                                          3
+
+
+                          Moses (w/o Paraphrases)     CCB                   Proposed Method
+                   EJ     38.98                       39.24 (+0.26)         40.34 (+1.36)
+                   EC     25.11                       26.14 (+1.03)         27.06 (+1.95)
+
+                          Table 1: Experimental results for IWSLT (%BLEU).
+
+
+1 if otherwise. Weights of the feature and other           an absolute improvement of 1.95 BLEU points
+features in SMT were optimized using MERT.                 over Moses and 0.92 BLEU points over CCB. As
+                                                           the relation of three systems is Moses < CCB <
+4.2 Proposed method                                        Proposed Method, paraphrasing is useful for SMT
+In the proposed method, we conducted experi-               and using paraphrase lattices and lattice decod-
+ments with various settings for paraphrasing and           ing is especially more useful than augmenting the
+lattice decoding. Then, we chose the best setting          phrase table. In Proposed Method, the criterion for
+according to the result of the dev2 set.                   building paraphrase lattices and the combination
+                                                           of features for lattice decoding were (p) and (p, L)
+4.2.1 Limitation of paraphrasing
+                                                           in EJ translation and (L) and (p, l) in EC transla-
+As the paraphrase list was automatically ac-               tion. Since features related to the source-side lan-
+quired, there were many erroneous paraphrase               guage model were chosen in each direction, using
+pairs. Building paraphrase lattices with all erro-         the source-side language model is useful for de-
+neous paraphrase pairs and decoding these para-            coding paraphrase lattices.
+phrase lattices caused high computational com-
+                                                              We also tried a combination of Proposed
+plexity. Therefore, we limited the number of para-
+                                                           Method and CCB, which is a method of decoding
+phrasing per phrase and per sentence. The number
+                                                           paraphrase lattices with an augmented phrase ta-
+of paraphrasing per phrase was limited to three and
+                                                           ble. However, the result showed no significant im-
+the number of paraphrasing per sentence was lim-
+                                                           provements. This is because the proposed method
+ited to twice the size of the sentence length.
+                                                           includes the effect of augmenting the phrase table.
+   As a criterion for limiting the number of para-
+                                                              Moreover, we conducted German-English
+phrasing, we use three features (p), (l) and (L),
+                                                           translation using the Europarl corpus (Koehn,
+which are same as the features described in Sub-
+                                                           2005). We used the WMT08 dataset1 , which
+section 3.2. When building paraphrase lattices, we
+                                                           consists of 1M sentences for training and 2K sen-
+apply paraphrases in descending order of the value
+                                                           tences for development and testing. We acquired
+of the criterion.
+                                                           5.3M pairs of German-German paraphrases from
+4.2.2 Finding optimal settings                             a 1M German-Spanish parallel corpus. We con-
+As previously mentioned, we have three choices             ducted experiments with various sizes of training
+for the criterion for building paraphrase lattices         corpus, using 10K, 20K, 40K, 80K, 160K and 1M.
+and four combinations of features for lattice de-          Figure 3 shows the proposed method consistently
+coding. Thus, there are 3 × 4 = 12 combinations            get higher score than Moses and CCB.
+of these settings. We conducted parameter tuning
+with the dev1 set for each setting and used as best        5 Conclusion
+the setting which got the highest BLEU score for
+                                                           This paper has proposed a novel method for trans-
+the dev2 set.
+                                                           forming a source sentence into a paraphrase lattice
+4.3 Results                                                and applying lattice decoding. Since our method
+                                                           can employ source-side language models as a de-
+The experimental results are shown in Table 1. We
+                                                           coding feature, the decoder can choose proper
+used the case-insensitive BLEU metric for eval-
+                                                           paraphrases and translate properly. The exper-
+uation. In EJ translation, the proposed method
+                                                           imental results showed significant gains for the
+obtained the highest score of 40.34%, which
+                                                           IWSLT and Europarl dataset. In IWSLT dataset,
+achieved an absolute improvement of 1.36 BLEU
+                                                           we obtained 1.36 BLEU points over Moses in EJ
+points over Moses and 1.10 BLEU points over
+                                                           translation and 1.95 BLEU points over Moses in
+CCB. In EC translation, the proposed method also
+                                                              1
+obtained the highest score of 27.06% and achieved                 http://www.statmt.org/wmt08/
+
+
+                                                       4
+
+
+                                            29
+
+                                            28
+
+                                            27
+
+                                            26
+
+
+
+
+                           BLEU score (%)
+                                            25
+
+                                            24
+
+                                            23
+
+                                            22                                       Moses
+                                                                                     CCB
+                                            21                                       Proposed
+
+                                            20
+                                                 10                    100                      1000
+                                                                  Corpus size (K)
+
+
+                                                  Figure 3: Effect of training corpus size.
+
+
+EC translation. In Europarl dataset, the proposed                         Cameron S. Fordyce. 2007. Overview of the IWSLT
+method consistently get higher score than base-                             2007 Evaluation Campaign. In Proceedings of the
+                                                                            International Workshop on Spoken Language Trans-
+lines.
+                                                                            lation (IWSLT), pages 1–12.
+   In future work, we plan to apply this method
+with paraphrases derived from a massive corpus                            J Howard Johnson, Joel Martin, George Foster, and
+                                                                            Roland Kuhn. 2007. Improving Translation Qual-
+such as the Web corpus and apply this method to a                           ity by Discarding Most of the Phrasetable. In Pro-
+hierarchical phrase based SMT.                                              ceedings of the 2007 Joint Conference on Empirical
+                                                                            Methods in Natural Language Processing and Com-
+                                                                            putational Natural Language Learning (EMNLP-
+References                                                                  CoNLL), pages 967–975.
+Colin Bannard and Chris Callison-Burch. 2005. Para-                       Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris
+  phrasing with Bilingual Parallel Corpora. In Pro-                         Callison-Burch, Marcello Federico, Nicola Bertoldi,
+  ceedings of the 43rd Annual Meeting of the Asso-                          Brooke Cowan, Wade Shen, Christine Moran,
+  ciation for Computational Linguistics (ACL), pages                        Richard Zens, Chris Dyer, Ondrej Bojar, Alexan-
+  597–604.                                                                  dra Constantin, and Evan Herbst. 2007. Moses:
+                                                                            Open Source Toolkit for Statistical Machine Trans-
+Nicola Bertoldi, Richard Zens, and Marcello Federico.                       lation. In Proceedings of the 45th Annual Meet-
+  2007. Speech translation by confusion network de-                         ing of the Association for Computational Linguistics
+  coding. In Proceedings of the International Confer-                       (ACL), pages 177–180.
+  ence on Acoustics, Speech, and Signal Processing
+  (ICASSP), pages 1297–1300.                                              Philipp Koehn. 2005. Europarl: A Parallel Corpus for
+                                                                            Statistical Machine Translation. In Proceedings of
+Francis Bond, Eric Nichols, Darren Scott Appling, and                       the 10th Machine Translation Summit (MT Summit),
+  Michael Paul. 2008. Improving Statistical Machine                         pages 79–86.
+  Translation by Paraphrasing the Training Data. In
+  Proceedings of the International Workshop on Spo-                       Yuval Marton, Chris Callison-Burch, and Philip
+  ken Language Translation (IWSLT), pages 150–157.                          Resnik.    2009.   Improved Statistical Machine
+                                                                            Translation Using Monolingually-Derived Para-
+Chris Callison-Burch, Philipp Koehn, and Miles Os-                          phrases. In Proceedings of the Conference on Em-
+  borne. 2006. Improved Statistical Machine Trans-                          pirical Methods in Natural Language Processing
+  lation Using Paraphrases. In Proceedings of the                           (EMNLP), pages 381–390.
+  Human Language Technology conference - North
+  American chapter of the Association for Computa-                        Preslav Nakov. 2008. Improved Statistical Machine
+  tional Linguistics (HLT-NAACL), pages 17–24.                              Translation Using Monolingual Paraphrases. In
+                                                                            Proceedings of the European Conference on Artifi-
+Chris Dyer. 2009. Using a maximum entropy model                             cial Intelligence (ECAI), pages 338–342.
+  to build segmentation lattices for MT. In Proceed-
+  ings of the Human Language Technology confer-                           Franz Josef Och. 2003. Minimum Error Rate Training
+  ence - North American chapter of the Association                          in Statistical Machine Translation. In Proceedings
+  for Computational Linguistics (HLT-NAACL), pages                          of the 41st Annual Meeting of the Association for
+  406–414.                                                                  Computational Linguistics (ACL), pages 160–167.
+
+
+                                                                      5
+

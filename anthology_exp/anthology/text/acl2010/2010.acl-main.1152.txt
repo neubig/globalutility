@@ -1,0 +1,740 @@
+                       Viterbi Training for PCFGs:
+       Hardness Results and Competitiveness of Uniform Initialization
+                                   Shay B. Cohen and Noah A. Smith
+                                      School of Computer Science
+                                      Carnegie Mellon University
+                                       Pittsburgh, PA 15213, USA
+                                  {scohen,nasmith}@cs.cmu.edu
+
+                      Abstract                                show that under the assumption that P 6= NP, solv-
+                                                              ing and even approximating the Viterbi training
+    We consider the search for a maximum                      problem is hard. This result holds even for hid-
+    likelihood assignment of hidden deriva-                   den Markov models. We extend the main hardness
+    tions and grammar weights for a proba-                    result to the EM algorithm (giving an alternative
+    bilistic context-free grammar, the problem                proof to this known result), as well as the problem
+    approximately solved by “Viterbi train-                   of conditional Viterbi training. We then describe
+    ing.” We show that solving and even ap-                   a “competitiveness” result for uniform initializa-
+    proximating Viterbi training for PCFGs is                 tion of Viterbi EM: we show that initialization of
+    NP-hard. We motivate the use of uniform-                  the trees in an E-step which uses uniform distri-
+    at-random initialization for Viterbi EM as                butions over the trees is optimal with respect to a
+    an optimal initializer in absence of further              certain approximate bound.
+    information about the correct model pa-                      The rest of this paper is organized as follows. §2
+    rameters, providing an approximate bound                  gives background on PCFGs and introduces some
+    on the log-likelihood.                                    notation. §3 explains Viterbi training, the declar-
+                                                              ative form of Viterbi EM. §4 describes a hardness
+1   Introduction                                              result for Viterbi training. §5 extends this result to
+Probabilistic context-free grammars are an essen-             a hardness result of approximation and §6 further
+tial ingredient in many natural language process-             extends these results for other cases. §7 describes
+ing models (Charniak, 1997; Collins, 2003; John-              the advantages in using uniform-at-random initial-
+son et al., 2006; Cohen and Smith, 2009, inter                ization for Viterbi training. We relate these results
+alia). Various algorithms for training such models            to work on the k-means problem in §8.
+have been proposed, including unsupervised meth-              2    Background and Notation
+ods. Many of these are based on the expectation-
+maximization (EM) algorithm.                                  We assume familiarity with probabilistic context-
+   There are alternatives to EM, and one such al-             free grammars (PCFGs). A PCFG G consists of:
+ternative is Viterbi EM, also called “hard” EM or
+                                                              • A finite set of nonterminal symbols N;
+“sparse” EM (Neal and Hinton, 1998). Instead
+of using the parameters (which are maintained in              • A finite set of terminal symbols Σ;
+the algorithm’s current state) to find the true pos-          • For each A ∈ N, a set of rewrite rules R(A) of
+terior over the derivations, Viterbi EM algorithm               the form A → α, where α ∈ (N ∪ Σ)∗ , and
+uses a posterior focused on the Viterbi parse of                R = ∪A∈N R(A);
+those parameters. Viterbi EM and variants have                • For each rule A → α, a probability θA→α . The
+been used in various settings in natural language               collection of probabilities is denoted θ, and they
+processing (Yejin and Cardie, 2007; Wang et al.,                are constrained such that:
+2007; Goldwater and Johnson, 2005; DeNero and
+Klein, 2008; Spitkovsky et al., 2010).                                  ∀(A → α) ∈ R(A), θA→α ≥ 0
+   Viterbi EM can be understood as a coordinate                       ∀A ∈ N,
+                                                                                  X
+                                                                                         θA→α = 1
+ascent procedure that locally optimizes a function;
+                                                                                  α:(A→α)∈R(A)
+we call this optimization goal “Viterbi training.”
+   In this paper, we explore Viterbi training for                 That is, θ is grouped into |N| multinomial dis-
+probabilistic context-free grammars. We first                     tributions.
+
+
+                                                        1502
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1502–1511,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+Under the PCFG, the joint probability of a string                algorithm, while the M-step normalizes frequency
+x ∈ Σ∗ and a grammatical derivation z is1                        counts FA→α (z) to obtain the maximum likeli-
+                  Y                                              hood estimate’s closed-form solution.
+p(x, z | θ) =           (θA→α )fA→α (z)       (1)                   We can understand Viterbi EM as a coordinate
+                     (A→α)∈R                                     ascent procedure that approximates the solution to
+                                                                 the following declarative problem:
+                             X
+                = exp                 fA→α (z) log θA→α
+                          (A→α)∈R                                Problem 1. ViterbiTrain
+                                                                 Input: G context-free grammar, x1 , . . . , xn train-
+where fA→α (z) is a function that “counts” the                   ing instances from L(G)
+number of times the rule A → α appears in                        Output: θ and z1 , . . . , zn such that
+the derivation z. fA (z) will similarly denote the
+                                                                                                      n
+number of times that nonterminal A appears in z.                                                      Y
+                                                                     (θ, z1 , . . . , zn ) = argmax         p(xi , zi | θ) (4)
+Given a sample of derivations z = hz1 , . . . , zn i,                                       θ,z       i=1
+let:
+                                n
+                                X                                   The optimization problem in Eq. 4 is non-
+            FA→α (z) =                fA→α (zi )          (2)
+                                                                 convex and, as we will show in §4, hard to op-
+                                i=1
+                                n                                timize. Therefore it is necessary to resort to ap-
+                                X
+                FA (z) =              fA (zi )            (3)    proximate algorithms like Viterbi EM.
+                                i=1                                 Neal and Hinton (1998) use the term “sparse
+                                                                 EM” to refer to a version of the EM algorithm
+We use the following notation for G:                             where the E-step finds the modes of hidden vari-
+• L(G) is the set of all strings (sentences) x that              ables (rather than marginals as in standard EM).
+  can be generated using the grammar G (the                      Viterbi EM is a variant of this, where the E-
+  “language of G”).                                              step finds the mode for each xi ’s derivation,
+                                                                 argmaxz∈D(G,xi ) p(xi , z | θ).
+• D(G) is the set of all possible derivations z that                We will refer to
+  can be generated using the grammar G.
+                                                                                              n
+• D(G, x) is the set of all possible derivations z
+                                                                                              Y
+                                                                             L(θ, z) =              p(xi , zi | θ)        (5)
+  that can be generated using the grammar G and                                               i=1
+  have the yield x.
+                                                                 as “the objective function of ViterbiTrain.”
+3       Viterbi Training                                            Viterbi training and Viterbi EM are closely re-
+                                                                 lated to self-training, an important concept in
+Viterbi EM, or “hard” EM, is an unsupervised                     semi-supervised NLP (Charniak, 1997; McClosky
+learning algorithm, used in NLP in various set-                  et al., 2006a; McClosky et al., 2006b). With self-
+tings (Yejin and Cardie, 2007; Wang et al., 2007;                training, the model is learned with some seed an-
+Goldwater and Johnson, 2005; DeNero and Klein,                   notated data, and then iterates by labeling new,
+2008; Spitkovsky et al., 2010). In the context of                unannotated data and adding it to the original an-
+PCFGs, it aims to select parameters θ and phrase-                notated training set. McClosky et al. consider self-
+structure trees z jointly. It does so by iteratively             training to be “one round of Viterbi EM” with su-
+updating a state consisting of (θ, z). The state                 pervised initialization using labeled seed data. We
+is initialized with some value, then the algorithm               refer the reader to Abney (2007) for more details.
+alternates between (i) a “hard” E-step, where the
+strings x1 , . . . , xn are parsed according to a cur-           4    Hardness of Viterbi Training
+rent, fixed θ, giving new values for z, and (ii) an
+M-step, where the θ are selected to maximize like-               We now describe hardness results for Problem 1.
+lihood, with z fixed.                                            We first note that the following problem is known
+   With PCFGs, the E-step requires running an al-                to be NP-hard, and in fact, NP-complete (Sipser,
+gorithm such as (probabilistic) CKY or Earley’s                  2006):
+    1
+                                                                 Problem 2. 3-SAT V
+     Note that x = yield(z); if the derivation is known, the
+string is also known. On the other hand, there may be many       Input: A formula φ = m   i=1 (ai ∨ bi ∨ ci ) in con-
+derivations with the same yield, perhaps even infinitely many.   junctive normal form, such that each clause has 3
+
+
+                                                             1503
+
+
+                                                            cT2  Sφ
+                                                  cccccccccc TTTTTT
+                                        cccccccccc                 TTTT
+                              cccccccccc                               TTTT
+                                                                           TTTT
+                             Sφ1                                               TTTT
+                                                                                   TTTT
+                                                                                       TTTT
+                                                                                           T
+                               A
+                               eY1Y
+                                                                                                     A
+                                                                                                     eY2Y
+                    eeeeeeeeeee YYYYYYYYYYY                                               eeeeeeeeeee YYYYYYYYYYY
+              eeeeee                       YYYYYY                                   eeeeee                       YYYYYY
+             e                                                                     e
+         UYM
+           1 ,0              UYM
+                               2 ,1               UYM
+                                                    4 ,0                       UYM
+                                                                                 1 ,0               U YM
+                                                                                                       2 ,1              UYM
+                                                                                                                           3 ,1
+
+      qqqqq MMMMM         qqqqq MMMMM          qqqqq MMMMM                  qqqqq MMMMM           qqqqq MMMMM         qqqqq MMMMM
+    qq           M      qq           M       qq           M               qq           M        qq           M      qq           M
+  VY¯1           VY1   VY2          VY¯2   VY¯4          V Y4           VY¯1            VY1   VY2           VY¯2   VY3          VY¯3
+
+   1              0     1            0      1             0              1               0     1             0      1            0
+
+Figure 1: An example of a Viterbi parse tree which represents a satisfying assignment for φ = (Y1 ∨ Y2 ∨ Y¯4 ) ∧ (Y¯1 ∨ Y¯2 ∨ Y3 ).
+In θ φ , all rules appearing in the parse tree have probability 1. The extracted assignment would be Y1 = 0, Y2 = 1, Y3 =
+1, Y4 = 0. Note that there is no usage of two different rules for a single nonterminal.
+
+
+literals.                                                               where yk ∈ {0, 1} and is the value of Y (aj ),
+Output: 1 if there is a satisfying assignment for φ                     Y (bj ) and Y (cj ) respectively for k ∈ {1, 2, 3}.
+and 0 otherwise.                                                        For each such clause-satisfying assignment, we
+   We now describe a reduction of 3-SAT to Prob-                        add the rule:
+lem 1. Given an instance of the 3-SAT problem,                                     Aj → UY (aj ),y1 UY (bj ),y2 UY (cj ),y3     (6)
+the reduction will, in polynomial time, create a
+grammar and a single string such that solving the                       For each Aj , we would have at most 7 rules of
+ViterbiTrain problem for this grammar and string                        that form, since one rule will be logically incon-
+will yield a solution for the instance of the 3-SAT                     sistent with aj ∨ bj ∨ cj .
+problem.                                                              7. The grammar’s start symbol is Sφn .
+   Let φ = m
+              V
+                i=1 (ai ∨ bi ∨ ci ) be an instance of                 8. The string to parse is sφ = (10)3m , i.e. 3m
+the 3-SAT problem, where ai , bi and ci are liter-
+                                                                        consecutive occurrences of the string 10.
+als over the set of variables {Y1 , . . . , YN } (a literal
+refers to a variable Yj or its negation, Y¯j ). Let Cj                   A parse of the string sφ using Gφ will be used
+be the jth clause in φ, such that Cj = aj ∨ bj ∨ cj .                 to get an assignment by setting Yr = 0 if the rule
+We define the following context-free grammar Gφ                       VYr → 0 or VY¯r → 1 are used in the derivation of
+and string to parse sφ :                                              the parse tree, and 1 otherwise. Notice that at this
+                                                                      point we do not exclude “contradictions” coming
+1. The terminals of Gφ are the binary digits Σ =                      from the parse tree, such as VY3 → 0 used in the
+  {0, 1}.                                                             tree together with VY3 → 1 or VY¯3 → 0. The fol-
+2. We create N nonterminals VYr , r              ∈                    lowing lemma gives a condition under which the
+  {1, . . . , N } and rules VYr → 0 and VYr → 1.                      assignment is consistent (so contradictions do not
+                                                                      occur in the parse tree):
+3. We create N nonterminals VY¯r , r               ∈
+  {1, . . . , N } and rules VY¯r → 0 and VY¯r → 1.                    Lemma 1. Let φ be an instance of the 3-SAT
+                                                                      problem, and let Gφ be a probabilistic CFG based
+4. We create UYr ,1 → VYr VY¯r and UYr ,0 →                           on the above grammar with weights θ φ . If the
+  VY¯r VYr .                                                          (multiplicative) weight of the Viterbi parse of sφ
+5. We create the rule Sφ1 → A1 . For each j ∈                         is 1, then the assignment extracted from the parse
+  {2, . . . , m}, we create a rule Sφj → Sφj−1 Aj                     tree is consistent.
+  where Sφj is a new nonterminal indexed by
+                                                                      Proof. Since the probability of the Viterbi parse
+  φj , ji=1 Ci and Aj is also a new nonterminal
+          V
+                                                                      is 1, all rules of the form {VYr , VY¯r } → {0, 1}
+  indexed by j ∈ {1, . . . , m}.                                      which appear in the parse tree have probability 1
+6. Let Cj = aj ∨ bj ∨ cj be clause j in φ. Let                        as well. There are two possible types of inconsis-
+  Y (aj ) be the variable that aj mentions. Let                       tencies. We show that neither exists in the Viterbi
+  (y1 , y2 , y3 ) be a satisfying assignment for Cj                   parse:
+
+
+                                                                1504
+
+
+1. For any r, an appearance of both rules of the            In order to show an NP-hardness result, we need
+  form VYr → 0 and VYr → 1 cannot occur be-              to “convert” ViterbiTrain to a decision problem.
+  cause all rules that appear in the Viterbi parse       The natural way to do it, following Lemmas 1
+  tree have probability 1.                               and 2, is to state the decision problem for Viter-
+2. For any r, an appearance of rules of the form         biTrain as “given G and x1 , . . . , xn and α ≥ 0,
+  VYr → 1 and VY¯r → 1 cannot occur, because             is the optimized value of the objective function
+  whenever we have an appearance of the rule             L(θ, z) ≥ α?” and use α = 1 together with Lem-
+  VYr → 0, we have an adjacent appearance of             mas 1 and 2. (Naturally, an algorithm for solving
+  the rule VY¯r → 1 (because we parse substrings         ViterbiTrain can easily be used to solve its deci-
+  of the form 10), and then again we use the fact        sion problem.)
+  that all rules in the parse tree have probability 1.   Theorem 3. The decision version of the Viterbi-
+  The case of VYr → 0 and VY¯r → 0 is handled            Train problem is NP-hard.
+  analogously.
+                                                         5    Hardness of Approximation
+Thus, both possible inconsistencies are ruled out,
+resulting in a consistent assignment.                    A natural path of exploration following the hard-
+                                                         ness result we showed is determining whether an
+  Figure 1 gives an example of an application of         approximation of ViterbiTrain is also hard. Per-
+the reduction.                                           haps there is an efficient approximation algorithm
+Lemma 2. Define φ, Gφ as before. There exists            for ViterbiTrain we could use instead of coordi-
+θ φ such that the Viterbi parse of sφ is 1 if and only   nate ascent algorithms such as Viterbi EM. Recall
+if φ is satisfiable. Moreover, the satisfying assign-    that such algorithms’ main guarantee is identify-
+ment is the one extracted from the parse tree with       ing a local maximum; we know nothing about how
+weight 1 of sφ under θ φ .                               far it will be from the global maximum.
+                                                            We next show that approximating the objective
+Proof. (=⇒) Assume that there is a satisfying as-
+                                                         function of ViterbiTrain with a constant factor of ρ
+signment. Each clause Cj = aj ∨ bj ∨ cj is satis-
+                                                         is hard for any ρ ∈ ( 12 , 1] (i.e., 1/2 +  approxima-
+fied using a tuple (y1 , y2 , y3 ) which assigns value
+                                                         tion is hard for any  ≤ 1/2). This means that, un-
+for Y (aj ), Y (bj ) and Y (cj ). This assignment cor-
+                                                         der the P 6= NP assumption, there is no efficient al-
+responds the following rule
+                                                         gorithm that, given a grammar G and a sample of
+        Aj → UY (aj ),y1 UY (bj ),y2 UY (cj ),y3   (7)   sentences x1 , . . . , xn , returns θ 0 and z 0 such that:
+                                                                                             n
+Set its probability to 1, and set all other rules of                0   0
+                                                                                             Y
+Aj to 0. In addition, for each r, if Yr = y, set the           L(θ , z ) ≥ ρ · max                 p(xi , zi | θ) (9)
+                                                                                       θ,z
+                                                                                             i=1
+probabilities of the rules VYr → y and VY¯r → 1−y
+to 1 and VY¯r → y and VYr → 1 − y to 0. The rest         We will continue to use the same reduction from
+of the weights for Sφj → Sφj−1 Aj are set to 1.          §4. Let sφ be the string from that reduction, and
+This assignment of rule probabilities results in a       let (θ, z) be the optimal solution for ViterbiTrain
+Viterbi parse of weight 1.                               given Gφ and sφ . We first note that if p(sφ , z |
+   (⇐=) Assume that the Viterbi parse has prob-          θ) < 1 (implying that there is no satisfying as-
+ability 1. From Lemma 1, we know that we can             signment), then there must be a nonterminal which
+extract a consistent assignment from the Viterbi         appears along with two different rules in z.
+parse. In addition, for each clause Cj we have a            This means that we have a nonterminal B ∈ N
+rule                                                     with some rule B → α that appears k times,
+                                                         while the nonterminal appears in the parse r ≥
+        Aj → UY (aj ),y1 UY (bj ),y2 UY (cj ),y3   (8)
+                                                         k + 1 times. Given the tree z, the θ that maxi-
+that is assigned probability 1, for some                 mizes the objective function is the maximum like-
+(y1 , y2 , y3 ). One can verify that (y1 , y2 , y3 )     lihood estimate (MLE) for z (counting and nor-
+are the values of the assignment for the corre-          malizing the rules).2 We therefore know that
+sponding variables in clause Cj , and that they          the ViterbiTrain objective function, L(θ, z), is at
+satisfy this clause. This means that each clause is          2
+                                                               Note that we can only make p(z | θ, x) greater by using
+satisfied by the assignment we extracted.                θ to be the MLE for the derivation z.
+
+
+                                                     1505
+
+
+       k
+        k                                                           Here, instead of maximizing the likelihood, we
+most         , because it includes a factor equal
+        r                                                        maximize the conditional likelihood. Note that
+     fB→α (z) fB→α (z)                                           there is a hidden assumption in this problem def-
+              
+to                     , where fB (z) is the num-                inition, that xi can be parsed using the grammar
+      fB (z)
+ber of times nonterminal B appears in z (hence                   G. Otherwise, the quantity p(zi | θ, xi ) is not
+fB (z) = r) and fB→α (z) is the number of times                  well-defined. We can extend ConditionalViterbi-
+B → α appears in z (hence fB→α (z) = k). For                     Train to return ⊥ in the case of not having a parse
+any k ≥ 1, r ≥ k + 1:                                            for one of the xi —this can be efficiently checked
+                                                                 using a run of a cubic-time parser on each of the
+                k      k
+                k      k       1                                 strings xi with the grammar G.
+                   ≤         ≤                           (10)       An approximate technique for this problem is
+                r     k+1      2
+                                                                 similar to Viterbi EM, only modifying the M-
+This means that if the value of the objective func-              step to maximize the conditional, rather than joint,
+tion of ViterbiTrain is not 1 using the reduction                likelihood. This new M-step will not have a closed
+from §4, then it is at most 12 . If we had an efficient          form and may require auxiliary optimization tech-
+approximate algorithm with approximation coeffi-                 niques like gradient ascent.
+cient ρ > 12 (Eq. 9 holds), then in order to solve                  Our hardness result for ViterbiTrain applies to
+3-SAT for formula φ, we could run the algorithm                  ConditionalViterbiTrain as well. The reason is
+on Gφ and sφ and check whether the assignment                    that if p(z, sφ | θ φ ) = 1 for a φ with a satisfying
+to (θ, z) that the algorithm returns satisfies φ or              assignment, then L(G) = {sφ } and D(G) = {z}.
+not, and return our response accordingly.                        This implies that p(z | θ φ , sφ ) = 1. If φ is unsat-
+   If φ were satisfiable, then the true maximal                  isfiable, then for the optimal θ of ViterbiTrain we
+value of L would be 1, and the approximation al-                 have z and z 0 such that 0 < p(z, sφ | θ φ ) < 1
+gorithm would return (θ, z) such that L(θ, z) ≥                  and 0 < p(z 0 , sφ | θ φ ) < 1, and therefore p(z |
+ρ > 12 . z would have to correspond to a satisfy-                θ φ , sφ ) < 1, which means the conditional objec-
+ing assignment, and in fact p(z | θ) = 1, because                tive function will not obtain the value 1. (Note
+in any other case, the probability of a derivation               that there always exist some parameters θ φ that
+which does not represent a satisfying assignment                 generate sφ .) So, again, given an algorithm for
+is smaller than 12 . If φ were not satisfiable, then             ConditionalViterbiTrain, we can discern between
+the approximation algorithm would never return a                 a satisfiable formula and an unsatisfiable formula,
+(θ, z) that results in a satisfying assignment (be-              using the reduction from §4 with the given algo-
+cause such a (θ, z) does not exist).                             rithm, and identify whether the value of the objec-
+   The conclusion is that an efficient algorithm for             tive function is 1 or strictly less than 1. We get the
+approximating the objective function of Viterbi-                 result that:
+Train (Eq. 4) within a factor of 12 +  is unlikely              Theorem 4. The decision problem of Condition-
+to exist. If there were such an algorithm, we could              alViterbiTrain problem is NP-hard.
+use it to solve 3-SAT using the reduction from §4.
+                                                                 where the decision problem of ConditionalViter-
+6     Extensions of the Hardness Result                          biTrain is defined analogously to the decision
+                                                                 problem of ViterbiTrain.
+An alternative problem to Problem 1, a variant of                  We can similarly show that finding the global
+Viterbi-training, is the following (see, for exam-               maximum of the marginalized likelihood:
+ple, Klein and Manning, 2001):
+                                                                                    n
+                                                                               1X     X
+Problem 3. ConditionalViterbiTrain                                         max    log   p(xi , z | θ)             (12)
+                                                                            θ n
+Input: G context-free grammar, x1 , . . . , xn train-                              i=1z
+ing instances from L(G)
+Output: θ and z1 , . . . , zn such that                          is NP-hard. The reasoning follows. Using the
+                                                                 reduction from before, if φ is satisfiable, then
+                                     n
+                                     Y                           Eq. 12 gets value 0. If φ is unsatisfiable, then we
+    (θ, z1 , . . . , zn ) = argmax         p(zi | θ, xi ) (11)   would still get value 0 only if L(G) = {sφ }. If
+                           θ,z       i=1                         Gφ generates a single derivation for (10)3m , then
+                                                                 we actually do have a satisfying assignment from
+
+
+                                                             1506
+
+
+Lemma 1. Otherwise (more than a single deriva-                     which gives the expected value of the feature func-
+tion), the optimal θ would have to give fractional                 tion f (z) under the distribution q(x) × p(z | θ, x).
+probabilities to rules of the form VYr → {0, 1} (or                We will make the following assumption about G:
+VY¯r → {0, 1}). In that case, it is no longer true                 Condition 1. There exists some θ I such that
+that (10)3m is the only generated sentence, which                  ∀x ∈ L(G), ∀z ∈ D(G, x), p(z | θ I , x) =
+is a contradiction.                                                1/|D(G, x)|.
+   The quantity in Eq. 12 can be maximized ap-
+                                                                      This condition is satisfied, for example, when G
+proximately using algorithms like EM, so this
+                                                                   is in Chomsky normal form and for all A, A0 ∈ N,
+gives a hardness result for optimizing the objec-
+                                                                   |R(A)| = |R(A0 )|. Then, if we set θA→α =
+tive function of EM for PCFGs. Day (1983) pre-
+                                                                   1/|R(A)|, we get that all derivations of x will
+viously showed that maximizing the marginalized
+                                                                   have the same number of rules and hence the same
+likelihood for hidden Markov models is NP-hard.
+                                                                   probability. This condition does not hold for gram-
+   We note that the grammar we use for all of our
+                                                                   mars with unary cycles because |D(G, x)| may be
+results is not recursive. Therefore, we can encode
+                                                                   infinite for some derivations. Such grammars are
+this grammar as a hidden Markov model, strength-
+                                                                   not commonly used in NLP.
+ening our result from PCFGs to HMMs.3
+                                                                      Let us assume that some “correct” parameters
+7       Uniform-at-Random Initialization                           θ ∗ exist, and that our data were drawn from a dis-
+                                                                   tribution parametrized by θ ∗ . The goal of this sec-
+In the previous sections, we showed that solving                   tion is to motivate the following initialization for
+Viterbi training is hard, and therefore requires an                θ, which we call UniformInit:
+approximation algorithm. Viterbi EM, which is an
+example of such algorithm, is dependent on an ini-                 1. Initialize z by sampling from the uniform dis-
+tialization of either θ to start with an E-step or z                 tribution over D(G, xi ) for each xi .
+to start with an M-step. In the absence of a better-               2. Update the grammar parameters using maxi-
+informed initializer, it is reasonable to initialize                 mum likelihood estimation.
+z using a uniform distribution over D(G, xi ) for
+each i. If D(G, xi ) is finite, it can be done effi-               7.1   Bounding the Objective
+ciently by setting θ = 1 (ignoring the normaliza-                  To show our result, we require first the following
+tion constraint), running the inside algorithm, and                definition due to Freund et al. (1997):
+sampling from the (unnormalized) posterior given
+                                                                   Definition 5. A distribution p1 is within λ ≥ 1 of
+by the chart (Johnson et al., 2007). We turn next
+                                                                   a distribution p2 if for every event A, we have
+to an analysis of this initialization technique that
+suggests it is well-motivated.                                                      1   p1 (A)
+                                                                                      ≤        ≤λ                  (13)
+   The sketch of our result is as follows: we                                       λ   p2 (A)
+first give an asymptotic upper bound for the log-
+likelihood of derivations and sentences. This                         For any feature function f (z) and any two
+bound, which has an information-theoretic inter-                   sets of parameters θ 2 and θ 1 for G and for any
+pretation, depends on a parameter λ, which de-                     marginal q(x), if p(z | θ 1 , x) is within λ of
+pends on the distribution from which the deriva-                   p(z | θ 2 , x) for all x then:
+tions were chosen. We then show that this bound                          Eq,θ1 [f ]
+is minimized when we pick λ such that this distri-                                  ≤ Eq,θ2 [f ] ≤ λEq,θ1 [f ]     (14)
+                                                                            λ
+bution is (conditioned on the sentence) a uniform
+distribution over derivations.                                     Let θ 0 be a set of parameters such that we perform
+   Let q(x) be any distribution over L(G) and θ                    the following procedure in initializing Viterbi EM:
+some parameters for G. Let f (z) be some feature                   first, we sample from the posterior distribution
+function (such as the one that counts the number                   p(z | θ 0 , x), and then update the parameters with
+of appearances of a certain rule in a derivation),                 maximum likelihood estimate, in a regular M-step.
+and then:                                                          Let λ be such that p(z | θ 0 , x) is within λ of
+                 X             X                                   p(z | θ ∗ , x) (for all x ∈ L(G)). (Later we will
+Eq,θ [f ] ,            q(x)           p(z | θ, x)f (z)             show that UniformInit is a wise choice for making
+                   x∈L(G)         z∈D(G,x)
+                                                                   λ small. Note that UniformInit is equivalent to the
+    3
+        We thank an anonymous reviewer for pointing this out.      procedure mentioned above with θ 0 = θ I .)
+
+
+                                                                1507
+
+
+   Consider p̃n (x), the empirical distribution over                    If we continue to develop Eq. 22 and apply
+x1 , . . . , xn . As n → ∞, we have that p̃n (x) →                    Eq. 17 and Eq. 23 again, we get that:
+p∗ (x), almost surely, where p∗ is:
+                                                                         1          Y
+                          X                                                                      ∗
+                                                                                               (θA→α )FA→α (z0 )
+                 p∗ (x) =   p∗ (x, z | θ ∗ )    (15)                  λ2|R|B
+                                                                               (A→α)∈R
+                               z
+                                                                                                                                    F       (z )
+                                                                                   1           Y
+                                                                                                           ∗           FA→α (z 0 )· FA (z0 )
+This means that as n → ∞ we have Ep̃n ,θ [f ] →                          =                               (θA→α )                        A     0
+                                                                               λ2|R|B
+Ep∗ ,θ [f ]. Now, let z 0 = (z0,1 , . . . , z0,n ) be sam-                                 (A→α)∈R
+                                                                                                                       Ep∗ ,θ [fA→α ]
+ples from p(z | θ 0 , xi ) for i ∈ {1, . . . , n}. Then,                           1           Y                             0        ·FA (z 0 )
+                                                                                                           ∗             Ep∗ ,θ [fA ]
+from simple MLE computation, we know that the                            ≈                               (θA→α )               0
+                                                                               λ2|R|B
+value                                                                                      (A→α)∈R
+
+               n                                                                   1           Y                        2 θ∗
+               Y
+                                     0                                   ≥                                 ∗
+                                                                                                         (θA→α )λ          A→α FA (z 0 )
+       max           p(xi , z0,i | θ )                         (16)            λ2|R|B
+       θ0                                                                                  (A→α)∈R
+               i=1                                                                                                               Bλ2 /n
+                                                FA→α (z0 )
+                     Y           FA→α (z 0 )                                       1                Y
+                                                                                                             ∗              ∗
+                                                                                                                          nθA→α
+        =                                                                ≥                                (θA→α )                               (24)
+                                  FA (z 0 )                                    λ2|R|B
+                (A→α)∈R                                                                        (A→α)∈R
+                                                                                           |                 {z                    }
+We also know that for θ 0 , from the consistency of                                                       T (θ ∗ ,n)
+MLE, for large enough samples:
+                                                                                              
+                                                                                       1                           2 /n
+                                                                         =                         T (θ ∗ , n)Bλ                                  (25)
+            FA→α (z 0 )                  Ep̃n ,θ0 [fA→α ]                          λ2|R|B
+                               ≈                               (17)
+             FA (z 0 )                    Ep̃n ,θ0 [fA ]                 , d(λ; θ ∗ , |R|, B)                                                     (26)
+which means that we have the following as n                           where Eq. 24 is the result of FA (z 0 ) ≤ B.
+grows (starting from the ViterbiTrain objective                          For two series {an } and {bn }, let “an ' bn ”
+with initial state z = z 0 ):                                         denote that limn→∞ an ≥ limn→∞ bn . In other
+        n
+        Y                                                             words, an is asymptotically larger than bn . Then,
+  max
+   0
+               p(xi , z0,i | θ 0 )                             (18)   if we changed the representation of the objec-
+   θ
+        i=1                                                           tive function of the ViterbiTrain problem to log-
+                                                 FA→α (z0 )
+                                                                      likelihood, for θ 0 that maximizes Eq. 18 (with
+                             
+    (Eq. 16)
+                     Y           FA→α (z 0 )
+       =                                                       (19)
+                                  FA (z 0 )                           some simple algebra) we have:
+                (A→α)∈R
+                                                    FA→α (z0 )           n
+                                                                      1X
+                             
+    (Eq. 17)                     Ep̃n ,θ0 [fA→α ]
+                                                                         log2 p(xi , z0,i | θ 0 )
+                     Y
+       ≈                                                    (20)                                                                                  (27)
+                                  Ep̃n ,θ0 [fA ]                      n
+                (A→α)∈R                                                  i=1
+                                                                                            Bλ2 1
+                                                                                                                    
+                                                                             2|R|B                             ∗
+We next use the fact that p̃n (x) ≈               p∗ (x)
+                                               for large                 ' −       log2 λ +           log2 T (θ , n)
+                                                                               n              n     n
+n, and apply Eq. 14, noting again our assumption
+                x) is within λ of p(z | θ ∗ , x). We
+that p(z | θ 0 ,X                                                            2|R|B              Bλ2 X
+                                                                         = −       log2 λ − |N|           H(θ ∗ , A)
+also let B =       |zi |, where |zi | is the number of                         n                |N|n
+                                                                                                                           A∈N
+                      i                                                                                                                           (28)
+nodes in the derivation zi . Note that FA (zi ) ≤
+B. The above quantity (Eq. 20) is approximately                       where
+bounded above by                                                                                        X
+                                                                         H(θ ∗ , A) = −                              ∗
+                                                                                                                    θA→α       ∗
+                                                                                                                         log2 θA→α
+                Ep∗ ,θ∗ [fA→α ] FA→α (z0 )
+                               
+   Y       1                                                                                       (A→α)∈R(A)
+                                              (21)
+          λ2B     Ep∗ ,θ∗ [fA ]                                                                                     (29)
+(A→α)∈R
+                                                                      is the entropy of the multinomial for nonter-
+                     1
+                                                                      minal A. H(θ ∗ , A) can be thought of as the
+                              Y
+        =                                   ∗
+                                          (θA→α )FA→α (z0 ) (22)
+                λ2|R|B                                                minimal number of bits required to encode a
+                           (A→α)∈R
+                                                                      choice of a rule from A, if chosen independently
+Eq. 22 follows from:
+                                                                      from the
+                                                                             P other rules.  All together, the quantity
+                                                                        B                ∗
+                   ∗             Ep∗ ,θ∗ [fA→α ]                      |N|n     A∈N H(θ , A) is the average number of
+                  θA→α =                                       (23)
+                                  Ep∗ ,θ∗ [fA ]                       bits required to encode a tree in our sample using
+
+
+                                                                  1508
+
+
+θ ∗ , while removing dependence among all rules                  and hence λopt (x, θ ∗ ) ≤ µx /τ for any θ ∗ , hence
+and assuming that each node at the tree is chosen                Λ(x; θ I ) ≤ µx /τ . However, if we choose θ 0 6=
+uniformly.4 This means that the log-likelihood, for              θ I , we have that p(z 0 | θ 0 , x) > µx for some z 0 ,
+large n, is bounded from above by a linear func-                 hence, for θ ∗ such that it assigns probability τ on
+tion of the (average) number of bits required to                 z 0 , we have that
+optimally encode n trees of total size B, while as-
+                                                                                    p(z | θ 0 , x)         µx
+suming independence among the rules in a tree.                                sup           ∗         >             (33)
+We note that the quantity B/n will tend toward the                         z∈D(G,x) p(z | θ , x)           τ
+average size of a tree, which, under Condition 1,
+                                                                 and hence λopt (x, θ ∗ ; θ 0 ) > µx /τ , so Λ(x; θ 0 ) >
+must be finite.
+                                                                 µx /τ . So, to optimize for the worst-case scenario
+   Our final approximate bound from Eq. 28 re-
+                                                                 over true distributions with respect to λ, we are
+lates the choice of distribution, from which sample
+                                                                 motivated to choose θ 0 = θ I as defined in Con-
+z 0 , to λ. The lower bound in Eq. 28 is a monotone-
+                                                                 dition 1. Indeed, UniformInit uses θ I to initialize
+decreasing function of λ. We seek to make λ as
+                                                                 the state of Viterbi EM.
+small as possible to make the bound tight. We next
+                                                                    We note that if θ I was known for a specific
+show that the uniform distribution optimizes λ in
+                                                                 grammar, then we could have used it as a direct
+that sense.
+                                                                 initializer. However, Condition 1 only guarantees
+7.2     Optimizing λ                                             its existence, and does not give a practical way to
+Note that the optimal choice of λ, for a single x                identify it. In general, as mentioned above, θ = 1
+and for candidate initializer θ 0 , is                           can be used to obtain a weighted CFG that sat-
+                                                                 isfies p(z | θ, x) = 1/|D(G, x)|. Since we re-
+                                        p(z | θ 0 , x)           quire a uniform posterior distribution, the num-
+      λopt (x, θ ∗ ; θ 0 ) =       sup          ∗     (30)
+                               z∈D(G,x) p(z | θ , x)             ber of derivations of a fixed length is finite. This
+                                                                 means that we can converted the weighted CFG
+In order to avoid degenerate cases, we will add an-
+                                                                 with θ = 1 to a PCFG with the same posterior
+other condition on the true model, θ ∗ :
+                                                                 (Smith and Johnson, 2007), and identify the ap-
+Condition 2. There exists τ > 0 such that, for                   propriate θ I .
+any x ∈ L(G) and for any z ∈ D(G, x), p(z |
+θ ∗ , x) ≥ τ .                                                   8   Related Work
+This is a strong condition, forcing the cardinal-                Viterbi training is closely related to the k-means
+ity of D(G) to be finite, but it is not unreason-                clustering problem, where the objective is to find
+able if natural language sentences are effectively               k centroids for a given set of d-dimensional points
+bounded in length.                                               such that the sum of distances between the points
+   Without further information about θ ∗ (other                  and the closest centroid is minimized. The ana-
+than that it satisfies Condition 2), we may want                 log for Viterbi EM for the k-means problem is the
+to consider the worst-case scenario of possible λ,               k-means clustering algorithm (Lloyd, 1982), a co-
+hence we seek initializer θ 0 such that                          ordinate ascent algorithm for solving the k-means
+                                                                 problem. It works by iterating between an E-like-
+           Λ(x; θ 0 ) , sup λopt (x, θ; θ 0 )           (31)
+                               θ                                 step, in which each point is assigned the closest
+                                                                 centroid, and an M-like-step, in which the cen-
+is minimized. If θ 0 = θ I , then we have that
+                                                                 troids are set to be the center of each cluster.
+p(z | θ I , x) = |D(G, x)|−1 , µx . Together with
+                                                                    “k” in k-means corresponds, in a sense, to the
+Condition 2, this implies that
+                                                                 size of our grammar. k-means has been shown to
+                  p(z | θ I , x)         µx                      be NP-hard both when k varies and d is fixed and
+                                   ≤                    (32)
+                  p(z | θ ∗ , x)         τ                       when d varies and k is fixed (Aloise et al., 2009;
+   4
+                                                                 Mahajan et al., 2009). An open problem relating to
+     We note that Grenander (1967) describes a (lin-
+ear) relationship between the derivational entropy and           our hardness result would be whether ViterbiTrain
+     ∗
+H(θP , A). The derivational entropy is defined as h(θ ∗ , A) =   (or ConditionalViterbiTrain) is hard even if we do
+− x,z p(x, z | θ ) log p(x, z | θ ∗ ), where z ranges over
+                  ∗
+                                                                 not permit grammars of arbitrarily large size, or
+trees that have nonterminal A as the root. P It follows    im-
+mediately  from  Grenander’s  result that       H(θ ∗
+                                                      , A)   ≤   at least, constrain the number of rules that do not
+                                             A
+         ∗
+                                                                 rewrite to terminals (in our current reduction, the
+P
+   A h(θ , A).
+
+
+
+
+                                                             1509
+
+
+size of the grammar grows as the size of the 3-SAT                    abilistic automata. Machine Learning, 9(2–3):205–
+formula grows).                                                       260.
+   On a related note to §7, Arthur and Vassilvit-                  S. Abney. 2007. Semisupervised Learning for Compu-
+                                                                      tational Linguistics. CRC Press.
+skii (2007) described a greedy initialization al-
+                                                                   D. Aloise, A. Deshpande, P. Hansen, and P. Popat.
+gorithm for initializing the centroids of k-means,                    2009. NP-hardness of Euclidean sum-of-squares
+called k-means++. They show that their ini-                           clustering. Machine Learning, 75(2):245–248.
+tialization is O(log k)-competitive; i.e., it ap-                  D. Arthur and S. Vassilvitskii. 2007. k-means++: The
+proximates the optimal clusters assignment by a                       advantages of careful seeding. In Proc. of ACM-
+factor of O(log k). In §7.1, we showed that                           SIAM symposium on Discrete Algorithms.
+uniform-at-random initialization is approximately                  F. Casacuberta and C. de la Higuera. 2000. Com-
+                                                                      putational complexity of problems on probabilistic
+O(|N|Lλ2 /n)-competitive (modulo an additive                          grammars and transducers. In Proc. of ICGI.
+constant) for CNF grammars, where n is the num-                    E. Charniak. 1997. Statistical parsing with a context-
+ber of sentences, L is the total length of sentences                  free grammar and word statistics. In Proc. of AAAI.
+and λ is a measure for distance between the true                   S. B. Cohen and N. A. Smith. 2009. Shared logis-
+distribution and the uniform distribution.5                           tic normal distributions for soft parameter tying in
+   Many combinatorial problems in NLP involv-                         unsupervised grammar induction. In Proc. of HLT-
+                                                                      NAACL.
+ing phrase-structure trees, alignments, and depen-
+                                                                   M. Collins. 2003. Head-driven statistical models for
+dency graphs are hard (Sima’an, 1996; Good-                           natural language processing. Computational Lin-
+man, 1998; Knight, 1999; Casacuberta and de la                        guistics, 29(4):589–637.
+Higuera, 2000; Lyngsø and Pederson, 2002;                          W. H. E. Day. 1983. Computationally difficult parsi-
+Udupa and Maji, 2006; McDonald and Satta,                             mony problems in phylogenetic systematics. Jour-
+                                                                      nal of Theoretical Biology, 103.
+2007; DeNero and Klein, 2008, inter alia). Of
+                                                                   J. DeNero and D. Klein. 2008. The complexity of
+special relevance to this paper is Abe and Warmuth                    phrase alignment problems. In Proc. of ACL.
+(1992), who showed that the problem of finding                     Y. Freund, H. Seung, E. Shamir, and N. Tishby. 1997.
+maximum likelihood model of probabilistic au-                         Selective sampling using the query by committee al-
+tomata is hard even for a single string and an au-                    gorithm. Machine Learning, 28(2–3):133–168.
+tomaton with two states. Understanding the com-                    S. Goldwater and M. Johnson. 2005. Bias in learning
+plexity of NLP problems, we believe, is crucial as                    syllable structure. In Proc. of CoNLL.
+we seek effective practical approximations when                    J. Goodman. 1998. Parsing Inside-Out. Ph.D. thesis,
+                                                                      Harvard University.
+necessary.
+                                                                   U. Grenander. 1967. Syntax-controlled probabilities.
+                                                                      Technical report, Brown University, Division of Ap-
+9       Conclusion                                                    plied Mathematics.
+                                                                   M. Johnson, T. L. Griffiths, and S. Goldwater. 2006.
+We described some properties of Viterbi train-
+                                                                      Adaptor grammars: A framework for specifying
+ing for probabilistic context-free grammars. We                       compositional nonparameteric Bayesian models. In
+showed that Viterbi training is NP-hard and, in                       Advances in NIPS.
+fact, NP-hard to approximate. We gave motivation                   M. Johnson, T. L. Griffiths, and S. Goldwater. 2007.
+for uniform-at-random initialization for deriva-                      Bayesian inference for PCFGs via Markov chain
+tions in the Viterbi EM algorithm.                                    Monte Carlo. In Proc. of NAACL.
+                                                                   D. Klein and C. Manning. 2001. Natural lan-
+                                                                      guage grammar induction using a constituent-
+Acknowledgments                                                       context model. In Advances in NIPS.
+We acknowledge helpful comments by the anony-                      K. Knight. 1999. Decoding complexity in word-
+                                                                      replacement translation models. Computational
+mous reviewers. This research was supported by                        Linguistics, 25(4):607–615.
+NSF grant 0915187.                                                 S. P. Lloyd. 1982. Least squares quantization in PCM.
+                                                                      In IEEE Transactions on Information Theory.
+                                                                   R. B. Lyngsø and C. N. S. Pederson. 2002. The con-
+References                                                            sensus string problem and the complexity of com-
+                                                                      paring hidden Markov models. Journal of Comput-
+N. Abe and M. Warmuth. 1992. On the computational
+                                                                      ing and System Science, 65(3):545–569.
+  complexity of approximating distributions by prob-
+                                                                   M. Mahajan, P. Nimbhorkar, and K. Varadarajan. 2009.
+    5
+     Making the assumption that the grammar is in CNF per-            The planar k-means problem is NP-hard. In Proc. of
+mits us to use L instead of B, since there is a linear relation-      International Workshop on Algorithms and Compu-
+ship between them in that case.                                       tation.
+
+
+                                                               1510
+
+
+D. McClosky, E. Charniak, and M. Johnson. 2006a.
+   Effective self-training for parsing. In Proc. of HLT-
+   NAACL.
+D. McClosky, E. Charniak, and M. Johnson. 2006b.
+   Reranking and self-training for parser adaptation. In
+   Proc. of COLING-ACL.
+R. McDonald and G. Satta. 2007. On the complex-
+   ity of non-projective data-driven dependency pars-
+   ing. In Proc. of IWPT.
+R. M. Neal and G. E. Hinton. 1998. A view of the
+   EM algorithm that justifies incremental, sparse, and
+   other variants. In Learning and Graphical Models,
+   pages 355–368. Kluwer Academic Publishers.
+K. Sima’an. 1996. Computational complexity of prob-
+   abilistic disambiguation by means of tree-grammars.
+   In In Proc. of COLING.
+M. Sipser. 2006. Introduction to the Theory of Com-
+   putation, Second Edition. Thomson Course Tech-
+   nology.
+N. A. Smith and M. Johnson. 2007. Weighted and
+   probabilistic context-free grammars are equally ex-
+   pressive. Computational Linguistics, 33(4):477–
+   491.
+V. I. Spitkovsky, H. Alshawi, D. Jurafsky, and C. D.
+   Manning. 2010. Viterbi training improves unsuper-
+   vised dependency parsing. In Proc. of CoNLL.
+R. Udupa and K. Maji. 2006. Computational com-
+   plexity of statistical machine translation. In Proc. of
+   EACL.
+M. Wang, N. A. Smith, and T. Mitamura. 2007. What
+   is the Jeopardy model? a quasi-synchronous gram-
+   mar for question answering. In Proc. of EMNLP.
+C. Yejin and C. Cardie. 2007. Structured local training
+   and biased potential functions for conditional ran-
+   dom fields with application to coreference resolu-
+   tion. In Proc. of HLT-NAACL.
+
+
+
+
+                                                         1511
+

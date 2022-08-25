@@ -1,0 +1,334 @@
+                 SVD and Clustering for Unsupervised POS Tagging
+
+                      Michael Lamar*                                       Yariv Maron*
+               Division of Applied Mathematics                       Gonda Brain Research Center
+                      Brown University                                   Bar-Ilan University
+                     Providence, RI, USA                                 Ramat-Gan, Israel
+                mlamar@dam.brown.edu                                  syarivm@yahoo.com
+
+                    Mark Johnson                                         Elie Bienenstock
+                Department of Computing                           Division of Applied Mathematics
+                   Faculty of Science                             and Department of Neuroscience
+                  Macquarie University                                   Brown University
+                   Sydney, Australia                                    Providence, RI, USA
+            mjohnson@science.mq.edu.au                                  elie@brown.edu
+
+                                                              date for fully unsupervised POS tagging.
+                       Abstract                                  The revisited SVD-based approach presented
+                                                              here, which we call “two-step SVD” or SVD2,
+      We revisit the algorithm of Schütze                     has four important characteristics. First, it
+      (1995) for unsupervised part-of-speech                  achieves state-of-the-art tagging accuracy.
+      tagging. The algorithm uses reduced-rank                Second, it requires drastically less computational
+      singular value decomposition followed                   effort than the best currently available models.
+      by clustering to extract latent features                Third, it demonstrates that state-of-the-art accu-
+      from context distributions. As imple-                   racy can be realized without disambiguation, i.e.,
+      mented here, it achieves state-of-the-art               without attempting to assign different tags to dif-
+      tagging accuracy at considerably less cost              ferent tokens of the same type. Finally, with no
+      than more recent methods. It can also                   significant increase in computational cost, SVD2
+      produce a range of finer-grained tag-                   can create much finer-grained labelings than typ-
+      gings, with potential applications to vari-             ically produced by other algorithms. When com-
+      ous tasks.                                              bined with some minimal supervision in post-
+                                                              processing, this makes the approach useful for
+1      Introduction                                           tagging languages that lack the resources re-
+                                                              quired by fully supervised models.
+While supervised approaches are able to solve
+the part-of-speech (POS) tagging problem with                 2    Methods
+over 97% accuracy (Collins 2002; Toutanova et
+al. 2003), unsupervised algorithms perform con-               Following the original work of Schütze (1995),
+siderably less well. These models attempt to tag              we begin by constructing a right context matrix,
+text without resources such as an annotated cor-              R, and a left context matrix, L. Rij counts the
+pus, a dictionary, etc. The use of singular value             number of times in the corpus a token of word
+decomposition (SVD) for this problem was in-                  type i is immediately followed by a token of
+troduced in Schütze (1995). Subsequently, a                   word type j. Similarly, Lij counts the number of
+number of methods for POS tagging without a                   times a token of type i is preceded by a token of
+dictionary were examined, e.g., by Clark (2000),              type j. We truncate these matrices, including, in
+Clark (2003), Haghighi and Klein (2006), John-                the right and left contexts, only the w1 most fre-
+son (2007), Goldwater and Griffiths (2007), Gao               quent word types. The resulting L and R are of
+and Johnson (2008), and Graça et al. (2009).                  dimension Ntypes×w1, where Ntypes is the number
+The latter two, using Hidden Markov Models                    of word types (spelling forms) in the corpus, and
+(HMMs), exhibit the highest performances to                   w1 is set to 1000. (The full Ntypes× Ntypes context
+                                                              matrices satisfy R = LT.)
+    * These authors contributed equally.
+
+
+                                                          215
+                         Proceedings of the ACL 2010 Conference Short Papers, pages 215–219,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   Next, both context matrices are factored using        weighted k-means algorithm as in the first pass,
+singular value decomposition:                            again placing the k initial centroids on the de-
+                  L = UL SL VLT                          scriptors of the k most frequent words in the cor-
+                  R = UR SR VRT.                         pus. The final tag of any token in the corpus is
+   The diagonal matrices SL and SR (each of rank         the cluster number of its type.
+1000) are reduced down to rank r1 = 100 by re-
+placing the 900 smallest singular values in each         3   Data and Evaluation
+matrix with zeros, yielding SL* and SR*. We then
+                                                         We ran the SVD2 algorithm described above on
+form a pair of latent-descriptor matrices defined
+                                                         the full Wall Street Journal part of the Penn
+by:
+                                                         Treebank (1,173,766 tokens). Capitalization was
+                  L * = UL S L*
+                                                         ignored, resulting in Ntypes = 43,766, with only a
+                  R* = UR SR*.
+                                                         minor effect on accuracy. Evaluation was done
+   Row i in matrix L* (resp. R*) is the left (resp.
+                                                         against the POS-tag annotations of the 45-tag
+right) latent descriptor for word type i. We next
+                                                         PTB tagset (hereafter PTB45), and against the
+include a normalization step in which each row
+                                                         Smith and Eisner (2005) coarse version of the
+in each of L* and R* is scaled to unit length,
+                                                         PTB tagset (hereafter PTB17). We selected the
+yielding matrices L** and R**. Finally, we form a
+                                                         three evaluation criteria of Gao and Johnson
+single descriptor matrix D by concatenating these
+                                                         (2008): M-to-1, 1-to-1, and VI. M-to-1 and 1-to-
+matrices into D = [L** R**]. Row i in matrix D is
+                                                         1 are the tagging accuracies under the best many-
+the complete latent descriptor for word type i;
+                                                         to-one map and the greedy one-to-one map re-
+this latent descriptor sits on the Cartesian product
+                                                         spectively; VI is a map-free information-
+of two 100-dimensional unit spheres, hereafter
+                                                         theoretic criterion—see Gao and Johnson (2008)
+the 2-sphere.
+                                                         for details. Although we find M-to-1 to be the
+   We next categorize these descriptors into
+                                                         most reliable criterion of the three, we include
+k1 = 500 groups, using a k-means clustering algo-
+                                                         the other two criteria for completeness.
+rithm. Centroid initialization is done by placing
+                                                            In addition to the best M-to-1 map, we also
+the k initial centroids on the descriptors of the k
+                                                         employ here, for large values of k2, a prototype-
+most frequent words in the corpus. As the de-
+                                                         based M-to-1 map. To construct this map, we
+scriptors sit on the 2-sphere, we measure the
+                                                         first find, for each induced tag t, the word type
+proximity of a descriptor to a centroid by the dot
+                                                         with which it co-occurs most frequently; we call
+product between them; this is equal to the sum of
+                                                         this word type the prototype of t. We then query
+the cosines of the angles—computed on the left
+                                                         the annotated data for the most common gold tag
+and right parts—between them. We update each
+                                                         for each prototype, and we map induced tag t to
+cluster’s centroid as the weighted average of its
+                                                         this gold tag. This prototype-based M-to-1 map
+constituents, the weight being the frequency of
+                                                         produces accuracy scores no greater—typically
+the word type; the centroids are then scaled, so
+                                                         lower—than the best M-to-1 map. We discuss
+they sit on the 2-sphere. Typically, only a few
+                                                         the value of this approach as a minimally-
+dozen iterations are required for full convergence
+                                                         supervised post-processing step in Section 5.
+of the clustering algorithm.
+   We then apply a second pass of this entire            4   Results
+SVD-and-clustering procedure. In this second
+pass, we use the k1 = 500 clusters from the first        Low-k performance. Here we present the per-
+iteration to assemble a new pair of context ma-          formance of the SVD2 model when k2, the num-
+trices. Now, Rij counts all the cluster-j (j=1… k1)      ber of induced tags, is the same or roughly the
+words to the right of word i, and Lij counts all the     same as the number of tags in the gold stan-
+cluster-j words to the left of word i. The new ma-       dard—hence small. Table 1 compares the per-
+trices L and R have dimension Ntypes × k1.               formance of SVD2 to other leading models. Fol-
+   As in the first pass, we perform reduced-rank         lowing Gao and Johnson (2008), the number of
+SVD, this time down to rank r2 = 300, and we             induced tags is 17 for PTB17 evaluation and 50
+again normalize the descriptors to unit length,          for PTB45 evaluation. Thus, with the exception
+yielding a new pair of latent descriptor matrices        of Graça et al. (2009) who use 45 induced tags
+L** and R**. Finally, we concatenate L** and R**         for PTB45, the number of induced tags is the
+into a single matrix of descriptors, and cluster         same across each column of Table 1.
+these descriptors into k2 groups, where k2 is the
+desired number of induced tags. We use the same
+
+                                                       216
+
+
+                                        M-to-1                      1-to-1                   VI
+      Model                PTB17            PTB45          PTB17        PTB45       PTB17         PTB45
+      SVD2                 0.730            0.660          0.513        0.467       3.02          3.84
+      HMM-EM               0.647            0.621          0.431        0.405       3.86          4.48
+      HMM-VB               0.637            0.605          0.514        0.461       3.44          4.28
+      HMM-GS               0.674            0.660          0.466        0.499       3.46          4.04
+      HMM-Sparse(32)       0.702(2.2)       0.654(1.0)     0.495        0.445
+      VEM (10-1,10-1)      0.682(0.8)       0.546(1.7)     0.528        0.460
+    Table 1. Tagging accuracy under the best M-to-1 map, the greedy 1-to-1 map, and
+    VI, for the full PTB45 tagset and the reduced PTB17 tagset. HMM-EM, HMM-VB
+    and HMM-GS show the best results from Gao and Johnson (2008); HMM-Sparse(32)
+    and VEM (10-1,10-1) show the best results from Graça et al. (2009).
+   The performance of SVD2 compares favora-
+bly to the HMM models. Note that SVD2 is a
+deterministic algorithm. The table shows, in pa-
+rentheses, the standard deviations reported in
+Graça et al. (2009). For the sake of comparison
+with Graça et al. (2009), we also note that, with
+k2 = 45, SVD2 scores 0.659 on PTB45. The NVI
+scores (Reichart and Rappoport 2009) corres-
+ponding to the VI scores for SVD2 are 0.938 for
+PTB17 and 0.885 for PTB45. To examine the
+sensitivity of the algorithm to its four parameters,
+w1, r1, k1, and r2, we changed each of these para-
+meters separately by a multiplicative factor of
+either 0.5 or 2; in neither case did M-to-1 accura-
+cy drop by more than 0.014.
+   This performance was achieved despite the
+fact that the SVD2 tagger is mathematically
+much simpler than the other models. Our MAT-
+LAB implementation of SVD2 takes only a few
+minutes to run on a desktop computer, in contrast
+to HMM training times of several hours or days
+(Gao and Johnson 2008; Johnson 2007).
+
+High-k performance. Not suffering from the
+same computational limitations as other models,
+SVD2 can easily accommodate high numbers of
+induced tags, resulting in fine-grained labelings.
+The value of this flexibility is discussed in the              Figure 1. Performance of the SVD2 algo-
+next section. Figure 1 shows, as a function of k2,             rithm as a function of the number of induced
+the tagging accuracy of SVD2 under both the                    tags. Top: PTB45; bottom: PTB17. Each
+best and the prototype-based M-to-1 maps (see                  plot shows the tagging accuracy under the
+Section 3), for both the PTB45 and the PTB17                   best and the prototype-based M-to-1 maps, as
+tagsets. The horizontal one-tag-per-word-type                  well as the upper limit for non-
+line in each panel is the theoretical upper limit              disambiguating taggers.
+for tagging accuracy in non-disambiguating
+models (such as SVD2). This limit is the fraction          which achieves state-of-the-art performance
+of all tokens in the corpus whose gold tag is the          when evaluation is done with the criteria now in
+most frequent for their type.                              common use, Schütze's original work should
+                                                           rightly be praised as ahead of its time. The SVD2
+5     Discussion                                           model presented here differs from Schütze's
+                                                           work in many details of implementation—not all
+At the heart of the algorithm presented here is            of which are explicitly specified in Schütze
+the reduced-rank SVD method of Schütze                     (1995). In what follows, we discuss the features
+(1995), which transforms bigram counts into la-            of SVD2 that are most critical to its performance.
+tent descriptors. In view of the present work,             Failure to incorporate any one of them signifi-
+
+                                                         217
+
+
+cantly reduces the performance of the algorithm          unsupervised taggers, whether disambiguating or
+(M-to-1 reduced by 0.04 to 0.08).                        not.
+   First, the reduced-rank left-singular vectors            To further gain insight into how successful
+(for the right and left context matrices) are            current models are at disambiguating when they
+scaled, i.e., multiplied, by the singular values.        have the power to do so, we examined a collec-
+While the resulting descriptors, the rows of L*          tion of HMM-VB runs (Gao and Johnson 2008)
+and R*, live in a much lower-dimensional space           and asked how the accuracy scores would change
+than the original context vectors, they are              if, after training was completed, the model were
+mapped by an angle-preserving map (defined by            forced to assign the same label to all tokens of
+the matrices of right-singular vectors VL and VR)        the same type. To answer this question, we de-
+into vectors in the original space. These mapped         termined, for each word type, the modal HMM
+vectors best approximate (in the least-squares           state, i.e., the state most frequently assigned by
+sense) the original context vectors; they have the       the HMM to tokens of that type. We then re-
+same geometric relationships as their equivalent         labeled all words with their modal label. The ef-
+high-dimensional images, making them good                fect of thus eliminating the disambiguation ca-
+candidates for the role of word-type descriptors.        pacity of the model was to slightly increase the
+   A second important feature of the SVD2 algo-          tagging accuracy under the best M-to-1 map for
+rithm is the unit-length normalization of the la-        every HMM-VB run (the average increase was
+tent descriptors, along with the computation of          0.026 for PTB17, and 0.015 for PTB45). We
+cluster centroids as the weighted averages of            view this as a further indication that, in the cur-
+their constituent vectors. Thanks to this com-           rent state of the art and with regards to tagging
+bined device, rare words are treated equally to          accuracy, limiting oneself to non-disambiguating
+frequent words regarding the length of their de-         models may not adversely affect performance.
+scriptor vectors, yet contribute less to the place-          To the contrary, this limitation may actually
+ment of centroids.                                       benefit an approach such as SVD2. Indeed, on
+    Finally, while the usual drawback of k-means-        difficult learning tasks, simpler models often be-
+clustering algorithms is the dependency of the           have better than more powerful ones (Geman et
+outcome on the initial—usually random—                   al. 1992). HMMs are powerful since they can, in
+placement of centroids, our initialization of the k      theory, induce both a system of tags and a system
+centroids as the descriptors of the k most fre-          of contextual patterns that allow them to disam-
+quent word types in the corpus makes the algo-           biguate word types in terms of these tags. How-
+rithm fully deterministic, and improves its per-         ever, carrying out both of these unsupervised
+formance substantially: M-to-1 PTB45 by 0.043,           learning tasks at once is problematic in view of
+M-to-1 PTB17 by 0.063.                                   the very large number of parameters to be esti-
+   As noted in the Results section, SVD2 is fairly       mated compared to the size of the training data
+robust to changes in all four parameters w1, r1, k1,     set.
+and r2. The values used here were obtained by a             The POS-tagging subtask of disambiguation
+coarse, greedy strategy, where each parameter            may then be construed as a challenge in its own
+was optimized independently. It is worth noting          right: demonstrate effective disambiguation in an
+that dispensing with the second pass altogether,         unsupervised model. Specifically, show that tag-
+i.e., clustering directly the latent descriptor vec-     ging accuracy decreases when the model's dis-
+tors obtained in the first pass into the desired         ambiguation capacity is removed, by re-labeling
+number of induced tags, results in a drop of             all tokens with their modal label, defined above.
+Many-to-1 score of only 0.021 for the PTB45                 We believe that the SVD2 algorithm presented
+tagset and 0.009 for the PTB17 tagset.                   here could provide a launching pad for an ap-
+                                                         proach that would successfully address the dis-
+   Disambiguation. An obvious limitation of              ambiguation challenge. It would do so by allow-
+SVD2 is that it is a non-disambiguating tagger,          ing a gradual and carefully controlled amount of
+assigning the same label to all tokens of a type.        ambiguity into an initially non-disambiguating
+However, this limitation per se is unlikely to be        model. This is left for future work.
+the main obstacle to the improvement of low-k
+performance, since, as is well known, the theo-          Fine-grained labeling. An important feature of
+retical upper limit for the tagging accuracy of          the SVD2 algorithm is its ability to produce a
+non-disambiguating models (shown in Fig. 1) is           fine-grained labeling of the data, using a number
+much higher than the current state-of-the-art for        of clusters much larger than the number of tags
+
+                                                       218
+
+
+in a syntax-motivated POS-tag system. Such                  Sharon Goldwater and Tom Griffiths. 2007. A fully
+fine-grained labelings can capture additional lin-            Bayesian approach to unsupervised part-of-speech
+guistic features. To achieve a fine-grained labe-             tagging. In Proceedings of the 45th Annual Meet-
+ling, only the final clustering step in the SVD2              ing of the Association of Computational Linguis-
+                                                              tics, pages 744–751.
+algorithm needs to be changed; the computation-
+al cost this entails is negligible. A high-quality          João V. Graça, Kuzman Ganchev, Ben Taskar, and
+fine-grained labeling, such as achieved by the                 Fernando Pereira. 2009. Posterior vs. Parameter
+SVD2 approach, may be of practical interest as                 Sparsity in Latent Variable Models. In Neural In-
+an input to various types of unsupervised gram-                formation Processing Systems Conference (NIPS).
+mar-induction algorithms (Headden et al. 2008).             Aria Haghighi and Dan Klein. 2006. Prototype-driven
+This application is left for future work.                     learning for sequence models. In Proceedings of
+                                                              the Human Language Technology Conference of
+Prototype-based tagging. One potentially im-                  the NAACL, Main Conference, pages 320–327,
+portant practical application of a high-quality               New York City, USA, June. Association for Com-
+                                                              putational Linguistics.
+fine-grained labeling is its use for languages
+which lack any kind of annotated data. By first             William P. Headden, David McClosky, and Eugene
+applying the SVD2 algorithm, word types are                   Charniak. 2008. Evaluating unsupervised part-of-
+grouped together into a few hundred clusters.                 speech tagging for grammar induction. In Proceed-
+Then, a prototype word is automatically ex-                   ings of the International Conference on Computa-
+tracted from each cluster. This produces, in a                tional Linguistics (COLING ’08).
+completely unsupervised way, a list of only a               Mark Johnson. 2007. Why doesn’t EM find good
+few hundred words that need to be hand-tagged                 HMM POS-taggers? In Proceedings of the 2007
+by an expert. The results shown in Fig. 1 indicate            Joint Conference on Empirical Methods in Natural
+that these prototype tags can then be used to tag             Language Processing and Computational Natural
+the entire corpus with only a minor decrease in               Language Learning (EMNLP-CoNLL), pages 296–
+                                                              305.
+accuracy compared to the best M-to-1 map—the
+construction of which requires a fully annotated            Marina Meilă. 2003. Comparing clusterings by the
+corpus. Fig. 1 also indicates that, with only a few           variation of information. In Bernhard Schölkopf
+hundred prototypes, the gap left between the ac-              and Manfred K. Warmuth, editors, COLT 2003:
+curacy thus achieved and the upper bound for                  The Sixteenth Annual Conference on Learning
+                                                              Theory, volume 2777 of Lecture Notes in Comput-
+non-disambiguating models is fairly small.
+                                                              er Science, pages 173–187. Springer.
+References                                                  Roi Reichart and Ari Rappoport. 2009. The NVI
+                                                              Clustering Evaluation Measure. In Proceedings of
+Alexander Clark. 2000. Inducing syntactic categories          the Thirteenth Conference on Computational Natu-
+  by context distribution clustering. In The Fourth           ral Language Learning (CoNLL), pages 165–173.
+  Conference on Natural Language Learning.
+                                                            Hinrich Schütze. 1995. Distributional part-of-speech
+Alexander Clark. 2003. Combining distributional and           tagging. In Proceedings of the seventh conference
+  morphological information for part of speech in-            on European chapter of the Association for Com-
+  duction. In 10th Conference of the European Chap-           putational Linguistics, pages 141–148.
+  ter of the Association for Computational Linguis-
+  tics, pages 59–66.                                        Noah A. Smith and Jason Eisner. 2005. Contrastive
+                                                              estimation: Training log-linear models on unla-
+Michael Collins. 2002. Discriminative training me-            beled data. In Proceedings of the 43rd Annual
+  thods for hidden markov models: Theory and expe-            Meeting of the Association for Computational Lin-
+  riments with perceptron algorithms. In Proceedings of       guistics (ACL’05), pages 354–362.
+  the ACL-02 conference on Empirical methods in
+  natural language processing – Volume 10.                  Kristina Toutanova, Dan Klein, Christopher D. Man-
+                                                              ning and Yoram Singer. 2003. Feature-rich part-of-
+Jianfeng Gao and Mark Johnson. 2008. A comparison             speech tagging with a cyclic dependency network.
+   of bayesian estimators for unsupervised Hidden             In Proceedings of HLT-NAACL 2003, pages 252-
+   Markov Model POS taggers. In Proceedings of the            259.
+   2008 Conference on Empirical Methods in Natural
+   Language Processing, pages 344–352.
+Stuart Geman, Elie Bienenstock and René Doursat.
+   1992. Neural Networks and the Bias/Variance Di-
+   lemma. Neural Computation, 4 (1), pages 1–58.
+
+
+                                                          219
+

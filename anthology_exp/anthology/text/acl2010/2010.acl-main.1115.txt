@@ -1,0 +1,650 @@
+                           Cross-Lingual Latent Topic Extraction
+
+        Duo Zhang                               Qiaozhu Mei                          ChengXiang Zhai
+   University of Illinois at                University of Michigan                  University of Illinois at
+    Urbana-Champaign                         qmei@umich.edu                          Urbana-Champaign
+ dzhang22@cs.uiuc.edu                                                              czhai@cs.uiuc.edu
+
+
+
+                      Abstract                                to the latent topics as well as the topic distributions
+    Probabilistic latent topic models have re-                in text. Intuitively, the learned word distributions
+    cently enjoyed much success in extracting                 capture clusters of words that co-occur with each
+    and analyzing latent topics in text in an un-             other probabilistically.
+    supervised way. One common deficiency                        Although many topic models have been pro-
+    of existing topic models, though, is that                 posed and shown to be useful (see Section 2 for
+    they would not work well for extracting                   more detailed discussion of related work), most
+    cross-lingual latent topics simply because                of them share a common deficiency: they are de-
+    words in different languages generally do                 signed to work only for mono-lingual text data and
+    not co-occur with each other. In this paper,              would not work well for extracting cross-lingual
+    we propose a way to incorporate a bilin-                  latent topics, i.e. topics shared in text data in
+    gual dictionary into a probabilistic topic                two different natural languages. The deficiency
+    model so that we can apply topic models to                comes from the fact that all these models rely on
+    extract shared latent topics in text data of              co-occurrences of words forming a topical cluster,
+    different languages. Specifically, we pro-                but words in different language generally do not
+    pose a new topic model called Probabilis-                 co-occur with each other. Thus with the existing
+    tic Cross-Lingual Latent Semantic Anal-                   models, we can only extract topics from text in
+    ysis (PCLSA) which extends the Proba-                     each language, but cannot extract common topics
+    bilistic Latent Semantic Analysis (PLSA)                  shared in multiple languages.
+    model by regularizing its likelihood func-                   In this paper, we propose a novel topic model,
+    tion with soft constraints defined based on               called Probabilistic Cross-Lingual Latent Seman-
+    a bilingual dictionary. Both qualitative and              tic Analysis (PCLSA) model, which can be used to
+    quantitative experimental results show that               mine shared latent topics from unaligned text data
+    the PCLSA model can effectively extract                   in different languages. PCLSA extends the Proba-
+    cross-lingual latent topics from multilin-                bilistic Latent Semantic Analysis (PLSA) model
+    gual text data.                                           by regularizing its likelihood function with soft
+                                                              constraints defined based on a bilingual dictio-
+1   Introduction
+                                                              nary. The dictionary-based constraints are key to
+As a robust unsupervised way to perform shallow               bridge the gap of different languages and would
+latent semantic analysis of topics in text, prob-             force the captured co-occurrences of words in
+abilistic topic models (Hofmann, 1999a; Blei et               each language by PCLSA to be “synchronized”
+al., 2003b) have recently attracted much atten-               so that related words in the two languages would
+tion. The common idea behind these models is the              have similar probabilities. PCLSA can be esti-
+following. A topic is represented by a multino-               mated efficiently using the General Expectation-
+mial word distribution so that words characteriz-             Maximization (GEM) algorithm. As a topic ex-
+ing a topic generally have higher probabilities than          traction algorithm, PCLSA would take a pair of
+other words. We can then hypothesize the exis-                unaligned document sets in different languages
+tence of multiple topics in text and define a gener-          and a bilingual dictionary as input, and output a
+ative model based on the hypothesized topics. By              set of aligned word distributions in both languages
+fitting the model to text data, we can obtain an es-          that can characterize the shared topics in the two
+timate of all the word distributions corresponding            languages. In addition, it also outputs a topic cov-
+
+
+                                                        1128
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1128–1137,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+erage distribution for each language to indicate the   corporating the knowledge of a bilingual dictio-
+relative coverage of different shared topics in each   nary as soft constraints. Such an extension is sim-
+language.                                              ilar to the extension of PLSA for incorporating so-
+   To the best of our knowledge, no previous work      cial network analysis (Mei et al., 2008a) but our
+has attempted to solve this topic extraction prob-     constraint is different.
+lem and generate the same output. The closest             Some previous work on multilingual topic mod-
+existing work to ours is the MuTo model pro-           els assume documents in multiple languages are
+posed in (Boyd-Graber and Blei, 2009) and the          aligned either at the document level, sentence level
+JointLDA model published recently in (Jagarala-        or by time stamps (Mimno et al., 2009; Zhao and
+mudi and Daumé III, 2010). Both used a bilingual      Xing, 2006; Kim and Khudanpur, 2004; Ni et al.,
+dictionary to bridge the language gap in a topic       2009; Wang et al., 2007). However, in many ap-
+model. However, the goals of their work are dif-       plications, we need to mine topics from unaligned
+ferent from ours in that their models mainly focus     text corpus. For example, mining topics from
+on mining cross-lingual topics of matching word        search results in different languages can facilitate
+pairs and discovering the correspondence at the        summarization of multilingual search results.
+vocabulary level. Therefore, the topics extracted         Besides all the multilingual topic modeling
+using their model cannot indicate how a common         work discussed above, comparable corpora have
+topic is covered differently in the two languages,     also been studied extensively (e.g. (Fung, 1995;
+because the words in each word pair share the          Franz et al., 1998; Masuichi et al., 2000; Sadat
+same probability in a common topic. Our work fo-       et al., 2003; Gliozzo and Strapparava, 2006)), but
+cuses on discovering correspondence at the topic       most previous work aims at acquiring word trans-
+level. In our model, since we only add a soft con-     lation knowledge or cross-lingual text categoriza-
+straint on word pairs in the dictionary, their prob-   tion from comparable corpora. Our work differs
+abilities in common topics are generally different,    from this line of previous work in that our goal is
+naturally capturing which shows the different vari-    to discover shared latent topics from multi-lingual
+ations of a common topic in different languages.       text data that are weakly comparable (e.g. the data
+   We use a cross-lingual news data set and a re-      does not have to be aligned by time).
+view data set to evaluate PCLSA. We also propose
+a “cross-collection” likelihood measure to quanti-     3 Problem Formulation
+tatively evaluate the quality of mined topics. Ex-
+perimental results show that the PCLSA model           In general, the problem of cross-lingual topic ex-
+can effectively extract cross-lingual latent topics    traction can be defined as to extract a set of com-
+from multilingual text data, and it outperforms a      mon cross-lingual latent topics covered in text col-
+baseline approach using the standard PLSA on text      lections in different natural languages. A cross-
+data in each language.                                 lingual latent topic will be represented as a multi-
+                                                       nomial word distribution over the words in all
+2   Related Work                                       the languages, i.e. a multilingual word distri-
+                                                       bution. For example, given two collections of
+Many topic models have been proposed, and the          news articles in English and Chinese, respectively,
+two basic models are the Probabilistic Latent Se-      we would like to extract common topics simul-
+mantic Analysis (PLSA) model (Hofmann, 1999a)          taneously from the two collections. A discov-
+and the Latent Dirichlet Allocation (LDA) model        ered common topic, such as the terrorist attack
+(Blei et al., 2003b). They and their extensions        on September 11, 2001, would be characterized
+have been successfully applied to many prob-           by a word distribution that would assign relatively
+lems, including hierarchical topic extraction (Hof-    high probabilities to words related to this event in
+mann, 1999b; Blei et al., 2003a; Li and McCal-         both English and Chinese (e.g. “terror”, “attack”,
+lum, 2006), author-topic modeling (Steyvers et al.,    “afghanistan”, “taliban”, and their translations in
+2004), contextual topic analysis (Mei and Zhai,        Chinese).
+2006), dynamic and correlated topic models (Blei          As a computational problem, our input is a
+and Lafferty, 2005; Blei and Lafferty, 2006), and      multi-lingual text corpus, and output is a set of
+opinion analysis (Mei et al., 2007; Branavan et al.,   cross-lingual latent topics. We now define this
+2008). Our work is an extension of PLSA by in-         problem more formally.
+
+
+                                                   1129
+
+
+   Definition 1 (Multi-Lingual Corpus) A multi-                   4 Probabilistic Cross-Lingual Latent
+lingual corpus C is a set of text collections                       Semantic Analysis
+{C1 , C2 , . . . , Cs }, where Ci = {di1 , di2 , . . . , diMi }
+is a collection of documents in language Li with                  In this section, we present our probabilistic cross-
+vocabulary Vi = {w1i , w2i , . . . , wN
+                                      i }. Here, M is             lingual latent semantic analysis (PCLSA) model
+                                        i                  i
+the total number of documents in Ci , Ni is the to-               and discuss how it can be used to extract cross-
+tal number of words in Vi , and dij is a document in              lingual topics from multi-lingual text data.
+collection Ci .                                                       The main reason why existing topic models
+                                                                  can’t be used for cross-lingual topic extraction is
+  Following the common assumption of bag-of-
+                                                                  because they cannot cross the language barrier.
+words representation, we represent document dij
+                                                                  Intuitively, in order to cross the language barrier
+with a bag of words {wji1 , wji2 , . . . , wjid }, and use
+                                                                  and extract a common topic shared in articles in
+c(wki , dij ) to denote the count of word wki in docu-            different languages, we must rely on some kind
+ment dij .                                                        of linguistic knowledge. Our PCLSA model as-
+   Definition 2 (Cross-Lingual Topic): A cross-                   sumes the availability of bi-lingual dictionaries for
+lingual topic θ is a semantically coherent multi-                 at least some language pairs, which are generally
+nomial distribution over all the words in the vo-                 available for major language pairs. Specifically,
+cabularies of languages L1 , ..., Ls . That is, p(w|θ)            for text data in languages L1 , ..., Ls , if we rep-
+would give the probability of a word w which can                  resent each language as a node in a graph and
+be in any of the s languages under consideration. θ               connect those language pairs for which we have a
+is semantically coherent if it assigns high probabil-             bilingual dictionary, the minimum requirement is
+ities to words that are semantically related either in            that the whole graph is connected. Thus, as a min-
+the same language or across different languages.
+                   ∑      ∑                                       imum, we will need s − 1 distinct bilingual dictio-
+Clearly, we have si=1 w∈Vi p(w|θ) = 1 for any                     naries. This is so that we can potentially cross all
+cross-lingual topic θ.                                            the language barriers.
+   Definition 3 (Cross-Lingual Topic Extrac-                          Our key idea is to “synchronize” the extraction
+tion) Given a multi-lingual corpus C, the task of                 of monolingual “component topics” of a cross-
+cross-lingual topic extraction is to model and ex-                lingual topic from individual languages by forcing
+tract k major cross-lingual topics {θ1 , θ2 , . . . , θk }        a cross-lingual topic word distribution to assign
+from C, where θi is a cross-lingual topic, and k is               similar probabilities to words that are potential
+a user specified parameter.                                       translations according to a Li -Lj bilingual dictio-
+   The extracted cross-lingual topics can be di-                  nary. We achieve this by adding such preferences
+rectly used as a summary of the common con-                       formally to the likelihood function of a probabilis-
+tent of the multi-lingual data set. Note that once                tic topic model as “soft constraints” so that when
+a cross-lingual topic is extracted, we can eas-                   we estimate the model, we would try to not only
+ily obtain its representation in each language Li                 fit the text data well (which is necessary to extract
+by “splitting” the cross-lingual topic into multi-                coherent component topics from each language),
+ple word distributions in different languages. For-               but also satisfy our specified preferences (which
+mally, the word distribution of a cross-lingual                   would ensure the extracted component topics in
+topic θ in language Li is given by pi (wi |θ) =                   different languages are semantically related). Be-
+∑ p(w |θ) .
+       i                                                          low we present how we implement this idea in
+   w∈Vi
+         p(w|θ)                                                   more detail.
+   These aligned language-specific word distribu-                     A bilingual dictionary for languages Li and Lj
+tions can directly review the variations of topics                generally would give us a many-to-many map-
+in different languages. They can also be used to                  ping between the vocabularies of the two lan-
+analyze the difference of the coverage of the same                guages. With such a mapping, we can construct
+topic in different languages. Moreover, they are                  a bipartite graph Gij = (Vij , Eij ) between the
+also useful for retrieving relevant articles or pas-              two languages where if one word can be poten-
+sages in each language and aligning them to the                   tially translated into another word, the two words
+same common topic, thus essentially also allow-                   would be connected with an edge. An edge can
+ing us to integrate and align articles in multiple                be weighted based on the probability of the cor-
+languages.                                                        responding translation. An example graph for
+
+
+                                                              1130
+
+
+Chinese-English dictionary is shown in Figure 1.                           is the degree of word u, i.e. the sum of the weights
+                                                                           of all the edges ending with u.
+                                                                              Intuitively, R(C) measures the difference be-
+                                                                           tween p(wu |θj ) and p(wv |θj ) for each pair (u, v)
+                                                                           in a bilingual dictionary; the more they differ, the
+                                                                           larger R(C) would be. So it can be regarded as
+                                                                           a “loss function” to help us assess how well the
+                                                                           “component word distributions” in multiple lan-
+                                                                           guages are correlated semantically. Clearly, we
+                                                                           would like the extracted topics to have a small
+    Figure 1: A Dictionary based Word Graph                                R(C). We choose this specific form of loss func-
+                                                                           tion because it would make it convenient to solve
+   With multiple bilingual dictionaries, we can                            the optimization problem of maximizing the cor-
+merge the graphs to generate a multi-partite graph                         responding regularized maximum likelihood (Mei
+G = (V, E). Based on this graph, the PCLSA                                 et al., 2008b). The normalization with Deg(u)
+model extends the standard PLSA by adding a                                and Deg(v) can be regarded as a way to compen-
+constraint to the likelihood function to “smooth”                          sate for the potential ambiguity of u and v in their
+the word distributions of topics in PLSA on the                            translations.
+multi-partite graph so that we would encourage the                            Putting L(C) and R(C) together, we would
+words that are connected in the graph (i.e. pos-                           like to maximize the following objective function
+sible translations of each other) to be given simi-                        which is a regularized log-likelihood:
+lar probabilities by every cross-lingual topic. Thus
+when a cross-lingual topic picks up words that co-                               O(C, G) = (1 − λ)L(C) − λR(C)                  (1)
+occur in mono-lingual text, it would prefer pick-
+ing up word pairs whose translations in other lan-                         where λ ∈ (0, 1) is a parameter to balance the
+guages also co-occur with each other, giving us a                          likelihood and the regularizer. When λ = 0, we
+coherent multilingual word distribution that char-                         recover the standard PLSA.
+acterizes well the content of text in different lan-                          Specifically, we will search for a set of values
+guages.                                                                    for all our parameters that can maximize the ob-
+   Specifically, let Θ = {θj } (j = 1, ..., k) be a set                    jective function defined above. Our parameters
+of k cross-lingual topic models to be discovered                           include all the cross-lingual topics and the cov-
+from a multilingual text data set with s languages                         erage distributions of the topics in all documents,
+such that p(w|θi ) is the probability of word w ac-                        which we denote by Ψ = {p(w|θj ), p(θj |d)}d,w,j
+cording to the topic model θi .                                            where j = 1, ..., k, w varies over the entire vo-
+   If we are to use the regular PLSA to model our                          cabularies of all the languages , d varies over
+data, we would have the following log-likelihood                           all the documents in our collection. This opti-
+and we usually use a maximum likelihood estima-                            mization problem can be solved using a General-
+tor to estimate parameters and discover topics.                            ized Expectation-Maximization (GEM) algorithm
+                                                                           as described in (Mei et al., 2008a).
+          ∑
+          s ∑ ∑                               ∑
+                                              k
+L(C) =                     c(w, d) log              p(θj |d)p(w|θj )          Specifically, in the E-step of the algorithm, the
+          i=1 d∈Ci w                          j=1                          distribution of hidden variables is computed using
+                                                                           Eq. 2.
+   Our main extension is to add to L(C) a cross-
+lingual constraint term R(C) to incorporate the
+knowledge of bilingual dictionaries. R(C) is de-                                                      p(θj |d)p(w|θj )
+fined as                                                                         z(w, d, j) =     ∑                             (2)
+                                                                                                     j ′ p(θj ′ |d)p(w|θj ′ )
+          1    ∑                  ∑
+                                  k
+                                    p(wu |θj )           p(wv |θj ) 2
+ R(C) =                 w(u, v)         (            −             )
+          2                                 Deg(u)        Deg(v)             Then in the M-step, we need to maximize the
+              ⟨u,v⟩∈E             j=1
+                                                                           complete data likelihood Q(Ψ; Ψn ):
+where w(u, v) is the weight on the edge between
+u and v in the multi-partite graph G = (V, E),
+which in our experiments is set to 1, and Deg(u)                                Q(Ψ; Ψn ) = (1 − λ)L′ (C) − λR(C)
+
+
+                                                                        1131
+
+
+where                                                                     a simple segmenter1 to split the data into Chinese
+           ∑∑                ∑                                            phrases. Both Chinese and English stopwords are
+ ′
+L (C) =            c(w, d)       z(w, d, j) log p(θj |d)p(w|θj ),   (3)
+                                                                          removed from our data.
+           d   w             j
+                                                                             The dictionary file we used for our PCLSA
+                                       ∑                                  model is from mandarintools.com2 . For each Chi-
+ with the constraints that j p(θj |d) = 1 and
+∑                                                                         nese phrase, if it has several English meanings, we
+   w p(w|θj ) = 1.
+   There is a closed form solution if we only want                        add an edge between it and each of its English
+to maximize the L′ (C) part:                                              translation. If one English translation is an En-
+                                                                          glish phrase, we add an edge between the Chinese
+                              ∑                                           phrase and each English word in the phrase.
+                               w c(w, d)z(w, d, j)
+     (n+1)
+     p       (θj |d) =       ∑ ∑
+                                 w      j′   c(w, d)z(w, d, j ′ )         5.2 Baseline Method
+                                  ∑
+                                       c(w, d)z(w, d, j)                  As a baseline method, we can apply the standard
+    p(n+1) (w|θj ) =         ∑ ∑d ′         ′       ′
+                                                           (4)            PLSA (Hofmann, 1999a) directly to the multi-
+                                 d     w c(w , d)z(w , d, j)
+                                                                          lingual corpus. Since PLSA takes advantage of
+   However, there is no closed form solution in the                       the word co-occurrences in the document level to
+M-step for the whole objective function. Fortu-                           find semantic topics, directly using it for a multi-
+nately, according to GEM we do not need to find                           lingual corpus will result in finding topics mainly
+the local maximum of Q(Ψ; Ψn ) in every M-step,                           reflecting a single language (because words in dif-
+and we only need to find a new value Ψn+1 to im-                          ferent languages would not co-occur in the same
+prove the complete data likelihood, i.e. to make                          document in general). That is, the discovered top-
+sure Q(Ψn+1 ; Ψn ) ≥ Q(Ψn ; Ψn ). So our method                           ics are mostly monolingual. These monolingual
+is to first maximize the L′ (C) part using Eq. 4 and                      topics can then be aligned based on a bilingual dic-
+then use Eq. 5 to gradually increase the R(C) part.                       tionary to suggest a possible cross-lingual topic.
+
+                                                                          6 Experimental Results
+p(t+1) (wu |θj ) = (1 − α)p(t) (wu |θj )        (5)
+                                                                          6.1 Qualitative Comparison
+                       ∑ w(u, v)
+                 + α                  p(t) (wv |θj )                      To qualitatively compare PCLSA with the baseline
+                     ⟨u,v⟩∈E
+                             Deg(v)
+                                                                          method, we compare the word distributions of top-
+                                                                          ics extracted by them. The data set we used in this
+   Here, parameter α is the length of each smooth-
+                                                                          experiment is selected from the Xinhua News data
+ing step. Obviously, after each smoothing step,
+                                                                          during the period from Jun. 8th, 2001 to Jun. 15th,
+the sum of the probabilities of all the words in one
+                                                                          2001. There are totally 1799 English articles and
+topic is still equal to 1. We smooth the parameters
+                                                                          1485 Chinese articles in the data set. The num-
+until we cannot get a better parameter set Ψn+1 .
+                                                                          ber of topics to be extracted is set to 10 for both
+Then, we continue to the next E-step. If there is
+                                                                          methods.
+no Ψn+1 s.t. Q(Ψn+1 ; Ψn ) ≥ Q(Ψn ; Ψn ), then
+                                                                             Table 1 shows the experimental results. To
+we consider Ψn to be the local maximum point of
+                                                                          make it easier to understand, we add an English
+the objective function Eq. 1.
+                                                                          translation to each Chinese phrase in our results.
+5        Experiment Design                                                The first ten rows show sample topics of the mod-
+                                                                          eling results of traditional PLSA model. We can
+5.1 Data Set                                                              see that it only contains mono-language topics,
+The data set we used in our experiment is collected                       i.e. the topics are either in Chinese or in En-
+from news articles of Xinhua English and Chi-                             glish. The next ten rows are the results from
+nese newswires. The whole data set is quite big,                          our PCLSA model. Compared with the base-
+containing around 40,000 articles in Chinese and                          line method, PCLSA can not only find coherent
+35,000 articles in English. For different purpose of                      topics from the cross-lingual corpus, but it can
+our experiments, we randomly selected different                           also show the content about one topic from both
+number of documents from the whole corpus, and                            two language corpora. For example, in ’Topic 2’
+we will describe the concrete statistics in each ex-                         1
+                                                                                 http://www.mandarintools.com/segmenter.html
+                                                                             2
+periment. To process the Chinese corpus, we use                                  http://www.mandarintools.com/cedict.html
+
+
+                                                                     1132
+
+
+                                                         6.3 Quantitative Evaluation
+ Table 2: Synthetic Data Set from Xinhua News
+ English       Shrine         Olympic     Championship   We also quantitatively evaluate how well our
+                90              101           70         PCLSA model can discover common topics
+ Chinese   CPC Anniversary   Afghan War   Championship
+                                                         among corpus in different languages. We pro-
+                95              206           72
+                                                         pose a “cross-collection” likelihood measure for
+                                                         this purpose. The basic idea is: suppose we got
+which is about ’Israel’ and ’Palestinian’, the Chi-      k cross-lingual topics from the whole corpus, then
+nese corpus mentions a lot about ’Arafat’ who is         for each topic, we split the topic into two sepa-
+the leader of ’Palestinian’, while the English cor-      rate set of topics, English topics and Chinese top-
+pus discusses more on topics such as ’cease fire’        ics, using the splitting formula described before,
+and ’women’. Similarly, in ’Topic 9’, the topic                                   i |θ)
+                                                         i.e. pi (wi |θ) = ∑ p(w p(w|θ)  . Then, we use the
+is related to Philippine, the Chinese corpus men-                            w∈Vi
+
+tions some environmental situation in Philippine,        word distribution of the Chinese topics (translating
+while the English corpus mentions a lot about            the words into English) to fit the English Corpus
+’Abu Sayyaf’.                                            and use the word distribution of the English top-
+                                                         ics (translating the words into Chinese) to fit the
+6.2 Discovering Common Topics                            Chinese Corpus. If the topics mined are common
+                                                         topics in the whole corpus, then such a “cross-
+To demonstrate the ability of PCLSA for finding          collection” likelihood should be larger than those
+common topics in cross-lingual corpus, we use            topics which are not commonly shared by the En-
+some event names, e.g. ’Shrine’ and ’Olympic’,           glish and the Chinese corpus. To calculate the
+as queries and randomly select a certain number of       likelihood of fitness, we use the folding-in method
+documents from the whole corpus, which are re-           proposed in (Hofmann, 2001). To translate topics
+lated to the queries. The number of documents for        from one language to another, e.g. Chinese to En-
+each query in the synthetic data set is shown in Ta-     glish, we look up the bilingual dictionary and do
+ble 2. In either the English corpus or the Chinese       word-to-word translation. If one Chinese word has
+corpus, we select a smaller number of documents          several English translations, we simply distribute
+about topic ’Championship’ combined with the             its probability mass equally to each English trans-
+other two topics in the same corpus. In this way,        lation.
+when we want to extract two topics from either En-          For comparison, we use the standard PLSA
+glish or Chinese corpus, the ’Championship’ topic        model as the baseline. Basically, suppose PLSA
+may not be easy to extract, because the other two        mined k semantic topics in the Chinese corpus and
+topics have more documents in the corpus. How-           k semantic topics in the English corpus. Then, we
+ever, when we use PCLSA to extract four topics           also use the “cross-collection” likelihood measure
+from the two corpora together, we expect that the        to see how well those k semantic Chinese topics fit
+topic ’Championship’ will be found, because now          the English corpus and those k semantic English
+the sum of English and Chinese documents related         topics fit the Chinese corpus.
+to ’Championship’ is larger than other topics. The          We totally collect three data sets to compare the
+experimental result is shown in Table 3. The first       performance. For the first data set, (English 1,
+two columns are the two topics extracted from En-        Chinese 1), both the Chinese and English corpus
+gish corpus, the third and the forth columns are         are chosen from the Xinhua News Data during
+two topics from Chinese corpus, and the other four       the period from 2001.06.08 to 2001.06.15, which
+columns are the results from cross-lingual cor-          has 1799 English articles and 1485 Chinese ar-
+pus. We can see that in either the Chinese sub-          ticles. For the second data set, (English 2, Chi-
+collection or the English sub-collection, the topic      nese 2), the Chinese corpus Chinese 2 is the same
+’Championship’ is not extracted as a significant         as Chinese 1, but the English corpus is chosen
+topic. But, as expected, the topic ’Championship’        from 2001.06.14 to 2001.06.19 which has 1547
+is extracted from the cross-lingual corpus, while        documents. For the third data set, (English 3, Chi-
+the topic ’Olympic’ and topic ’Shrine’ are merged        nese 3), the Chinese corpus is the same as in data
+together. This demonstrate that PCLSA is capable         set one, but the English corpus is chosen from
+of extracting common topics from a cross-lingual         2001.10.02 to 2001.10.07 which contains 1530
+corpus.                                                  documents. In other words, in the first data set,
+
+
+                                                     1133
+
+
+                                                                  Table 1: Qualitative Evaluation
+      Topic 0                Topic 1                Topic 2           Topic 3            Topic 4              Topic 5         Topic 6           Topic 7             Topic 8          Topic 9
+     d(party)              dd(crime)             dd(athlete)        d(palestine)     dd(collaboration)    dd(education)         israel              bt               dollar           china
+  ddd(communist)         dd(agriculture)        dd(champion)      dddd(palestine)     dd(shanghai)            d(ball)       palestinian           beat              percent        cooperate
+   dd(revolution)          dd(travel)         ddd(championship)     ddd(israel)       dd(relation)         dd(league)             eu              final             million         shanghai
+  dd(party member)       dd(heathendom)            d(base)         dd(cease fire)     dd(bilateral)        dd(soccer)          police        championship            index           develop
+    dd(central)         dd(public security)    ddd(badminton)       ddd(UN)            dd(trade)           dd(minute)          report             play               stock             beije
+     dd(ism)               dd(name)              dd(sports)         dd(mid east)      dd(president)      dd(team member)       secure          champion              point         particulate
+    dd(cadre)                d(case)              dd(final)        ddd(lebanon)        d(country)          dd(teacher)            kill             win               share            matter
+ ddd(chairman mao)      dd(law enforcement)      dd(women)         ddd(macedon)       dd(friendly)        ddd(school)          europe           olympic              close              sco
+dd(chinese communist)        d(city)             dd(chess)          dd(conflict)       dd(meet)             dd(team)            egypt            game                  0              invest
+    dd(leader)            dd(penalize)           dd(fitness)         dd(talk)         ddd(russia)          d(grade A)          treaty              cup              billion          project
+   dd(bilateral)          dd(league)                 israel          cooperate         dd(athlete)             party              eu             invest                0          dd(absorb)
+  dd(collaboration)        dd(name)              ddd(israel)            sco             particulate          d(party)         khatami       dd(investment)           dollar             d
+     dd(talk)                d(ball)                   bt             develop              dd               communist         ireland        dd(billion)            percent      ddddd(abu)
+   dd(friendly)           dd(shenhua)             palestinian         country             athlete           revolution     ddd(ireland)     dd(education)            index              d
+    d(palestine)            dd(host)               ceasefire         president          champion            dd(-ism)             elect     dd(environ. protect.)    million       dd(particle)
+      country                   A               dddd(arafat)           apec                  ii            dd(antiwar)           vote        dd(money)               stock         philippine
+    ddd(UN)                    ball                 women            shanghai          dd(chess)          dd(comrade)       presidential    ddd(school)             billion             abu
+   ddd(leader)             dd(jinde)              jerusalem            africa          competition        dd(revolution)          cpc            market              point          d(base)
+      bilateral           dd(season)               mideast             meet             contestant         ddd(party)            iran        dd(teacher)           dd(billion)          d
+        state             dd(player)               lebanon        ddd(zemin jiang)   dd(gymnastics)          ideology       referendum          business             share         d(object)
+
+
+
+                                              Table 3: Effectiveness of Extracting Common Topics
+     English 1      English 2            Chinese 1                  Chinese 2             Cross 1                Cross 2                Cross 3                        Cross 4
+       japan         olympic           ddd(CPC)                   ddd(afghan)            koizumi               dd(taliban)               swim                       dd(worker)
+      shrine            ioc           d(championship)              d(taliban)            yasukuni              dd(military)         d(championship)                     party
+        visit          beije             d(world)                 dd(taliban)                ioc                   city             ddd(free style)                  dd(three)
+     koizumi          game             dd(thought)                dd(military)             japan                 refugee              dd(diving)                    ddd(marx)
+     yasukuni          july            dd(theory)                  dd(attack)            olympic                   side            ddd(championship)                 communist
+        war             bid            ddd(marx)                  dd(US army)              beije               dd(US army)          ddd(semi final)                     marx
+      august          swim              dd(swim)                    d(laden)              shrine                dd(bomb)              competition                      theory
+        asia           vote          ddd(championship)             dd(army)                 visit              ddd(kabul)             dd(swim)                     dd(found party)
+     criminal     championship           d(party)                  dd(bomb)            ddd(olympic)             dd(attack)           ddd(record)                    ddd(CPC)
+         ii         committee         dd(found party)             ddd(kabul)          dddd(olympic)            dd(refugee)         ddd(xuejuan luo)                  revolution
+
+
+the English corpus and Chinese corpus are com-
+                                                                                                Table 4: Quantitative Evaluation of Common
+parable with each other, because they cover simi-
+                                                                                                Topic Finding (“cross-collection” log-likelihood)
+lar events during the same period. In the second                                                                        PCLSA                       PLSA                   Rel. Imprv.
+data set, the English and Chinese corpora share                                                    English 1         -2.86294E+06               -3.03176E+06                 5.6%
+some common topics during the overlap period.                                                      Chinese 1         -4.69989E+06               -4.85369E+06                 3.2%
+The third data is the most tough one since the two                                                 English 2         -2.48174E+06               -2.60805E+06                 4.8%
+                                                                                                   Chinese 2         -4.73218E+06               -4.88906E+06                 3.2%
+corpora are from different periods. The purpose of
+                                                                                                   English 3         -2.44714E+06               -2.60540E+06                 6.1%
+using these three different data sets for evaluation                                               Chinese 3         -4.79639E+06               -4.94273E+06                 3.0%
+is to test how well PCLSA can mine common top-
+ics from either a data set where the English corpus                                             provement of PCLSA over PLSA does not drop
+and the Chinese corpus are comparable or a data                                                 much. On the other hand, the improvement of
+set where the English corpus and the Chinese cor-                                               PCLSA over PLSA on the three English corpora
+pus rarely share common topics.                                                                 does not show any correlation with the difficulty
+   The experimental results are shown in Table 4.                                               of the data set.
+Each row shows the “cross-collection” likelihood
+                                                                                                6.4 Extracting from Multi-Language Corpus
+of using the “cross-collection” topics to fit the data
+set named in the first column. For example, in                                                  In the previous experiments, we have shown the
+the first row, the values are the “cross-collection”                                            capability and effectiveness of the PCLSA model
+likelihood of using Chinese topics found by differ-                                             in latent topic extraction from two language cor-
+ent methods from the first data set to fit English 1.                                           pora. In fact, the proposed model is general and
+The last collum shows how much improvement we                                                   capable of extracting latent topics from multi-
+got from PCLSA compared with PLSA. From the                                                     language corpus. For example, if we have dic-
+results, we can see that in all the data sets, our                                              tionaries among multiple languages, we can con-
+PCLSA has higher “cross-collection” likelihood                                                  struct a multi-partite graph based on the corre-
+value, which means it can find better common top-                                               spondence between those vocabularies, and then
+ics compared to the baseline method. Notice that                                                smooth the PCLSA model with this graph.
+the Chinese corpora are the same in all three data                                                 To show the effectiveness of PCLSA in min-
+sets. The results show that both PCLSA and PLSA                                                 ing multiple language corpus, we first construct a
+get lower “cross-collection” likelihood for fitting                                             simulated data set based on 1115 reviews of three
+the Chinese corpora when the data set becomes                                                   brands of laptops, namely IBM (303), Apple(468)
+“tougher”, i.e. less topic overlapping, but the im-                                             and DELL(344). To simulate a three language cor-
+
+
+                                                                                        1134
+
+
+            Table 5: Effectiveness of Latent Topic Extraction from Multi-Language Corpus
+                  Topic 0               Topic 1            Topic 2           Topic 3               Topic 4             Topic 5             Topic 6          Topic 7
+                 cd(apple)         battery(dell)      mouse(dell)         print(apple)            port(ibm)        laptop(ibm)            os(apple)        port(dell)
+                port(apple)         drive(dell)        button(dell)     resolution(dell)         card(ibm)            t20(ibm)          run(apple)          2(dell)
+               drive(apple)         8200(dell)      touchpad(dell)        burn(apple)          modem(ibm)        thinkpad(ibm)            1(apple)         usb(dell)
+              airport(apple)      inspiron(dell)          pad(dell)       normal(dell)         display(ibm)        battery(ibm)         ram(apple)          1(dell)
+             firewire(apple)       system(dell)     keyboard(dell)        image(dell)            built(ibm)      notebook(ibm)         mac(apple)           0(dell)
+                dvd(apple)           hour(dell)         point(dell)      digital(apple)          swap(ibm)           ibm(ibm)         battery(apple)       slot(dell)
+                usb(apple)          sound(dell)          stick(dell)    organize(apple)          easy(ibm)             3(ibm)          hour(apple)      firewire(dell)
+                 rw(apple)            dell(dell)          rest(dell)       cds(apple)        connector(ibm)          feel(ibm)           12(apple)       display(dell)
+                card(apple)        service(dell)        touch(dell)       latch(apple)         feature(ibm)         hour(ibm)        operate(apple)     standard(dell)
+              mouse(apple)            life(dell)        erase(dell)      advertise(dell)           cd(ibm)          high(ibm)          word(apple)         fast(dell)
+                osx(apple)      applework(apple)         port(dell)       battery(dell)        lightest(ibm)        uxga(dell)          light(ibm)     battery(apple)
+              memory(dell)           file(apple)        port(apple)       battery(ibm)         quality(dell)     ultrasharp(dell)     ultrabay(ibm)       point(dell)
+               special(dell)     bounce(apple)           port(ibm)       battery(apple)          year(ibm)         display(dell)    connector(ibm)     touchpad(dell)
+               crucial(dell)        quit(apple)     firewire(apple)      geforce4(dell)         hassle(ibm)     organize(apple)           dvd(ibm)       button(dell)
+             memory(apple)         word(apple)         imac(apple)      100mhz(apple)            bania(dell)       learn(apple)          nice(ibm)       hour(apple)
+              memory(ibm)             file(ibm)      firewire(dell)         440(dell)        800mhz(apple)         logo(apple)        modem(ibm)         battery(ibm)
+             netscape(apple)           file(dell)    firewire(ibm)         bus(apple)       trackpad(apple)     postscript(apple)    connector(dell)     battery(dell)
+              reseller(apple)   microsoft(apple)        jack(apple)        8200(dell)           cover(ibm)            ll(apple)        light(apple)        fan(dell)
+                  10(dell)           ms(apple)      playback(dell)         8100(dell)      workmanship(dell)        sxga(dell)           light(dell)      erase(dell)
+              special(apple)       excel(apple)          jack(dell)       chipset(dell)       section(apple)      warm(apple)          floppy(ibm)       point(apple)
+                2000(ibm)           ram(apple)           port(dell)       itune(apple)           uxga(dell)         port(apple)       pentium(dell)       drive(ibm)
+               window(ibm)            ram(ibm)          port(apple)    applework(apple)         screen(dell)         port(ibm)       processor(dell)      drive(dell)
+               2000(apple)            ram(dell)          port(ibm)       imovie(apple)          screen(ibm)          port(dell)            p4(dell)      drive(apple)
+                 2000(dell)       screen(apple)            2(dell)       import(apple)        screen(apple)         usb(apple)         power(dell)        hard(ibm)
+             window(apple)             1(apple)           2(apple)       battery(apple)      ultrasharp(dell)      plug(apple)       pentium(apple)       osx(apple)
+               window(dell)        screen(ibm)             2(ibm)        iphoto(apple)      1600x1200(dell)        cord(apple)        pentium(ibm)        hard(dell)
+               portege(ibm)        screen(dell)         speak(dell)       battery(ibm)         display(dell)         usb(ibm)        keyboard(dell)      hard(apple)
+               option(ibm)              1(ibm)        toshiba(dell)       battery(dell)      display(apple)          usb(dell)       processor(ibm)       card(ibm)
+                hassle(ibm)             1(dell)        speak(ibm)         hour(apple)          display(ibm)      firewire(apple)    processor(apple)       dvd(ibm)
+               device(ibm)         maco(apple)       toshiba(ibm)          hour(ibm)             view(dell)         plug(ibm)         power(apple)        card(dell)
+
+
+
+pus, we use an ’IBM’ word, an ’Apple’ word, and                                               7 Conclusion
+a ’Dell’ word to replace an English word in their
+                                                                                              In this paper, we study the problem of cross-
+corpus. For example, we use ’IBM10’, ’Apple10’,
+                                                                                              lingual latent topic extraction where the task is to
+’Dell10’ to replace the word ’CD’ whenever it ap-
+                                                                                              extract a set of common latent topics from multi-
+pears in an IBM’s, Apple’s, or Dell’s review. Af-
+                                                                                              lingual text data. We propose a novel probabilistic
+ter the replacement, the reviews about IBM, Ap-
+                                                                                              topic model (i.e. the Probabilistic Cross-Lingual
+ple, and Dell will not share vocabularies with each
+                                                                                              Latent Semantic Analysis (PCLSA) model) that
+other. On the other hand, for any three created
+                                                                                              can incorporate translation knowledge in bilingual
+words which represent the same English word, we
+                                                                                              dictionaries as a regularizer to constrain the pa-
+add three edges among them, and therefore we
+                                                                                              rameter estimation so that the learned topic models
+get a simulated dictionary graph for our PCLSA
+                                                                                              would be synchronized in multiple languages. We
+model.
+                                                                                              evaluated the model using several data sets. The
+                                                                                              experimental results show that PCLSA is effec-
+                                                                                              tive in extracting common latent topics from mul-
+   The experimental result is shown in Table 5, in                                            tilingual text data, and it outperforms the baseline
+which we try to extract 8 topics from the cross-                                              method which uses the standard PLSA to fit each
+lingual corpus. The first ten rows show the re-                                               monolingual text data set.
+sult of our PCLSA model, in which we set a very                                                   Our work opens up some interesting future re-
+small value to the weight parameter λ for the reg-                                            search directions to further explore. First, in
+ularizer part. This can be used as an approxima-                                              this paper, we have only experimented with uni-
+tion of the result from the traditional PLSA model                                            form weighting of edge in the bilingual graph.
+on this three language corpus. We can see that                                                It should be very interesting to explore how to
+the extracted topics are mainly written in mono-                                              assign weights to the edges and study whether
+language. As we set the value of parameter λ                                                  weighted graphs can further improve performance.
+larger, the extracted topics become multi-lingual,                                            Second, it would also be interesting to further
+which is shown in the next ten rows. From this                                                extend PCLSA to accommodate discovering top-
+result, we can see the difference between the re-                                             ics in each language that aren’t well-aligned with
+views of different brands about the similar topic.                                            other languages.
+In addition, if we set the λ even larger, we will
+                                                                                              8 Acknowledgments
+get topics that are mostly made of the same words
+from the three different brands, which means the                                              We sincerely thank the anonymous reviewers for
+extracted topics are very smooth on the dictionary                                            their comprehensive and constructive comments.
+graph now.                                                                                    The work was supported in part by NASA grant
+
+
+                                                                                     1135
+
+
+NNX08AC35A, by the National Science Foun-                 Jagadeesh Jagaralamudi and Hal Daumé III. 2010. Ex-
+dation under Grant Numbers IIS-0713581, IIS-                 tracting multilingual topics from unaligned corpora.
+                                                             In Proceedings of the European Conference on In-
+0713571, and CNS-0834709, and by a Sloan Re-
+                                                             formation Retrieval (ECIR), Milton Keynes, United
+search Fellowship.                                           Kingdom.
+
+                                                          Woosung Kim and Sanjeev Khudanpur. 2004. Lex-
+References                                                 ical triggers and latent semantic analysis for cross-
+                                                           lingual language model adaptation. ACM Trans-
+David Blei and John Lafferty. 2005. Correlated topic       actions on Asian Language Information Processing
+  models. In NIPS ’05: Advances in Neural Informa-         (TALIP), 3(2):94–112.
+  tion Processing Systems 18.
+                                                          Wei Li and Andrew McCallum. 2006. Pachinko allo-
+David M. Blei and John D. Lafferty. 2006. Dynamic
+                                                            cation: Dag-structured mixture models of topic cor-
+  topic models. In Proceedings of the 23rd interna-
+                                                            relations. In ICML ’06: Proceedings of the 23rd in-
+  tional conference on Machine learning, pages 113–
+                                                            ternational conference on Machine learning, pages
+  120.
+                                                            577–584.
+D. Blei, T. Griffiths, M. Jordan, and J. Tenenbaum.
+  2003a. Hierarchical topic models and the nested         H. Masuichi, R. Flournoy, S. Kaufmann, and S. Peters.
+  chinese restaurant process. In Neural Information         2000. A bootstrapping method for extracting bilin-
+  Processing Systems (NIPS) 16.                             gual text pairs. In Proc. 18th COLINC, pages 1066–
+                                                            1070.
+D. Blei, A. Ng, and M. Jordan. 2003b. Latent Dirichlet
+   allocation. Journal of Machine Learning Research,      Qiaozhu Mei and ChengXiang Zhai. 2006. A mixture
+   3:993–1022.                                              model for contextual text mining. In Proceedings of
+                                                            KDD ’06, pages 649–655.
+J. Boyd-Graber and D. Blei. 2009. Multilingual topic
+   models for unaligned text. In Uncertainty in Artifi-   Qiaozhu Mei, Xu Ling, Matthew Wondra, Hang Su,
+   cial Intelligence.                                       and ChengXiang Zhai. 2007. Topic sentiment mix-
+                                                            ture: Modeling facets and opinions in weblogs. In
+S. R. K. Branavan, Harr Chen, Jacob Eisenstein, and         Proceedings of WWW ’07.
+   Regina Barzilay. 2008. Learning document-level
+   semantic properties from free-text annotations. In     Qiaozhu Mei, Deng Cai, Duo Zhang, and ChengXiang
+   Proceedings of ACL 2008.                                 Zhai. 2008a. Topic modeling with network regular-
+                                                            ization. In WWW, pages 101–110.
+Martin Franz, J. Scott McCarley, and Salim Roukos.
+ 1998. Ad hoc and multilingual information retrieval      Qiaozhu Mei, Duo Zhang, and ChengXiang Zhai.
+ at IBM. In Text REtrieval Conference, pages 104–           2008b. A general optimization framework for
+ 115.                                                       smoothing language models on graph structures. In
+                                                            SIGIR ’08: Proceedings of the 31st annual interna-
+Pascale Fung. 1995. A pattern matching method               tional ACM SIGIR conference on Research and de-
+  for finding noun and proper noun translations from        velopment in information retrieval, pages 611–618,
+  noisy parallel corpora. In Proceedings of ACL 1995,       New York, NY, USA. ACM.
+  pages 236–243.
+
+Alfio Gliozzo and Carlo Strapparava. 2006. Exploit-       David Mimno, Hanna M. Wallach, Jason Naradowsky,
+  ing comparable corpora and bilingual dictionaries         David A. Smith, and Andrew Mccallum. 2009.
+  for cross-language text categorization. In ACL-44:        Polylingual topic models. In Proceedings of the
+  Proceedings of the 21st International Conference          2009 Conference on Empirical Methods in Natural
+  on Computational Linguistics and the 44th annual          Language Processing, pages 880–889, Singapore,
+  meeting of the Association for Computational Lin-         August. Association for Computational Linguistics.
+  guistics, pages 553–560, Morristown, NJ, USA. As-
+  sociation for Computational Linguistics.                Xiaochuan Ni, Jian-Tao Sun, Jian Hu, and Zheng Chen.
+                                                            2009. Mining multilingual topics from wikipedia.
+T. Hofmann. 1999a. Probabilistic latent semantic anal-      In WWW ’09: Proceedings of the 18th international
+   ysis. In Proceedings of UAI 1999, pages 289–296.         conference on World wide web, pages 1155–1156,
+                                                            New York, NY, USA. ACM.
+Thomas Hofmann. 1999b. The cluster-abstraction
+  model: Unsupervised learning of topic hierarchies       F. Sadat, M. Yoshikawa, and S. Uemura. 2003. Bilin-
+  from text data. In IJCAI’ 99, pages 682–687.               gual terminology acquisition from comparable cor-
+                                                             pora and phrasal translation to cross-language infor-
+Thomas Hofmann. 2001. Unsupervised learning by               mation retrieval. In ACL ’03: Proceedings of the
+  probabilistic latent semantic analysis. Mach. Learn.,      41st Annual Meeting on Association for Computa-
+  42(1-2):177–196.                                           tional Linguistics, pages 141–144.
+
+
+                                                      1136
+
+
+Mark Steyvers, Padhraic Smyth, Michal Rosen-Zvi,
+ and Thomas Griffiths. 2004. Probabilistic author-
+ topic models for information discovery. In Proceed-
+ ings of KDD’04, pages 306–315.
+
+Xuanhui Wang, ChengXiang Zhai, Xiao Hu, and
+  Richard Sproat. 2007. Mining correlated bursty
+  topic patterns from coordinated text streams. In
+  KDD ’07: Proceedings of the 13th ACM SIGKDD
+  international conference on Knowledge discovery
+  and data mining, pages 784–793, New York, NY,
+  USA. ACM.
+
+Bing Zhao and Eric P. Xing. 2006. Bitam: Bilingual
+  topic admixture models for word alignment. In In
+  Proceedings of the 44th Annual Meeting of the As-
+  sociation for Computational Linguistics.
+
+
+
+
+                                                   1137
+

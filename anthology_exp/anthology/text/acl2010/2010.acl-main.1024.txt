@@ -1,0 +1,731 @@
+             Fully Unsupervised Core-Adjunct Argument Classification
+
+                        Omri Abend∗                                             Ari Rappoport
+               Institute of Computer Science                            Institute of Computer Science
+                  The Hebrew University                                    The Hebrew University
+                omria01@cs.huji.ac.il                                      arir@cs.huji.ac.il
+
+
+
+
+                        Abstract                                    roles are more predicate-specific, e.g., [on his col-
+                                                                    league] has a different meaning with the verbs ‘op-
+     The core-adjunct argument distinction is a                     erate’ and ‘count’.
+     basic one in the theory of argument struc-                        Sometimes the same argument plays a different
+     ture. The task of distinguishing between                       role in different sentences. In (3), [in the park]
+     the two has strong relations to various ba-                    places a well-defined situation (Yuri playing foot-
+     sic NLP tasks such as syntactic parsing,                       ball) in a certain location. However, in “The troops
+     semantic role labeling and subcategoriza-                      are based [in the park]”, the same argument is
+     tion acquisition. This paper presents a                        obligatory, since being based requires a place to
+     novel unsupervised algorithm for the task                      be based in.
+     that uses no supervised models, utilizing                         Distinguishing between the two argument types
+     instead state-of-the-art syntactic induction                   has been discussed extensively in various formu-
+     algorithms. This is the first work to tackle                   lations in the NLP literature, notably in PP attach-
+     this task in a fully unsupervised scenario.                    ment, semantic role labeling (SRL) and subcatego-
+                                                                    rization acquisition. However, no work has tack-
+1     Introduction
+                                                                    led it yet in a fully unsupervised scenario. Unsu-
+The distinction between core arguments (hence-                      pervised models reduce reliance on the costly and
+forth, cores) and adjuncts is included in most the-                 error prone manual multi-layer annotation (POS
+ories on argument structure (Dowty, 2000). The                      tagging, parsing, core-adjunct tagging) commonly
+distinction can be viewed syntactically, as one                     used for this task. They also allow to examine the
+between obligatory and optional arguments, or                       nature of the distinction and to what extent it is
+semantically, as one between arguments whose                        accounted for in real data in a theory-independent
+meanings are predicate dependent and indepen-                       manner.
+dent. The latter (cores) are those whose function in                   In this paper we present a fully unsupervised al-
+the described event is to a large extent determined                 gorithm for core-adjunct classification. We utilize
+by the predicate, and are obligatory. Adjuncts are                  leading fully unsupervised grammar induction and
+optional arguments which, like adverbs, modify                      POS induction algorithms. We focus on preposi-
+the meaning of the described event in a predictable                 tional arguments, since non-prepositional ones are
+or predicate-independent manner.                                    generally cores. The algorithm uses three mea-
+   Consider the following examples:                                 sures based on different characterizations of the
+    1. The surgeon operated [on his colleague].                     core-adjunct distinction, and combines them us-
+                                                                    ing an ensemble method followed by self-training.
+    2. Ron will drop by [after lunch].
+                                                                    The measures used are based on selectional prefer-
+    3. Yuri played football [in the park].                          ence, predicate-slot collocation and argument-slot
+   The marked argument is a core in 1 and an ad-                    collocation.
+junct in 2 and 3. Adjuncts form an independent                         We evaluate against PropBank (Palmer et al.,
+semantic unit and their semantic role can often be                  2005), obtaining roughly 70% accuracy when
+inferred independently of the predicate (e.g., [af-                 evaluated on the prepositional arguments and
+ter lunch] is usually a temporal modifier). Core                    more than 80% for the entire argument set. These
+     ∗
+       Omri Abend is grateful to the Azrieli Foundation for         results are substantially better than those obtained
+the award of an Azrieli Fellowship.                                 by a non-trivial baseline.
+
+
+                                                              226
+          Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 226–236,
+                   Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+  Section 2 discusses the core-adjunct distinction.                  frame allows a ‘Duration’ non-core argument, the
+Section 3 describes the algorithm. Sections 4 and                    ‘Active Perception’ frame does not.
+5 present our experimental setup and results.                           PB and FN tend to agree in clear (prototypical)
+                                                                     cases, but to differ in others. For instance, both
+2       Core-Adjunct in Previous Work                                schemes would tag “Yuri played football [in the
+PropBank. PropBank (PB) (Palmer et al., 2005)                        park]” as an adjunct and “The commander placed
+is a widely used corpus, providing SRL annotation                    a guard [in the park]” as a core. However, in “He
+for the entire WSJ Penn Treebank. Its core labels                    walked [into his office]”, the marked argument is
+are predicate specific, while adjunct (or modifiers                  tagged as a directional adjunct in PB but as a ‘Di-
+under their terminology) labels are shared across                    rection’ core in FN.
+predicates. The adjuncts are subcategorized into                        Under both schemes, non-cores are usually con-
+several classes, the most frequent of which are                      fined to a few specific semantic domains, no-
+locative, temporal and manner1 .                                     tably time, place and manner, in contrast to cores
+   The organization of PropBank is based on                          that are not restricted in their scope of applica-
+the notion of diathesis alternations, which are                      bility. This approach is quite common, e.g., the
+(roughly) defined to be alternations between two                     COBUILD English grammar (Willis, 2004) cate-
+subcategorization frames that preserve meaning or                    gorizes adjuncts to be of manner, aspect, opinion,
+change it systematically. The frames in which                        place, time, frequency, duration, degree, extent,
+each verb appears were collected and sets of al-                     emphasis, focus and probability.
+ternating frames were defined. Each such set was
+                                                                     Semantic Role Labeling. Work in SRL does
+assumed to have a unique set of roles, named ‘role-
+                                                                     not tackle the core-adjunct task separately but as
+set’. These roles include all roles appearing in any
+                                                                     part of general argument classification. Super-
+of the frames, except of those defined as adjuncts.
+                                                                     vised approaches obtain an almost perfect score
+   Adjuncts are defined to be optional arguments
+                                                                     in distinguishing between the two in an in-domain
+appearing with a wide variety of verbs and frames.
+                                                                     scenario. For instance, the confusion matrix in
+They can be viewed as fixed points with respect to
+                                                                     (Toutanova et al., 2008) indicates that their model
+alternations, i.e., as arguments that do not change
+                                                                     scores 99.5% accuracy on this task. However,
+their place or slot when the frame undergoes an
+                                                                     adaptation results are lower, with the best two
+alternation. This follows the notions of optionality
+                                                                     models in the CoNLL 2005 shared task (Carreras
+and compositionality that define adjuncts.
+                                                                     and Màrquez, 2005) achieving 95.3% (Pradhan et
+   Detecting diathesis alternations automatically
+                                                                     al., 2008) and 95.6% (Punyakanok et al., 2008) ac-
+is difficult (McCarthy, 2001), requiring an initial
+                                                                     curacy in an adaptation between the relatively sim-
+acquisition of a subcategorization lexicon. This
+                                                                     ilar corpora WSJ and Brown.
+alone is a challenging task tackled in the past us-
+                                                                        Despite the high performance in supervised sce-
+ing supervised parsers (see below).
+                                                                     narios, tackling the task in an unsupervised man-
+FrameNet. FrameNet (FN) (Baker et al., 1998)                         ner is not easy. The success of supervised methods
+is a large-scale lexicon based on frame semantics.                   stems from the fact that the predicate-slot com-
+It takes a different approach from PB to semantic                    bination (slot is represented in this paper by its
+roles. Like PB, it distinguishes between core and                    preposition) strongly determines whether a given
+non-core arguments, but it does so for each and                      argument is an adjunct or a core (see Section 3.4).
+every frame separately. It does not commit that a                    Supervised models are provided with an anno-
+semantic role is consistently tagged as a core or                    tated corpus from which they can easily learn the
+a non-core across frames. For example, the se-                       mapping between predicate-slot pairs and their
+mantic role ‘path’ is considered core in the ‘Self                   core/adjunct label. However, induction of the
+Motion’ frame, but as non-core in the ‘Placing’                      mapping in an unsupervised manner must be based
+frame. Another difference is that FN does not al-                    on inherent core-adjunct properties. In addition,
+low any type of non-core argument to attach to                       supervised models utilize supervised parsers and
+a given frame. For instance, while the ‘Getting’                     POS taggers, while the current state-of-the-art in
+    1
+                                                                     unsupervised parsing and POS tagging is consid-
+     PropBank annotates modals and negation words as mod-
+ifiers. Since these are not arguments in the common usage of         erably worse than their supervised counterparts.
+the term, we exclude them from the discussion in this paper.            This challenge has some resemblance to un-
+
+
+                                                               227
+
+
+supervised detection of multiword expressions                 formulation models the core-adjunct distinction
+(MWEs). An important MWE sub-class is that                    explicitly. Therefore, any CCG parser can be used
+of phrasal verbs, which are also characterized by             as a core-adjunct classifier (Hockenmaier, 2003).
+verb-preposition pairs (Li et al., 2003; Sporleder
+and Li, 2009) (see also (Boukobza and Rappoport,
+2009)). Both tasks aim to determine semantic
+compositionality, which is a highly challenging               Subcategorization Acquisition. This task spec-
+task.                                                         ifies for each predicate the number, type and order
+                                                              of obligatory arguments. Determining the allow-
+   Few works addressed unsupervised SRL-related
+                                                              able subcategorization frames for a given predi-
+tasks. The setup of (Grenager and Manning,
+                                                              cate necessarily involves separating its cores from
+2006), who presented a Bayesian Network model
+                                                              its allowable adjuncts (which are not framed). No-
+for argument classification, is perhaps closest to
+                                                              table works in the field include (Briscoe and Car-
+ours. Their work relied on a supervised parser
+                                                              roll, 1997; Sarkar and Zeman, 2000; Korhonen,
+and a rule-based argument identification (both dur-
+                                                              2002). All these works used a parsed corpus in
+ing training and testing). Swier and Stevenson
+                                                              order to collect, for each predicate, a set of hy-
+(2004, 2005), while addressing an unsupervised
+                                                              pothesized subcategorization frames, to be filtered
+SRL task, greatly differ from us as their algorithm
+                                                              by hypothesis testing methods.
+uses the VerbNet (Kipper et al., 2000) verb lex-
+icon, in addition to supervised parses. Finally,                 This line of work differs from ours in a few
+Abend et al. (2009) tackled the argument identi-              aspects. First, all works use manual or super-
+fication task alone and did not perform argument              vised syntactic annotations, usually including a
+classification of any sort.                                   POS tagger. Second, the common approach to the
+                                                              task focuses on syntax and tries to identify the en-
+PP attachment. PP attachment is the task of de-               tire frame, rather than to tag each argument sep-
+termining whether a prepositional phrase which                arately. Finally, most works address the task at
+immediately follows a noun phrase attaches to the             the verb type level, trying to detect the allowable
+latter or to the preceding verb. This task’s relation         frames for each type. Consequently, the common
+to the core-adjunct distinction was addressed in              evaluation focuses on the quality of the allowable
+several works. For instance, the results of (Hindle           frames acquired for each verb type, and not on the
+and Rooth, 1993) indicate that their PP attachment            classification of specific arguments in a given cor-
+system works better for cores than for adjuncts.              pus. Such a token level evaluation was conducted
+   Merlo and Esteve Ferrer (2006) suggest a sys-              in a few works (Briscoe and Carroll, 1997; Sarkar
+tem that jointly tackles the PP attachment and the            and Zeman, 2000), but often with a small num-
+core-adjunct distinction tasks. Unlike in this work,          ber of verbs or a small number of frames. A dis-
+their classifier requires extensive supervision in-           cussion of the differences between type and token
+cluding WordNet, language-specific features and               level evaluation can be found in (Reichart et al.,
+a supervised parser. Their features are generally             2010).
+motivated by common linguistic considerations.
+Features found adaptable to a completely unsuper-                The core-adjunct distinction task was tackled in
+vised scenario are used in this work as well.                 the context of child language acquisition. Villav-
+                                                              icencio (2002) developed a classifier based on
+Syntactic Parsing. The core-adjunct distinction
+                                                              preposition selection and frequency information
+is included in many syntactic annotation schemes.
+                                                              for modeling the distinction for locative preposi-
+Although the Penn Treebank does not explicitly
+                                                              tional phrases. Her approach is not entirely corpus
+annotate adjuncts and cores, a few works sug-
+                                                              based, as it assumes the input sentences are given
+gested mapping its annotation (including func-
+                                                              in a basic logical form.
+tion tags) to core-adjunct labels. Such a mapping
+was presented in (Collins, 1999). In his Model                   The study of prepositions is a vibrant research
+2, Collins modifies his parser to provide a core-             area in NLP. A special issue of Computational Lin-
+adjunct prediction, thereby improving its perfor-             guistics, which includes an extensive survey of re-
+mance.                                                        lated work, was recently devoted to the field (Bald-
+   The Combinatory Categorial Grammar (CCG)                   win et al., 2009).
+
+
+                                                        228
+
+
+3   Algorithm                                                  (PSH) joint distribution. This section details the
+                                                               process of extracting samples from this joint dis-
+We are given a (predicate, argument) pair in a test            tribution given a raw text corpus.
+sentence, and we need to determine whether the
+                                                                  We start by parsing the corpus using the Seginer
+argument is a core or an adjunct. Test arguments
+                                                               parser (Seginer, 2007). This parser is unique in its
+are assumed to be correctly bracketed. We are al-
+                                                               ability to induce a bracketing (unlabeled parsing)
+lowed to utilize a training corpus of raw text.
+                                                               from raw text (without even using POS tags) with
+3.1 Overview                                                   strong results. Its high speed (thousands of words
+                                                               per second) allows us to use millions of sentences,
+Our algorithm utilizes statistics based on the                 a prohibitive number for other parsers.
+(predicate, slot, argument head) (PSH) joint dis-
+                                                                  We continue by tagging the corpus using
+tribution (a slot is represented by its preposition).
+                                                               Clark’s unsupervised POS tagger (Clark, 2003)
+To estimate this joint distribution, PSH samples
+                                                               and the unsupervised Prototype Tagger (Abend et
+are extracted from the training corpus using unsu-
+                                                               al., 2010)2 . The classes corresponding to preposi-
+pervised POS taggers (Clark, 2003; Abend et al.,
+                                                               tions and to verbs are manually selected from the
+2010) and an unsupervised parser (Seginer, 2007).
+                                                               induced clusters3 . A preposition is defined to be
+As current performance of unsupervised parsers
+                                                               any word which is the first word of an argument
+for long sentences is low, we use only short sen-
+                                                               and belongs to a prepositions cluster. A verb is
+tences (up to 10 words, excluding punctuation).
+                                                               any word belonging to a verb cluster. This manual
+The length of test sentences is not bounded. Our
+                                                               selection requires only a minute, since the number
+results will show that the training data accounts
+                                                               of classes is very small (34 in our experiments).
+well for the argument realization phenomena in
+                                                               In addition, knowing what is considered a prepo-
+the test set, despite the length bound on its sen-
+                                                               sition is part of the task definition itself.
+tences. The sample extraction process is detailed
+                                                                  Argument identification is hard even for super-
+in Section 3.2.
+                                                               vised models and is considerably more so for un-
+   Our approach makes use of both aspects of the
+                                                               supervised ones (Abend et al., 2009). We there-
+distinction – obligatoriness and compositionality.
+                                                               fore confine ourselves to sentences of length not
+We define three measures, one quantifying the
+                                                               greater than 10 (excluding punctuation) which
+obligatoriness of the slot, another quantifying the
+                                                               contain a single verb. A sequence of words will
+selectional preference of the verb to the argument
+                                                               be marked as an argument of the verb if it is a con-
+and a third that quantifies the association between
+                                                               stituent that does not contain the verb (according
+the head word and the slot irrespective of the pred-
+                                                               to the unsupervised parse tree), whose parent is
+icate (Section 3.3).
+                                                               an ancestor of the verb. This follows the pruning
+   The measures’ predictions are expected to coin-
+                                                               heuristic of (Xue and Palmer, 2004) often used by
+cide in clear cases, but may be less successful in
+                                                               SRL algorithms.
+others. Therefore, an ensemble-based method is
+                                                                  The corpus is now tagged using an unsupervised
+used to combine the three measures into a single
+                                                               POS tagger. Since the sentences in question are
+classifier. This results in a high accuracy classifier
+                                                               short, we consider every word which does not be-
+with relatively low coverage. A self-training step
+                                                               long to a closed class cluster as a head word (an
+is now performed to increase coverage with only a
+                                                               argument can have several head words). A closed
+minor deterioration in accuracy (Section 3.4).
+                                                               class is a class of function words with relatively
+   We focus on prepositional arguments. Non-
+                                                               few word types, each of which is very frequent.
+prepositional arguments in English tend to be
+                                                               Typical examples include determiners, preposi-
+cores (e.g., in more than 85% of the cases in
+                                                               tions and conjunctions. A class which is not closed
+PB sections 2–21), while prepositional arguments
+                                                               is open. In this paper, we define closed classes to
+tend to be equally divided between cores and ad-
+                                                               be clusters in which the ratio between the number
+juncts. The difficulty of the task thus lies in the
+                                                               of word tokens and the number of word types ex-
+classification of prepositional arguments.
+                                                                  2
+                                                                     Clark’s tagger was replaced by the Prototype Tagger
+3.2 Data Collection                                            where the latter gave a significant improvement. See Sec-
+                                                               tion 4.
+The statistical measures used by our classifier                    3
+                                                                     We also explore a scenario in which they are identified
+are based on the (predicate, slot, argument head)              by a supervised tagger. See Section 4.
+
+
+                                                         229
+
+
+ceeds a threshold T 4 .                                                  This is a natural extension of the naive (and sparse)
+   Using these annotation layers, we traverse the                        maximum likelihood estimator P r(h|p, s), which
+corpus and extract every (predicate, slot, argument                      is obtained by taking sim(h, h′ ) to be 1 if h = h′
+head) triplet. In case an argument has several head                      and 0 otherwise.
+words, each of them is considered as an inde-                               The similarity measure we use is based on the
+pendent sample. We denote the number of times                            slot distributions of the arguments. That is, two
+that a triplet occurred in the training corpus by                        arguments are considered similar if they tend to
+N (p, s, h).                                                             appear in the same slots. Each head word h is as-
+                                                                         signed a vector where each coordinate corresponds
+3.3 Collocation Measures                                                 to a slot s. The value of the coordinate is the num-
+In this section we present the three types of mea-                       ber of times h appeared in s, i.e. Σp′ N (p′ , s, h)
+sures used by the algorithm and the rationale be-                        (p′ is summed over all predicates). The similarity
+hind each of them. These measures are all based                          measure between two head words is then defined
+on the PSH joint distribution.                                           as the cosine measure of their vectors.
+   Given a (predicate, prepositional argument) pair                         Since arguments in the test set can be quite long,
+from the test set, we first tag and parse the argu-                      not every open class word in the argument is taken
+ment using the unsupervised tools above5 . Each                          to be a head word. Instead, only those appearing in
+word in the argument is now represented by its                           the top level (depth = 1) of the argument under its
+word form (without lemmatization), its unsuper-                          unsupervised parse tree are taken. In case there are
+vised POS tag and its depth in the parse tree of the                     no such open class words, we take those appearing
+argument. The last two will be used to determine                         in depth 2. The selectional preference of the whole
+which are the head words of the argument (see be-                        argument is then defined to be the arithmetic mean
+low). The head words themselves, once chosen,                            of this measure over all of its head words. If the ar-
+are represented by the lemma. We now compute                             gument has no head words under this definition or
+the following measures.                                                  if none of the head words appeared in the training
+                                                                         corpus, the selectional preference is undefined.
+Selectional Preference (SP). Since the seman-
+tics of cores is more predicate dependent than the                       Predicate-Slot Collocation. Since cores are
+semantics of adjuncts, we expect arguments for                           obligatory, when a predicate persistently appears
+which the predicate has a strong preference (in a                        with an argument in a certain slot, the arguments
+specific slot) to be cores.                                              in this slot tends to be cores. This notion can be
+   Selectional preference induction is a well-                           captured by the (predicate, slot) joint distribu-
+established task in NLP. It aims to quantify the                         tion. We use the Pointwise Mutual Information
+likelihood that a certain argument appears in a                          measure (PMI) to capture the slot and the predi-
+certain slot of a predicate. Several methods have                        cate’s collocation tendency. Let p be a predicate
+been suggested (Resnik, 1996; Li and Abe, 1998;                          and s a slot, then:
+Schulte im Walde et al., 2008).
+                                                                                                                P r(p, s)
+   We use the paradigm of (Erk, 2007). For a given                        P S(p, s) = P M I(p, s) = log                      =
+predicate slot pair (p, s), we define its preference                                                         P r(s) · P r(p)
+to the argument head h to be:                                                              N (p, s)Σp′ ,s′ N (p′ , s′ )
+                                                                                   = log
+                    X                                                                      Σs′ N (p, s′ )Σp′ N (p′ , s)
+ SP (p, s, h) =             P r(h′ |p, s) · sim(h, h′ )
+                                                                         Since there is only a meager number of possi-
+                    h′ ∈Heads
+                                                                         ble slots (that is, of prepositions), estimating the
+                                 N (p, s, h)
+             P r(h|p, s) =                                               (predicate, slot) distribution can be made by the
+                                Σh′ N (p, s, h′ )                        maximum likelihood estimator with manageable
+sim(h, h′ ) is a similarity measure between argu-                        sparsity.
+ment heads. Heads is the set of all head words.                             In order not to bias the counts towards predi-
+   4
+     We use sections 2–21 of the PTB WSJ for these counts,               cates which tend to take more arguments, we de-
+containing 0.95M words. Our T was set to 50.                             fine here N (p, s) to be the number of times the
+   5
+     Note that while current unsupervised parsers have low               (p, s) pair occurred in the training corpus, irre-
+performance on long sentences, arguments, even in long sen-
+tences, are usually still short enough for them to operate well.         spective of the number of head words the argu-
+Their average length in the test set is 5.1 words.                       ment had (and not e.g., Σh N (p, s, h)). Argu-
+
+
+                                                                   230
+
+
+ments with no prepositions are included in these                          the classifiers abstained, i.e., when sufficient infor-
+counts as well (with s = N U LL), so not to bias                          mation was available to make all three predictions.
+against predicates which tend to have less non-                           The prediction is determined by the majority vote.
+prepositional arguments.                                                     The ensemble classifier has high precision but
+                                                                          low coverage. In order to increase its coverage, a
+Argument-Slot Collocation. Adjuncts tend to                               self-training step is performed. We observe that a
+belong to one of a few specific semantic domains                          predicate and a slot generally determine whether
+(see Section 2). Therefore, if an argument tends to                       the argument is a core or an adjunct. For instance,
+appear in a certain slot in many of its instances, it                     in our development data, a classifier which assigns
+is an indication that this argument tends to have a                       all arguments that share a predicate and a slot their
+consistent semantic flavor in most of its instances.                      most common label, yields 94.3% accuracy on the
+In this case, the argument and the preposition can                        pairs appearing at least 5 times. This property of
+be viewed as forming a unit on their own, indepen-                        the core-adjunct distinction greatly simplifies the
+dent of the predicate with which they appear. We                          task for supervised algorithms (see Section 2).
+therefore expect such arguments to be adjuncts.                              We therefore apply the following procedure: (1)
+   We formalize this notion using the following                           tag the training data with the ensemble classifier;
+measure. Let p, s, h be a predicate, a slot and a                         (2) for each test sample x, if more than a ratio of α
+head word respectively. We then use6 :                                    of the training samples sharing the same predicate
+                                           Σp′ N (p′ , s, h)              and slot with x are labeled as cores, tag x as core.
+AS(s, h) = 1 − P r(s|h) = 1 −                                             Otherwise, tag x as adjunct.
+                                          Σp′ ,s′ N (p′ , s′ , h)
+                                                                             Test samples which do not share a predicate and
+We select the head words of the argument as                               a slot with any training sample are considered out
+we did with the selectional preference measure.                           of coverage. The parameter α is chosen so half
+Again, the AS of the whole argument is defined                            of the arguments are tagged as cores and half as
+to be the arithmetic mean of the measure over all                         adjuncts. In our experiments α was about 0.25.
+of its head words.
+                                                                          4 Experimental Setup
+Thresholding. In order to turn these measures
+into classifiers, we set a threshold below which ar-                      Experiments were conducted in two scenarios. In
+guments are marked as adjuncts and above which                            the ‘SID’ (supervised identification of prepositions
+as cores. In order to avoid tuning a parameter for                        and verbs) scenario, a gold standard list of prepo-
+each of the measures, we set the threshold as the                         sitions was provided. The list was generated by
+median value of this measure in the test set. That                        taking every word tagged by the preposition tag
+is, we find the threshold which tags half of the ar-                      (‘IN’) in at least one of its instances under the
+guments as cores and half as adjuncts. This relies                        gold standard annotation of the WSJ sections 2–
+on the prior knowledge that prepositional argu-                           21. Verbs were identified using MXPOST (Ratna-
+ments are roughly equally divided between cores                           parkhi, 1996). Words tagged with any of the verb
+and adjuncts7 .                                                           tags, except of the auxiliary verbs (‘have’, ‘be’ and
+                                                                          ‘do’) were considered predicates. This scenario
+3.4 Combination Model                                                     decouples the accuracy of the algorithm from the
+The algorithm proceeds to integrate the predic-                           quality of the unsupervised POS tagging.
+tions of the weak classifiers into a single classi-                          In the ‘Fully Unsupervised’ scenario, preposi-
+fier. We use an ensemble method (Breiman, 1996).                          tions and verbs were identified using Clark’s tag-
+Each of the classifiers may either classify an argu-                      ger (Clark, 2003). It was asked to produce a tag-
+ment as an adjunct, classify it as a core, or ab-                         ging into 34 classes. The classes corresponding
+stain. In order to obtain a high accuracy classifier,                     to prepositions and to verbs were manually identi-
+to be used for self-training below, the ensemble                          fied. Prepositions in the test set were detected with
+classifier only tags arguments for which none of                          84.2% precision and 91.6% recall.
+                                                                             The prediction of whether a word belongs to an
+    6
+      The conditional probability is subtracted from 1 so that            open class or a closed was based on the output of
+higher values correspond to cores, as with the other measures.
+    7
+      In case the test data is small, we can use the median value         the Prototype tagger (Abend et al., 2010). The
+on the training data instead.                                             Prototype tagger provided significantly more ac-
+
+
+                                                                    231
+
+
+curate predictions in this context than Clark’s.                         in which the ensemble is used to tag arguments
+   The 39832 sentences of PropBank’s sections 2–                         for which all three measures give a prediction
+21 were used as a test set without bounding their                        (the ‘Ensemble(Intersection)’ classifier) and one
+lengths8 . Cores were defined to be any argument                         in which the ensemble tags all arguments for
+bearing the labels ‘A0’ – ‘A5’, ‘C-A0’ – ‘C-A5’                          which at least one classifier gives a prediction (the
+or ‘R-A0’ – ‘R-A5’. Adjuncts were defined to                             ‘Ensemble(Union)’ classifier). For the latter, a tie
+be arguments bearing the labels ‘AM’, ‘C-AM’ or                          is broken in favor of the core label. The ‘Ensem-
+‘R-AM’. Modals (‘AM-MOD’) and negation mod-                              ble(Union)’ classifier is not a part of our model
+ifiers (‘AM-NEG’) were omitted since they do not                         and is evaluated only as a reference.
+represent adjuncts.                                                         In order to provide a broader perspective on the
+   The test set includes 213473 arguments, 45939                         task, we compare the measures in the basis of our
+(21.5%) are prepositional. Of the latter, 22442                          algorithm to simplified or alternative measures.
+(48.9%) are cores and 23497 (51.1%) are adjuncts.                        We experiment with the following measures:
+The non-prepositional arguments include 145767                              1. Simple SP – a selectional preference measure
+(87%) cores and 21767 (13%) adjuncts. The aver-                          defined to be P r(head|slot, predicate).
+age number of words per argument is 5.1.                                    2. Vast Corpus SP – similar to ‘Simple SP’
+   The NANC (Graff, 1995) corpus was used as a                           but with a much larger corpus. It uses roughly
+training set. Only sentences of length not greater                       100M arguments which were extracted from the
+than 10 excluding punctuation were used (see Sec-                        web-crawling based corpus of (Gabrilovich and
+tion 3.2), totaling 4955181 sentences. 7673878                           Markovitch, 2005) and the British National Cor-
+(5635810) arguments were identified in the ‘SID’                         pus (Burnard, 2000).
+(‘Fully Unsupervised’) scenario. The average                                3. Thesaurus SP – a selectional preference mea-
+number of words per argument is 1.6 (1.7).                               sure which follows the paradigm of (Erk, 2007)
+   Since this is the first work to tackle this task                      (Section 3.3) and defines the similarity between
+using neither manual nor supervised syntactic an-                        two heads to be the Jaccard affinity between their
+notation, there is no previous work to compare                           two entries in Lin’s automatically compiled the-
+to. However, we do compare against a non-trivial                         saurus (Lin, 1998)10 .
+baseline, which closely follows the rationale of                            4. Pr(slot|predicate) – an alternative to the used
+cores as obligatory arguments.                                           predicate-slot collocation measure.
+   Our Window Baseline tags a corpus using MX-                              5. PMI(slot, head) – an alternative to the used
+POST and computes, for each predicate and                                argument-slot collocation measure.
+preposition, the ratio between the number of times                          6. Head Dependence – the entropy of the pred-
+that the preposition appeared in a window of W                           icate distribution given the slot and the head (fol-
+words after the verb and the total number of                             lowing (Merlo and Esteve Ferrer, 2006)):
+times that the verb appeared. If this number ex-                          HD(s, h) = −Σp P r(p|s, h) · log(P r(p|s, h))
+ceeds a certain threshold β, all arguments hav-
+ing that predicate and preposition are tagged as                         Low entropy implies a core.
+cores. Otherwise, they are tagged as adjuncts. We                           For each of the scenarios and the algorithms,
+used 18.7M sentences from NANC of unbounded                              we report accuracy, coverage and effective accu-
+length for this baseline. W and β were fine-tuned                        racy. Effective accuracy is defined to be the ac-
+against the test set9 .                                                  curacy obtained when all out of coverage argu-
+   We also report results for partial versions of                        ments are tagged as adjuncts. This procedure al-
+the algorithm, starting with the three measures                          ways yields a classifier with 100% coverage and
+used (selectional preference, predicate-slot col-                        therefore provides an even ground for comparing
+location and argument-slot collocation). Results                         the algorithms’ performance.
+for the ensemble classifier (prior to the bootstrap-                        We see accuracy as important on its own right
+ping stage) are presented in two variants: one                           since increasing coverage is often straightforward
+   8
+                                                                         given easily obtainable larger training corpora.
+     The first 15K arguments were used for the algorithm’s
+development and therefore excluded from the evaluation.                     10
+                                                                               Since we aim for a minimally supervised scenario,
+   9
+     Their optimal value was found to be W =2, β=0.03. The               we used the proximity-based version of his thesaurus
+low optimal value of β is an indication of the noisiness of this         which does not require parsing as pre-processing.
+technique.                                                               http://webdocs.cs.ualberta.ca/∼lindek/Downloads/sims.lsp.gz
+
+
+                                                                   232
+
+
+                                                Collocation Measures                                      Ensemble + Cov.
+                                       Sel. Preference Pred-Slot Arg-Slot            Ensemble(I)      Ensemble(U) E(I) + ST
+     SID Scenario         Accuracy           65.6           64.5     72.4               74.1              68.7        70.6
+                          Coverage           35.6           77.8     44.7               33.2              88.1        74.2
+                          Eff. Acc.          56.7           64.8     58.8               58.8              67.8        68.4
+  Fully Unsupervised      Accuracy           62.6           61.1     69.4               70.6              64.8        68.8
+       Scenario           Coverage           24.8           59.0     38.7               22.8              74.2        56.9
+                          Eff. Acc.          52.6           57.5     55.8               53.8              61.0        61.4
+
+Table 1: Results for the various models. Accuracy, coverage and effective accuracy are presented in percents. Effective
+accuracy is defined to be the accuracy resulting from labeling each out of coverage argument with an adjunct label. The
+rows represent the following models (left to right): selectional preference, predicate-slot collocation, argument-slot collocation,
+‘Ensemble(Intersection)’, ‘Ensemble(Union)’ and the ‘Ensemble(Intersection)’ followed by self-training (see Section 3.4). ‘En-
+semble(Intersection)’ obtains the highest accuracy. The ensemble + self-training obtains the highest effective accuracy.
+
+                        Selectional Preference Measures          Pred-Slot Measures           Arg-Slot Measures
+                       SP∗ S. SP V.C. SP Lin SP               PS∗ Pr(s|p) Window              AS∗     PMI(s, h)      HD
+           Acc.        65.6    41.6      44.8     49.9        64.5    58.9      64.1          72.4      67.5         67.4
+           Cov.        35.6    36.9      45.3     36.7        77.8    77.8      92.6          44.7      44.7         44.7
+         Eff. Acc.     56.7    48.2      47.7     51.3        64.8    60.5      65.0          58.8      56.6         56.6
+
+Table 2: Comparison of the measures used by our model to alternative measures in the ‘SID’ scenario. Results are in percents.
+The sections of the table are (from left to right): selectional preference measures, predicate-slot measures, argument-slot mea-
+sures and head dependence. The measures are (left to right): SP∗ , Simple SP, Vast Corpus SP, Lin SP, PS∗ , Pr(slot|predicate),
+Window Baseline, AS∗ , PMI(slot, head) and Head Dependence. The measures marked with ∗ are the ones used by our model.
+See Section 4.
+
+
+Another reason is that a high accuracy classifier                    the number of unlabeled matches11 .
+may provide training data to be used by subse-
+quent supervised algorithms.                                         5 Results
+   For completeness, we also provide results for                     Table 1 presents the results of our main experi-
+the entire set of arguments. The great majority of                   ments. In both scenarios, the most accurate of the
+non-prepositional arguments are cores (87% in the                    three basic classifiers was the argument-slot col-
+test set). We therefore tag all non-prepositional as                 location classifier. This is an indication that the
+cores and tag prepositional arguments using our                      collocation between the argument and the prepo-
+model. In order to minimize supervision, we dis-                     sition is more indicative of the core/adjunct label
+tinguish between the prepositional and the non-                      than the obligatoriness of the slot (as expressed by
+prepositional arguments using Clark’s tagger.                        the predicate-slot collocation).
+   Finally, we experiment on a scenario where                           Indeed, we can find examples where adjuncts,
+even argument identification on the test set is                      although optional, appear very often with a certain
+not provided, but performed by the algorithm of                      verb. An example is ‘meet’, which often takes a
+(Abend et al., 2009), which uses neither syntactic                   temporal adjunct, as in ‘Let’s meet [in July]’. This
+nor SRL annotation but does utilize a supervised                     is a semantic property of ‘meet’, whose syntactic
+POS tagger. We therefore run it in the ‘SID’ sce-                    expression is not obligatory.
+nario. We apply it to the sentences of length at                        All measures suffered from a comparable dete-
+most 10 contained in sections 2–21 of PB (11586                      rioration of accuracy when moving from the ‘SID’
+arguments in 6007 sentences). Non-prepositional                      to the ‘Fully Unsupervised’ scenario. The dete-
+arguments are invariably tagged as cores and out                     rioration in coverage, however, was considerably
+of coverage prepositional arguments as adjuncts.                     lower for the argument-slot collocation.
+   We report labeled and unlabeled recall, preci-                       The ‘Ensemble(Intersection)’ model in both
+sion and F-scores for this experiment. An un-                        cases is more accurate than each of the basic clas-
+labeled match is defined to be an argument that                      sifiers alone. This is to be expected as it combines
+agrees in its boundaries with a gold standard ar-                    the predictions of all three. The self-training step
+gument and a labeled match requires in addition                      significantly increases the ensemble model’s cov-
+that the arguments agree in their core/adjunct la-                     11
+                                                                         Note that the reported unlabeled scores are slightly lower
+bel. We also report labeling accuracy which is the                   than those reported in the 2009 paper, due to the exclusion of
+ratio between the number of labeled matches and                      the modals and negation modifiers.
+
+
+                                                               233
+
+
+                  Precision    Recall    F-score    lAcc.              somewhat higher than the score on the entire test
+    Unlabeled       50.7        66.3      57.5        –
+     Labeled        42.4        55.4      48.0       83.6              set (‘SID’ scenario), which was 83.0% (68.4%),
+                                                                       probably due to the bounded length of the test sen-
+Table 3: Unlabeled and labeled scores for the experi-                  tences in this case.
+ments using the unsupervised argument identification system
+of (Abend et al., 2009). Precision, recall, F-score and label-
+ing accuracy are given in percents.
+                                                                       6 Conclusion
+                                                                       We presented a fully unsupervised algorithm for
+erage (with some loss in accuracy), thus obtaining                     the classification of arguments into cores and ad-
+the highest effective accuracy. It is also more accu-                  juncts. Since most non-prepositional arguments
+rate than the simpler classifier ‘Ensemble(Union)’                     are cores, we focused on prepositional arguments,
+(although the latter’s coverage is higher).                            which are roughly equally divided between cores
+   Table 2 presents results for the comparison to                      and adjuncts. The algorithm computes three sta-
+simpler or alternative measures. Results indicate                      tistical measures and utilizes ensemble-based and
+that the three measures used by our algorithm                          self-training methods to combine their predictions.
+(leftmost column in each section) obtain superior                         The algorithm applies state-of-the-art unsuper-
+results. The only case in which performance is                         vised parser and POS tagger to collect statistics
+comparable is the window baseline compared to                          from a large raw text corpus. It obtains an accu-
+the Pred-Slot measure. However, the baseline’s                         racy of roughly 70%. We also show that (some-
+score was obtained by using a much larger corpus                       what surprisingly) an argument-slot collocation
+and a careful hand-tuning of the parameters12 .                        measure gives more accurate predictions than a
+   The poor performance of Simple SP can be as-                        predicate-slot collocation measure on this task.
+cribed to sparsity. This is demonstrated by the                        We speculate the reason is that the head word dis-
+median value of 0, which this measure obtained                         ambiguates the preposition and that this disam-
+on the test set. Accuracy is only somewhat better                      biguation generally determines whether a preposi-
+with a much larger corpus (Vast Corpus SP). The                        tional argument is a core or an adjunct (somewhat
+Thesaurus SP most probably failed due to insuffi-                      independently of the predicate). This calls for
+cient coverage, despite its applicability in a similar                 a future study into the semantics of prepositions
+supervised task (Zapirain et al., 2009).                               and their relation to the core-adjunct distinction.
+   The Head Dependence measure achieves a rel-                         In this context two recent projects, The Preposi-
+atively high accuracy of 67.4%. We therefore at-                       tion Project (Litkowski and Hargraves, 2005) and
+tempted to incorporate it into our model, but failed                   PrepNet (Saint-Dizier, 2006), which attempt to
+to achieve a significant improvement to the overall                    characterize and categorize the complex syntactic
+result. We expect a further study of the relations                     and semantic behavior of prepositions, may be of
+between the measures will suggest better ways of                       relevance.
+combining their predictions.                                              It is our hope that this work will provide a better
+   The obtained effective accuracy for the entire                      understanding of core-adjunct phenomena. Cur-
+set of arguments, where the prepositional argu-                        rent supervised SRL models tend to perform worse
+ments are automatically identified, was 81.6%.                         on adjuncts than on cores (Pradhan et al., 2008;
+   Table 3 presents results of our experiments with                    Toutanova et al., 2008). We believe a better under-
+the unsupervised argument identification model                         standing of the differences between cores and ad-
+of (Abend et al., 2009). The unlabeled scores                          juncts may contribute to the development of better
+reflect performance on argument identification                         SRL techniques, in both its supervised and unsu-
+alone, while the labeled scores reflect the joint per-                 pervised variants.
+formance of both the 2009 and our algorithms.
+These results, albeit low, are potentially benefi-                     References
+cial for unsupervised subcategorization acquisi-
+                                                                       Omri Abend, Roi Reichart and Ari Rappoport, 2009.
+tion. The accuracy of our model on the entire                           Unsupervised Argument Identification for Semantic
+set (prepositional argument subset) of correctly                        Role Labeling. ACL ’09.
+identified arguments was 83.6% (71.7%). This is
+                                                                       Omri Abend, Roi Reichart and Ari Rappoport, 2010.
+  12                                                                    Improved Unsupervised POS Induction through Pro-
+    We tried about 150 parameter pairs for the baseline. The
+average of the five best effective accuracies was 64.3%.                totype Discovery. ACL ’10.
+
+
+                                                                 234
+
+
+Collin F. Baker, Charles J. Fillmore and John B. Lowe,         Anna Korhonen, 2002. Subcategorization Acquisition.
+  1998. The Berkeley FrameNet Project. ACL-                      Ph.D. thesis, University of Cambridge.
+  COLING ’98.
+                                                               Hang Li and Naoki Abe, 1998. Generalizing Case
+Timothy Baldwin, Valia Kordoni and Aline Villavicen-             Frames using a Thesaurus and the MDL Principle.
+  cio, 2009. Prepositions in Applications: A Sur-                Computational Linguistics, 24(2):217–244.
+  vey and Introduction to the Special Issue. Computa-
+  tional Linguistics, 35(2):119–147.                           Wei Li, Xiuhong Zhang, Cheng Niu, Yuankai Jiang and
+                                                                 Rohini Srihari, 2003. An Expert Lexicon Approach
+Ram Boukobza and Ari Rappoport, 2009. Multi-                     to Identifying English Phrasal Verbs. ACL ’03.
+  Word Expression Identification Using Sentence Sur-
+  face Features. EMNLP ’09.                                    Dekang Lin, 1998. Automatic Retrieval and Cluster-
+                                                                 ing of Similar Words. COLING–ACL ’98.
+Leo Breiman, 1996. Bagging Predictors. Machine
+  Learning, 24(2):123–140.                                     Ken Litkowski and Orin Hargraves, 2005. The Prepo-
+                                                                 sition Project. ACL-SIGSEM Workshop on “The
+Ted Briscoe and John Carroll, 1997. Automatic Ex-                Linguistic Dimensions of Prepositions and Their
+  traction of Subcategorization from Corpora. Ap-                Use in Computational Linguistic Formalisms and
+  plied NLP ’97.                                                 Applications”.
+
+Lou Burnard, 2000. User Reference Guide for the                Diana McCarthy, 2001. Lexical Acquisition at the
+  British National Corpus. Technical report, Oxford              Syntax-Semantics Interface: Diathesis Alternations,
+  University.                                                    Subcategorization Frames and Selectional Prefer-
+                                                                 ences. Ph.D. thesis, University of Sussex.
+Xavier Carreras and Lluı̀s Màrquez, 2005. Intro-
+  duction to the CoNLL–2005 Shared Task: Semantic              Paula Merlo and Eva Esteve Ferrer, 2006. The No-
+  Role Labeling. CoNLL ’05.                                      tion of Argument in Prepositional Phrase Attach-
+                                                                 ment. Computational Linguistics, 32(3):341–377.
+Alexander Clark, 2003. Combining Distributional and
+  Morphological Information for Part of Speech In-             Martha Palmer, Daniel Gildea and Paul Kingsbury,
+  duction. EACL ’03.                                            2005. The Proposition Bank: A Corpus Annotated
+                                                                with Semantic Roles. Computational Linguistics,
+Michael Collins, 1999. Head-driven statistical models           31(1):71–106.
+  for natural language parsing. Ph.D. thesis, Univer-
+  sity of Pennsylvania.                                        Sameer Pradhan, Wayne Ward and James H. Martin,
+                                                                 2008. Towards Robust Semantic Role Labeling.
+David Dowty, 2000. The Dual Analysis of Adjuncts                 Computational Linguistics, 34(2):289–310.
+  and Complements in Categorial Grammar. Modify-
+  ing Adjuncts, ed. Lang, Maienborn and Fabricius–             Vasin Punyakanok, Dan Roth and Wen-tau Yih, 2008.
+  Hansen, de Gruyter, 2003.                                      The Importance of Syntactic Parsing and Inference
+                                                                 in Semantic Role Labeling. Computational Linguis-
+Katrin Erk, 2007. A Simple, Similarity-based Model               tics, 34(2):257–287.
+  for Selectional Preferences. ACL ’07.
+                                                               Adwait Ratnaparkhi, 1996. Maximum Entropy Part-
+Evgeniy Gabrilovich and Shaul Markovitch, 2005.                  Of-Speech Tagger. EMNLP ’96.
+  Feature Generation for Text Categorization using
+  World Knowledge. IJCAI ’05.                                  Roi Reichart, Omri Abend and Ari Rappoport, 2010.
+                                                                 Type Level Clustering Evaluation: New Measures
+David Graff, 1995. North American News Text Cor-                 and a POS Induction Case Study. CoNLL ’10.
+  pus. Linguistic Data Consortium. LDC95T21.
+                                                               Philip Resnik, 1996. Selectional constraints: An
+Trond Grenager and Christopher D. Manning, 2006.                 information-theoretic model and its computational
+  Unsupervised Discovery of a Statistical Verb Lexi-             realization. Cognition, 61:127–159.
+  con. EMNLP ’06.
+                                                               Patrick Saint-Dizier, 2006. PrepNet: A Multilingual
+Donald Hindle and Mats Rooth, 1993. Structural Am-               Lexical Description of Prepositions. LREC ’06.
+  biguity and Lexical Relations. Computational Lin-
+  guistics, 19(1):103–120.                                     Anoop Sarkar and Daniel Zeman, 2000. Automatic
+                                                                 Extraction of Subcategorization Frames for Czech.
+Julia Hockenmaier, 2003. Data and Models for Sta-                COLING ’00.
+   tistical Parsing with Combinatory Categorial Gram-
+   mar. Ph.D. thesis, University of Edinburgh.                 Sabine Schulte im Walde, Christian Hying, Christian
+                                                                 Scheible and Helmut Schmid, 2008. Combining
+Karin Kipper, Hoa Trang Dang and Martha Palmer,                  EM Training and the MDL Principle for an Auto-
+  2000. Class-Based Construction of a Verb Lexicon.              matic Verb Classification Incorporating Selectional
+  AAAI ’00.                                                      Preferences. ACL ’08.
+
+
+                                                         235
+
+
+Yoav Seginer, 2007. Fast Unsupervised Incremental
+  Parsing. ACL ’07.
+
+Caroline Sporleder and Linlin Li, 2009. Unsupervised
+  Recognition of Literal and Non-Literal Use of Id-
+  iomatic Expressions. EACL ’09.
+
+Robert S. Swier and Suzanne Stevenson, 2004. Unsu-
+  pervised Semantic Role Labeling. EMNLP ’04.
+
+Robert S. Swier and Suzanne Stevenson, 2005. Ex-
+  ploiting a Verb Lexicon in Automatic Semantic Role
+  Labelling. EMNLP ’05.
+
+Kristina Toutanova, Aria Haghighi and Christopher D.
+  Manning, 2008. A Global Joint Model for Se-
+  mantic Role Labeling. Computational Linguistics,
+  34(2):161–191.
+
+Aline Villavicencio, 2002. Learning to Distinguish PP
+  Arguments from Adjuncts. CoNLL ’02.
+
+Dave Willis, 2004. Collins Cobuild Intermedia En-
+  glish Grammar, Second Edition. HarperCollins Pub-
+  lishers.
+
+Nianwen Xue and Martha Palmer, 2004. Calibrating
+  Features for Semantic Role Labeling. EMNLP ’04.
+
+Beñat Zapirain, Eneko Agirre and Lluı́s Màrquez,
+  2009. Generalizing over Lexical Features: Selec-
+  tional Preferences for Semantic Role Classification.
+  ACL ’09, short paper.
+
+
+
+
+                                                         236
+

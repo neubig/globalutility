@@ -1,0 +1,759 @@
+               Simple, Accurate Parsing with an All-Fragments Grammar
+
+                                       Mohit Bansal and Dan Klein
+                                        Computer Science Division
+                                      University of California, Berkeley
+                                  {mbansal, klein}@cs.berkeley.edu
+
+
+
+                          Abstract                                (Galley et al., 2004; Chiang, 2005; Deneefe and
+                                                                  Knight, 2009). In all such systems, a central chal-
+        We present a simple but accurate parser
+                                                                  lenge is efficiency: there are generally a combina-
+        which exploits both large tree fragments
+                                                                  torial number of substructures in the training data,
+        and symbol refinement. We parse with
+                                                                  and it is impractical to explicitly extract them all.
+        all fragments of the training set, in con-
+                                                                  On both efficiency and statistical grounds, much
+        trast to much recent work on tree se-
+                                                                  recent TSG work has focused on fragment selec-
+        lection in data-oriented parsing and tree-
+                                                                  tion (Zuidema, 2007; Cohn et al., 2009; Post and
+        substitution grammar learning. We re-
+                                                                  Gildea, 2009).
+        quire only simple, deterministic grammar
+                                                                     At the same time, many high-performance
+        symbol refinement, in contrast to recent
+                                                                  parsers have focused on symbol refinement ap-
+        work on latent symbol refinement. More-
+                                                                  proaches, wherein PCFG independence assump-
+        over, our parser requires no explicit lexi-
+                                                                  tions are weakened not by increasing rule sizes
+        con machinery, instead parsing input sen-
+                                                                  but by subdividing coarse treebank symbols into
+        tences as character streams. Despite its
+                                                                  many subcategories either using structural anno-
+        simplicity, our parser achieves accuracies
+                                                                  tation (Johnson, 1998; Klein and Manning, 2003)
+        of over 88% F1 on the standard English
+                                                                  or lexicalization (Collins, 1999; Charniak, 2000).
+        WSJ task, which is competitive with sub-
+                                                                  Indeed, a recent trend has shown high accura-
+        stantially more complicated state-of-the-
+                                                                  cies from models which are dedicated to inducing
+        art lexicalized and latent-variable parsers.
+                                                                  such subcategories (Henderson, 2004; Matsuzaki
+        Additional specific contributions center on
+                                                                  et al., 2005; Petrov et al., 2006). In this paper,
+        making implicit all-fragments parsing effi-
+                                                                  we present a simplified parser which combines the
+        cient, including a coarse-to-fine inference
+                                                                  two basic ideas, using both large fragments and
+        scheme and a new graph encoding.
+                                                                  symbol refinement, to provide non-local and lo-
+1       Introduction                                              cal context respectively. The two approaches turn
+                                                                  out to be highly complementary; even the simplest
+Modern NLP systems have increasingly used data-
+                                                                  (deterministic) symbol refinement and a basic use
+intensive models that capture many or even all
+                                                                  of an all-fragments grammar combine to give ac-
+substructures from the training data. In the do-
+                                                                  curacies substantially above recent work on tree-
+main of syntactic parsing, the idea that all train-
+                                                                  substitution grammar based parsers and approach-
+ing fragments1 might be relevant to parsing has a
+                                                                  ing top refinement-based parsers. For example,
+long history, including tree-substitution grammar
+                                                                  our best result on the English WSJ task is an F1
+(data-oriented parsing) approaches (Scha, 1990;
+                                                                  of over 88%, where recent TSG parsers2 achieve
+Bod, 1993; Goodman, 1996a; Chiang, 2003) and
+                                                                  82-84% and top refinement-based parsers3 achieve
+tree kernel approaches (Collins and Duffy, 2002).
+                                                                  88-90% (e.g., Table 5).
+For machine translation, the key modern advance-
+                                                                     Rather than select fragments, we use a simplifi-
+ment has been the ability to represent and memo-
+                                                                  cation of the PCFG-reduction of DOP (Goodman,
+rize large training substructures, be it in contigu-
+                                                                     2
+ous phrases (Koehn et al., 2003) or syntactic trees                    Zuidema (2007), Cohn et al. (2009), Post and Gildea
+                                                                  (2009). Zuidema (2007) incorporates deterministic refine-
+    1                                                             ments inspired by Klein and Manning (2003).
+     In this paper, a fragment means an elementary tree in a
+                                                                     3
+tree-substitution grammar, while a subtree means a fragment            Including Collins (1999), Charniak and Johnson (2005),
+that bottoms out in terminals.                                    Petrov and Klein (2007).
+
+
+                                                            1098
+           Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1098–1107,
+                     Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+1996a) to work with all fragments. This reduction      and other areas in which a similar tension exists
+is a flexible, implicit representation of the frag-    between the desire to extract many large structures
+ments that, rather than extracting an intractably      and the computational cost of doing so.
+large grammar over fragment types, indexes all
+nodes in the training treebank and uses a com-         2       Representation of Implicit Grammars
+pact grammar over indexed node tokens. This in-
+                                                       2.1      All-Fragments Grammars
+dexed grammar, when appropriately marginalized,
+is equivalent to one in which all fragments are ex-    We consider an all-fragments grammar G (see
+plicitly extracted. Our work is the first to apply     Figure 1(a)) derived from a binarized treebank
+this reduction to full-scale parsing. In this direc-   B. G is formally a tree-substitution grammar
+tion, we present a coarse-to-fine inference scheme     (Resnik, 1992; Bod, 1993) wherein each subgraph
+and a compact graph encoding of the training set,      of each training tree in B is an elementary tree,
+which, together, make parsing manageable. This         or fragment f , in G. In G, each derivation d is
+tractability allows us to avoid selection of frag-     a tree (multiset) of fragments (Figure 1(c)), and
+ments, and work with all fragments.                    the weight of the derivation is the Qproduct of the
+                                                       weights of the fragments: ω(d) = f ∈d ω(f ). In
+   Of course, having a grammar that includes all
+                                                       the following, the derivation weights, when nor-
+training substructures is only desirable to the ex-
+                                                       malized over a given sentence s, are interpretable
+tent that those structures can be appropriately
+                                                       as conditional probabilities, so G induces distribu-
+weighted. Implicit representations like those
+                                                       tions of the form P (d|s).
+used here do not allow arbitrary weightings of
+                                                          In models like G, many derivations will gen-
+fragments. However, we use a simple weight-
+                                                       erally correspond to the same unsegmented tree,
+ing scheme which does decompose appropriately
+                                                       and the parsing task is to find the tree whose
+over the implicit encoding, and which is flexible
+                                                       sum of derivation    weights is highest: tmax =
+enough to allow weights to depend not only on fre-               P
+                                                       arg maxt d∈t ω(d). This final optimization is in-
+quency but also on fragment size, node patterns,
+                                                       tractable in a way that is orthogonal to this pa-
+and certain lexical properties. Similar ideas have
+                                                       per (Sima’an, 1996); we describe minimum Bayes
+been explored in Bod (2001), Collins and Duffy
+                                                       risk approximations in Section 4.
+(2002), and Goodman (2003). Our model empir-
+ically affirms the effectiveness of such a flexible    2.2      Implicit Representation of G
+weighting scheme in full-scale experiments.
+                                                       Explicitly extracting all fragment-rules of a gram-
+   We also investigate parsing without an explicit     mar G is memory and space intensive, and imprac-
+lexicon. The all-fragments approach has the ad-        tical for full-size treebanks. As a tractable alter-
+vantage that parsing down to the character level       native, we consider an implicit grammar GI (see
+requires no special treatment; we show that an ex-     Figure 1(b)) that has the same posterior probabil-
+plicit lexicon is not needed when sentences are        ities as G. To construct GI , we use a simplifi-
+considered as strings of characters rather than        cation of the PCFG-reduction of DOP by Good-
+words. This avoids the need for complex un-            man (1996a).4 GI has base symbols, which are
+known word models and other specialized lexical        the symbol types from the original treebank, as
+resources.                                             well as indexed symbols, which are obtained by
+   The main contribution of this work is to show       assigning a unique index to each node token in
+practical, tractable methods for working with an       the training treebank. The vast majority of sym-
+all-fragments model, without an explicit lexicon.      bols in GI are therefore indexed symbols. While
+In the parsing case, the central result is that ac-    it may seem that such grammars will be overly
+curacies in the range of state-of-the-art parsers      large, they are in fact reasonably compact, being
+(i.e., over 88% F1 on English WSJ) can be ob-          linear in the treebank size B, while G is exponen-
+tained with no sampling, no latent-variable mod-       tial in the length of a sentence. In particular, we
+eling, no smoothing, and even no explicit lexicon      found that GI was smaller than explicit extraction
+(hence negligible training overall). These tech-       of all depth 1 and 2 unbinarized fragments for our
+niques, however, are not limited to the case of            4
+                                                            The difference is that Goodman (1996a) collapses our
+monolingual parsing, offering extensions to mod-       BEGIN   and END rules into the binary productions, giving a
+els of machine translation, semantic interpretation,   larger grammar which is less convenient for weighting.
+
+
+                                                   1099
+
+
+                                GRAMMAR                          DERIVATIONS                              FRAGMENTS
+                                      !                                     X
+      EXPLICIT                                                                                                      X
+
+                 SYMBOLS: X, for all types in treebank "
+(a)                                                                  A      B      C                           Y         Z
+
+                 RULES:      Xĺ#, for all fragments in "                                                  A         B          C
+                                                                          words
+                                                                           %                                        #
+                       MAP ʌ
+
+                                     !$                                                                            X
+                                                                                                                                       BEGIN
+                 SYMBOLS:
+                                                                            X                                      Xi
+                 ŹBase:    X for all types in treebank "
+      IMPLICIT
+
+
+
+
+                                                                                                                                    CONTINUE
+                 ŹIndexed: Xi for all tokens of X in "                                                        Yj        Zk
+(b)
+                                                                     A      B      C
+                 RULES:                                                                               Al           Bm         Cn
+                 ŹBegin:    ;ĺ;i for all Xi in "                          words                                                         END
+                 ŹContinue: Xiĺ<j Zk for all rule-tokens in "                                         A            B          C
+                 ŹEnd:      Xi ĺ;IRUDOO;i in "
+                                                                          %$                                       #$
+
+Figure 1: Grammar definition and sample derivations and fragments in the grammar for (a) the explicitly extracted all-fragments
+grammar G, and (b) its implicit representation GI .
+
+
+treebanks – in practice, even just the raw treebank                      G. In particular, each derivation d in G has a non-
+grammar grows almost linearly in the size of B.5                         empty set of corresponding derivations {dI } =
+   There are 3 kinds of rules in GI , which are illus-                   π −1 (d) in GI , because fragments f in d corre-
+trated in Figure 1(d). The BEGIN rules transition                        spond to multiple fragments f I in GI that differ
+from a base symbol to an indexed symbol and rep-                         only in their indexed symbols (one f I per occur-
+resent the beginning of a fragment from G. The                           rence of f in B). Therefore, the set of derivations
+CONTINUE rules use only indexed symbols and                              in G is preserved in GI . We now discuss how
+correspond to specific depth-1 binary fragment to-                       weights can be preserved under π.
+kens from training trees, representing the internal
+continuation of a fragment in G. Finally, END                            2.3      Equivalence for Weighted Grammars
+rules transition from an indexed symbol to a base
+                                                                         In general, arbitrary weight functions ω on frag-
+symbol, representing the frontier of a fragment.
+                                                                         ments in G do not decompose along the increased
+   By construction, all derivations in GI will seg-                      locality of GI . However, we now consider a use-
+ment, as shown in Figure 1(d), into regions corre-                       fully broad class of weighting schemes for which
+sponding to tokens of fragments from the training                        the posterior probabilities under G of derivations
+treebank B. Let π be the map which takes appro-                          d are preserved in GI . In particular, assume that
+priate fragments in GI (those that begin and end                         we have a weighting ω on rules in GI which does
+with base symbols and otherwise contain only in-                         not depend on the specific indices used. There-
+dexed symbols), and maps them to the correspond-                         fore, any fragment f I will have a weight in GI of
+ing f in G. We can consider any derivation dI in                         the form:
+GI to be a tree of fragments f I , each fragment a
+token of a fragment type f = π(f I ) in the orig-                                                   Y                        Y
+                                                                           ωI (f I ) = ωBEGIN (b)         ωCONT (r)                ωEND (e)
+inal grammar G. By extension, we can therefore
+                                                                                                    r∈C                      e∈E
+map any derivation dI in GI to the corresponding
+derivation d = π(dI ) in G.                                              where b is the BEGIN rule, r are CONTINUE rules,
+   The mapping π is an onto mapping from GI to                           and e are END rules in the fragment f I (see Fig-
+    5                                                                    ure 1(d)). Because ω is assumed to not depend on
+      Just half the training set (19916 trees) itself had 1.7 mil-
+lion depth 1 and 2 unbinarized rules compared to the 0.9 mil-            the specific indices, all f I which correspond to the
+lion indexed symbols in GI (after graph packing). Even ex-               same f under π will have the same weight ωI (f )
+tracting binarized fragments (depth 1 and 2, with one order
+of parent annotation) gives us 0.75 million rules, and, practi-
+                                                                         in GI .
+cally, we would need fragments of greater depth.                            In this case, we can define an induced weight
+
+
+                                                                 1100
+
+
+          RULE TYPES                                    WEIGHTS
+                                                                                       in the parameter schema we have defined. The
+                                          MIN-FRAGMENTS       DOP1       OUR MODEL
+                                                                                       END rule weight is 0 or 1 depending on whether
+               X
+                               BEGIN                                                   A is an intermediate symbol or not.6 The local
+               Xi                                                                      fragments in DOP1 were flat (non-binary) so this
+                           CONTINUE              !              !
+          Yj        Zk                                                                 weight choice simulates that property by not al-
+                                                                                       lowing switching between fragments at intermedi-
+    Al
+                                                                                       ate symbols.
+                                 END           "%#$%!         " #$ !
+    A
+                                                                                          The original DOP1 model weights a fragment f
+                                                                                       in G as ωG (f ) = n(f )/s(X), i.e., the frequency
+    Bm
+                                                                                       of fragment f divided by the number of fragments
+                           CONTINUE              !              !
+word                                                                                   rooted at base symbol X. This is simulated by our
+                                                                                       weight choices (Figure 2) where each fragment f I
+Figure 2: Rules defined for grammar GI and weight schema                               in GI has weight       I
+for the DOP1 model, the Min-Fragments model (Goodman                                                P ωI (f ) = 1/s(X)       and therefore,
+                                                                                                                        I ) = n(f )/s(X).
+(2003)) and our model. Here s(X) denotes the total number
+                                                                                       ωG (f ) =        I  −1
+                                                                                                       f ∈π (f ) ω I (f
+of fragments rooted at base symbol X.                                                  Given the weights used for DOP1, the recursive
+                                                                                       formula for the number of fragments s(Xi ) rooted
+                                                                                       at indexed symbol Xi (and for the CONTINUE rule
+for fragments f in G by
+                                                                                       Xi → Yj Zk ) is
+               X
+  ωG (f ) =          ωI (f I ) = n(f )ωI (f )                                                   s(Xi ) = (1 + s(Yj ))(1 + s(Zk )),               (1)
+                         f I ∈π −1 (f )
+                                       Y                       Y                       where s(Yj ) and s(Zk ) are the number of frag-
+     = n(f )ωBEGIN (b0 )                       ωCONT (r0 )             ωEND (e0 )
+                                       r0 ∈C                   e0 ∈E
+                                                                                       ments rooted at indexed symbols Yj and Zk (non-
+                                                                                       intermediate) respectively. The number of frag-
+where now b0 , r0 and e0 are non-indexed type ab-                                      ments s(X)
+                                                                                                P rooted at base symbol X is then
+stractions of f ’s member productions in GI and                                        s(X) = Xi s(Xi ).
+n(f ) = |π −1 (f )| is the number of tokens of f in                                       Implicitly parsing with the full DOP1 model (no
+B.                                                                                     sampling of fragments) using the weights in Fig-
+   Under the weight function ωG (f ), any deriva-                                      ure 2 gives a 68% parsing accuracy on the WSJ
+tion d in G will have weight which obeys                                               dev-set.7 This result indicates that the weight of a
+                 Y             Y                                                       fragment should depend on more than just its fre-
+       ωG (d) =      ωG (f ) =    n(f )ωI (f )                                         quency.
+                              f ∈d                   f ∈d
+                                                     X                                 3.2   Better Parameterization
+                                                =            ωI (dI )
+                                                     dI ∈d
+                                                                                       As has been pointed out in the literature, large-
+                                                                                       fragment grammars can benefit from weights of
+and so the posterior P (d|s) of a derivation d for                                     fragments depending not only on their frequency
+a sentence s will be the same whether computed                                         but also on other properties. For example, Bod
+in G or GI . Therefore, provided our weighting                                         (2001) restricts the size and number of words
+function on fragments f in G decomposes over                                           in the frontier of the fragments, and Collins and
+the derivational representation of f in GI , we can                                    Duffy (2002) and Goodman (2003) both give
+equivalently compute the quantities we need for                                        larger fragments smaller weights. Our model can
+inference (see Section 4) using GI instead.                                            incorporate both size and lexical properties. In
+                                                                                       particular, we set ωCONT (r) for each binary CON -
+3        Parameterization of Implicit                                                  TINUE rule r to a learned constant ωBODY , and we
+         Grammars                                                                      set the weight for each rule with a POS parent to a
+3.1       Classical DOP1                                                                   6
+                                                                                             Intermediate symbols are those created during binariza-
+                                                                                       tion.
+The original data-oriented parsing model ‘DOP1’                                            7
+                                                                                             For DOP1 experiments, we use no symbol refinement.
+(Bod, 1993) is a particular instance of the general                                    We annotate with full left binarization history to imitate the
+weighting scheme which decomposes appropri-                                            flat nature of fragments in DOP1. We use mild coarse-pass
+                                                                                       pruning (Section 4.1) without which the basic all-fragments
+ately over the implicit encoding, described in Sec-                                    chart does not fit in memory. Standard WSJ treebank splits
+tion 2.3. Figure 2 shows rule weights for DOP1                                         used: sec 2-21 training, 22 dev, 23 test.
+
+
+                                                                                    1101
+
+
+                                                 PPP
+            Rule score: r(A → B C, i, k, j) =                  O(Ax , i, j)ω(Ax → By Cz )I(By , i, k)I(Cz , k, j)
+                                                     x y   z
+                                                 P
+                                                      O(Ax ,i,j)I(Ax ,i,j)
+                                                     xP
+                                                                                                                     P
+ Max-Constituent:                 q(A, i, j) =                                                      tmax = argmax        q(c)
+                                                        r I(rootr ,0,n)                                         t    c∈t
+                                                                r(A→B C,i,k,j)                                       P
+ Max-Rule-Sum:                    q(A → B C, i, k, j) =         P                                   tmax = argmax          q(e)
+                                                                  r I(rootr ,0,n)                               t    e∈t
+                                                                P r(A→B C,i,k,j)
+                                                                                                                     Q
+ Max-Variational:                 q(A → B C, i, k, j) =                                             tmax = argmax          q(e)
+                                                                 x O(Ax ,i,j)I(Ax ,i,j)                         t    e∈t
+
+
+Figure 3: Inference: Different objectives for parsing with posteriors. A, B, C are base symbols, Ax , By , Cz are indexed
+symbols and i,j,k are between-word indices. Hence, (Ax , i, j) represents a constituent labeled with Ax spanning words i
+to j. I(Ax , i, j) and O(Ax , i, j) denote the inside and outside scores of this constituent, respectively. For brevity, we write
+c ≡ (A, i, j) and e ≡ (A → B C, i, k, j). Also, tmax is the highest scoring parse. Adapted from Petrov and Klein (2007).
+
+
+constant ωLEX (see Figure 2). Fractional values of                                        dev (≤ 40)   test (≤ 40)      test (all)
+                                                                            Model          F1    EX     F1     EX      F1      EX
+these parameters allow the weight of a fragment to                          Constituent   88.4 33.7    88.5 33.0      87.6 30.8
+depend on its size and lexical properties.                                  Rule-Sum      88.2 34.6    88.3 33.8      87.4 31.6
+   Another parameter we introduce is a                                      Variational   87.7 34.4    87.7 33.9      86.9 31.6
+‘switching-penalty’ csp for the END rules                               Table 1: All-fragments WSJ results (accuracy F1 and exact
+(Figure 2). The DOP1 model uses binary values                           match EX) for the constituent, rule-sum and variational ob-
+(0 if symbol is intermediate, 1 otherwise) as                           jectives, using parent annotation and one level of markoviza-
+                                                                        tion.
+the END rule weight, which is equivalent to
+prohibiting fragment switching at intermediate
+symbols. We learn a fractional constant asp                             4     Efficient Inference
+that allows (but penalizes) switching between
+fragments at annotated symbols through the            The previously described implicit grammar GI de-
+formulation csp (Xintermediate ) = 1 − asp and        fines a posterior distribution P (dI |s) over a sen-
+csp (Xnon−intermediate ) = 1 + asp . This feature     tence s via a large, indexed PCFG. This distri-
+allows fragments to be assigned weights based on      bution has the property that, when marginalized,
+the binarization status of their nodes.               it is equivalent to a posterior distribution P (d|s)
+   With the above weights, the recursive formula      over derivations in the correspondingly-weighted
+for s(Xi ), the total weighted number of fragments    all-fragments grammar G. However, even with
+rooted at indexed symbol Xi , is different from       an explicit representation of G, we would not be
+DOP1 (Equation 1). For rule Xi → Yj Zk , it is        able to tractably P     compute the parse  P that maxi-
+                                                      mizes P (t|s) = d∈t P (d|s) = dI ∈t P (dI |s)
+s(Xi ) = ωBODY .(csp (Yj )+s(Yj ))(csp (Zk )+s(Zk )). (Sima’an, 1996). We therefore approximately
+                                                      maximize over trees by computing various exist-
+The formula uses ωLEX in place of ωBODY if r is a     ing approximations to P (t|s) (Figure 3). Good-
+lexical rule (Figure 2).                              man (1996b), Petrov and Klein (2007), and Mat-
+   The resulting grammar is primarily parameter-      suzaki et al. (2005) describe the details of con-
+ized by the training treebank B. However, each        stituent, rule-sum and variational objectives re-
+setting of the hyperparameters (ωBODY , ωLEX , asp )  spectively. Note that all inference methods depend
+defines a different conditional distribution on       on the posterior P (t|s) only through marginal ex-
+trees. We choose amongst these distributions by       pectations of labeled constituent counts and an-
+directly optimizing parsing F1 on our develop-        chored local binary tree counts, which are easily
+ment set. Because this objective is not easily dif-   computed from P (dI |s) and equivalent to those
+ferentiated, we simply perform a grid search on       from P (d|s). Therefore, no additional approxima-
+the three hyperparameters. The tuned values are       tions are made in GI over G.
+ωBODY = 0.35, ωLEX = 0.25 and asp = 0.018.               As shown in Table 1, our model (an all-
+For generalization to a larger parameter space, we    fragments grammar with the weighting scheme
+would of course need to switch to a learning ap-
+                                                      tent by Johnson (2002). Later, Zollmann and Sima’an (2005)
+proach that scales more gracefully in the number      presented a statistically consistent estimator, with the basic
+of tunable hyperparameters.8                          insight of optimizing on a held-out set. Our estimator is not
+                                                                        intended to be viewed as a generative model of trees at all,
+   8
+     Note that there has been a long history of DOP estima-             but simply a loss-minimizing conditional distribution within
+tors. The generative DOP1 model was shown to be inconsis-               our parametric family.
+
+
+                                                                  1102
+
+
+shown in Figure 2) achieves an accuracy of                       88.4
+
+88.5% (using simple parent annotation) which is
+4-5% (absolute) better than the recent TSG work                  88.2
+(Zuidema, 2007; Cohn et al., 2009; Post and
+
+
+
+
+                                                              F1
+Gildea, 2009) and also approaches state-of-the-
+                                                                 88.0
+art refinement-based parsers (e.g., Charniak and
+Johnson (2005), Petrov and Klein (2007)).9
+                                                                 87.8                                         -6.2
+4.1   Coarse-to-Fine Inference
+                                                                        -4.0      -4.5   -5.0     -5.5    -6.0     -6.5   -7.0          -7.5
+Coarse-to-fine inference is a well-established way                                  Coarse-pass Log Posterior Threshold (PT)
+to accelerate parsing. Charniak et al. (2006) in-
+                                                              Figure 4: Effect of coarse-pass pruning on parsing accuracy
+troduced multi-level coarse-to-fine parsing, which            (for WSJ dev-set, ≤ 40 words). Pruning increases to the left
+extends the basic pre-parsing idea by adding more             as log posterior threshold (PT) increases.
+rounds of pruning. Their pruning grammars
+                                                                   90.0
+were coarse versions of the raw treebank gram-                                 89.8
+                                                                   89.5        89.6
+mar. Petrov and Klein (2007) propose a multi-                                                                                 No Pruning
+                                                                   89.0                                                       (PT = -inf)
+stage coarse-to-fine method in which they con-                     88.5
+struct a sequence of increasingly refined gram-
+                                                              F1
+                                                                   88.0
+mars, reparsing with each refinement. In par-                      87.5
+ticular, in their approach, which we adopt here,                   87.0
+coarse-to-fine pruning is used to quickly com-                     86.5
+pute approximate marginals, which are then used                    86.0                            -6
+to prune subsequent search. The key challenge                             -1          -3       -5      -7        -9      -11      -13
+                                                                                       Coarse-pass Log Posterior Threshold (PT)
+in coarse-to-fine inference is the construction of
+coarse models which are much smaller than the                 Figure 5: Effect of coarse-pass pruning on parsing accuracy
+target model, yet whose posterior marginals are               (WSJ, training ≤ 20 words, tested on dev-set ≤ 20 words).
+close enough to prune with safely.                            This graph shows that the fortuitous improvement due to
+                                                              pruning is very small and that the peak accuracy is almost
+   Our grammar GI has a very large number of in-              equal to the accuracy without pruning (the dotted line).
+dexed symbols, so we use a coarse pass to prune
+away their unindexed abstractions. The simple,
+intuitive, and effective choice for such a coarse             from no pruning to pruning with a −6.2 log pos-
+grammar GC is a minimal PCFG grammar com-                     terior threshold.10 Figure 4 depicts the variation
+posed of the base treebank symbols X and the                  in parsing accuracies in response to the amount
+minimal depth-1 binary rules X → Y Z (and                     of pruning done by the coarse-pass. Higher pos-
+with the same level of annotation as in the full              terior pruning thresholds induce more aggressive
+grammar). If a particular base symbol X is pruned             pruning. Here, we observe an effect seen in previ-
+by the coarse pass for a particular span (i, j) (i.e.,        ous work (Charniak et al. (1998), Petrov and Klein
+the posterior marginal P (X, i, j|s) is less than a           (2007), Petrov et al. (2008)), that a certain amount
+certain threshold), then in the full grammar GI ,             of pruning helps accuracy, perhaps by promoting
+we do not allow building any indexed symbol                   agreement between the coarse and full grammars
+Xl of type X for that span. Hence, the pro-                   (model intersection). However, these ‘fortuitous’
+jection map for the coarse-to-fine model is π C :             search errors give only a small improvement and
+Xl (indexed symbol) → X (base symbol).                        the peak accuracy is almost equal to the pars-
+   We achieve a substantial improvement in speed              ing accuracy without any pruning (as seen in Fig-
+and memory-usage from the coarse-pass pruning.                ure 5).11 This outcome suggests that the coarse-
+Speed increases by a factor of 40 and memory-                 pass pruning is critical for tractability but not for
+usage decreases by a factor of 10 when we go                  performance.
+    9                                                            10
+      All our experiments use the constituent objective ex-         Unpruned experiments could not be run for 40-word test
+cept when we report results for max-rule-sum and max-         sentences even with 50GB of memory, therefore we calcu-
+variational parsing (where we use the parameters tuned for    lated the improvement factors using a smaller experiment
+max-constituent, therefore they unsurprisingly do not per-    with full training and sixty 30-word test sentences.
+                                                                 11
+form as well as max-constituent). Evaluations use EVALB,            To run experiments without pruning, we used training
+see http://nlp.cs.nyu.edu/evalb/.                             and dev sentences of length ≤ 20 for the graph in Figure 5.
+
+
+                                                          1103
+
+
+                                                                      Parsing Model             No. of Indexed Symbols
+                                                                      Word-level Trees                 1,900,056
+                                                                      Word-level Graph                  903,056
+                                                                      Character-level Trees           12,280,848
+                                                                      Character-level Graph            1,109,399
+
+                                                                Table 2: Number of indexed symbols for word-level and
+                                tree-to-graph encoding          character-level parsing and their graph versions (for all-
+                                                                fragments grammar with parent annotation and one level of
+                                                                markovization).
+
+
+
+
+Figure 6: Collapsing the duplicate training subtrees converts
+them to a graph and reduces the number of indexed symbols
+significantly.                                                  Figure 7: Character-level parsing: treating the sentence as a
+                                                                string of characters instead of words.
+
+4.2   Packed Graph Encoding
+                                                                ments s(Xi ) parented by an indexed symbol Xi
+The implicit all-fragments approach (Section 2.2)               (see Section 3.2), and when calculating the inside
+avoids explicit extraction of all rule fragments.               and outside scores during inference, we account
+However, the number of indexed symbols in our                   for the collapsed subtree tokens by expanding the
+implicit grammar GI is still large, because ev-                 counts and scores using the corresponding multi-
+ery node in each training tree (i.e., every symbol              plicities. Therefore, we achieve the compaction
+token) has a unique indexed symbol. We have                     with negligible overhead in computation.
+around 1.9 million indexed symbol tokens in the
+word-level parsing model (this number increases                 5     Improved Treebank Representations
+further to almost 12.3 million when we parse char-
+acter strings in Section 5.1). This large symbol                5.1     Character-Level Parsing
+space makes parsing slow and memory-intensive.                  The all-fragments approach to parsing has the
+    We reduce the number of symbols in our im-                  added advantage that parsing below the word level
+plicit grammar GI by applying a compact, packed                 requires no special treatment, i.e., we do not need
+graph encoding to the treebank training trees. We               an explicit lexicon when sentences are considered
+collapse the duplicate subtrees (fragments that                 as strings of characters rather than words.
+bottom out in terminals) over all training trees.                  Unknown words in test sentences (unseen in
+This keeps the grammar unchanged because in an                  training) are a major issue in parsing systems for
+tree-substitution grammar, a node is defined (iden-             which we need to train a complex lexicon, with
+tified) by the subtree below it. We maintain a                  various unknown classes or suffix tries. Smooth-
+hashmap on the subtrees which allows us to eas-                 ing factors need to be accounted for and tuned.
+ily discover the duplicates and bin them together.              With our implicit approach, we can avoid training
+The collapsing converts all the training trees in the           a lexicon by building up the parse tree from char-
+treebank to a graph with multiple parents for some              acters instead of words. As depicted in Figure 7,
+nodes as shown in Figure 6. This technique re-                  each word in the training trees is split into its cor-
+duces the number of indexed symbols significantly               responding characters with start and stop bound-
+as shown in Table 2 (1.9 million goes down to 0.9               ary tags (and then binarized in a standard right-
+million, reduction by a factor of 2.1). This reduc-             branching style). A test sentence’s words are split
+tion increases parsing speed by a factor of 1.4 (and            up similarly and the test-parse is built from train-
+by a factor of 20 for character-level parsing, see              ing fragments using the same model and inference
+Section 5.1) and reduces memory usage to under                  procedure as defined for word-level parsing (see
+4GB.                                                            Sections 2, 3 and 4). The lexical items (alphabets,
+    We store the duplicate-subtree counts for each              digits etc.) are now all known, so unlike word-level
+indexed symbol of the collapsed graph (using a                  parsing, no sophisticated lexicon is needed.
+hashmap). When calculating the number of frag-                     We choose a slightly richer weighting scheme
+
+
+                                                            1104
+
+
+                dev (≤ 40)     test (≤ 40)      test (all)          Parsing Model                                   F1
+  Model          F1    EX       F1     EX      F1      EX           No Refinement (P=0, H=0)?                      71.3
+  Constituent   88.2 33.6      88.0 31.9      87.1 29.8             Basic Refinement (P=1, H=1)?                   80.0
+  Rule-Sum      88.0 33.9      87.8 33.1      87.0 30.9             All-Fragments + No Refinement (P=0, H=0)       85.7
+  Variational   87.6 34.4      87.2 32.3      86.4 30.2             All-Fragments + Basic Refinement (P=1, H=1)    88.4
+
+Table 3: All-fragments WSJ results for the character-level      Table 4: F1 for a basic PCFG, and incorporation of basic
+parsing model, using parent annotation and one level of         refinement, all-fragments and both, for WSJ dev-set (≤ 40
+markovization.                                                  words). P = 1 means parent annotation of all non-terminals,
+                                                                including the preterminal tags. H = 1 means one level of
+                                                                markovization. ? Results from Klein and Manning (2003).
+for this representation by extending the two-
+weight schema for CONTINUE rules (ωLEX and
+ωBODY ) to a three-weight one: ωLEX , ωWORD , and               marked with its parent in the underlying treebank.
+ωSENT for CONTINUE rules in the lexical layer, in               It is reasonable to hope that the gains from us-
+the portion of the parse that builds words from                 ing large fragments and the gains from symbol re-
+characters, and in the portion of the parse that                finement will be complementary. Indeed, previous
+builds the sentence from words, respectively. The               work has shown or suggested this complementar-
+tuned values are ωSENT = 0.35, ωWORD = 0.15,                    ity. Sima’an (2000) showed modest gains from en-
+ωLEX = 0.95 and asp = 0. The character-level                    riching structural relations with semi-lexical (pre-
+model achieves a parsing accuracy of 88.0% (see                 head) information. Charniak and Johnson (2005)
+Table 3), despite lacking an explicit lexicon.12                showed accuracy improvements from composed
+   Character-level parsing expands the training                 local tree features on top of a lexicalized base
+trees (see Figure 7) and the already large indexed              parser. Zuidema (2007) showed a slight improve-
+symbol space size explodes (1.9 million increases               ment in parsing accuracy when enough fragments
+to 12.3 million, see Table 2). Fortunately, this                were added to learn enrichments beyond manual
+is where the packed graph encoding (Section 4.2)                refinements. Our work reinforces this intuition by
+is most effective because duplication of character              demonstrating how complementary they are in our
+strings is high (e.g., suffixes). The packing shrinks           model (∼20% error reduction on adding refine-
+the symbol space size from 12.3 million to 1.1 mil-             ment to an all-fragments grammar, as shown in the
+lion, a reduction by a factor of 11. This reduction             last two rows of Table 4).
+increases parsing speed by almost a factor of 20                   Table 4 shows results for a basic PCFG, and its
+and brings down memory-usage to under 8GB.13                    augmentation with either basic refinement (parent
+                                                                annotation and one level of markovization), with
+5.2   Basic Refinement: Parent Annotation                       all-fragments rules (as in previous sections), or
+      and Horizontal Markovization                              both. The basic incorporation of large fragments
+In a pure all-fragments approach, compositions                  alone does not yield particularly strong perfor-
+of units which would have been independent in                   mance, nor does basic symbol refinement. How-
+a basic PCFG are given joint scores, allowing                   ever, the two approaches are quite additive in our
+the representation of certain non-local phenom-                 model and combine to give nearly state-of-the-art
+ena, such as lexical selection or agreement, which              parsing accuracies.
+in fully local models require rich state-splitting              5.3    Additional Deterministic Refinement
+or lexicalization. However, at substitution sites,
+the coarseness of raw unrefined treebank sym-                   Basic symbol refinement (parent annotation), in
+bols still creates unrealistic factorization assump-            combination with all-fragments, gives test-set ac-
+tions. A standard solution is symbol refinement;                curacies of 88.5% (≤ 40 words) and 87.6% (all),
+Johnson (1998) presents the particularly simple                 shown as the Basic Refinement model in Table 5.
+case of parent annotation, in which each node is                Klein and Manning (2003) describe a broad set
+                                                                of simple, deterministic symbol refinements be-
+   12
+      Note that the word-level model yields a higher accuracy   yond parent annotation. We included ten of their
+of 88.5%, but uses 50 complex unknown word categories
+based on lexical, morphological and position features (Petrov   simplest annotation features, namely: UNARY-DT,
+et al., 2006). Cohn et al. (2009) also uses this lexicon.       UNARY-RB, SPLIT-IN, SPLIT-AUX, SPLIT-CC, SPLIT-%,
+   13
+      Full char-level experiments (w/o packed graph encoding)   GAPPED-S, POSS-NP, BASE-NP    and DOMINATES-V.
+could not be run even with 50GB of memory. We calcu-
+late the improvement factors using a smaller experiment with    None of these annotation schemes use any head
+70% training and fifty 20-word test sentences.                  information. This additional annotation (see Ad-
+
+
+                                                             1105
+
+
+     89                                                                                            test (≤ 40)    test (all)
+                                                                          Parsing Model             F1 EX       F1        EX
+     88                                                                              FRAGMENT-BASED PARSERS
+     87
+                                                                          Zuidema (2007)             –     –   83.8? 26.9?
+                                                                          Cohn et al. (2009)         –     –   84.0         –
+     86                                                                   Post and Gildea (2009)   82.6    –     –          –
+F1
+
+
+
+
+                                                                                              THIS PAPER
+     85                                                                   All-Fragments
+                                                                          + Basic Refinement       88.5 33.0 87.6         30.8
+     84                                                                   + Additional Refinement 88.7 33.8 88.1          31.7
+                                                                                    REFINEMENT-BASED PARSERS
+     83
+                                                                          Collins (1999)           88.6    –   88.2         –
+          0         20        40          60          80        100
+              Percentage of WSJ sections 2-21 used for training           Petrov and Klein (2007) 90.6 39.1 90.1          37.1
+
+                                                                      Table 5: Our WSJ test set parsing accuracies, compared
+Figure 8: Parsing accuracy F1 on the WSJ dev-set (≤ 40
+                                                                      to recent fragment-based parsers and top refinement-based
+words) increases with increasing percentage of training data.
+                                                                      parsers. Basic Refinement is our all-fragments grammar with
+                                                                      parent annotation. Additional Refinement adds determinis-
+                                                                      tic refinement of Klein and Manning (2003) (Section 5.3).
+ditional Refinement, Table 5) improves the test-                      ?
+                                                                        Results on the dev-set (≤ 100).
+set accuracies to 88.7% (≤ 40 words) and 88.1%
+(all), which is equal to a strong lexicalized parser
+                                                                      Klein (2008)), our simple all-fragments parser
+(Collins, 1999), even though our model does not
+                                                                      achieves accuracies in the range of top refinement-
+use lexicalization or latent symbol-split induc-
+                                                                      based parsers, even though the model parameters
+tion.
+                                                                      were tuned out of domain on WSJ. For German,
+                                                                      our parser achieves an F1 of 79.8% compared
+6     Other Results
+                                                                      to 81.5% by the state-of-the-art and substantially
+6.1       Parsing Speed and Memory Usage                              more complex Petrov and Klein (2008) work. For
+                                                                      French, our approach yields an F1 of 78.0% vs.
+The word-level parsing model using the whole
+                                                                      80.1% by Petrov and Klein (2008).14
+training set (39832 trees, all-fragments) takes ap-
+proximately 3 hours on the WSJ test set (2245
+trees of ≤40 words), which is equivalent to                           7        Conclusion
+roughly 5 seconds of parsing time per sen-
+                                                                      Our approach of using all fragments, in combi-
+tence; and runs in under 4GB of memory. The
+                                                                      nation with basic symbol refinement, and even
+character-level version takes about twice the time
+                                                                      without an explicit lexicon, achieves results in the
+and memory. This novel tractability of an all-
+                                                                      range of state-of-the-art parsers on full scale tree-
+fragments grammar is achieved using both coarse-
+                                                                      banks, across multiple languages. The main take-
+pass pruning and packed graph encoding. Micro-
+                                                                      away is that we can achieve such results in a very
+optimization may further improve speed and mem-
+                                                                      knowledge-light way with (1) no latent-variable
+ory usage.
+                                                                      training, (2) no sampling, (3) no smoothing be-
+6.2       Training Size Variation                                     yond the existence of small fragments, and (4) no
+                                                                      explicit unknown word model at all. While these
+Figure 8 shows how WSJ parsing accuracy in-                           methods offer a simple new way to construct an
+creases with increasing amount of training data                       accurate parser, we believe that this general ap-
+(i.e., percentage of WSJ sections 2-21). Even if we                   proach can also extend to other large-fragment
+train on only 10% of the WSJ training data (3983                      tasks, such as machine translation.
+sentences), we still achieve a reasonable parsing
+accuracy of nearly 84% (on the development set,
+                                                                      Acknowledgments
+≤ 40 words), which is comparable to the full-
+system results obtained by Zuidema (2007), Cohn                       This project is funded in part by BBN under
+et al. (2009) and Post and Gildea (2009).                             DARPA contract HR0011-06-C-0022 and the NSF
+                                                                      under grant 0643742.
+6.3       Other Language Treebanks
+On the French and German treebanks (using the
+                                                                          14
+standard dataset splits mentioned in Petrov and                                All results on the test set (≤ 40 words).
+
+
+                                                                1106
+
+
+References                                               Mark Johnson. 1998. PCFG Models of Linguistic
+                                                          Tree Representations. Computational Linguistics,
+Rens Bod. 1993. Using an Annotated Corpus as a            24:613–632.
+  Stochastic Grammar. In Proceedings of EACL.
+                                                         Mark Johnson. 2002. The DOP Estimation Method Is
+Rens Bod. 2001. What is the Minimal Set of Frag-
+                                                          Biased and Inconsistent. In Computational Linguis-
+  ments that Achieves Maximum Parse Accuracy? In
+                                                          tics 28(1).
+  Proceedings of ACL.
+                                                         Dan Klein and Christopher Manning. 2003. Accurate
+Eugene Charniak and Mark Johnson. 2005. Coarse-
+                                                           Unlexicalized Parsing. In Proceedings of ACL.
+  to-fine n-best parsing and MaxEnt discriminative
+  reranking. In Proceedings of ACL.                      Philipp Koehn, Franz Och, and Daniel Marcu. 2003.
+Eugene Charniak, Sharon Goldwater, and Mark John-          Statistical Phrase-Based Translation. In Proceed-
+  son. 1998. Edge-Based Best-First Chart Parsing.          ings of HLT-NAACL.
+  In Proceedings of the 6th Workshop on Very Large       Takuya Matsuzaki, Yusuke Miyao, and Jun’ichi Tsujii.
+  Corpora.                                                 2005. Probabilistic CFG with latent annotations. In
+Eugene Charniak, Mark Johnson, et al. 2006. Multi-         Proceedings of ACL.
+  level Coarse-to-fine PCFG Parsing. In Proceedings      Slav Petrov and Dan Klein. 2007. Improved Infer-
+  of HLT-NAACL.                                             ence for Unlexicalized Parsing. In Proceedings of
+Eugene Charniak. 2000. A Maximum-Entropy-                   NAACL-HLT.
+  Inspired Parser. In Proceedings of NAACL.
+                                                         Slav Petrov and Dan Klein. 2008. Sparse Multi-Scale
+David Chiang. 2003. Statistical parsing with an             Grammars for Discriminative Latent Variable Pars-
+  automatically-extracted tree adjoining grammar. In        ing. In Proceedings of EMNLP.
+  Data-Oriented Parsing.
+                                                         Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+David Chiang. 2005. A Hierarchical Phrase-Based             Klein. 2006. Learning Accurate, Compact, and
+  Model for Statistical Machine Translation. In Pro-        Interpretable Tree Annotation. In Proceedings of
+  ceedings of ACL.                                          COLING-ACL.
+
+Trevor Cohn, Sharon Goldwater, and Phil Blunsom.         Slav Petrov, Aria Haghighi, and Dan Klein. 2008.
+  2009.     Inducing Compact but Accurate Tree-             Coarse-to-Fine Syntactic Machine Translation using
+  Substitution Grammars. In Proceedings of NAACL.           Language Projections. In Proceedings of EMNLP.
+
+Michael Collins and Nigel Duffy. 2002. New Ranking       Matt Post and Daniel Gildea. 2009. Bayesian Learning
+  Algorithms for Parsing and Tagging: Kernels over        of a Tree Substitution Grammar. In Proceedings of
+  Discrete Structures, and the Voted Perceptron. In       ACL-IJCNLP.
+  Proceedings of ACL.
+                                                         Philip Resnik. 1992. Probabilistic Tree-Adjoining
+Michael Collins. 1999. Head-Driven Statistical Mod-        Grammar as a Framework for Statistical Natural
+  els for Natural Language Parsing. Ph.D. thesis, Uni-     Language Processing. In Proceedings of COLING.
+  versity of Pennsylvania, Philadelphia.
+                                                         Remko Scha. 1990. Taaltheorie en taaltechnologie;
+Steve Deneefe and Kevin Knight. 2009. Synchronous          competence en performance. In R. de Kort and
+   Tree Adjoining Machine Translation. In Proceed-         G.L.J. Leerdam (eds.): Computertoepassingen in de
+   ings of EMNLP.                                          Neerlandistiek.
+Michel Galley, Mark Hopkins, Kevin Knight, and           Khalil Sima’an. 1996. Computational Complexity
+  Daniel Marcu. 2004. What’s in a translation rule?        of Probabilistic Disambiguation by means of Tree-
+  In Proceedings of HLT-NAACL.                             Grammars. In Proceedings of COLING.
+Joshua Goodman. 1996a. Efficient Algorithms for          Khalil Sima’an. 2000. Tree-gram Parsing: Lexical De-
+   Parsing the DOP Model. In Proceedings of EMNLP.         pendencies and Structural Relations. In Proceedings
+                                                           of ACL.
+Joshua Goodman. 1996b. Parsing Algorithms and
+   Metrics. In Proceedings of ACL.                       Andreas Zollmann and Khalil Sima’an. 2005. A
+                                                           Consistent and Efficient Estimator for Data-Oriented
+Joshua Goodman. 2003. Efficient parsing of DOP with        Parsing. Journal of Automata, Languages and Com-
+   PCFG-reductions. In Bod R, Scha R, Sima’an K            binatorics (JALC), 10(2/3):367–388.
+   (eds.) Data-Oriented Parsing. University of Chicago
+   Press, Chicago, IL.                                   Willem Zuidema. 2007. Parsimonious Data-Oriented
+                                                           Parsing. In Proceedings of EMNLP-CoNLL.
+James Henderson. 2004. Discriminative Training of
+  a Neural Network Statistical Parser. In Proceedings
+  of ACL.
+
+
+                                                     1107
+

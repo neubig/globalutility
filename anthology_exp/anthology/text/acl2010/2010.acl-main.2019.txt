@@ -1,0 +1,326 @@
+    Semantics-Driven Shallow Parsing for Chinese Semantic Role Labeling
+
+
+                                         Weiwei Sun
+                  Department of Computational Linguistics, Saarland University
+                   German Research Center for Artificial Intelligence (DFKI)
+                                D-66123, Saarbrücken, Germany
+                             wsun@coli.uni-saarland.de
+
+
+
+
+                    Abstract                                 of a given sentence. Because of the semantic in-
+     One deficiency of current shallow pars-                 formation it contains, we call it semantics-driven
+     ing based Semantic Role Labeling (SRL)                  shallow parsing. The key idea is to make basic
+     methods is that syntactic chunks are too                chunks as large as possible but not overlap with ar-
+     small to effectively group words. To par-               guments. Additionally, we introduce several new
+     tially resolve this problem, we propose                 “path” features to express more structural infor-
+     semantics-driven shallow parsing, which                 mation, which is important for SRL.
+     takes into account both syntactic struc-                   We present encouraging SRL results on Chinese
+     tures and predicate-argument structures.                PropBank (CPB) data. With semantics-driven
+     We also introduce several new “path” fea-               shallow parsing, our SRL system achieves 76.10
+     tures to improve shallow parsing based                  F-measure, with gold segmentation and POS tag-
+     SRL method. Experiments indicate that                   ging. The performance further achieves 76.46
+     our new method obtains a significant im-                with the help of new “path” features. These re-
+     provement over the best reported Chinese                sults obtain significant improvements over the best
+     SRL result.                                             reported SRL performance (74.12) in the literature
+                                                             (Sun et al., 2009).
+1    Introduction
+                                                             2   Related Work
+In the last few years, there has been an increas-
+ing interest in Semantic Role Labeling (SRL) on              CPB is a project to add predicate-argument rela-
+several languages, which consists of recognizing             tions to the syntactic trees of the Chinese Tree-
+arguments involved by predicates of a given sen-             Bank (CTB). Similar to English PropBank, the ar-
+tence and labeling their semantic types. Both                guments of a predicate are labeled with a contigu-
+full parsing based and shallow parsing based SRL             ous sequence of integers, in the form of AN (N is
+methods have been discussed for English and Chi-             a natural number); the adjuncts are annotated as
+nese. In Chinese SRL, shallow parsing based                  such with the label AM followed by a secondary
+methods that cast SRL as the classification of               tag that represents the semantic classification of
+syntactic chunks into semantic labels has gained             the adjunct. The assignment of argument labels
+promising results. The performance reported in               is illustrated in Figure 1, where the predicate is the
+(Sun et al., 2009) outperforms the best published            verb “提供/provide” For example, the noun phrase
+performance of full parsing based SRL systems.               “保险公司/the insurance company” is labeled as
+   Previously proposed shallow parsing takes into            A0, meaning that it is the proto-Agent of “提供”.
+account only syntactic information and basic                    Sun et al. (2009) explore the Chinese SRL prob-
+chunks are usually too small to group words into             lem on the basis of shallow syntactic information
+argument candidates. This causes one main defi-              at the level of phrase chunks. They present a se-
+ciency of Chinese SRL. To partially resolve this             mantic chunking method to resolve SRL on basis
+problem, we propose a new shallow parsing. The               of shallow parsing. Their method casts SRL as
+new chunk definition takes into account both syn-            the classification of syntactic chunks with IOB2
+tactic structure and predicate-argument structures           representation for semantic roles (i.e. semantic
+
+
+                                                       103
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 103–108,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+    WORD:       保险          公司             已         为      三峡       工程         提供         保险        服务
+              insurance company         already     for    Sanxia Project provide insurance service
+     POS:        [NN        NN]          [AD]       [P]     [NR]     [NN]       [VV]        [NN      NN]
+  SYN CH:             [NP]             [ADVP]       [PP      NP       NP ]      [VP]            [NP]
+  SEM CH:             B-A0           B-AM-ADV B-A2          I-A2      I-A2       B-V            B-A1
+                       The insurance company has provided insurance services for the Sanxia Project.
+
+                             Figure 1: An example from Chinese PropBank.
+
+
+chunks). Two labeling strategies are presented: 1)              Joint learning of syntactic and semantic struc-
+directly tagging semantic chunks in one-stage, and           tures is another hot topic in dependency parsing
+2) identifying argument boundaries as a chunking             research. Some models have been well evalu-
+task and labeling their semantic types as a clas-            ated in CoNLL 2008 and 2009 shared tasks (Sur-
+sification task. On the basis of syntactic chunks,           deanu et al., 2008; Hajič et al., 2009). The
+they define semantic chunks which do not overlap             CoNLL 2008/2009 shared tasks propose a unified
+nor embed using IOB2 representation. Syntactic               dependency-based formalism to model both syn-
+chunks outside a chunk receive the tag O (Out-               tactic dependencies and semantic roles for multi-
+side). For syntactic chunks forming a chunk of               ple languages. Several joint parsing models are
+type A*, the first chunk receives the B-A* tag (Be-          presented in the shared tasks. Our focus is differ-
+gin), and the remaining ones receive the tag I-A*            ent from the shared tasks. In this paper, we hope
+(Inside). Then a SRL system can work directly                to find better syntactic representation for semantic
+by using sequence tagging technique. Shallow                 role labeling.
+chunk definition presented in (Chen et al., 2006)
+is used in their experiments. The definition of syn-         3     Semantics-Driven Shallow Parsing
+tactic and semantic chunks is illustrated Figure 1.          3.1    Motivation
+For example, “保险公司/the insurance company”,
+                                                             There are two main jobs of semantic chunking: 1)
+consisting of two nouns, is a noun phrase; in the
+                                                             grouping words as argument candidate and 2) clas-
+syntactic chunking stage, its two components “保
+                                                             sifying semantic types of possible arguments. Pre-
+险” and “公司” should be labeled as B-NP and
+                                                             viously proposed shallow parsing only considers
+I-NP. Because this phrase is the Agent of the pred-
+                                                             syntactic information and basic chunks are usu-
+icate “提 供/provide”, it takes a semantic chunk
+                                                             ally too small to effectively group words. This
+label B-A0. In the semantic chunking stage, this
+                                                             causes one main deficiency of semantic chunking.
+phrase should be labeled as B-A0.
+                                                             E.g. the argument “为三峡工程/for the Sanxia
+   Their experiments on CPB indicate that accord-            Project” consists of three chunks, each of which
+ing to current state-of-the-art of Chinese parsing,          only consists of one word. To rightly recognize
+SRL systems on basis of full parsing do not per-             this A2, Semantic chunker should rightly predict
+form better than systems based on shallow parsing.           three chunk labels. Small chunks also make the
+They report the best SRL performance with gold               important “path” feature sparse, since there are
+segmentation and POS tagging as inputs. This is              more chunks between a target chunk and the pred-
+very different from English SRL. In English SRL,             icate in focus. In this section, we introduce a new
+previous work shows that full parsing, both con-             chunk definition to improve shallow parsing based
+stituency parsing and dependency parsing, is nec-            SRL, which takes both syntactic and predicate-
+essary.                                                      argument structures into account. The key idea
+   Ding and Chang (2009) discuss semantic                    is to make syntactic chunks as large as possible
+chunking methods without any parsing informa-                for semantic chunking. The formal definition is as
+tion. Different from (Sun et al., 2009), their               follows.
+method formulates SRL as the classification of
+words with semantic chunks. Comparison of ex-                3.2    Chunk Bracketing
+perimental results in their work shows that parsing          Given a sentence s = w1 , ..., wn , let c[i : j]
+is necessary for Chinese SRL, and the semantic               denote a constituent that is made up of words
+chunking methods on the basis of shallow parsing             between wi and wj (including wi and wj ); let
+outperform the ones without any parsing.                     pv = {c[i : j]|c[i : j] is an argument of v}
+
+
+                                                       104
+
+
+                       WORD    POS    TARGET                PROPOSITION                 CHUNK 1    CHUNK 2
+              China    中国      NR     -          (A0*         *    *          *         B-NP       B-NPˆS
+                 tax   税务      NN     -              *        *    *          *         I-NP       I-NPˆS
+        department     部门      NN     -             *)        *    *          *         I-NP       I-NPˆS
+           stipulate   规定      VV     规定          (V*)        *    *          *         O          O
+                   :   ：       PU     -              *        *    *          *         O          O
+              owing    欠缴      VV     欠缴         (A1*      (V*)    *      (A0*          O          O
+       tax payment     税款      NN     -              *    (A1*)    *          *         B-NP       B-NPˆVP
+          company      企业      NN     -              *    (A0*)    *          *         B-NP       B-NPˆNP
+    Function Word      的       DEG    -              *        *    *          *         O          O
+             leaders   领导人     NN     -              *        *    *         *)         B-NP       B-NPˆNP
+                 not   不       AD     -              *        *    * (AM-ADV*)          B-ADVP     B-ADVPˆVP
+                 can   得       VV     得              *        * (V*)          *         O          O
+  leave the country    出境      VV     出境            *)        *    *       (V*)         B-VP       B-VPˆVP
+
+       Figure 2: An example for definition of semantics-driven chunks with IOB2 representation.
+
+
+denote one predicate-argument structure where v                So we can still formulate our new shallow parsing
+is the predicate in focus. Given a syntactic tree              as an “IOB” sequence labeling problem.
+Ts = {c[i : j]|c[i : j] is a constituent of s}, and
+its all argument structures Ps = {pv | v is a verbal           3.3   Chunk Type
+predicate in s}, there is one and only one chunk               We introduce two types of chunks. The first is
+set C = {c[i : j]} s.t.                                        simply the phrase type, such as NP, PP, of cur-
+                                                               rent chunk. The column CHUNK 1 illustrates
+  1. ∀c[i : j] ∈ C, c[i : j] ∈ Ts ;
+                                                               this kind of chunk type definition. The second is
+  2. ∀c[i : j] ∈ C, ∀c[iv : j v ] ∈ ∪Ps , j < iv or            more complicated. Inspired by (Klein and Man-
+     i > j v or iv ≤ i ≤ j ≤ j v ;                             ning, 2003), we split one phrase type into several
+                                                               subsymbols, which contain category information
+  3. ∀c[i : j] ∈ C, the parent of c[i : j] does not            of current constituent’s parent. For example, an
+     satisfy the condition 2.                                  NP immediately dominated by a S, will be sub-
+  4. ∀C 0 satisfies above conditions, C 0 ⊂ C.                 stituted by NPˆS. This strategy severely increases
+                                                               the number of chunk types and make it hard to
+   The first condition guarantees that every chunk             train chunking models. To shrink this number, we
+is a constituent. The second condition means that              linguistically use a cluster of CTB phrasal types,
+chunks do not overlap with arguments, and further              which was introduced in (Sun and Sui, 2009). The
+guarantees that semantic chunking can recover all              column CHUNK 2 illustrates this definition. E.g.,
+arguments with the last condition. The third condi-            NPˆS implicitly represents Subject while NPˆVP
+tion makes new chunks as big as possible. The last             represents Object.
+one makes sure that C contains all sub-components
+of all arguments. Figure 2 is an example to illus-             3.4   New Path Features
+trate our new chunk definition. For example, “中                The Path feature is defined as a chain of base
+国/Chinese 税务/tax 部分/department” is a con-                      phrases between the token and the predicate. At
+stituent of current sentence, and is also an argu-             both ends, the chain is terminated with the POS
+ment of “规定/stipulate”. If we take it as a chunk,              tags of the predicate and the headword of the to-
+it does not conflict with any other arguments, so              ken. For example, the path feature of “保险公
+it is a reasonable syntactic chunk. For the phrase             司” in Figure 1 is “公司-ADVP-PP-NP-NP-VV”.
+“欠缴/owing 税款/tax payment”, though it does                      Among all features, the “path” feature contains
+not overlap with the first, third and fourth proposi-          more structural information, which is very impor-
+tions, it is bigger than the argument “税款” (con-               tant for SRL. To better capture structural infor-
+flicting with condition 2) while labeling the pred-            mation, we introduce several new “path” features.
+icate “欠缴”, so it has to be separated into two                 They include:
+chunks. Note that the third condition also guar-
+antees the constituents in C does not overlap with               • NP|PP|VP path: only syntactic chunks
+each other since each one is as large as possible.                 that takes tag NP, PP or VP are kept.
+
+
+                                                         105
+
+
+      When labeling the predicate “出境/leave the                 Test                   P(%)    R(%)     Fβ=1
+      country” in Figure 2, this feature of “中                  (Chen et al., 2006)    93.51   92.81    93.16
+      国 税 务 部 门/Chinese tax departments” is                     Overall (C1)           91.66   89.13    90.38
+      NP+NP+NP+NP+VP.                                           Bracketing (C1)        92.31   89.72    91.00
+                                                                Overall (C2)           88.77   86.71    87.73
+    • V|的 path: a sequential container of POS tags              Bracketing (C2)        92.71   90.55    91.62
+      of verbal words and “的”; This feature of “中
+      国税务部门” is NP+VV+VV+的+VV+VP.                                    Table 1: Shallow parsing performance.
+
+
+    • O2POS path: if a word occupies a chunk                 4.2     Syntactic Chunking Performance
+      label O, use its POS in the path fea-                  Table 1 shows the performance of shallow syntac-
+      ture. This feature of “中 国 税 务 部 门” is                 tic parsing. Line Chen et al., 2006 is the chunk-
+      NP+VV+PU+VV+NP+NP+DEG+ADVP+                            ing performance evaluated on syntactic chunk def-
+      VV+VP.                                                 inition proposed in (Chen et al., 2006). The sec-
+                                                             ond and third blocks present the chunking perfor-
+4     Experiments and Analysis                               mance with new semantics-driven shallow pars-
+                                                             ing. The second block shows the overall perfor-
+4.1    Experimental Setting                                  mance when the first kind of chunks type is used,
+                                                             while the last block shows the performance when
+Experiments in previous work are mainly based                the more complex chunk type definition is used.
+on CPB 1.0 and CTB 5.0. We use CoNLL-2005                    For the semantic-driven parsing experiments, we
+shared task software to process CPB and CTB. To              add the path from current word to the first verb be-
+facilitate comparison with previous work, we use             fore or after as two new features. Line Bracketing
+the same data setting with (Xue, 2008). Nearly               evaluates the word grouping ability of these two
+all previous research on Chinese SRL evalua-                 kinds of chunks. In other words, detailed phrase
+tion use this setting, also including (Ding and              types are not considered. Because the two new
+Chang, 2008, 2009; Sun et al., 2009; Sun, 2010).             chunk definitions use the same chunk boundaries,
+The data is divided into three parts: files from             the fourth and sixth lines are comparable. There
+chtb 081 to chtb 899 are used as training set; files         is a clear decrease between the traditional shallow
+from chtb 041 to chtb 080 as development set;                parsing (Chen et al., 2006) and ours. We think one
+files from chtb 001 to chtb 040, and chtb 900 to             main reason is that syntactic chunks in our new
+chtb 931 as test set. Both syntactic chunkers and            definition are larger than the traditional ones. An
+semantic chunkers are trained and evaluated by us-           interesting phenomenon is that though the second
+ing the same data set. By using CPB and CTB, we              kind of chunk type definition increases the com-
+can extract gold standard semantics-driven shal-             plexity of the parsing job, it achieves better brack-
+low chunks according to our definition. We use               eting performance.
+this kind of gold chunks automatically generated
+from training data to train syntactic chunkers.              4.3     SRL Performance
+   For both syntactic and semantic chunking, we              Table 2 summarizes the SRL performance. Line
+used conditional random field model. Crfsgd1 , is            Sun et al., 2009 is the SRL performance reported
+used for experiments. Crfsgd provides a feature              in (Sun et al., 2009). To the author’s knowledge,
+template that defines a set of strong word and POS           this is the best published SRL result in the liter-
+features to do syntactic chunking. We use this               ature. Line SRL (Chen et al., 2006) is the SRL
+feature template to resolve shallow parsing. For             performance of our system. These two systems
+semantic chunking, we implement a similar one-               are both evaluated by using syntactic chunking de-
+stage shallow parsing based SRL system described             fined in (Chen et al., 2006). From the first block
+in (Sun et al., 2009). There are two differences be-         we can see that our semantic chunking system
+tween our system and Sun et al.’s system. First,             reaches the state-of-the-art. The second and third
+our system uses Start/End method to represent se-            blocks in Table 2 present the performance with
+mantic chunks (Kudo and Matsumoto, 2001). Sec-
+                                                                1
+ond, word formation features are not used.                          http://leon.bottou.org/projects/sgd
+
+
+                                                       106
+
+
+new shallow parsing. Line SRL (C1) and SRL (C2)                 sociation for Computational Linguistics, Syd-
+show the overall performances with the first and                ney, Australia.
+second chunk definition. The lines following are              Weiwei Ding and Baobao Chang. 2008. Improv-
+the SRL performance when new “path” features                   ing Chinese semantic role classification with hi-
+are added. We can see that new “path” features                 erarchical feature selection strategy. In Pro-
+are useful for semantic chunking.                              ceedings of the EMNLP 2008, pages 324–
+                                                               333. Association for Computational Linguis-
+    Test                        P(%)    R(%)    Fβ=1
+                                                               tics, Honolulu, Hawaii.
+    (Sun et al., 2009)          79.25   69.61   74.12
+    SRL [(Chen et al., 2006)]   80.87   68.74   74.31         Weiwei Ding and Baobao Chang. 2009. Fast se-
+    SRL [C1]                    80.23   71.00   75.33          mantic role labeling for Chinese based on se-
+    + NP|PP|VP path             80.25   71.19   75.45          mantic chunking. In ICCPOL ’09: Proceed-
+    + V|的 path                  80.78   71.67   75.96          ings of the 22nd International Conference on
+    + O2POS path                80.44   71.59   75.76          Computer Processing of Oriental Languages.
+    + All new path              80.73   72.08   76.16          Language Technology for the Knowledge-
+    SRL [C2]                    80.87   71.86   76.10          based Economy, pages 79–90. Springer-Verlag,
+    + All new path              81.03   72.38   76.46          Berlin, Heidelberg.
+Table 2: SRL performance on the test data. Items              Jan Hajič, Massimiliano Ciaramita, Richard Jo-
+in the first column SRL [(Chen et al., 2006)], SRL              hansson, Daisuke Kawahara, Maria Antònia
+[C1] and SRL [C2] respetively denote the SRL                    Martı́, Lluı́s Màrquez, Adam Meyers, Joakim
+systems based on shallow parsing defined in (Chen               Nivre, Sebastian Padó, Jan Štěpánek, Pavel
+et al., 2006) and Section 3.                                    Straňák, Mihai Surdeanu, Nianwen Xue, and
+                                                                Yi Zhang. 2009. The CoNLL-2009 shared task:
+                                                                Syntactic and semantic dependencies in multi-
+5     Conclusion                                                ple languages. In Proceedings of the 13th Con-
+                                                                ference on Computational Natural Language
+In this paper we propose a new syntactic shal-
+                                                                Learning (CoNLL-2009), June 4-5. Boulder,
+low parsing for Chinese SRL. The new chunk
+                                                                Colorado, USA.
+definition contains both syntactic structure and
+predicate-argument structure information. To im-              Dan Klein and Christopher D. Manning. 2003. Ac-
+prove SRL, we also introduce several new “path”                 curate unlexicalized parsing. In Proceedings of
+features. Experimental results show that our new                the 41st Annual Meeting of the Association for
+chunk definition is more suitable for Chinese SRL.              Computational Linguistics, pages 423–430. As-
+It is still an open question what kinds of syntactic            sociation for Computational Linguistics, Sap-
+information is most important for Chinese SRL.                  poro, Japan.
+We suggest that our attempt at semantics-driven               Taku Kudo and Yuji Matsumoto. 2001. Chunking
+shallow parsing is a possible way to better exploit             with support vector machines. In NAACL ’01:
+this problem.                                                   Second meeting of the North American Chapter
+                                                                of the Association for Computational Linguis-
+Acknowledgments                                                 tics on Language technologies 2001, pages 1–
+                                                                8. Association for Computational Linguistics,
+The author is funded both by German Academic
+                                                                Morristown, NJ, USA.
+Exchange Service (DAAD) and German Research
+Center for Artificial Intelligence (DFKI).                    Weiwei Sun. 2010. Improving Chinese semantic
+  The author would like to thank the anonymous                 role labeling with rich features. In Proceedings
+reviewers for their helpful comments.                          of the ACL 2010.
+                                                              Weiwei Sun and Zhifang Sui. 2009. Chinese func-
+References                                                     tion tag labeling. In Proceedings of the 23rd
+Wenliang Chen, Yujie Zhang, and Hitoshi Isahara.               Pacific Asia Conference on Language, Informa-
+ 2006. An empirical study of Chinese chunking.                 tion and Computation. Hong Kong.
+ In Proceedings of the COLING/ACL 2006 Main                   Weiwei Sun, Zhifang Sui, Meng Wang, and Xin
+ Conference Poster Sessions, pages 97–104. As-                 Wang. 2009. Chinese semantic role labeling
+
+
+                                                        107
+
+
+  with shallow parsing. In Proceedings of the
+  2009 Conference on Empirical Methods in Nat-
+  ural Language Processing, pages 1475–1483.
+  Association for Computational Linguistics, Sin-
+  gapore.
+Mihai Surdeanu, Richard Johansson, Adam Mey-
+ ers, Lluı́s Màrquez, and Joakim Nivre. 2008.
+ The conll 2008 shared task on joint parsing of
+ syntactic and semantic dependencies. In CoNLL
+ 2008: Proceedings of the Twelfth Conference
+ on Computational Natural Language Learning,
+ pages 159–177. Coling 2008 Organizing Com-
+ mittee, Manchester, England.
+Nianwen Xue. 2008. Labeling Chinese predi-
+  cates with semantic roles. Comput. Linguist.,
+  34(2):225–255.
+
+
+
+
+                                                    108
+

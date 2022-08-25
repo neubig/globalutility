@@ -1,0 +1,736 @@
+              Hard Constraints for Grammatical Function Labelling
+                     Wolfgang Seeker                           Ines Rehbein
+                   University of Stuttgart                  University of Saarland
+      Institut für Maschinelle Sprachverarbeitung Dep. for Comp. Linguistics & Phonetics
+               seeker@ims.uni-stuttgart.de                 rehbein@coli.uni-sb.de
+
+
+                       Jonas Kuhn                                    Josef van Genabith
+                   University of Stuttgart                          Dublin City University
+      Institut für Maschinelle Sprachverarbeitung               CNGL and School of Computing
+                jonas@ims.uni-stuttgart.de                         josef@computing.dcu.ie
+
+                      Abstract                                (Bresnan, 2001). Case features, for instance, can
+                                                              be important indicators of grammatical functions.
+    For languages with (semi-) free word or-                  Unfortunately, many of these languages (including
+    der (such as German), labelling gramma-                   German) exhibit strong syncretism where morpho-
+    tical functions on top of phrase-structural               logical cues can be highly ambiguous with respect
+    constituent analyses is crucial for making                to functional information.
+    them interpretable. Unfortunately, most                      Statistical classifiers have been successfully
+    statistical classifiers consider only local               used to label constituent structure parser output
+    information for function labelling and fail               with grammatical function information (Blaheta
+    to capture important restrictions on the                  and Charniak, 2000; Chrupała and Van Genabith,
+    distribution of core argument functions                   2006). However, as these approaches tend to
+    such as subject, object etc., namely that                 use only limited and local context information
+    there is at most one subject (etc.) per                   for learning and prediction, they often fail to en-
+    clause. We augment a statistical classifier               force simple yet important global linguistic con-
+    with an integer linear program imposing                   straints that exist for most languages, e. g. that
+    hard linguistic constraints on the solution               there will be at most one subject (object) per sen-
+    space output by the classifier, capturing                 tence/clause.1
+    global distributional restrictions. We show                  “Hard” linguistic constraints, such as these,
+    that this improves labelling quality, in par-             tend to affect mostly the “core grammatical func-
+    ticular for argument grammatical func-                    tions”, i. e. the argument functions (rather than
+    tions, in an intrinsic evaluation, and, im-               e. g. adjuncts) of a particular predicate. As these
+    portantly, grammar coverage for treebank-                 functions constitute the core meaning of a sen-
+    based (Lexical-Functional) grammar ac-                    tence (as in: who did what to whom), it is impor-
+    quisition and parsing, in an extrinsic eval-              tant to get them right. We present a system that
+    uation.                                                   adds grammatical function labels to constituent
+                                                              parser output for German in a postprocessing step.
+1   Introduction
+                                                              We combine a statistical classifier with an inte-
+Phrase or constituent structure is often regarded as          ger linear program (ILP) to model non-violable
+an analysis step guiding semantic interpretation,             global linguistic constraints, restricting the solu-
+while grammatical functions (i. e. subject, object,           tion space of the classifier to those labellings that
+modifier etc.) provide important information rele-            comply with our set of global constraints. There
+vant to determining predicate-argument structure.             are, of course, many other ways of including func-
+  In languages with restricted word order (e. g.              tional information into the output of a syntactic
+English), core grammatical functions can often                parser. Klein and Manning (2003) show that merg-
+be recovered from configurational information in              ing some linguistically motivated function labels
+constituent structure analyses. By contrast, sim-             with specific syntactic categories can improve the
+ple constituent structures are not sufficient for less        performance of a PCFG model on Penn-II En-
+configurational languages, which tend to encode                   1
+                                                                    Coordinate subjects/objects form a constituent that func-
+grammatical functions by morphological means                  tions as a joint subject/object.
+
+
+                                                        1087
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1087–1097,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+glish data.2 Tsarfaty and Sim’aan (2008) present               scribes the labeller including the feature model of
+a statistical model (Relational-Realizational Pars-            the classifier and the integer linear program used
+ing) that alternates between functional and config-            to pick the correct labelling. The evaluation part
+urational information for constituency tree pars-              (Section 4) is split into an intrinsic evaluation mea-
+ing and Hebrew data. Dependency parsers like                   suring the quality of the labelling directly using
+the MST parser (McDonald and Pereira, 2006) and                the German TiGer Treebank (Brants et al., 2002),
+Malt parser (Nivre et al., 2007) use function labels           and an extrinsic evaluation where we test the im-
+as core part of their underlying formalism. In this            pact of the constraint-based labelling on treebank-
+paper, we focus on phrase structure parsing with               based automatic LFG grammar acquisition.
+function labelling as a post-processing step.
+   Integer linear programs have already been suc-              2         Data
+cessfully used in related fields including semantic            Unlike English, German exhibits a relatively free
+role labelling (Punyakanok et al., 2004), relation             word order, i. e. in main clauses, the verb occu-
+and entity classification (Roth and Yih, 2004), sen-           pies second position (the last position in subor-
+tence compression (Clarke and Lapata, 2008) and                dinated clauses) and arguments and adjuncts can
+dependency parsing (Martins et al., 2009). Early               be placed (fairly) freely. The grammatical func-
+work on function labelling for German (Brants et               tion of a noun phrase is marked morphologically
+al., 1997) reports 94.2% accuracy on gold data (a              on its constituting parts. Determiners, pronouns,
+very early version of the TiGer Treebank (Brants               adjectives and nouns carry case markings and in
+et al., 2002)) using Markov models. Klenner                    order to be well-formed, all parts of a noun phrase
+(2007) uses a system similar to – but more re-                 have to agree on their case features. German uses
+stricted than – ours to label syntactic chunks de-             a nominative–accusative system to mark predicate
+rived from the TiGer Treebank. His research fo-                arguments. Subjects are marked with nominative
+cusses on the correct selection of predefined sub-             case, direct objects carry accusative case. Further-
+categorisation frames for a verb (see also Klenner             more, indirect objects are mostly marked with da-
+(2005)). By contrast, our research does not involve            tive case and sometimes genitive case.
+subcategorisation frames as an external resource,
+instead opting for a less knowledge-intensive ap-              (1)       Der Löwe gibt dem Wolf einen Besen.
+                                                                         NOM                DAT        ACC
+proach. Klenner’s system was evaluated on gold                           the lion    gives the wolf a broom
+treebank data and used a small set of 7 dependency                       The lion gives a broom to the wolf.
+labels. We show that an ILP-based approach can
+be scaled to a large and comprehensive set of 42                  (1) shows a sentence containing the ditransi-
+labels, achieving 97.99% label accuracy on gold                tive verb geben (to give) with its three arguments.
+standard trees. Furthermore, we apply the sys-                 Here, the subject is unambiguously marked with
+tem to automatically parsed data using a state-of-             nominative case (NOM), the indirect object with
+the-art statistical phrase-structure parser with a la-         dative case (DAT) and the direct object with ac-
+bel accuracy of 94.10%. In both cases, the ILP-                cusative case (ACC). (2) shows possible word or-
+based approach improves the quality of argument                ders for the arguments in this sentence.3
+function labelling when compared with a non-ILP-
+                                                               (2)       Der Löwe gibt einen Besen dem Wolf.
+approach. Finally, we show that the approach                             Dem Wolf gibt der Löwe einen Besen.
+substantially improves the quality and coverage                          Dem Wolf gibt einen Besen der Löwe.
+                                                                         Einen Besen gibt der Löwe dem Wolf.
+(from 93.6% to 98.4%) of treebank-based Lexical-                         Einen Besen gibt dem Wolf der Löwe.
+Functional Grammars for German over previous
+work in Rehbein and van Genabith (2009).                          Since all permutations of arguments are possi-
+   The paper is structured as follows: Section 2               ble, there is no chance for a statistical classifier to
+presents basic data demonstrating the challenges               decide on the correct function of a noun phrase by
+presented by German word order and case syn-                   its position alone. Introducing adjuncts to this ex-
+cretism for the function labeller. Section 3 de-               ample makes matters even worse.
+   2
+     Table 6 shows that for our data a model with merged             3
+                                                                    Note that although (apart from the position of the finite
+category and function labels (but without hard constraints!)   verb) there are no syntactic restrictions on the word order,
+performs slightly worse than the ILP approach developed in     there are restrictions pertaining to phonological or informa-
+this paper.                                                    tion structure.
+
+
+
+                                                           1088
+
+
+   Case information for a given noun phrase can                   structure (as obtained by a standard phrase struc-
+give a classifier some clue about the correct ar-                 ture parser) and it outputs a tree structure where
+gument function, since functions are strongly re-                 every node is labelled with the grammatical rela-
+lated to case values. Unfortunately, the German                   tion it bears to its mother node. For each possi-
+case system is complex (see Eisenberg (2006) for                  ble label and for each node, the classifier assigns
+a thorough description) and exhibits a high degree                a probability that this node is labelled by this la-
+of case syncretism. (3) shows a sentence where                    bel. This results in a complete probability distri-
+both argument NPs are ambiguous between nom-                      bution over all labels for each node. An integer
+inative or accusative case. In such cases, addi-                  linear program then tries to find the optimal over-
+tional semantic or contextual information is re-                  all tree labelling by picking for each node the label
+quired for disambiguation. A statistical classifier               with the highest probability without violating any
+(with access to local information only) runs a high               of its constraints. These constraints implement lin-
+risk of incorrectly classifying both NPs as sub-                  guistic rules like the one-subject-per-sentence rule
+jects, or both as direct objects or even as nominal               mentioned above. They can also be used to cap-
+predicates (which are also required to carry nom-                 ture treebank particulars, such as for example that
+inative case). This would leave us with uninter-                  punctuation marks never receive a label.
+pretable results. Uninterpretability of this kind can
+be avoided if we are able to constrain the number                 3.1    The Feature Model
+of subjects and objects globally to one per clause.4              Maximum entropy classifiers have been used in a
+                                                                  wide range of applications in NLP for a long time
+(3)   Das Schaf sieht das Mädchen.
+      NOM/ACC             NOM/ACC                                 (Berger et al., 1996; Ratnaparkhi, 1998). They
+      the sheep    sees the girl                                  usually give good results while at the same time
+      EITHER The sheep sees the girl                              allowing for the inclusion of arbitrarily complex
+      OR The girl sees the sheep.
+                                                                  features. They also have the advantage that they
+3     Grammatical Function Labelling                              directly output probability distributions over their
+                                                                  set of labels (unlike e. g. SVMs).
+Our function labeller was developed and tested on                    The classifier uses the following features:
+the TiGer Treebank (Brants et al., 2002). The                     •   the lemma (if terminal node)
+TiGer Treebank is a phrase-structure and gram-
+                                                                  •   the category (the POS for terminal nodes)
+matical function annotated treebank with 50,000
+newspaper sentences from the Frankfurter Rund-                    •   the number of left/right sisters
+schau (Release 2, July 2006). Its overall anno-                   •   the category of the two left/right sisters
+tation scheme is quite flat to account for the rel-               •   the number of daughters
+atively free word order of German and does not                    •   the number of terminals covered
+allow for unary branching. The annotations use                    •   the lemma of the left/right corner terminal
+non-projective trees modelling long distance de-
+                                                                  •   the category of the left/right corner terminal
+pendencies directly by crossing branches. Words
+are lemmatised and part-of-speech tagged with the                 •   the category of the mother node
+Stuttgart-Tübingen Tag Set (STTS) (Schiller et al.,              •   the category of the mother’s head node
+1999) and contain morphological annotations (Re-                  •   the lemma of the mother’s head node
+lease 2). TiGer uses 25 syntactic categories and a                •   the category of the grandmother node
+set of 42 function labels to annotate the grammat-                •   the category of the grandmother’s head node
+ical function of a phrase.
+                                                                  •   the lemma of the grandmother’s head node
+   The function labeller consists of two main com-
+                                                                  •   the case features for noun phrases
+ponents, a maximum entropy classifier and an in-
+teger linear program. This basic architecture was                 •   the category for PP objects
+introduced by Punyakanok et al. (2004) for the                    •   the lemma for PP objects (if terminal node)
+task of semantic role labelling and since then has                   These features are also computed for the head
+been applied to different NLP tasks without signif-               of the phrase, determined using a set of head-
+icant changes. In our case, its input is a bare tree              finding rules in the style of Magerman (1995)
+   4
+     Although the classifier may, of course, still identify the   adapted to TiGer. For lemmatisation, we use Tree-
+wrong phrase as subject or object.                                Tagger (Schmid, 1994) and case features of noun
+
+
+                                                              1089
+
+
+phrases are obtained from a full German morpho-                   label, we add a constraint that for every node n,
+logical analyser based on (Schiller, 1994). If a                  exactly one of its variables is set to 1.
+noun phrase consists of a single word (e. g. pro-                                        X
+nouns, but also bare common nouns and proper                                                   xn,l = 1                      (5)
+nouns), all case values output by the analyser are                                       l∈L
+used to reflect the case syncretism. For multi-word                  Up to now, the whole system is doing exactly
+noun phrases, the case feature is computed by tak-                the same as an ordinary classifier that always takes
+ing the intersection of all case-bearing words in-                the most probable label for each node. We will
+side the noun phrase, i. e. determiners, pronouns,                now add additional global and local linguistic con-
+adjectives, common nouns and proper nouns. If,                    straints.7
+for some reason (e.g., due to a bracketing error in                  The first and most important constraint restricts
+phrase structure parsing), the intersection turns out             the number of each argument function (as opposed
+to be empty, all four case values are assigned to the             to modifier functions) to at most one per clause.
+phrase.5                                                          Let D ⊂ N × N be the direct dominance rela-
+                                                                  tion between the nodes of the current tree. For ev-
+3.2    Constrained Optimisation                                   ery node n with category S (sentence) or VP (verb
+In the second step, a binary integer linear pro-                  phrase), at most one of its daughters is allowed
+gram is used to select those labels that optimise the             to be labelled SB (subject). The single-subject-
+whole tree labelling. A linear program consists of                function condition is defined as:
+a linear objective function that is to be maximised
+(or minimised) and a set of constraints which im-                                                    X
+                                                                     cat(n) ∈ {S, V P } −→                   xm,SB ≤ 1 (6)
+pose conditions on the variables of the objective
+                                                                                                  hn,mi∈D
+function (see (Clarke and Lapata, 2008) for a short
+but readable introduction). Although solving a lin-                 Identical constraints are added for labels OA,
+ear program has polynomial complexity, requiring                  OA2, DA, OG, OP, PD, OC, EP.8
+the variables to be integral or binary makes find-                  We add further constraints to capture the follow-
+ing a solution exponentially hard in the worst case.              ing linguistic restrictions:
+Fortunately, there are efficient algorithms which                 • Of all daughters of a phrase, only one is allowed
+are capable of handling a large number of vari-                     to be labelled HD (head).
+ables and constraints in practical applications.6                                   X
+                                                                                           xm,HD ≤ 1               (7)
+   For the function labeller, we define the set of                                    hn,mi∈D
+binary variables V = N × L to be the crossprod-
+uct of the set of nodes N and the set of labels L.                • If a noun phrase carries no case feature for nom-
+Setting a variable xn,l to 1 means that node n is                   inative case, it cannot be labelled SB, PD or EP.
+                                                                                                  X
+labelled by label l. Every variable is weighted by                    case(n) 6= nom −→                     xn,l = 0
+the probability wn,l = P (l|f (n)) which the clas-                                                l∈{SB,P D,EP }
+sifier has assigned to this node-label combination.                                                               (8)
+The objective function that we seek to optimise is                • If a noun phrase carries no case feature for ac-
+defined as the sum over all weighted variables:                     cusative case, it cannot be labelled OA or OA2.
+                        XX                                        • If a noun phrase carries no case feature for da-
+                 max               wn,l xn,l               (4)      tive case, it cannot be labelled DA.
+                        n∈N l∈L                                   • If a noun phrase carries no case feature for gen-
+   Since we want every node to receive exactly one                  itive case, it cannot be labelled OG or AG9 .
+   5                                                                  7
+      We decided to train the classifier on automatically               Note that some of these constraints are language specific
+assigned and possibly ambiguous morphological informa-            in that they represent linguistic facts about German and do
+tion instead of on the hand-annotated and manually disam-         not necessarily hold for other languages. Furthermore, the
+biguated morphological information provided by TiGer be-          constraints are treebank specific to a certain degree in that
+cause we want the classifier to learn the German case syn-        they use a TiGer-specific set of labels and are conditioned on
+cretism. This way, the classifier will perform better when pre-   TiGer-specific configurations and categories.
+                                                                      8
+sented with unseen data (e.g. from parser output) for which             SB = subject, OA = accusative object, OA2 = sec-
+no hand-annotated morphological information is available.         ond accusative object, DA = dative, OG = genitive object,
+    6                                                             OP = prepositional object, PD = predicate, OC = clausal ob-
+      See lpsolve (http://lpsolve.sourceforge.net/) or GLPK
+(http://www.gnu.org/software/glpk/glpk.html) for open-            ject, EP = expletive es
+                                                                      9
+source implementations                                                  AG = genitive adjunct
+
+
+                                                              1090
+
+
+   Unlike Klenner (2007), we do not use prede-           the dependencies from TiGerDB for assessing the
+fined subcategorization frames, instead letting the      quality and coverage of the automatically acquired
+statistical model choose arguments.                      LFG resources in the extrinsic evaluation.
+   In TiGer, sentences whose main verbs are                 In order to test on real parser output, the test
+formed from auxiliary-participle combinations,           set was parsed with the Berkeley Parser (Petrov et
+are annotated by embedding the participle under          al., 2006) trained on 48k sentences of the TiGer
+an extra VP node and non-subject arguments are           corpus (Table 1), excluding the test set. Since the
+sisters to the participle. Therefore we add an ex-       Berkeley Parser assumes projective structures, the
+tension of the constraint in (6) to the constraint set   training data and test data were made projective by
+in order to also include the daughters of an embed-      raising non-projective nodes in the tree (Kübler,
+ded VP node in such a case.                              2005).
+   Because of the particulars of the annotation                   precision    83.60    recall          82.81
+scheme of TiGer, we can decide some labels in                     f-score      83.20    tagging acc.    97.97
+advance. As mentioned before, punctuation does
+not get a label in TiGer. We set the label for those     Table 1: evalb unlabelled parsing scores on test set for Berke-
+                                                         ley Parser trained on 48,000 sentences (sentence length ≤ 40)
+nodes to −− (no label). Other examples are:
+• If a node’s category is PTKVZ (separated verb              The maximum entropy classifier of the func-
+  particle), it is labeled SVP (separable verb par-      tion labeller was trained on 46,473 sentences of
+  ticle).                                                the TiGer Treebank (excluding the test set) which
+                                                         yields about 1.2 million nodes as training samples.
+      cat(n) = P T KV Z −→ xn,SV P = 1            (9)    For training the Maximum Entropy Model, we
+                                                         used the BLMVM algorithm (Benson and More,
+• If a node’s category is APPR, APPRART,                 2001) with a width factor of 1.0 (Kazama and Tsu-
+  APPO or APZR (prepositions), it is labeled AC          jii, 2005) implemented in an open-source C++ li-
+  (adpositional case marker).                            brary from Tsujii Laboratory.10 The integer linear
+• All daughters of an MTA node (multi-token              program was solved with the simplex algorithm in
+  adjective) are labeled ADC (adjective compo-           combination with a branch-and-bound method us-
+  nent).                                                 ing the freely available GLPK.11
+   These constraints are conditioned on part-of-
+                                                         4.1     Intrinsic Evaluation
+speech tags and require high POS-tagging accu-
+racy (when dealing with raw text).                       In the intrinsic evaluation, we measured the qual-
+   Due to the constraints imposed on the classifi-       ity of the labelling itself. We used the node
+cation, the function labeller can no longer assign       span evaluation method of (Blaheta and Char-
+two subjects to the same S node. Faced with two          niak, 2000) which takes only those nodes into ac-
+nodes whose most probable label is SB, it has to         count which have been recognised correctly by the
+decide on one of them taking the next best label for     parser, i.e. if there are two nodes in the parse and
+the other. This way, it outputs the optimal solution     the reference treebank tree which cover the same
+with respect to the set of constraints. Note that this   word span. Unlike Blaheta and Charniak (2000)
+requires the feature model not only to rank the cor-     however, we do not require the two nodes to carry
+rect label highest but also to provide a reasonable      the same syntactic category label.12
+ranking of the other labels as well.                        Table 2 shows the results of the node span eval-
+                                                         uation. The labeller achieves close to 98% label
+4   Evaluation                                           accuracy on gold treebank trees which shows that
+                                                         the feature model captures the differences between
+We conducted a number of experiments using
+                                                         the individual labels well. Results on parser output
+1,866 sentences of the TiGer Dependency Bank
+                                                         are about 4 percentage points (absolute) lower as
+(Forst et al., 2004) as our test set. The TiGerDB is
+                                                         parsing errors can distort local context features for
+a part of the TiGer Treebank semi-automatically
+                                                         the classifier even if the node itself has been parsed
+converted into a dependency representation. We
+                                                            10
+use the manually labelled TiGer trees correspond-             http://www-tsujii.is.s.u-tokyo.ac.jp/∼tsuruoka/maxent/
+                                                            11
+                                                              http://www.gnu.org/software/glpk/glpk.html
+ing to the sentences in the TiGerDB for assessing          12
+                                                              We also excluded the root node, all punctuation marks
+the labelling quality in the intrinsic evaluation, and   and both nodes in unary branching sub-trees from evaluation.
+
+
+                                                     1091
+
+
+correctly. The addition of the ILP constraints im-                  tention to correctly parsed nodes, the results are
+proves results only slightly since the constraints                  somewhat over-optimistic. Table 4 provides the
+affect only (a small number of) argument labels                     results obtained from an evalb evaluation of the
+while the evaluation considers all 40 labels occur-                 same data sets.13 The gold standard scores are
+ring in the test set. Since the constraints restrict the            high confirming our previous findings about the
+selection of certain labels, a less probable label has              performance of the function labeller. However,
+to be picked by the labeller if the most probable                   the results on parser output are much worse. The
+is not available. If the classifier is ranking labels               evaluation scores are now taking the parsing qual-
+sensibly, the correct label should emerge. How-                     ity into account (Table 1). The considerable drop
+ever, with an incorrect ranking, the ILP constraints                in quality between gold trees and parser output
+might also introduce new errors.                                    clearly shows that a good parse tree is an impor-
+                      label accuracy           error red.           tant prerequisite for reasonable function labelling.
+                     without constraints                            This is in accordance with previous findings by
+       gold      44689/45691 = 97.81%              –                Punyakanok et al. (2008) who emphasise the im-
+       parser    40578/43140 = 94.06%              –
+                       with constraints
+                                                                    portance of syntactic parsing for the closely re-
+       gold      44773/45691 = 97.99%*          8.21%               lated task of semantic role labelling.
+       parser    40593/43140 = 94.10%           0.68%
+                                                                                                 prec.     rec.      f-score
+                                                                                           without constraints
+Table 2: label accuracy and error reduction (all labels) for                    gold standard 95.94 95.94            95.94
+node span evaluation, * statistically significant, sign test, α =               parser output 76.27 75.55            75.91
+0.01 (Koo and Collins, 2005)                                                                 with constraints
+                                                                                gold standard 96.21 96.21            96.21
+   As the main target of the constraint set are argu-                           parser output 76.36 75.64            76.00
+ment functions, we also tested the quality of argu-
+ment labels. Table 3 shows the node span evalua-                                   Table 4: evalb results for the test set
+tion in terms of precision, recall and f-score for ar-
+gument functions only, with clear statistically sig-                4.1.1 Subcategorisation Frames
+nificant improvements.                                              Early on in the paper we mention that, unlike e. g.
+                          prec.     rec.       f-score              Klenner (2007), we did not include predefined
+                    without constraints                             subcategorisation frames into the constraint set,
+         gold standard 92.41 91.86             92.13
+         parser output    88.14 86.43          87.28                but rather let the joint statistical and ILP models
+                      with constraints                              decide on the correct type of arguments assigned
+         gold standard 94.31 92.76             93.53*               to a verb. The assumption is that if one uses prede-
+         parser output    89.51 86.73          88.09*
+                                                                    fined subcategorisation frames which fix the num-
+Table 3: node span results for the test set, argument functions     ber and type of arguments for a verb, one runs the
+only (SB, EP, PD, OA, OA2, DA, OG, OP, OC), * statistically         risk of excluding correct labellings due to missing
+significant, sign test, α = 0.01 (Koo and Collins, 2005)            subcat frames, unless a very comprehensive and
+                                                                    high quality subcat lexicon resource is available.
+   For comparison and to establish a highly com-
+                                                                       In order to test this assumption, we run an addi-
+petitive baseline, we use the best-scoring system
+                                                                    tional experiment with about 10,000 verb frames
+in (Chrupała and Van Genabith, 2006), trained and
+                                                                    for 4,508 verbs, which were automatically ex-
+tested on exactly the same data sets. This purely
+                                                                    tracted from our training section. Following Klen-
+statistical labeller achieves accuracy of 96.44%
+                                                                    ner (2007), for each verb and for each subcat frame
+(gold) and 92.81% (parser) for all labels, and f-
+                                                                    for this verb attested at least once in the training
+scores of 89.88% (gold) and 84.98% (parser) for
+                                                                    data, we introduce a new binary variable fn to
+argument labels. Tables 2 and 3 show that our sys-
+                                                                    the ILP model representing the n-th frame (for the
+tem (with and even without ILP constraints) com-
+                                                                    verb) weighted by its frequency.
+prehensively outperforms all corresponding base-
+                                                                       We add an ILP constraint requiring exactly one
+line scores.
+                                                                    of the frames to be set to one (each verb has to have
+   The node span evaluation defines a correct la-
+                                                                    a subcat frame) and replace the ILP constraint in
+belling by taking only those nodes (in parser out-
+                                                                    (6) by:
+put) into account that have a corresponding node
+                                                                       13
+in the reference tree. However, as this restricts at-                       Function labels were merged with the category symbols.
+
+
+
+                                                                1092
+
+
+                X                     X                                Lexical-Functional Grammar (Bresnan, 2001)
+                        xm,SB −             fi = 0         (10)     is a constraint-based theory of grammar with min-
+              hn,mi∈D               SB∈fi                           imally two levels of representation: c(onstituent)-
+   This constraint requires the number of subjects                  structure and f(unctional)-structure. C-structure
+in a phrase to be equal to the number of selected14                 (CFG trees) captures language specific surface
+verb frames that require a subject. As each verb                    configurations such as word order and the hier-
+is constrained to “select” exactly one subcat frame                 archical grouping of words into phrases, while
+(see additional ILP constraint above), there is at                  f-structure represents more abstract (and some-
+most one subject per phrase, if the frame in ques-                  what more language independent) grammatical re-
+tion requires a subject. If the selected frame does                 lations (essentially bilexical labelled dependencies
+not require a subject, then the constraint blocks the               with some morphological and semantic informa-
+assignment of subjects for the entire phrase. The                   tion, approximating to basic predicate-argument
+same was done for the other argument functions                      structures) in the form of attribute-value struc-
+and as before we included an extension of this con-                 tures. F-structures are defined in terms of equa-
+straint to cover embedded VPs. For unseen verbs                     tions annotated to nodes in c-structure trees (gram-
+(i.e. verbs not attested in the training set) we keep               mar rules). Treebank-based LFG acquisition was
+the original constraints as a back-off.                             originally developed for English (Cahill, 2004;
+                                                                    Cahill et al., 2008) and is based on an f-structure
+                             prec.     rec.   f-score
+                                                                    annotation algorithm that annotates c-structure
+                    all labels (cmp. Table 2)
+           gold standard 97.24 97.24           97.24                trees (from a treebank or parser output) with
+           parser output     93.43 93.43       93.43                f-structure equations, which are read off of the tree
+            argument functions only (cmp. Table 3)                  and passed on to a constraint solver producing an
+           gold standard 91.36 90.12           90.74
+           parser output     86.64 84.38       85.49                f-structure for the given sentence. The English
+                                                                    annotation algorithm (for Penn-II treebank-style
+Table 5: node span results for the test set using constraints       trees) relies heavily on configurational and catego-
+with automatically extracted subcat frames
+                                                                    rial information, translating this into grammatical
+   Table 5 shows the results of the test set node                   functional information (subject, object etc.) rep-
+span evaluation when using the ILP system en-                       resented at f-structure. LFG is “functional” in the
+hanced with subcat frames. Compared to Tables 2                     mathematical sense, in that argument grammatical
+and 3, the results are clearly inferior, and particu-               functions have to be single valued (there cannot be
+larly so for argument grammatical functions. This                   two or more subjects etc. in the same clause). In
+seems to confirm our assumption that, given our                     fact, if two or more values are assigned to a single
+data, letting the joint statistical and ILP model de-               argument grammatical function in a local tree, the
+cide argument functions is superior to an approach                  LFG constraint solver will produce a clash (i. e.
+that involves subcat frames. However, and impor-                    it will fail to produce an f-structure) and the sen-
+tantly, our results do not rule out that a more com-                tence will be considered ungrammatical (in other
+prehensive subcat frame resource may in fact re-                    words, the corresponding c-structure tree will be
+sult in improvements.                                               uninterpretable).
+                                                                       Rehbein (2009) and Rehbein and van Genabith
+4.2      Extrinsic Evaluation                                       (2009) develop an f-structure annotation algorithm
+Over the last number of years, treebank-based                       for German based on the TiGer treebank resource.
+deep grammar acquisition has emerged as an                          Unlike the English annotation algorithm and be-
+attractive alternative to hand-crafting resources                   cause of the language-particular properties of Ger-
+within the HPSG, CCG and LFG paradigms                              man (see Section 2), the German annotation al-
+(Miyao et al., 2003; Clark and Hockenmaier,                         gorithm cannot rely on c-structure configurational
+2002; Cahill et al., 2004). While most of the ini-                  information, but instead heavily uses TiGer func-
+tial development work focussed on English, more                     tion labels in the treebank. Learning function la-
+recently efforts have branched to other languages.                  bels is therefore crucial to the German LFG an-
+Below we concentrate on LFG.                                        notation algorithm, in particular when parsing raw
+  14
+                                                                    text. Because of the strong case syncretism in Ger-
+       The variable representing this frame has been set to 1.
+                                                                    man, traditional classification models using local
+
+
+
+                                                                 1093
+
+
+information only run the risk of predicting mul-                   scoring method of Rehbein (2009). Rehbein trains
+tiple occurences of the same function (subject,                    the Berkeley Parser to learn an extended category
+object etc.) at the same level, causing feature                    set, merging TiGer function labels with syntactic
+clashes in the constraint solver with no f-structure               categories, where the parser outputs fully-labelled
+being produced. Rehbein (2009) and Rehbein                         trees. The results show that this approach suf-
+and van Genabith (2009) identify this as a major                   fers from the same drop in coverage as the classi-
+problem resulting in a considerable loss in cov-                   fier without ILP constraints, with recall about 7%
+erage of the German annotation algorithm com-                      and f-score about 4% (absolute) lower than for the
+pared to English, in particular for parsing raw text,              classifier with ILP constraints.
+where TiGer function labels have to be supplied by                    Table 7 shows the dramatic effect of the ILP
+a machine-learning-based method and where the                      constraints on the number of sentences in the test
+coverage of the LFG annotation algorithm drops                     set that have multiple argument functions of the
+to 93.62% with corresponding drops in recall and                   same type within the same clause. With ILP con-
+f-scores for the f-structure evaluations (Table 6).                straints, the problem disappears and therefore, less
+   Below we test whether the coverage problems                     feature-clashes occur during f-structure computa-
+caused by incorrect multiple assignments of gram-                  tion.
+matical functions can be addressed using the com-                                      no constraints    constraints
+bination of classifier with ILP constraints devel-                            gold          185              0
+                                                                              parser        212              0
+oped in this paper. We report experiments where
+automatically parsed and labelled data are handed                  Table 7: Number of sentences in the test set with doubly an-
+over to an LFG f-structure computation algorithm.                  notated argument functions
+The f-structures produced are converted into a
+dependency triple representation (Crouch et al.,                      In order to assess whether ILP constraints help
+2002) and evaluated against TiGerDB.                               with coverage only or whether they affect the qual-
+                      cov.     prec.     rec.     f-score
+                                                                   ity of the f-structures as well, we repeat the experi-
+     upper bound     99.14 85.63 82.58             84.07           ment in Table 6, however this time evaluating only
+                     without constraints                           on those sentences that receive an f-structure, ig-
+     gold            95.82 84.71 76.68             80.49
+     parser          93.41 79.70 70.38             74.75
+                                                                   noring the rest. Table 8 shows that the impact of
+                      with constraints                             ILP constraints on quality is much less dramatic
+     gold            99.30 84.62 82.15             83.37           than on coverage, with only very small variations
+     parser          98.39 79.43 75.60             77.47
+                                                                   in precison, recall and f-scores across the board,
+                       Rehbein 2009
+     parser          93.62 79.20 68.86             73.67           and small increases over Rehbein (2009).
+                                                                                        cov.    prec.     rec.    f-score
+Table 6: f-structure evaluation results for the test set against         no constr.    93.41    79.70    77.89     78.79
+TigerDB                                                                  constraints   98.39    79.43    77.85     78.64
+                                                                         Rehbein       93.62    79.20    76.43     77.79
+   Table 6 shows the results of the f-structure
+evaluation against TiGerDB, with 84.07% f-score                    Table 8: f-structure evaluation results for parser output ex-
+upper-bound results for the f-structure annotation                 cluding sentences without f-structures
+algorithm on the original TiGer treebank trees
+                                                                      Early work on automatic LFG acquisition and
+with hand-annotated function labels. Using the
+                                                                   parsing for German is presented in Cahill et al.
+function labeller without ILP constraints results in
+                                                                   (2003) and Cahill (2004), adapting the English
+drastic drops in coverage (between 4.5% and 6.5%
+                                                                   Annotation Algorithm to an earlier and smaller
+points absolute) and hence recall (6% and 12%)
+                                                                   version of the TiGer treebank (without morpho-
+and f-score (3.5% and 9.5%) for both gold trees
+                                                                   logical information) and training a parser to learn
+and parser output (compared to upper bounds).
+                                                                   merged Tiger function-category labels, and report-
+By contrast, with ILP constraints, the loss in cov-
+                                                                   ing 95.75% coverage and an f-score of 74.56%
+erage observed above almost completely disap-
+                                                                   f-structure quality against 2,000 gold treebank
+pears and recall and f-scores improve by between
+                                                                   trees automatically converted into f-structures.
+4.4% and 5.5% (recall) and 3% (f-score) abso-
+                                                                   Rehbein (2009) uses the larger Release 2 of the
+lute (over without ILP constraints). For compar-
+                                                                   treebank (with morphological information) report-
+ison, we repeated the experiment using the best-
+                                                                   ing 77.79% f-score and coverage of 93.62% (Ta-
+
+
+                                                               1094
+
+
+ble 8) against the dependencies in the TiGerDB                     is the unlimited context it can take into account
+test set. The only rule-based approach to German                   by optimising over the entire structure, providing
+LFG-parsing we are aware of is the hand-crafted                    an elegant way of supporting classifiers with ex-
+German grammar in the ParGram Project (Butt                        plicit linguistic knowledge while at the same time
+et al., 2002). Forst (2007) reports 83.01% de-                     keeping feature models small and comprehensi-
+pendency f-score evaluated against a set of 1,497                  ble. Most of the constraints are direct formaliza-
+sentences of the TiGerDB. It is very difficult to                  tions of linguistic generalizations for German. Our
+compare results across the board, as individual pa-                approach should generalise to other languages for
+pers use (i) different versions of the treebank, (ii)              which linguistic expertise is available.
+different (sections of) gold-standards to evaluate                    We evaluated our system on the TiGer corpus
+against (gold TiGer trees in TigerDB, the depen-                   and the TiGerDB and gave results on gold stan-
+dency representations provided by TigerDB, auto-                   dard trees and parser output. We also applied
+matically generated gold-standards etc.) and (iii)                 the German f-structure annotation algorithm to
+different label/grammatical function sets. Further-                the automatically labelled data and evaluated the
+more, (iv) coverage differs drastically (with the                  system by measuring the quality of the resulting
+hand-crafted LFG resources achieving about 80%                     f-structures. We found that by using the con-
+full f-structures) and finally, (v) some of the gram-              straint set, the function labeller ensures the inter-
+mars evaluated having been used in the generation                  pretability and thus the usefulness of the syntac-
+of the gold standards, possibly introducing a bias                 tic structure for a subsequently applied processing
+towards these resources: the German hand-crafted                   step. In our f-structure evaluation, that means, the
+LFG was used to produce TiGerDB (Forst et al.,                     f-structure computation algorithm is able to pro-
+2004). In order to put the results into some per-                  duce an f-structure for almost all sentences.
+spective, Table 9 shows an evaluation of our re-
+sources against a set of automatically generated                   Acknowledgements
+gold standard f-structures produced by using the                   The first author would like to thank Gerlof Bouma
+f-structure annotation algorithm on the original                   for a lot of very helpful discussions. We would
+hand-labelled TiGer gold trees in the section cor-                 like to thank our anonymous reviewers for de-
+responding to TiGerDB: without ILP constraints                     tailed and helpful comments. The research was
+we achieve a dependency f-score of 84.35%, with                    supported by the Science Foundation Ireland SFI
+ILP constraints 87.23% and 98.89% coverage.                        (Grant 07/CE/I1142) as part of the Centre for
+                   cov.    prec.     rec.      f-score             Next Generation Localisation (www.cngl.ie) and
+                     without constraints                           by DFG (German Research Foundation) through
+        gold      95.24 97.76 90.93            94.22
+        parser    93.35 88.71 80.40            84.35
+                                                                   SFB 632 Potsdam-Berlin and SFB 732 Stuttgart.
+                      with constraints
+        gold      99.30 97.66 97.33            97.50
+        parser    98.89 88.37 86.12            87.23               References
+                                                                   Steven J. Benson and Jorge J. More. 2001. A limited
+Table 9: f-structure evaluation results for the test set against
+automatically generated goldstandard (1,850 sentences)
+                                                                      memory variable metric method in subspaces and
+                                                                      bound constrained optimization problems. Techni-
+                                                                      cal report, Argonne National Laboratory.
+5    Conclusion                                                    Adam L. Berger, Vincent J.D. Pietra, and Stephen A.D.
+                                                                     Pietra. 1996. A maximum entropy approach to nat-
+In this paper, we addressed the problem of assign-                   ural language processing. Computational linguis-
+ing grammatical functions to constituent struc-                      tics, 22(1):71.
+tures. We have proposed an approach to grammat-
+                                                                   Don Blaheta and Eugene Charniak. 2000. Assigning
+ical function labelling that combines the flexibil-                  function tags to parsed text. In Proceedings of the
+ity of a statistical classifier with linguistic expert               1st North American chapter of the Association for
+knowledge in the form of hard constraints imple-                     Computational Linguistics conference, pages 234 –
+mented by an integer linear program. These con-                      240, Seattle, Washington. Morgan Kaufmann Pub-
+                                                                     lishers Inc.
+straints restrict the solution space of the classifier
+by blocking those solutions that cannot be correct.                Thorsten Brants, Wojciech Skut, and Brigitte Krenn.
+One of the strengths of an integer linear program                    1997. Tagging grammatical functions. In Proceed-
+                                                                     ings of EMNLP, volume 97, pages 64–74.
+
+
+                                                               1095
+
+
+Sabine Brants, Stefanie Dipper, Silvia Hansen, Wolf-     Martin Forst, Núria Bertomeu, Berthold Crysmann,
+  gang Lezius, and George Smith. 2002. The TIGER          Frederik Fouvry, Silvia Hansen-Shirra, and Valia
+  treebank. In Proceedings of the Workshop on Tree-       Kordoni. 2004. Towards a dependency-based gold
+  banks and Linguistic Theories, page 2441.               standard for German parsers The TiGer Dependency
+                                                          Bank. In Proceedings of the COLING Workshop
+Joan Bresnan. 2001. Lexical-Functional Syntax.            on Linguistically Interpreted Corpora (LINC ’04),
+  Blackwell Publishers.                                   Geneva, Switzerland.
+Miriam Butt, Helge Dyvik, Tracy Halloway King, Hi-       Martin Forst. 2007. Filling Statistics with Linguistics
+  roshi Masuichi, and Christian Rohrer. 2002. The         Property Design for the Disambiguation of German
+  parallel grammar project. In COLING-02 on Gram-         LFG Parses. In Proceedings of ACL 2007. Associa-
+  mar engineering and evaluation-Volume 15, volume        tion for Computational Linguistics.
+  pages, page 7. Association for Computational Lin-
+  guistics.                                              Jun’Ichi Kazama and Jun’Ichi Tsujii. 2005. Maxi-
+                                                           mum entropy models with inequality constraints: A
+Aoife Cahill, Martin Forst, Mairead McCarthy, Ruth
+                                                           case study on text categorization. Machine Learn-
+  ODonovan, Christian Rohrer, Josef van Genabith,
+                                                           ing, 60(1):159194.
+  and Andy Way. 2003. Treebank-based multilingual
+  unification-grammar development. In Proceedings        Dan Klein and Christopher D. Manning. 2003. Accu-
+  of the Workshop on Ideas and Strategies for Multi-       rate unlexicalized parsing. In Proceedings of ACL
+  lingual Grammar Development at the 15th ESSLLI,          2003, pages 423–430, Morristown, NJ, USA. Asso-
+  page 1724.                                               ciation for Computational Linguistics.
+Aoife Cahill, Michael Burke, Ruth O’Donovan, Josef       Manfred Klenner. 2005. Extracting Predicate Struc-
+  van Genabith, and Andy Way. 2004. Long-                 tures from Parse Trees. In Proceedings of the
+  distance dependency resolution in automatically ac-     RANLP 2005.
+  quired wide-coverage PCFG-based LFG approxima-
+  tions. Proceedings of the 42nd Annual Meeting          Manfred Klenner. 2007. Shallow dependency label-
+  on Association for Computational Linguistics - ACL      ing. In Proceedings of the ACL 2007 Demo and
+  ’04, pages 319–es.                                      Poster Sessions, page 201204, Prague. Association
+                                                          for Computational Linguistics.
+Aoife Cahill, Michael Burke, Ruth O’Donovan, Stefan
+  Riezler, Josef van Genabith, and Andy Way. 2008.       Terry Koo and Michael Collins. 2005. Hidden-
+  Wide-Coverage Deep Statistical Parsing Using Au-         variable models for discriminative reranking. In
+  tomatic Dependency Structure Annotation. Compu-          Proceedings of the conference on Human Language
+  tational Linguistics, 34(1):81–124, März.               Technology and Empirical Methods in Natural Lan-
+                                                           guage Processing - HLT ’05, pages 507–514, Mor-
+Aoife Cahill. 2004. Parsing with Automatically Ac-
+  quired, Wide-Coverage, Robust, Probabilistic LFG         ristown, NJ, USA. Association for Computational
+  Approximations. Ph.D. thesis, Dublin City Univer-        Linguistics.
+  sity.                                                  Sandra Kübler. 2005. How Do Treebank Annotation
+Grzegorz Chrupała and Josef Van Genabith. 2006.            Schemes Influence Parsing Results? Or How Not to
+  Using machine-learning to assign function labels         Compare Apples And Oranges. In Proceedings of
+  to parser output for Spanish. In Proceedings of          RANLP 2005, Borovets, Bulgaria.
+  the COLING/ACL main conference poster session,         David M. Magerman. 1995. Statistical decision-tree
+  page 136143, Sydney. Association for Computa-            models for parsing. In Proceedings of the 33rd an-
+  tional Linguistics.                                      nual meeting on Association for Computational Lin-
+Stephen Clark and Judith Hockenmaier. 2002. Evalu-         guistics, page 276283, Morristown, NJ, USA. Asso-
+   ating a wide-coverage CCG parser. In Proceedings        ciation for Computational Linguistics Morristown,
+   of the LREC 2002, pages 60–66.                          NJ, USA.
+
+James Clarke and Mirella Lapata. 2008. Global in-        André F. T. Martins, Noah A. Smith, and Eric P. Xing.
+  ference for sentence compression an integer linear       2009. Concise integer linear programming formu-
+  programming approach. Journal of Artificial Intelli-     lations for dependency parsing. In Proceedings of
+  gence Research, 31:399–429.                              ACL 2009.
+
+Richard Crouch, Ronald M. Kaplan, Tracy Halloway         Ryan McDonald and Fernando Pereira. 2006. Online
+  King, and Stefan Riezler. 2002. A comparison of          learning of approximate dependency parsing algo-
+  evaluation metrics for a broad-coverage stochastic       rithms. In Proceedings of EACL, volume 6.
+  parser. In Proceedings of LREC 2002 Workshop,
+  pages 67–74, Las Palmas, Canary Islands, Spain.        Yusuke Miyao, Takashi Ninomiya, and Jun’ichi Tsujii.
+                                                           2003. Probabilistic modeling of argument structures
+Peter Eisenberg. 2006. Grundriss der deutschen             including non-local dependencies. In Proceedings
+  Grammatik: Das Wort. J.B. Metzler, Stuttgart, 3          of the Conference on Recent Advances in Natural
+  edition.                                                 Language Processing RANLP 2003, volume 2.
+
+
+                                                     1096
+
+
+Joakim Nivre, Johan Hall, Jens Nilsson, Atanas
+  Chanev, Gülsen Eryigit, Sandra Kübler, Svetoslav
+  Marinov, and Erwin Marsi. 2007. MaltParser:
+  A language-independent system for data-driven de-
+  pendency parsing. Natural Language Engineering,
+  13(2):95–135, Januar.
+Slav Petrov, Leon Barrett, Romain Thibaux, and Dan
+   Klein. 2006. Learning accurate, compact, and
+   interpretable tree annotation. In Proceedings of
+   the 21st International Conference on Computational
+   Linguistics and the 44th annual meeting of the ACL
+   - ACL ’06, pages 433–440, Morristown, NJ, USA.
+   Association for Computational Linguistics.
+
+Vasin Punyakanok, Wen-Tau Yih, Dan Roth, and Dav
+  Zimak. 2004. Semantic role labeling via integer
+  linear programming inference. In Proceedings of
+  the 20th international conference on Computational
+  Linguistics - COLING ’04, Morristown, NJ, USA.
+  Association for Computational Linguistics.
+
+Vasin Punyakanok, Dan Roth, and Wen-tau Yih. 2008.
+  The Importance of Syntactic Parsing and Inference
+  in Semantic Role Labeling. Computational Linguis-
+  tics, 34(2):257–287, Juni.
+Adwait Ratnaparkhi. 1998. Maximum Entropy Models
+  for Natural Language Ambiguity Resolution. Ph.D.
+  thesis, University of Pennsylvania.
+
+Ines Rehbein and Josef van Genabith. 2009. Auto-
+   matic Acquisition of LFG Resources for German-
+   As Good as it gets. In Miriam Butt and Tracy Hol-
+   loway King, editors, Proceedings of LFG Confer-
+   ence 2009. CSLI Publications.
+Ines Rehbein. 2009. Treebank-based grammar acqui-
+   sition for German. Ph.D. thesis, Dublin City Uni-
+   versity.
+Dan Roth and Wen-Tau Yih. 2004. A linear program-
+  ming formulation for global inference in natural lan-
+  guage tasks. In Proceedings of CoNNL 2004.
+
+Anne Schiller, Simone Teufel, and Christine Stöckert.
+  1999.     Guidelines für das Tagging deutscher
+  Textcorpora mit STTS (Kleines und großes Tagset).
+  Technical Report August, Universität Stuttgart.
+Anne Schiller. 1994. Dmor - user’s guide. Technical
+  report, University of Stuttgart.
+
+Helmut Schmid. 1994. Probabilistic Part-of-Speech
+  Tagging Using Decision Trees. In Proceedings of
+  International Conference on New Methods in Lan-
+  guage Processing, volume 12. Manchester, UK.
+
+Reut Tsarfaty and Khalil Sima’an. 2008. Relational-
+  realizational parsing. In Proceedings of the 22nd In-
+  ternational Conference on Computational Linguis-
+  tics - COLING ’08, pages 889–896, Morristown, NJ,
+  USA. Association for Computational Linguistics.
+
+
+
+
+                                                      1097
+

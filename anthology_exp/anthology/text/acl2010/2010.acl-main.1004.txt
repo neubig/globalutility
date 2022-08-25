@@ -1,0 +1,647 @@
+                                   Computing weakest readings
+
+                   Alexander Koller                                       Stefan Thater
+                 Cluster of Excellence                          Dept. of Computational Linguistics
+                  Saarland University                                   Saarland University
+             koller@mmci.uni-saarland.de                            stth@coli.uni-saarland.de
+
+
+
+                     Abstract                                  ings as well. However, when a sentence has mil-
+                                                               lions of readings, finding the weakest reading is a
+    We present an efficient algorithm for com-                 hard problem. It is of course completely infeasible
+    puting the weakest readings of semantically                to compute all readings and compare all pairs for
+    ambiguous sentences. A corpus-based eval-                  entailment; but even the best known algorithm in
+    uation with a large-scale grammar shows                    the literature (Gabsdil and Striegnitz, 1999) is only
+    that our algorithm reduces over 80% of sen-                an optimization of this basic strategy, and would
+    tences to one or two readings, in negligible               take months to compute the weakest readings for
+    runtime, and thus makes it possible to work                the sentences in the Rondane Treebank.
+    with semantic representations derived by                      In this paper, we propose a new, efficient ap-
+    deep large-scale grammars.                                 proach to the problem of computing weakest read-
+                                                               ings. We follow an underspecification approach
+1   Introduction
+                                                               to managing ambiguity: Rather than deriving all
+Over the past few years, there has been consid-                semantic representations from the syntactic analy-
+erable progress in the ability of manually created             sis, we work with a single, compact underspecified
+large-scale grammars, such as the English Resource             semantic representation, from which the semantic
+Grammar (ERG, Copestake and Flickinger (2000))                 representations can then be extracted by need. We
+or the ParGram grammars (Butt et al., 2002), to                then approximate entailment with a rewrite sys-
+parse wide-coverage text and assign it deep seman-             tem that rewrites readings into logically weaker
+tic representations. While applications should ben-            readings; the weakest readings are exactly those
+efit from these very precise semantic representa-              readings that cannot be rewritten into some other
+tions, their usefulness is limited by the presence             reading any more (the relative normal forms). We
+of semantic ambiguity: On the Rondane Treebank                 present an algorithm that computes the relative nor-
+(Oepen et al., 2002), the ERG computes an aver-                mal forms, and evaluate it on the underspecified de-
+age of several million semantic representations for            scriptions that the ERG derives on a 624-sentence
+each sentence, even when the syntactic analysis is             subcorpus of the Rondane Treebank. While the
+fixed. The problem of appropriately selecting one              mean number of scope readings in the subcorpus
+of them to work with would ideally be solved by                is in the millions, our system computes on average
+statistical methods (Higgins and Sadock, 2003) or              4.5 weakest readings for each sentence, in less than
+knowledge-based inferences. However, no such                   twenty milliseconds; over 80% of all sentences are
+approach has been worked out in sufficient detail to           reduced to at most two weakest readings. In other
+support the disambiguation of treebank sentences.              words, we make it feasible for the first time to build
+   As an alternative, Bos (2008) proposes to com-              an application that uses the individual (weakest)
+pute the weakest reading of each sentence and then             semantic representations computed by the ERG,
+use it instead of the “true” reading of the sentence.          both in terms of the remaining ambiguity and in
+This is based on the observation that the readings             terms of performance. Our technique is not lim-
+of a semantically ambiguous sentence are partially             ited to the ERG, but should be applicable to other
+ordered with respect to logical entailment, and the            underspecification-based grammars as well.
+weakest readings – the minimal (least informative)                Technically, we use underspecified descriptions
+readings with respect to this order – only express             that are regular tree grammars derived from dom-
+“safe” information that is common to all other read-           inance graphs (Althaus et al., 2003; Koller et al.,
+
+
+                                                          30
+         Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 30–39,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2008). We compute the weakest readings by in-                                                   1       ¬
+tersecting these grammars with other grammars
+representing the rewrite rules. This approach can                                 ∃z                    ∀x            ∃y
+                                                                                       4            2             3
+be used much more generally than just for the com-
+putation of weakest readings; we illustrate this by                           5             6                7
+                                                                              compz        repr-ofx,z        sampley
+showing how a more general version of the redun-
+                                                                                                             8
+dancy elimination algorithm by Koller et al. (2008)                                                          seex,y
+can be seen as a special case of our construction.
+Thus our system can serve as a general framework                Figure 1: A dominance graph describing the five
+for removing unintended readings from an under-                 readings of the sentence “it is not the case that
+specified representation.                                       every representative of a company saw a sample.”
+   The paper is structured as follows. Section 2
+starts by reviewing related work. We recall domi-
+                                                                work presented here. Here we go beyond that paper
+nance graphs, regular tree grammars, and the basic
+                                                                by applying a concrete implementation of our RTG
+ideas of underspecification in Section 3, before we
+                                                                construction for weakest readings to a real-world
+show how to compute weakest readings (Section 4)
+                                                                grammar, evaluating the system on practical inputs,
+and logical equivalences (Section 5). In Section 6,
+                                                                and combining weakest readings with redundancy
+we define a weakening rewrite system for the ERG
+                                                                elimination.
+and evaluate it on the Rondane Treebank. Section 7
+concludes and points to future work.                            3     Underspecification
+2   Related work                                                This section briefly reviews two formalisms for
+                                                                specifying sets of trees: dominance graphs and
+The idea of deriving a single approximative seman-              regular tree grammars. Both of these formalisms
+tic representation for ambiguous sentences goes                 can be used to model scope ambiguities compactly
+back to Hobbs (1983); however, Hobbs only works                 by regarding the semantic representations of a sen-
+his algorithm out for a restricted class of quantifiers,        tence as trees. Some example trees are shown in
+and his representations can be weaker than our                  Fig. 2. These trees can be read as simplified for-
+weakest readings. Rules that weaken one reading                 mulas of predicate logic, or as formulas involv-
+into another were popular in the 1990s underspeci-              ing generalized quantifiers (Barwise and Cooper,
+fication literature (Reyle, 1995; Monz and de Rijke,            1981). Formally, we assume a ranked signature
+2001; van Deemter, 1996) because they simplify                  Σ of tree constructors { f , g, a, . . .}, each of which
+logical reasoning with underspecified representa-               is equipped with an arity ar( f ) ≥ 0. We take a
+tions. From a linguistic perspective, Kempson and               (finite constructor) tree t as a finite tree in which
+Cormack (1981) even go so far as to claim that                  each node is labelled with a symbol of Σ, and the
+the weakest reading should be taken as the “basic”              number of children of the node is exactly the arity
+reading of a sentence, and the other readings only              of this symbol. For instance, the signature of the
+seen as pragmatically licensed special cases.                   trees in Fig. 1 is {∀x |2, ∃y |2, compz |0, . . .}. Finite
+   The work presented here is related to other ap-              constructor trees can be seen as ground terms over
+proaches that reduce the set of readings of an un-              Σ that respect the arities. We write T (Σ) for the
+derspecified semantic representation (USR). Koller              finite constructor trees over Σ.
+and Niehren (2000) showed how to strengthen
+a dominance constraint using information about                  3.1    Dominance graphs
+anaphoric accessibility; later, Koller et al. (2008)            A (labelled) dominance graph D (Althaus et al.,
+presented and evaluated an algorithm for redun-                 2003) is a directed graph that consists of a col-
+dancy elimination, which removes readings from                  lection of trees called fragments, plus dominance
+an USR based on logical equivalence. Our system                 edges relating nodes in different fragments. We dis-
+generalizes the latter approach and applies it to a             tinguish the roots WD of the fragments from their
+new inference problem (weakest readings) which                  holes, which are the unlabelled leaves. We write
+they could not solve.                                           LD : WD → Σ for the labeling function of D.
+   This paper builds closely upon Koller and Thater                The basic idea behind using dominance graphs
+(2010), which lays the formal groundwork for the                to model scope underspecification is to specify
+
+
+                                                           31
+
+
+        [+]     ¬                               [+]   ¬                      [+]     ¬                             [+]   ¬                                         [+]   ¬
+        [-]     ∃y                              [-]   ∃y                     [-]     ∃z                            [-]   ∃z                                        [-]   ∀x
+  [-]            [-]   ∃z                 [-]          [-]   ∀x        [-]           [-]     ∃y             [-]          [-]      ∀x                   ∃z    [+]               [-]   ∃y
+ sampley                                 sampley                       compz                                compz
+         [-]              [-]   ∀x              [+]    ∃z    [-]              [-]            [-]   ∀x              [+]            [-]   ∃y       [+]        [+]          [-]         [-]
+        compz                                                 seex,y         sampley                              repr-ofx,z                     compz repr-ofx,z sampley seex,y
+                [+]             [-]       [+]         [+]                            [+]           [-]                    [-]           [-]
+               repr-ofx,z seex,y          compz       repr-ofx,z                    repr-ofx,z seex,y                    sampley        seex,y
+                    (a)                               (b)                                  (c)                                  (d)                                  (e)
+
+
+                                      Figure 2: The five configurations of the dominance graph in Fig. 1.
+
+
+the “semantic material” common to all readings                                                                    {1, 2, 3, 4, 5, 6, 7, 8} → ¬({2, 3, 4, 5, 6, 7, 8})
+as fragments, plus dominance relations between                                                                      {2, 3, 4, 5, 6, 7, 8} → ∀x ({4, 5, 6}, {3, 7, 8})
+these fragments. An example dominance graph                                                                         {2, 3, 4, 5, 6, 7, 8} → ∃y ({7}, {2, 4, 5, 6, 8})
+D is shown in Fig. 1. It represents the five read-                                                                  {2, 3, 4, 5, 6, 7, 8} → ∃z ({5}, {2, 3, 6, 7, 8})
+ings of the sentence “it is not the case that every                                                                       {2, 4, 5, 6, 8} → ∀x ({4, 5, 6}, {8})
+representative of a company saw a sample.”                                                                                                  | ∃z ({5}, {2, 6, 8})
+   Each reading is encoded as a (labeled) configura-                                                                      {2, 3, 6, 7, 8} → ∀x ({6}, {3, 7, 8})
+tion of the dominance graph, which can be obtained                                                                                          | ∃y ({7}, {2, 6, 8})
+                                                                                                                                {2, 6, 8} → ∀x ({6}, {8})
+by “plugging” the tree fragments into each other,
+                                                                                                                                {3, 7, 8} → ∃y ({7}, {8})
+in a way that respects the dominance edges: The
+                                                                                                                                {4, 5, 6} → ∃z ({5}, {6})
+source node of each dominance edge must dom-
+                                                                                                                         {5} → compz                   {7} → sampley
+inate (be an ancestor of) the target node in each
+configuration. The trees in Fig. 2 are the five la-                                                                      {6} → repr-ofx,z              {8} → seex,y
+beled configurations of the example graph.
+                                                                                                      Figure 3: A regular tree grammar that generates
+3.2      Regular tree grammars                                                                        the five trees in Fig. 2.
+Regular tree grammars (RTGs) are a general gram-
+mar formalism for describing languages of trees
+                                                                                                      (RTLs), and regular tree grammars are equivalent
+(Comon et al., 2007). An RTG is a 4-tuple G =
+                                                                                                      to finite tree automata, which are defined essen-
+(S, N, Σ, P), where N and Σ are nonterminal and ter-
+                                                                                                      tially like the well-known finite string automata,
+minal alphabets, S ∈ N is the start symbol, and
+                                                                                                      except that they assign states to the nodes in a tree
+P is a finite set of production rules. Unlike in
+                                                                                                      rather than the positions in a string. Regular tree
+context-free string grammars (which look super-
+                                                                                                      languages enjoy many of the closure properties of
+ficially the same), the terminal symbols are tree
+                                                                                                      regular string languages. In particular, we will later
+constructors from Σ. The production rules are of
+                                                                                                      exploit that RTLs are closed under intersection and
+the form A → t, where A is a nonterminal and t is a
+                                                                                                      complement.
+tree from T (Σ ∪ N); nonterminals count as having
+arity zero, i.e. they must label leaves. A derivation
+                                                                                                      3.3         Dominance graphs as RTGs
+starts with a tree containing a single node labeled
+with S. Then in each step of the derivation, some                                                     An important class of dominance graphs are hy-
+leaf u which is labelled with a nonterminal A is                                                      pernormally connected (hnc) dominance graphs
+expanded with a rule A → t; this results in a new                                                     (Koller et al., 2003). The precise definition of hnc
+tree in which u has been replaced by t, and the                                                       graphs is not important here, but note that virtually
+derivation proceeds with this new tree. The lan-                                                      all underspecified descriptions that are produced
+guage L(G) generated by the grammar is the set of                                                     by current grammars are hypernormally connected
+all trees in T (Σ) that can be derived in this way.                                                   (Flickinger et al., 2005), and we will restrict our-
+   Fig. 3 shows an RTG as an example. This gram-                                                      selves to hnc graphs for the rest of the paper.
+mar uses sets of root names from D as nonterminal                                                        Every hypernormally connected dominance
+symbols, and generates exactly the five configura-                                                    graph D can be automatically translated into an
+tions of the graph in Fig. 1.                                                                         equivalent RTG GD that generates exactly the same
+   The languages that can be accepted by regular                                                      configurations (Koller et al., 2008); the RTG in
+tree grammars are called regular tree languages                                                       Fig. 3 is an example. The nonterminals of GD are
+
+
+                                                                                                 32
+
+
+always hnc subgraphs of D. In the worst case, GD               rules (Baader and Nipkow, 1999). Consider the re-
+can be exponentially bigger than D, but in practice            lation between (d) and (c). We can explain that (d)
+it turns out that the grammar size remains manage-             entails (c) by observing that (c) can be built from
+able: even the RTG for the most ambiguous sen-                 (d) by exchanging the positions of the adjacent
+tence in the Rondane Treebank, which has about                 quantifiers ∀x and ∃y ; more precisely, by applying
+4.5 × 1012 scope readings, has only about 75 000               the following rewrite rule:
+rules and can be computed in a few seconds.
+                                                                      [−] ∀x (Q, ∃y (P, R)) → ∃y (P, ∀x (Q, R))    (1)
+4     Computing weakest readings
+                                                               The body of the rule specifies that an occurrence of
+Now we are ready to talk about computing the                   ∀x which is the direct parent of an occurrence of ∃y
+weakest readings of a hypernormally connected                  may change positions with it; the subformulas P,
+dominance graph. We will first explain how we ap-              Q, and R must be copied appropriately. The annota-
+proximate logical weakening with rewrite systems.              tion [−] specifies that we must only apply the rule
+We will then discuss how weakest readings can be               to subformulas in negative logical polarity: If the
+computed efficiently as the relative normal forms              quantifiers in (d) were not in the scope of a nega-
+of these rewrite systems.                                      tion, then applying the rule would actually make
+                                                               the formula stronger. We say that the rule (1) is
+4.1    Weakening rewrite systems
+                                                               logically sound because applying it to a subformula
+The different readings of a sentence with a scope              with the correct polarity of some configuration t
+ambiguity are not a random collection of formulas;             always makes the result t 0 logically weaker than t.
+they are partially ordered with respect to logical                We formalize these rewrite systems as follows.
+entailment, and are structurally related in a way              We assume a finite annotation alphabet Ann with a
+that allows us to model this entailment relation               special starting annotation a0 ∈ Ann; in the exam-
+with simpler technical means.                                  ple, we had Ann = {+, −} and a0 = +. We also
+   To illustrate this, consider the five configurations        assume an annotator function ann : Ann×Σ×N →
+in Fig. 2. The formula represented by (d) logically            Ann. The function ann can be used to traverse a
+entails (c); we say that (c) is a weaker reading than          tree top-down and compute the annotation of each
+(d) because it is satisfied by more models. Similar            node from the annotation of its parent: Its first
+entailment relations hold between (d) and (e), (e)             argument is the annotation and its second argu-
+and (b), and so on (see also Fig. 5). We can define            ment the node label of the parent, and the third
+the weakest readings of the dominance graph as                 argument is the position of the child among the par-
+the minimal elements of the entailment order; in               ent’s children. In our example, the annotator ann
+the example, these are (b) and (c). Weakest read-              models logical polarity by mapping, for instance,
+ings capture “safe” information in that whichever              ann(+, ∃z , 1) = ann(+, ∃z , 2) = ann(+, ∃y , 2) = +,
+reading of the sentence the speaker had in mind,               ann(−, ∃z , 1) = ann(−, ∃z , 2) = ann(+, ∀x , 1) = −,
+any model of this reading also satisfies at least one          etc. We have labelled each node of the configura-
+weakest reading; in the absence of convincing dis-             tions in Fig. 1 with the annotations that are com-
+ambiguation methods, they can therefore serve as               puted in this way.
+a practical approximation of the intended meaning                 Now we can define an annotated rewrite system
+of the sentence.                                               R to be a finite set of pairs (a, r) where a is an anno-
+   A naive algorithm for computing weakest read-               tation and r is an ordinary rewrite rule. The rule (1)
+ings would explicitly compute the entailment order,            above is an example of an annotated rewrite rule
+by running a theorem prover on each pair of config-            with a = −. A rewrite rule (a, r) can be applied at
+urations, and then pick out the minimal elements.              the node u of a tree t if ann assigns the annotation a
+But this algorithm is quadratic in the number of               to u and r is applicable at u as usual. The rule then
+configurations, and therefore impractically slow               rewrites t as described above. In other words, an-
+for real-life sentences.                                       notated rewrite systems are rewrite systems where
+   Here we develop a fast algorithm for this prob-             rule applications are restricted to subtrees with spe-
+lem. The fundamental insight we exploit is that                cific annotations. We write t →R t 0 if some rule of
+entailment among the configurations of a domi-                 R can be applied at a node of t, and the result of
+nance graph can be approximated with rewriting                 rewriting is t 0 . The rewrite system R is called linear
+
+
+                                                          33
+
+
+if every variable that occurs on the left-hand side                  The key idea of the construction is to repre-
+of a rule occurs on its right-hand side exactly once.             sent the relation →R in terms of a context tree
+                                                                  transducer M, and characterize the relative nor-
+4.2   Relative normal forms                                       mal forms of a tree language L in terms of the
+The rewrite steps of a sound weakening rewrite sys-               pre-image of L under M. Like ordinary regular
+tem are related to the entailment order: Because ev-              tree transducers (Comon et al., 2007), context tree
+ery rewrite step transforms a reading into a weaker               transducers read an input tree, assigning states to
+reading, an actual weakest readings must be such                  the nodes, while emitting an output tree. But while
+that there is no other configuration into which it                ordinary transducers read the input tree symbol by
+can be rewritten. The converse is not always true,                symbol, a context tree transducer can read multiple
+i.e. there can be non-rewritable configurations that              symbols at once. In this way, they are equivalent to
+are not weakest readings, but we will see in Sec-                 the extended left-hand side transducers of Graehl
+tion 6 that this approximation is good enough for                 et al. (2008).
+practical use. So one way to solve the problem of                    We will now define context tree transducers. Let
+computing weakest readings is to find readings that               Σ be a ranked signature, and let Xm be a set of m
+cannot be rewritten further.                                      variables. We write Con(m) (Σ) for the contexts with
+   One class of configurations that “cannot be                    m holes, i.e. those trees in T (Σ ∪ Xm ) in which each
+rewritten” with a rewrite system R is the set of nor-             element of Xm occurs exactly once, and always
+mal forms of R, i.e. those configurations to which                as a leaf. If C ∈ Con(m) (Σ), then C[t1 , . . . ,tm ] =
+no rule in R can be applied. In our example, (b)                  C[t1 /x1 , . . . ,tm /xm ], where x1 , . . . , xm are the vari-
+and (c) are indeed normal forms with respect to                   ables from left to right.
+a rewrite system that consists only of the rule (1).                 A (top-down) context tree transducer from Σ to ∆
+However, this is not exactly what we need here.                   is a 5-tuple M = (Q, Σ, ∆, q0 , δ ). Σ and ∆ are ranked
+Consider a rewrite system that also contains the fol-             signatures, Q is a finite set of states, and q0 ∈ Q is
+lowing annotated rewrite rule, which is also sound                the start state. δ is a finite set of transition rules of
+for logical entailment:                                           the form q(C[x1 , . . . , xn ]) → D[q1 (xi1 ), . . . , qm (xim )],
+                                                                  where C ∈ Con(n) (Σ) and D ∈ Con(m) (∆).
+          [+] ¬(∃z (P, Q)) → ∃z (P, ¬(Q)),            (2)
+                                                                     If t ∈ T (Σ ∪ ∆ ∪ Q), then we say that M derives
+This rule would allow us to rewrite                               t in one step from t, t →M t 0 , if t is of the form
+                                                                   0
+
+the     configuration       (c)    into     the       tree        C0 [q(C[t1 , . . . ,tn ])] for some C0 ∈ Con(1) (Σ), t 0 is
+∃z (compz , ¬(∃y (sampley , ∀x (repr−of x,z , seex,y )))).        of the form C0 [D[q1 (ti1 ), . . . , qm (tim )]], and there is
+But this is no longer a configuration of the graph.               a rule q(C[x1 , . . . , xn ]) → D[q1 (xi1 ), . . . , qm (xim )] in
+If we were to equate weakest readings with normal                 δ . The derivation relation →∗M is the reflexive,
+forms, we would erroneously classify (c) as not                   transitive closure of →M . The translation relation
+being a weakest reading. The correct concept                      τM of M is
+for characterizing weakest readings in terms of
+                                                                  τM = {(t,t 0 ) | t ∈ T (Σ) and t 0 ∈ T (∆) and q0 (t) →∗ t 0 }.
+rewriting is that of a relative normal form. We
+define a configuration t of a dominance graph D to                   For each linear annotated rewrite system R, we
+be a R-relative normal form of (the configurations                can now build a context tree transducer MR such
+of) D iff there is no other configuration t 0 of D such           that t →R t 0 iff (t,t 0 ) ∈ τMR . The idea is that MR
+that t →R t 0 . These are the configurations that can’t           traverses t from the root to the leaves, keeping
+be weakened further without obtaining a tree that                 track of the current annotation in its state. MR
+is no longer a configuration of D. In other words,                can nondeterministically choose to either copy the
+if R approximates entailment, then the R-relative                 current symbol to the output tree unchanged, or to
+normal forms approximate the weakest readings.                    apply a rewrite rule from R. The rules are built in
+                                                                  such a way that in each run, exactly one rewrite
+4.3   Computing relative normal forms                             rule must be applied.
+We now show how the relative normal forms of a                       We achieve this as follows. MR takes as its
+dominance graph can be computed efficiently. For                  states the set {q̄} ∪ {qa | a ∈ Ann} and as its start
+lack of space, we only sketch the construction and                state the state qa0 . If MR reads a node u in state
+omit all proofs. Details can be found in Koller and               qa , this means that the annotator assigns annota-
+Thater (2010).                                                    tion a to u and MR will rewrite a subtree at or
+
+
+                                                             34
+
+
+below u. If MR reads u in state q̄, this means                                    {1, 2, 3, 4, 5, 6, 7, 8}F → ¬({2, 3, 4, 5, 6, 7, 8}F )
+that MR will copy the subtree below u unchanged                                     {2, 3, 4, 5, 6, 7, 8}F → ∃y ({7}{q̄} , {2, 4, 5, 6, 8}F )
+because the rewriting has taken place elsewhere.                                                             | ∃z ({5}{q̄} , {2, 3, 6, 7, 8}F )
+Thus MR has three types of rewrite rules. First,                                         {2, 3, 6, 7, 8}F → ∃y ({7}{q̄} , ∀x ({6}{q̄} , {8}{q̄} ))
+for any f ∈ Σ, we have a rule q̄( f (x1 , . . . , xn )) →
+                                                                                         {2, 4, 5, 6, 8}F → ∀x ({4, 5, 6}{q̄} , {8}{q̄} )
+ f (q̄(x1 ), . . . , q̄(xn )).       Second, for any f and
+                                                                                              {4, 5, 6}{q̄} → ∃z ({5}{q̄} , {6}{q̄} )
+1 ≤ i ≤ n, we have a rule qa ( f (x1 , . . . , xn )) →
+                                                                                          {5}{q̄} → compz          {6}{q̄} → repr-ofx,z
+ f (q̄(x1 ), . . . , qann(a, f ,i) (xi ), . . . , q̄(xn )), which non-
+deterministically chooses under which child the                                           {7}{q̄} → sampley        {8}{q̄} → seex,y
+rewriting should take place, and assigns it the
+correct annotation. Finally, we have a rule                                   Figure 4: RTG for the weakest readings of Fig. 1.
+qa (C[x1 , . . . , xn ]) → C0 [q̄(xi1 ), . . . , q̄(xin )] for every
+rewrite rule C[x1 , . . . , xn ] → C0 [xi1 , . . . , xin ] with an-           types for lack of space.
+notation a in R.
+    Now let’s put the different parts together. We                            q− (∀x (x1 , ∃y (x2 , x3 ))) → ∃y (q̄(x2 ), ∀x (q̄(x1 ), q̄(x3 )))
+know that for each hnc dominance graph D, there is                            q− (∃y (x1 , ∀x (x2 , x3 ))) → ∀x (∃y (q̄(x1 ), q̄(x2 )), q̄(x3 ))
+a regular tree grammar GD such that L(GD ) is the                                                q̄(¬(x1 )) → ¬(q̄(x1 ))
+set of configurations of D. Furthermore, the pre-                                              q (¬(x1 )) → ¬(q− (x1 ))
+                                                                                                 +
+           −1
+image τM        (L) = {t | exists t 0 ∈ L with (t,t 0 ) ∈ τM }
+                                                                                           q̄(∀x (x1 , x2 )) → ∀x (q̄(x1 ), q̄(x2 ))
+of a regular tree language L is also regular (Koller
+and Thater, 2010) if M is linear, and regular tree                                       q (∀x (x1 , x2 )) → ∀x (q̄(x1 ), q+ (x2 ))
+                                                                                          +
+
+languages are closed under intersection and com-                                         q+ (∀x (x1 , x2 )) → ∀x (q− (x1 ), q̄(x2 ))              ...
+plement (Comon et al., 2007). So we can compute
+another RTG G0 such that                                                         The grammar G0 for the relative normal forms
+                                                                              is shown in Fig. 4 (omitting rules that involve un-
+             L(G0 ) = L(GD ) ∩ τM
+                                −1
+                                 R
+                                   (L(GD )).                                  productive nonterminals). We obtain it by starting
+                                                                              with the example grammar GD in Fig. 3; then com-
+   L(G0 ) consists of the members of L(GD ) which                             puting a deterministic RTG GR for τM    −1
+                                                                                                                         (L(GD ));
+                                                                                                                       R
+cannot be rewritten by MR into members of L(GD );                             and then intersecting the complement of GR with
+that is, L(G0 ) is exactly the set of R-relative normal                       GD . The nonterminals of G0 are subgraphs of D,
+forms of D. In general, the complement construc-                              marked either with a set of states of MR or the sym-
+tion requires exponential time in the size of MR and                          bol F, indicating that GR had no production rule
+GD . However, it can be shown that if the rules in                            for a given left-hand side. The start symbol of G0
+R have at most depth two and GD is deterministic,                             is marked with F because G0 should only gener-
+then the entire above construction can be computed                            ate trees that GR cannot generate. As expected, G0
+in time O(|GD | · |R|) (Koller and Thater, 2010).                             generates precisely two trees, namely (b) and (c).
+   In other words, we have shown how to compute
+the weakest readings of a hypernormally connected                             5     Redundancy elimination, revisited
+dominance graph D, as approximated by a weaken-                               The construction we just carried out – characterize
+ing rewrite system R, in time linear in the size of                           the configurations we find interesting as the rela-
+GD and linear in the size of R. This is a dramatic im-                        tive normal forms of an annotated rewrite system
+provement over the best previous algorithm, which                             R, translate it into a transducer MR , and intersect
+was quadratic in |conf(D)|.                                                   conf(D) with the complement of the pre-image un-
+4.4    An example                                                             der MR – is more generally useful than just for the
+                                                                              computation of weakest readings. We illustrate this
+Consider an annotated rewrite system that contains
+                                                                              on the problem of redundancy elimination (Vestre,
+rule (1) plus the following rewrite rule:
+                                                                              1991; Chaves, 2003; Koller et al., 2008) by show-
+        [−] ∃z (P, ∀x (Q, R)) → ∀x (∃z (P, Q), R)                (3)          ing how a variant of the algorithm of Koller et al.
+                                                                              (2008) falls out of our technique as a special case.
+   This rewrite system translates into a top-down                                Redundancy elimination is the problem of com-
+context tree transducer MR with the following tran-                           puting, from a dominance graph D, another domi-
+sition rules, omitting most rules of the first two                            nance graph D0 such that conf(D0 ) ⊆ conf(D) and
+
+
+                                                                         35
+
+
+every formula in conf(D) is logically equivalent                  (d) ¬∃z∀x∃y                                (c) ¬∃z∃y∀x
+                                                                                            (1)
+to some formula in conf(D0 ). We can approximate                     (3)                                      (5)
+logical equivalence using a finite system of equa-                (e) ¬∀x(∃z,∃y)         (b) ¬∃y∀x∃z         (a) ¬∃y∃z∀x
+                                                                                   (1)                 (3)
+tions such as
+
+        ∃y (P, ∃z (Q, R)) = ∃z (Q, ∃y (P, R)),     (4)        Figure 5: Structure of the configuration set of Fig. 1
+                                                              in terms of rewriting.
+indicating that ∃y and ∃z can be permuted without
+changing the models of the formula.
+                                                              (b); the configuration (c) is rejected because it can
+   Following the approach of Section 4, we can
+                                                              be rewritten to (a) with (5). The graph in Fig. 5 il-
+solve the redundancy elimination problem by trans-
+                                                              lustrates how the equivalence and weakening rules
+forming the equation system into a rewrite system
+                                                              conspire to exclude all other configurations.
+R such that t →R t 0 implies that t and t 0 are equiv-
+alent. To this end, we assume an arbitrary linear             6    Evaluation
+order < on Σ, and orient all equations into rewrite
+rules that respect this order. If we assume ∃y < ∃z ,         In this section, we evaluate the effectiveness and
+the example rule (4) translates into the annotated            efficiency of our weakest readings algorithm on
+rewrite rules                                                 a treebank. We compute RTGs for all sentences
+                                                              in the treebank and measure how many weakest
+       [a] ∃z (P, ∃y (Q, R)) → ∃y (Q, ∃z (P, R))   (5)        readings remain after the intersection, and how
+                                                              much time this computation takes.
+for all annotations a ∈ Ann; logical equivalence
+is not sensitive to the annotation. Finally, we can           Resources. For our experiment, we use the Ron-
+compute the relative normal forms of conf(D) un-              dane treebank (version of January 2006), a “Red-
+der this rewrite system as above. The result will be          woods style” (Oepen et al., 2002) treebank con-
+an RTG G0 describing a subset of conf(D). Every               taining underspecified representations (USRs) in
+tree t in conf(D) that is not in L(G0 ) is equivalent         the MRS formalism (Copestake et al., 2005) for
+to some tree t 0 in L(G0 ), because if t could not be         sentences from the tourism domain.
+rewritten into such a t 0 , then t would be in rela-             Our implementation of the relative normal forms
+tive normal form. That is, the algorithm solves the           algorithm is based on Utool (Koller and Thater,
+redundancy elimination problem. Furthermore, if               2005), which (among other things) can translate a
+the oriented rewrite system is confluent (Baader              large class of MRS descriptions into hypernormally
+and Nipkow, 1999), no two trees in L(G0 ) will be             connected dominance graphs and further into RTGs
+equivalent to each other, i.e. we achieve complete            as in Section 3. The implementation exploits cer-
+reduction in the sense of Koller et al. (2008).               tain properties of RTGs computed from dominance
+   This solution shares much with that of Koller et           graphs to maximize efficiency. We will make this
+al. (2008), in that we perform redundancy elimina-            implementation publically available as part of the
+tion by intersecting tree grammars. However, the              next Utool release.
+construction we present here is much more general:               We use Utool to automatically translate the 999
+The algorithmic foundation for redundancy elim-               MRS descriptions for which this is possible into
+ination is now exactly the same as that for weak-             RTGs. To simplify the specification of the rewrite
+est readings, we only have to use an equivalence-             systems, we restrict ourselves to the subcorpus in
+preserving rewrite system instead of a weakening              which all scope-taking operators (labels with arity
+one. This new formal clarity also simplifies the              > 0) occur at least ten times. This subset contains
+specification of certain equations, as we will see in         624 dominance graphs. We refer to this subset as
+Section 6.                                                    “RON10.”
+   In addition, we can now combine the weakening
+rules (1), (3), and (5) into a single rewrite system,         Signature and annotations. For each domi-
+and then construct a tree grammar for the relative            nance graph D that we obtain by converting an
+normal forms of the combined system. This algo-               MRS description, we take GD as a grammar over
+rithm performs redundancy elimination and com-                the signature Σ = { fu | u ∈ WD , f = LD (u)}. That
+putes weakest readings at the same time, and in our           is, we distinguish possible different occurrences
+example retains only a single configuration, namely           of the same symbol in D by marking each occur-
+
+
+                                                         36
+
+
+rence with the name of the node. This makes GD a                We write E and D for existential and definite
+deterministic grammar.                                       determiners. P stands for proper names and pro-
+   We then specify an annotator over Σ that assigns          nouns, A stands for universal determiners like all
+polarities for the weakening rewrite system. We              and each, N for the negation not, and M for modal
+distinguish three polarities: + for positive occur-          operators like can or would. M also includes in-
+rences, − for negative occurrences (as in predicate          tensional verbs like have to and want. Notice that
+logic), and ⊥ for contexts in which a weakening              while the reverse rules are applicable in negative
+rule neither weakens or strengthens the entire for-          polarities, no rules are applicable in polarity ⊥.
+mula. The starting annotation is +.                             Rule schema 1 states, for instance, that the spe-
+   Finally, we need to decide upon each scope-               cific (wide-scope) reading of the indefinite in the
+taking operator’s effects on these annotations. To           president of a company is logically stronger than
+this end, we build upon Barwise and Cooper’s                 the reading in which a company is within the re-
+(1981) classification of the monotonicity prop-              striction of the definite determiner. The schema is
+erties of determiners. A determiner is upward                intuitively plausible, and it can also be proved to be
+(downward) monotonic if making the denotation of             logically sound if we make the standard assumption
+the determiner’s argument bigger (smaller) makes             that the definite determiner the means “exactly one”
+the sentence logically weaker. For instance, ev-             (Montague, 1974). A similar argument applies to
+ery is downward monotonic in its first argument              rule schema 2.
+and upward monotonic in its second argument,                    Rule schema 3 encodes the classical entailment
+i.e. every girl kissed a boy entails every blond             (1). Schema 4 is similar to the rule (2). Notice
+girl kissed someone. Thus ann(everyu , a, 1) = −a            that it is not, strictly speaking, logically sound;
+and ann(everyu , a, 2) = a (where u is a node name           however, because strong determiners like all or
+as above). There are also determiners with non-              every carry a presupposition that their restrictions
+monotonic argument positions, which assign the               have a non-empty denotation (Lasersohn, 1993),
+annotation ⊥ to this argument. Negation reverses             the schema becomes sound for all instances that
+positive and negative polarity, and all other non-           can be expressed in natural language. Similar ar-
+quantifiers simply pass on their annotation to the           guments apply to rule schemas 5 and 6, which are
+arguments.                                                   potentially unsound for subtle reasons involving
+                                                             the logical interpretation of intensional expressions.
+Weakest readings. We use the following weak-                 However, these cases of unsoundness did not occur
+ening rewrite system for our experiment, where               in our test corpus.
+i ∈ {1, 2}:
+                                                             Redundancy elimination. In addition, we as-
+  1. [+] (E/i, D/1), (D/2, D/1)                              sume the following equation system for redundancy
+                                                             elimination for i, j ∈ {1, 2} and k ∈ N (again writ-
+  2. [+] (E/i, P/1), (D/2, P/1)
+                                                             ten in an analogous shorthand as above):
+  3. [+] (E/i, A/2), (D/1, A/2)
+                                                              7.   E/i = E/ j
+  4. [+] (A/2, N/1)
+                                                              8.   D/1 = E/i, E/i = D/1
+  5. [+] (N/1, E/i), (N/1, D/2)
+                                                              9.   D/1 = D/1
+  6. [+] (E/i, M/1), (D/1, M/1)                              10.   Σ/k = P/2
+   Here the symbols E, D, etc. stand for classes                These rule schemata state that permuting exis-
+of labels in Σ, and a rule schema [a] (C/i, C0 /k) is        tential determiners with each other is an equiva-
+to be read as shorthand for a set of rewrite rules           lence transformation, and so is permuting definite
+which rearrange a tree where the i-th child of a             determiners with existential and definite determin-
+symbol from C is a symbol from C0 into a tree                ers if one determiner is the second argument (in
+where the symbol from C becomes the k-th child               the scope) of a definite. Schema 10 states that
+of the symbol from C0 . For example, because we              proper names and pronouns, which the ERG ana-
+have allu ∈ A and notv ∈ N, Schema 4 licenses the            lyzes as scope-bearing operators, can permute with
+following annotated rewrite rule:                            any other label.
+                                                                We orient these equalities into rewrite rules by
+     [+] allu (P, notv (Q)) → notv (allu (P, Q)).            ordering symbols in P before symbols that are not
+
+
+                                                        37
+
+
+                   All      KRT08         RE       RE+WR applicable in 44 sentences. Nevertheless, where
+                                                          these rules do apply, they have a noticeable effect:
+ #conf = 1       8.5%       23.4%       34.9%       66.7%
+                                                          Without them, the mean number of configurations
+ #conf ≤ 2       20.5%      40.9%       57.9%       80.6%
+                                                          in RON10 after RE+WR increases to 12.5.
+avg(#conf)       3.2M       7603.1      119.0        4.5
+med(#conf)         25         4           2           1
+                                                          7 Conclusion
+   runtime        8.1s       9.4s        8.7s        9.1s
+                                                                    In this paper, we have shown how to compute the
+Figure 6: Analysis of the numbers of configurations
+                                                                    weakest readings of a dominance graph, charac-
+in RON10.
+                                                                    terized by an annotated rewrite system. Evaluat-
+                                                                    ing our algorithm on a subcorpus of the Rondane
+in P, and otherwise ordering a symbol fu before a                   Treebank, we reduced the mean number of config-
+symbol gv if u < v by comparison of the (arbitrary)                 urations of a sentence from several million to 4.5,
+node names.                                                         in negligible runtime. Our algorithm can be ap-
+                                                                    plied to other problems in which an underspecified
+Results. We used these rewrite systems to com-                      representation is to be disambiguated, as long as
+pute, for each USR in RON10, the number of all                      the remaining readings can be characterized as the
+configurations, the number of configurations that                   relative normal forms of a linear annotated rewrite
+remain after redundancy elimination, and the num-                   system. We illustrated this for the case of redun-
+ber of weakest readings (i.e., the relative normal                  dancy elimination.
+forms of the combined equivalence and weakening                        The algorithm presented here makes it possible,
+rewrite systems). The results are summarized in                     for the first time, to derive a single meaningful se-
+Fig. 6. By computing weakest readings (WR), we                      mantic representation from the syntactic analysis
+reduce the ambiguity of over 80% of all sentences                   of a deep grammar on a large scale. In the future,
+to one or two readings; this is a clear improvement                 it will be interesting to explore how these semantic
+even over the results of the redundancy elimina-                    representations can be used in applications. For in-
+tion (RE). Computing weakest readings reduces                       stance, it seems straightforward to adapt MacCart-
+the mean number of readings from several million                    ney and Manning’s (2008) “natural logic”-based
+to 4.5, and improves over the RE results by a factor                Textual Entailment system, because our annotator
+of 30. Notice that the RE algorithm from Section 5                  already computes the polarities needed for their
+is itself an improvement over Koller et al.’s (2008)                monotonicity inferences. We could then perform
+system (“KRT08” in the table), which could not                      such inferences on (cleaner) semantic representa-
+process the rule schema 10.                                         tions, rather than strings (as they do).
+   Finally, computing the weakest readings takes                       On the other hand, it may be possible to re-
+only a tiny amount of extra runtime compared to                     duce the set of readings even further. We retain
+the RE elimination or even the computation of the                   more readings than necessary in many treebank sen-
+RTGs (reported as the runtime for “All”).1 This re-                 tences because the combined weakening and equiv-
+mains true on the entire Rondane corpus (although                   alence rewrite system is not confluent, and there-
+the reduction factor is lower because we have no                    fore may not recognize a logical relation between
+rules for the rare scope-bearers): RE+WR compu-                     two configurations. The rewrite system could be
+tation takes 32 seconds, compared to 30 seconds                     made more powerful by running the Knuth-Bendix
+for RE. In other words, our algorithm brings the                    completion algorithm (Knuth and Bendix, 1970).
+semantic ambiguity in the Rondane Treebank down                     Exploring the practical tradeoff between the further
+to practically useful levels at a mean runtime in-                  reduction in the number of remaining configura-
+vestment of a few milliseconds per sentence.                        tions and the increase in complexity of the rewrite
+   It is interesting to note how the different rule                 system and the RTG would be worthwhile.
+schemas contribute to this reduction. While the
+instances of Schemata 1 and 2 are applicable in 340                 Acknowledgments. We are indebted to Joachim
+sentences, the other schemas 3–6 together are only                  Niehren, who pointed out a crucial simplification
+   1 Runtimes
+                                                                    in the algorithm to us. We also thank our reviewers
+                were measured on an Intel Core 2 Duo CPU
+at 2.8 GHz, under MacOS X 10.5.6 and Apple Java 1.5.0_16,           for their constructive comments.
+after allowing the JVM to just-in-time compile the bytecode.
+
+
+                                                               38
+
+
+References                                                     D. Knuth and P. Bendix. 1970. Simple word problems
+                                                                 in universal algebras. In J. Leech, editor, Computa-
+E. Althaus, D. Duchier, A. Koller, K. Mehlhorn,                  tional Problems in Abstract Algebra, pages 263–297.
+  J. Niehren, and S. Thiel. 2003. An efficient graph             Pergamon Press, Oxford.
+  algorithm for dominance constraints. Journal of Al-
+  gorithms, 48:194–219.                                        A. Koller and J. Niehren. 2000. On underspecified
+                                                                 processing of dynamic semantics. In Proceedings of
+F. Baader and T. Nipkow. 1999. Term rewriting and all            the 18th International Conference on Computational
+   that. Cambridge University Press.                             Linguistics (COLING-2000).
+J. Barwise and R. Cooper. 1981. Generalized quanti-            A. Koller and S. Thater. 2005. Efficient solving and ex-
+   fiers and natural language. Linguistics and Philoso-           ploration of scope ambiguities. In ACL-05 Demon-
+   phy, 4:159–219.                                                stration Notes, Ann Arbor.
+J. Bos. 2008. Let’s not argue about semantics. In              A. Koller and S. Thater. 2010. Computing relative nor-
+   Proceedings of the 6th international conference on             mal forms in regular tree languages. In Proceedings
+   Language Resources and Evaluation (LREC 2008).                 of the 21st International Conference on Rewriting
+                                                                 Techniques and Applications (RTA).
+M. Butt, H. Dyvik, T. Holloway King, H. Masuichi,
+  and C. Rohrer. 2002. The parallel grammar                    A. Koller, J. Niehren, and S. Thater. 2003. Bridg-
+  project. In Proceedings of COLING-2002 Workshop                ing the gap between underspecification formalisms:
+  on Grammar Engineering and Evaluation.                         Hole semantics as dominance constraints. In Pro-
+                                                                 ceedings of the 10th EACL.
+R. P. Chaves. 2003. Non-redundant scope disambigua-
+   tion in underspecified semantics. In Proceedings of         A. Koller, M. Regneri, and S. Thater. 2008. Regular
+   the 8th ESSLLI Student Session.                               tree grammars as a formalism for scope underspeci-
+                                                                 fication. In Proceedings of ACL-08: HLT.
+H. Comon, M. Dauchet, R. Gilleron, C. Löding,
+  F. Jacquemard, D. Lugiez, S. Tison, and M. Tom-              P. Lasersohn. 1993. Existence presuppositions and
+  masi. 2007. Tree automata techniques and appli-                 background knowledge.   Journal of Semantics,
+  cations. Available on: http://www.grappa.                       10:113–122.
+  univ-lille3.fr/tata.
+                                                               B. MacCartney and C. Manning. 2008. Modeling
+A. Copestake and D. Flickinger. 2000. An open-                   semantic containment and exclusion in natural lan-
+  source grammar development environment and                     guage inference. In Proceedings of the 22nd Inter-
+  broad-coverage english grammar using HPSG. In                  national Conference on Computational Linguistics
+  Proceedings of the 2nd International Conference on             (COLING).
+  Language Resources and Evaluation (LREC).
+                                                               R. Montague. 1974. The proper treatment of quantifi-
+A. Copestake, D. Flickinger, C. Pollard, and I. Sag.              cation in ordinary English. In R. Thomason, editor,
+  2005. Minimal recursion semantics: An introduc-                Formal Philosophy. Selected Papers of Richard Mon-
+  tion. Journal of Language and Computation.                      tague. Yale University Press, New Haven.
+
+D. Flickinger, A. Koller, and S. Thater. 2005. A new           C. Monz and M. de Rijke. 2001. Deductions with
+  well-formedness criterion for semantics debugging.             meaning. In Michael Moortgat, editor, Logical As-
+  In Proceedings of the 12th International Conference            pects of Computational Linguistics, Third Interna-
+  on HPSG, Lisbon.                                               tional Conference (LACL’98), volume 2014 of LNAI.
+                                                                 Springer-Verlag, Berlin/Heidelberg.
+M. Gabsdil and K. Striegnitz. 1999. Classifying scope
+  ambiguities. In Proceedings of the First Intl. Work-         S. Oepen, K. Toutanova, S. Shieber, C. Manning,
+  shop on Inference in Computational Semantics.                   D. Flickinger, and T. Brants. 2002. The LinGO
+                                                                  Redwoods treebank: Motivation and preliminary
+J. Graehl, K. Knight, and J. May. 2008. Training tree             applications. In Proceedings of the 19th Inter-
+   transducers. Computational Linguistics, 34(3):391–             national Conference on Computational Linguistics
+   427.                                                          (COLING).
+
+D. Higgins and J. Sadock. 2003. A machine learning             Uwe Reyle. 1995. On reasoning with ambiguities. In
+  approach to modeling scope preferences. Computa-              Proceedings of the 7th Conference of the European
+  tional Linguistics, 29(1).                                    Chapter of the Association for Computational Lin-
+                                                                 guistics (EACL’95).
+J. Hobbs. 1983. An improper treatment of quantifi-
+   cation in ordinary English. In Proceedings of the           K. van Deemter. 1996. Towards a logic of ambiguous
+   21st Annual Meeting of the Association for Compu-             expressions. In Semantic Ambiguity and Underspec-
+   tational Linguistics (ACL’83).                                ification. CSLI Publications, Stanford.
+
+R. Kempson and A. Cormack. 1981. Ambiguity and                 E. Vestre. 1991. An algorithm for generating non-
+   quantification. Linguistics and Philosophy, 4:259–             redundant quantifier scopings. In Proc. of EACL,
+   309.                                                           Berlin.
+
+
+                                                          39
+

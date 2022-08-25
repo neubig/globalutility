@@ -1,0 +1,608 @@
+    Incorporating Extra-linguistic Information into Reference Resolution in
+                         Collaborative Task Dialogue
+
+                 Ryu Iida            Shumpei Kobayashi          Takenobu Tokunaga
+                                      Tokyo Institute of Technology
+                           2-12-1, Ôokayama, Meguro, Tokyo 152-8552, Japan
+                              {ryu-i,skobayashi,take}@cl.cs.titech.ac.jp
+
+
+                       Abstract                                problem as it is represented in the annotated data
+     This paper proposes an approach to ref-                   sets provided by the Message Understanding Con-
+     erence resolution in situated dialogues                   ference (MUC)1 and the Automatic Content Ex-
+     by exploiting extra-linguistic information.               traction (ACE)2 . In these data sets, coreference re-
+     Recently, investigations of referential be-               lations are deﬁned as a limited version of a typ-
+     haviours involved in situations in the real               ical coreference; this generally means that only
+     world have received increasing attention                  the relations where expressions refer to the same
+     by researchers (Di Eugenio et al., 2000;                  named entities are addressed, because it makes
+     Byron, 2005; van Deemter, 2007; Spanger                   the coreference resolution task more information
+     et al., 2009). In order to create an accurate             extraction-oriented. In other words, the corefer-
+     reference resolution model, we need to                    ence task as deﬁned by MUC and ACE is geared
+     handle extra-linguistic information as well               toward only identifying coreference relations an-
+     as textual information examined by exist-                 chored to an entity within the text.
+     ing approaches (Soon et al., 2001; Ng and                    In contrast to this research trend, investigations
+     Cardie, 2002, etc.). In this paper, we incor-             of referential behaviour in real world situations
+     porate extra-linguistic information into an               have continued to gain interest in the language
+     existing corpus-based reference resolution                generation community (Di Eugenio et al., 2000;
+     model, and investigate its effects on refer-              Byron, 2005; van Deemter, 2007; Foster et al.,
+     ence resolution problems within a corpus                  2008; Spanger et al., 2009), aiming at applica-
+     of Japanese dialogues. The results demon-                 tions such as human-robot interaction. Spanger
+     strate that our proposed model achieves an                et al. (2009) for example constructed a corpus by
+     accuracy of 79.0% for this task.                          recording dialogues of two participants collabo-
+                                                               ratively solving the Tangram puzzle. The corpus
+1    Introduction                                              includes extra-lingustic information synchronised
+The task of identifying reference relations includ-            with utterances (such as operations on the puzzle
+ing anaphora and coreferences within texts has re-             pieces). They analysed the relations between re-
+ceived a great deal of attention in natural language           ferring expressions and the extra-linguistic infor-
+processing, from both theoretical and empirical                mation, and reported that the pronominal usage of
+perspectives. Recently, research trends for refer-             referring expressions is predominant. They also
+ence resolution have drastically shifted from hand-            revealed that the multi-modal perspective of refer-
+crafted rule-based approaches to corpus-based ap-              ence should be dealt with for more realistic refer-
+proaches, due predominately to the growing suc-                ence understanding. Thus, a challenging issue in
+cess of machine learning algorithms (such as Sup-              reference resolution is to create a model bridging a
+port Vector Machines (Vapnik, 1998)); many re-                 referring expression in the text and its object in the
+searchers have examined ways for introducing var-              real world. As a ﬁrst step, this paper focuses on
+ious linguistic clues into machine learning-based              incorporating extra-linguistic information into an
+models (Ge et al., 1998; Soon et al., 2001; Ng                 existing corpus-based approach, taking Spanger et
+and Cardie, 2002; Yang et al., 2003; Iida et al.,              al. (2009)’s REX-J corpus3 as the data set. In our
+2005; Yang et al., 2005; Yang et al., 2008; Poon                  1
+                                                                    www-nlpir.nist.gov/related projects/muc/
+and Domingos, 2008, etc.). Research has contin-                   2
+                                                                    www.itl.nist.gov/iad/mig//tests/ace/
+                                                                  3
+ued to progress each year, focusing on tackling the                 The corpus was named REX-J after their publication of
+
+
+                                                         1259
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1259–1267,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+problem setting, a referent needs to be identiﬁed
+by taking into account extra-linguistic informa-
+tion, such as the spatiala relations of puzzle pieces
+and the participants’ operations on them, as well
+as any preceding utterances in the dialogue. We
+particularly focus on the participants’ operation of                goal shape area
+
+pieces and so introduce it as several features in a
+machine learning-based approach.
+                                                                         working area
+   This paper is organised as follows. We ﬁrst ex-
+plain the corpus of collaborative work dialogues
+in Section 2, and then present our approach for
+identifying a referent given a referring expres-                  Figure 1: Screenshot of the Tangram simulator
+sion in situated dialogues in Section 3. Section 4
+shows the results of our empirical evaluation.                out the REX-J corpus and some of its prominent
+In Section 5 we compare our work with exist-                  statistics.
+ing work on reference resolution, and then con-
+clude this paper and discuss future directions in             2.1 The REX-J corpus
+Section 6.
+                                                              In the process of building the REX-J corpus,
+2    REX-J corpus: a corpus of                                Spanger et al. (2009) recruited 12 Japanese grad-
+     collaborative work dialogue                              uate students (4 females and 8 males), and split
+                                                              them into 6 pairs. All pairs knew each other previ-
+For investigating dialogue from the multi-modal               ously and were of the same sex and approximately
+perspective, researchers have developed data sets             the same age. Each pair was instructed to solve
+including extra-linguistic information, bridging              the Tangram puzzle. The goal of the puzzle is to
+objects in the world and their referring expres-              construct a given shape by arranging seven pieces
+sions. The COCONUT corpus (Di Eugenio et al.,                 of simple ﬁgures as shown in Figure 1. The pre-
+2000) is collected from keyboard-dialogues be-                cise position of every piece and every action that
+tween two participants, who are collaborating on              the participants make are recorded by the Tangram
+a simple 2D design task. The setting tends to en-             simulator in which the pieces on the computer dis-
+courage simple types of expressions by the partic-            play can be moved, rotated and ﬂipped with sim-
+ipants. The COCONUT corpus is also limited to                 ple mouse operations. The piece position and the
+annotations with symbolic information about ob-               mouse actions were recorded at intervals of 10
+jects, such as object attributes and location in dis-         msec. The simulator displays two areas: a goal
+crete coordinates. Thus, in addition to the artiﬁ-            shape area (the left side of Figure 1) and a work-
+cial nature of interaction, such as using keyboard            ing area (the right side of Figure 1) where pieces
+input, this corpus only records restricted types of           are shown and can be manipulated.
+data.                                                            A different role was assigned to each participant
+   On the other hand, though the annotated corpus             of a pair: a solver and an operator. Given a cer-
+by Spanger et al. (2009) focuses on a limited do-             tain goal shape, the solver thinks of the necessary
+main (i.e. collaborative work dialogues for solving           arrangement of the pieces and gives instructions
+the Tangram puzzle using a puzzle simulator on                to the operator for how to move them. The op-
+the computer), the required operations to solve the           erator manipulates the pieces with the mouse ac-
+puzzle, and the situation as it is updated by a series        cording to the solver’s instructions. During this
+of operations on the pieces are both recorded by              interaction, frequent uttering of referring expres-
+the simulator. The relationship between a referring           sions are needed to distinguish the pieces of the
+expression in a dialogue and its referent on a com-           puzzle. This collaboration is achieved by placing
+puter display is also annotated. For this reason,             a set of participants side by side, each with their
+we selected the REX-J corpus for use in our em-               own display showing the work area, and a shield
+pirical evaluations on reference resolution. Before           screen set between them to prevent the operator
+explaining the details of our evaluation, we sketch           from seeing the goal shape, which is visible only
+Spanger et al. (2009), which describes its construction.      on the solver’s screen, and to further restrict their
+
+
+                                                           1260
+
+
+interaction to only speech.                                      pirical evaluation in which a reference resolution
+                                                                 model chooses a referent (i.e. a piece) for a given
+2.2 Statistics                                                   referring expression from the set of pieces illus-
+Table 1 lists the syntactic and semantic features of             trated on the computer display.
+the referring expressions in the corpus with their                  As a basis for our reference resolution model,
+respective frequencies. Note that multiple fea-                  we adopt an existing model for reference res-
+tures can be used in a single expression. This list              olution. Recently, machine learning-based ap-
+demonstrates that ‘pronoun’ and ‘shape’ features                 proaches to reference resolution (Soon et al., 2001;
+are frequently uttered in the corpus. This is be-                Ng and Cardie, 2002, etc.) have been developed,
+cause pronominal expressions are often used for                  particularly focussing on identifying anaphoric re-
+pointing to a piece on a computer display. Expres-               lations in texts, and have achieved better perfor-
+sions representing ‘shape’ frequently appear in di-              mance than hand-crafted rule-based approaches.
+alogues even though they may be relatively redun-                These models for reference resolution take into ac-
+dant in the current utterance. From these statistics,            count linguistic factors, such as relative salience of
+capturing these two features can be judged as cru-               candidate antecedents, which have been modeled
+cial as a ﬁrst step toward accurate reference reso-              in Centering Theory (Grosz et al., 1995) by rank-
+lution.                                                          ing candidate antecedents appearing in the preced-
+                                                                 ing discourse (Iida et al., 2003; Yang et al., 2003;
+3       Reference Resolution using                               Denis and Baldridge, 2008). In order to take ad-
+        Extra-linguistic Information                             vantage of existing models, we adopt the ranking-
+Before explaining the treatment of extra-linguistic              based approach as a basis for our reference resolu-
+information, let us ﬁrst describe the task deﬁni-                tion model.
+tion, taking the REX-J corpus as target data. In                    In conventional ranking-based models, Yang et
+the task of reference resolution, the reference res-             al. (2003) and Iida et al. (2003) decompose the
+olution model has to identify a referent (i.e. a                 ranking process into a set of pairwise compar-
+piece on a computer display)4 . In comparison to                 isons of two candidate antecedents. However, re-
+conventional problem settings for anaphora reso-                 cent work by Denis and Baldridge (2008) reports
+lution, where the model searches for an antecedent               that appropriately constructing a model for rank-
+out of a set of candidate antecedents from pre-                  ing all candidates yields improved performance
+ceding utterances, expressions corresponding to                  over those utilising pairwise ranking.
+antecedents are sometimes omitted because refer-                    Similarly we adopt a ranking-based model, in
+ring expressions are used as deixis (i.e. physically             which all candidate antecedents compete with
+pointing to a piece on a computer display); they                 one another to decide the most likely candi-
+may also refer to a piece that has just been manip-              date antecedent. Although the work by Denis
+ulated by an operator due to the temporal salience               and Baldridge (2008) uses Maximum Entropy to
+in a series of operations. For these reasons, even               create their ranking-based model, we adopt the
+though the model checks all candidates in the pre-               Ranking SVM algorithm (Joachims, 2002), which
+ceding utterances, it may not ﬁnd the antecedent                 learns a weight vector to rank candidates for a
+of a given referring expression. However, we do                  given partial ranking of each referent. Each train-
+know that each referent exists as a piece on the                 ing instance is created from the set of all referents
+display. We can therefore establish that when a re-              for each referring expression. To deﬁne the par-
+ferring expression is uttered by either a solver or              tial ranking of referents, we simply rank referents
+an operator, the model can choose one of seven                   referred to by a given referring expression as ﬁrst
+pieces as a referent of the current referring expres-            place and other referents as second place.
+sion.
+                                                                 3.2 Use of extra-linguistic information
+3.1 Ranking model to identify referents
+To investigate the impact of extra-linguistic infor-             Recent work on multi-modal reference resolution
+mation on reference resolution, we conduct an em-                or referring expression generation (Prasov and
+    4
+                                                                 Chai, 2008; Foster et al., 2008; Carletta et al.,
+    In the current task on reference resolution, we deal only
+with referring expressions referring to a single piece to min-   2010) indicates that extra-linguistic information,
+imise complexity.                                                such as eye-gaze and manipulation of objects, is
+
+
+                                                             1261
+
+
+                                   Table 1: Referring expressions in REX-J corpus
+        feature               tokens    example
+        demonstratives           742
+           adjective             194    “ano migigawa no sankakkei (that triangle at the right side)”
+           pronoun               548    “kore (this)”
+        attribute                795
+           size                  223    “tittyai sankakkei (the small triangle)”
+           shape                 566    “ôkii sankakkei (the large triangle)”
+           direction               6    “ano sita muiteru dekai sankakkei (that large triangle facing to the bottom)”
+        spatial relations        147
+           projective            143    “hidari no okkii sankakkei (the small triangle on the left)”
+           topological             2    “ôkii hanareteiru yatu (the big distant one)”
+           overlapping             2    “ sono sita ni aru sankakkei (the triangle underneath it)”
+        action-mentioning         85    “migi ue ni doketa sankakkei (the triangle you put away to the top right)”
+
+
+one of essential clues for distinguishing deictic                 tecedent explicitly appears. These features have
+reference from endophoric reference.                              been examined by approaches to anaphora or
+   For instance, Prasov and Chai (2008) demon-                    coreference resolution (Soon et al., 2001; Ng and
+strated that integrating eye-gaze information (es-                Cardie, 2002, etc.) to capture the salience of a can-
+pecially, relative ﬁxation intensity, the amount of               didate antecedent. To capture the textual aspect
+time spent ﬁxating a candidate object) into the                   of dialogues for solving Tangram puzzle, we ex-
+conventional dialogue history-based model im-                     ploit the features such as a binary value indicating
+proved the performance of reference resolution.                   whether a referring expression has no antecedent
+Foster et al. (2008) investigated the relationship of             in the preceding discourse and case markers fol-
+referring expressions and the manupluation of ob-                 lowing a candidate antecedent.
+jects on a collaborative construction task, which
+is similar to our Tangram task5 . They reported
+                                                                  3.2.2 Action history features
+about 36% of the initial mentioned referring ex-
+pressions in their corpus were involved with par-                 The history of the operations may yield important
+ticipant’s operations of objects, such as mouse ma-               clues that indicate the salience in terms of the tem-
+nipulation.                                                       poral recency of a piece within a series of opera-
+   From these background, in addition to the in-                  tions. To introduce this aspect as a set of features,
+formation about the history of the preceding dis-                 we can use, for example, the time distance of a
+course, which has been used in previous machine                   candidate referent (i.e. a piece in the Tangram puz-
+learning-based approaches, we integrate extra-                    zle) since the mouse cursor was moved over it. We
+linguistic information into the reference resolution              call this type of feature the action history feature.
+model shown in Section 3.1. More precisely, we
+introduce the following extra-linguistic informa-
+tion: the information with regards to the history                 3.2.3 Current operation features
+of a piece’s movement and the mouse cursor po-
+                                                                  The recency of operations of a piece is also an im-
+sitions, and the information of the piece currently
+                                                                  portant factor on reference resolution because it is
+manipulated by an operator. We next elaborate on
+                                                                  directly associated with the focus of attention in
+these three kinds of features. All the features are
+                                                                  terms of the cognition in a series of operations.
+summarised in Table 2.
+                                                                  For example, since a piece which was most re-
+3.2.1 Discourse history features                                  cently manipulated is most salient from cognitive
+                                                                  perspectives, it might be expected that the piece
+First, ‘type of’ features are acquired from the ex-
+                                                                  tends to be referred to by unmarked referring ex-
+pressions of a given referring expression and its
+                                                                  pressions such as pronouns. To incorporate such
+antecedent in the preceding discourse if the an-
+                                                                  clues into the reference resolution model, we can
+   5
+     Note that the task deﬁned in Foster et al. (2008) makes no   use, for example, the time distance of a candidate
+distinction between two roles; a operator and a solver. Thus,     referent since it was last manipulated in the pre-
+two partipants both can mamipulate pieces on a computer dis-
+play, but need to jointly construct to create a predeﬁned goal    ceding utterances. We call this type of feature the
+shape.                                                            current operation feature.
+
+
+                                                              1262
+
+
+                                                       Table 2: Feature set
+    (a) Discourse history features
+    DH1 : yes, no        a binary value indicating that P is referred to by the most recent referring expression.
+    DH2 : yes, no        a binary value indicating that the time distance to the last mention of P is less than or equal to 10 sec.
+    DH3 : yes, no        a binary value indicating that the time distance to the last mention of P is more than 10 sec and less
+                         than or equal to 20 sec.
+    DH4 : yes, no        a binary value indicating that the time distance to the last mention of P is more than 20 sec.
+    DH5 : yes, no        a binary value indicating that P has never been referred to by any mentions in the preceding utterances.
+    DH6 : yes, no, N/A a binary value indicating that the attributes of P are compatible with the attributes of R.
+    DH7 : yes, no        a binary value indicating that R is followed by the case marker ‘o (accusative)’.
+    DH8 : yes, no        a binary value indicating that R is followed by the case marker ‘ni (dative)’.
+    DH9 : yes, no        a binary value indicating that R is a pronoun and the most recent reference to P is not a pronoun.
+    DH10 : yes, no       a binary value indicating that R is not a pronoun and was most recently referred to by a pronoun.
+    (b) Action history features
+    AH1 : yes, no        a binary value indicating that the mouse cursor was over P at the beginning of uttering R.
+    AH2 : yes, no        a binary value indicating that P is the last piece that the mouse cursor was over when feature AH1 is
+                         ‘no’.
+    AH3 : yes, no        a binary value indicating that the time distance is less than or equal to 10 sec after the mouse cursor
+                         was over P.
+    AH4 : yes, no        a binary value indicating that the time distance is more than 10 sec and less than or equal to 20 sec
+                         after the mouse cursor was over P.
+    AH5 : yes, no        a binary value indicating that the time distance is more than 20 sec after the mouse cursor was over P.
+    AH6 : yes, no        a binary value indicating that the mouse cursor was never over P in the preceding utterances.
+    (c) Current operation features
+    CO1 : yes, no        a binary value indicating that P is being manipulated at the beginning of uttering R.
+    CO2 : yes, no        a binary value indicating that P is the most recently manipulated piece when feature CO1 is ‘no’.
+    CO3 : yes, no        a binary value indicating that the time distance is less than or equal to 10 sec after P was most recently
+                         manipulated.
+    CO4 : yes, no        a binary value indicating that the time distance is more than 10 sec and less than or equal to 20 sec
+                         after P was most recently manipulated.
+    CO5 : yes, no        a binary value indicating that the time distance is more than 20 sec after P was most recently manipu-
+                         lated.
+    CO6 : yes, no        a binary value indicating that P has never been manipulated.
+P stands for a piece of the Tangram puzzle (i.e. a candidate referent of a referring expression) and R stands for the target
+referring expression.
+
+
+4      Empirical Evaluation                                          model and the latter one the non-pronoun model
+                                                                     respectively. At the training phase, we use only
+In order to investigate the effect of the extra-
+                                                                     training instances whose referring expressions are
+linguistic information introduced in this paper, we
+                                                                     pronouns for creating the pronoun model, and
+conduct an empirical evaluation using the REX-J
+                                                                     all other training instances are used for the non-
+corpus.
+                                                                     pronoun model. The model using one of these
+4.1 Models                                                           models depending on the referring expression to
+                                                                     be solved is called the separate model.
+As we see in Section 2.2, the feature testing
+                                                                        To verify Denis and Baldridge (2008)’s premise
+whether a referring expression is a pronoun or
+                                                                     mentioned above, we also create a model using all
+not is crucial because it is directly related to the
+                                                                     training instances without dividing pronouns and
+‘deictic’ usage of referring expressions, whereas
+                                                                     other. This model is called the combined model
+other expressions tend to refer to an expression ap-
+                                                                     hereafter.
+pearing in the preceding utterances. As described
+in Denis and Baldridge (2008), when the size of
+                                                                     4.2 Experimental setting
+training instances is relatively small, the models
+induced by learning algorithms (e.g. SVM) should                     We used 40 dialogues in the REX-J corpus6 , con-
+be separately created with regards to distinct fea-                  taining 2,048 referring expressions. To facilitate
+tures. Therefore, focusing on the difference of                      the experiments, we conduct 10-fold crossvalida-
+the pronominal usage of referring expressions, we                    tion using 2,035 referring expressions, each of
+separately create the reference resolution models;                   which refers to a single piece in a computer dis-
+one is for identifying a referent of a given pro-                        6
+                                                                          Spanger et al. (2009)’s original corpus contains only 24
+noun, and the other is for all other expressions.                    dialogues. In addition to this, we obtained anothor 16 dia-
+We henceforth call the former model the pronoun                      logues by favour of the authors.
+
+
+                                                                1263
+
+
+                                Table 3: Results on reference resolution: accuracy
+  model                        discourse history        +action history*       +current operation         +action history,
+                                   (baseline)                                                           +current operation*
+  separated model (a+b)      0.664 (1352/2035)       0.790    (1608/2035)     0.685    (1394/2035)     0.780 (1587/2035)
+   a) pronoun model          0.648     (660/1018)    0.886     (902/1018)     0.692     (704/1018)     0.875     (891/1018)
+   b) non-pronoun model      0.680     (692/1017)    0.694     (706/1017)     0.678     (690/1017)     0.684     (696/1017)
+  combined model             0.664 (1352/2035)       0.749    (1524/2035)     0.650    (1322/2035)     0.743 (1513/2035)
+‘*’ means the extra-lingustic features (or the combinations of them) signiﬁcantly contribute to improving performance. For the
+signiﬁcant tests, we used McNemar test with Bonferroni’s correction for multiple comparisons, i.e. α/K = 0.05/4 = 0.01.
+
+
+play7 .
+                                                                    Table 4: Weights of the features in each model
+   As a baseline model, we adopted a model only                                  pronoun model       non-pronoun model
+using the discourse history features. We utilised                      rank    feature    weight     feature    weight
+SVM rank8 as an implementation of the Ranking                            1      AH1       0.6371      DH6       0.7060
+                                                                         2      AH3       0.2721      DH2       0.2271
+SVM algorithm, in which the parameter c was set                          3      DH1       0.2239      AH3       0.2035
+as 1.0 and the remaining parameters were set to                          4      DH2       0.2191      AH1       0.1839
+their defaults.                                                          5      CO1       0.1911      DH1       0.1573
+                                                                         6      DH9       0.1055      DH7       0.0669
+                                                                         7      AH2       0.0988      CO5       0.0433
+4.3 Results                                                              8      CO3       0.0852      CO3       0.0393
+                                                                         9      DH6       0.0314      CO1       0.0324
+The results of each model are shown in Table 3.                         10      CO2       0.0249      DH3       0.0177
+First of all, by comparing the models with and                          11     DH10            0      AH4       0.0079
+without extra-linguistic information (i.e. the                          12      DH7      -0.0011      AH2       0.0069
+                                                                        13      DH3      -0.0088      CO4       0.0059
+model using all features shown in Table 2 and                           14      CO6      -0.0228     DH10       0.0059
+the baseline model), we can see the effectiveness                       15      CO4      -0.0308      DH9            0
+of extra-linguistic information. The results typi-                      16      CO5      -0.0317      CO2      -0.0167
+                                                                        17      DH8      -0.0371      DH8      -0.0728
+cally show that the former achieved better perfor-                      18      AH6      -0.0600      CO6      -0.0885
+mance than the latter. In particular, it indicates that                 19      AH4      -0.0761      DH4      -0.0924
+exploiting the action history features are signiﬁ-                      20      DH5      -0.0910      AH5      -0.1042
+                                                                        21      DH4      -0.1193      AH6      -0.1072
+cantly useful for reference resolution in this data                     22      AH5      -0.1361      DH5      -0.1524
+set.
+   Second, we can also see the impact of extra-
+linguistic information (especially, the action his-              operation features. As we can see in the feature
+tory features) with regards to the pronoun and                   deﬁnitions of CO1 and AH1, some current opera-
+non-pronoun models. In the former case, the                      tion features partially overlap with the action his-
+model with extra-linguistic information improved                 tory features, which is effectively used in the rank-
+by about 22% compared with the baseline model.                   ing process. However, the other current operation
+On the other hand, in the latter case, the accuracy              features may have bad effects for ranking refer-
+improved by only 7% over the baseline model.                     ents due to their ill-formed deﬁnitions. To shed
+The difference may be caused by the fact that pro-               light on this problem, we need additional investi-
+nouns are more sensitive to the usage of the ac-                 gation of the usage of features, and to reﬁne their
+tion history features because pronouns are often                 deﬁnitions.
+uttered as deixis (i.e. a pronoun tends to directly                 Finally, the results show that the performance
+refer to a piece shown in a computer display).                   of the separated model is signiﬁcantly better than
+   The results also show that the model using                    that of the combined model9 , which indicates that
+the discourse history and action history features                separately creating models to specialise in distinct
+achieved better performance than the model using                 factors (i.e. whether a referring expression is a
+all the features. This may be due to the duplicated              pronoun or not) is important as suggested by Denis
+deﬁnitions between the action history and current                and Baldridge (2008).
+   7
+     The remaining 13 instances referred to either more than        We next investigated the signiﬁcance of each
+one piece or a class of pieces, thus were excluded in this ex-
+periment.                                                      9
+                                                                 For the signiﬁcant tests, we used McNemar test (α =
+   8
+     www.cs.cornell.edu/people/tj/svm light/svm rank.html 0.05).
+
+
+                                                             1264
+
+
+                                                                 pronominal anaphora in the Switchboard corpus
+Table 5: Frequencies of REs relating to on-mouse
+                      pronouns       others       total          by porting a corpus-based anaphora resolution
+      # all REs            548         693      1,241            model focusing on written texts (e.g. Soon et al.
+      # on-mouse           452         155         607           (2001) and Ng and Cardie (2002)). They used
+                       (82.5%)     (22.4%)    (48.9%)
+                                                                 specialised features for spoken dialogues as well
+‘# all REs’ stands for the frequency of referring expressions    as conventional features. They reported relatively
+uttered in the corpus and ‘# on-mouse’ is the frequency of re-
+ferring expressions in the situation when a referring expres-    worse results than with written texts. The reason
+sion is uttered and a mouse cursor is over the piece referred    is that the features in their work capture only in-
+to by the expression.                                            formation derived from transcripts of dialogues,
+                                                                 while it is also essential to bridge objects and con-
+feature of the pronoun and non-pronoun models.                   cepts in the real (or virtual) world and their expres-
+We calculate the weight of feature f shown in                    sions (especially pronouns) for recognising refer-
+Table 2 according to the following formula.                      ential relations intrinsically.
+                                 ∑
+            weight(f ) =               wx zx (f )         (1)
+                              x∈SV s                                To improve performance on reference resolu-
+                                                                 tion in dialogue, researchers have focused on
+where SVs is a set of the support vectors in a ranker
+                                                                 anaphoricity determination, which is the task of
+induced by SVM rank , wx is the weight of the sup-
+                                                                 judging whether an expression explicitly has an
+port vector x, zx (f ) is the function that returns 1
+                                                                 antecedent in the text (i.e. in the preceding ut-
+if f occurs in x, respectively.
+                                                                 terances) (Müller, 2006; Müller, 2007). Their
+   The feature weights are shown in Table 4. This
+                                                                 work presented implementations of pronominal
+demonstrates that in the pronoun model the ac-
+                                                                 reference resolution in transcribed, multi-party di-
+tion history features have the highest weight, while
+                                                                 alogues. Müller (2006) focused on the determina-
+with the non-pronoun model these features are less
+                                                                 tion of non-referential it, categorising instances of
+signiﬁcant. As we can see in Table 5, pronouns
+                                                                 it in the ICSI Meeting Corpus (Janin et al., 2003)
+are strongly related to the situation where a mouse
+                                                                 into six classes in terms of their grammatical cat-
+cursor is over a piece, directly causing the weights
+                                                                 egories. They also took into account each charac-
+of the features associated with the ‘on-mouse’ sit-
+                                                                 teristic of these types by using a reﬁned feature set.
+uation to become higher than other features.
+                                                                 In the work by Müller (2007), they conducted an
+   On the other hand, in the non-pronoun model,
+                                                                 empirical evaluation including antecedent identiﬁ-
+the discourse history features, such as DH6 and
+                                                                 cation as well as anaphoricity determination. They
+DH2, are the most signiﬁcant, indicating that the
+                                                                 used the relative frequencies of linguistic patterns
+compatibility of the attributes of a piece and a re-
+                                                                 as clues to introduce speciﬁc patterns for non-
+ferring expression is more crucial than other ac-
+                                                                 referentials. They reported that their performance
+tion history and current operation features. This is
+                                                                 for detecting non-referentials was relatively high
+compatible with the previous research concerning
+                                                                 (80.0% in precision and 60.9% in recall), while
+textual reference resolution (Mitkov, 2002).
+                                                                 the overall performance was still low (18.2% in
+   Table 4 shows that feature AH3 (aiming at cap-
+                                                                 precision and 19.1% in recall). These results indi-
+turing the recency in terms of a series of oper-
+                                                                 cate the need for advancing research in reference
+ations) is also signiﬁcant. It empirically proves
+                                                                 resolution in dialogue.
+that the recent operation is strongly related to the
+salience of reference as a kind of ‘focus’ by hu-
+mans.                                                               In contrast to the above mentioned research, our
+                                                                 task includes the treatment of entity disambigua-
+5 Related Work
+                                                                 tion (i.e. selecting a referent out of a set of pieces
+There have been increasing concerns about ref-                   on a computer display) as well as conventional
+erence resolution in dialogue. Byron and Allen                   anaphora resolution. Although our task setting is
+(1998) and Eckert and Strube (2000) reported                     limited to the problem of solving the Tangram puz-
+about 50% of pronouns had no antecedent in                       zle, we believe it is a good starting point for incor-
+TRAINS93 and Switchboard corpora respectively.                   porating real (or virtual) world entities into coven-
+Strube and Müller (2003) attempted to resolve                   tional anaphora resolution.
+
+
+                                                             1265
+
+
+6   Conclusion                                               for two-person tasks with manipulation of a virtual
+                                                             world. Behavior Research Methods, 42:254–265.
+This paper presented the task of reference reso-
+                                                          P. Denis and J. Baldridge. 2008. Specialized models
+lution bridging pieces in the real world and their
+                                                             and ranking for coreference resolution. In Proceed-
+referents in dialogue. We presented an imple-                ings of the 2008 Conference on Empirical Methods
+mentation of a reference resolution model ex-                in Natural Language Processing, pages 660–669.
+ploiting extra-linguistic information, such as ac-
+                                                          B. P. W. Di Eugenio, R. H. Thomason, and J. D. Moore.
+tion history and current operation features, to cap-         2000. The agreement process: An empirical investi-
+ture the salience of operations by a participant             gation of human-human computer-mediated collab-
+and the arrangement of the pieces. Through our               orative dialogues. International Journal of Human-
+empirical evaluation, we demonstrated that the               Computer Studies, 53(6):1017–1076.
+extra-linguistic information introduced in this pa-       M. Eckert and M. Strube. 2000. Dialogue acts, syn-
+per contributed to improving performance. We                chronising units and anaphora resolution. Journal
+also analysed the effect of each feature, showing           of Semantics, 17(1):51–89.
+that while action history features were useful for        M. E. Foster, E. G. Bard, M. Guhe, R. L. Hill, J. Ober-
+pronominal reference, discourse history features            lander, and A. Knoll. 2008. The roles of haptic-
+made sense for the other references.                        ostensive referring expressions in cooperative, task-
+                                                            based human-robot dialogue. In Proceedings of the
+   In order to enhance this kind of reference res-          3rd ACM/IEEE international conference on Human
+olution, there are several possible future direc-           robot interaction (HRI ’08), pages 295–302.
+tions. First, in the current problem setting, we
+                                                          N. Ge, J. Hale, and E. Charniak. 1998. A statistical ap-
+exclude zero-anaphora (i.e. omitted expressions              proach to anaphora resolution. In Proceedings of the
+refer to either an expression in the previous utter-         6th Workshop on Very Large Corpora, pages 161–
+ances or an object on a display deictically). How-           170.
+ever, zero-anaphora is essential for precise mod-         B. J. Grosz, A. K. Joshi, and S. Weinstein. 1995.
+eling and recognition of reference because it is            Centering: A framework for modeling the local co-
+also directly related with the recency of referents,        herence of discourse. Computational Linguistics,
+either textually or situationally. Second, repre-           21(2):203–226.
+senting distractors in a reference resolution model       R. Iida, K. Inui, H. Takamura, and Y. Matsumoto.
+is also a key. Although, this paper presents an             2003. Incorporating contextual cues in trainable
+implementation of a reference model considering             models for coreference resolution. In Proceedings
+                                                            of the 10th EACL Workshop on The Computational
+only the relationship between a referring expres-
+                                                            Treatment of Anaphora, pages 23–30.
+sion and its candidate referents. However, there
+might be cases when the occurrence of expressions         R. Iida, K. Inui, and Y. Matsumoto. 2005. Anaphora
+or manipulated pieces intervening between a refer-           resolution by antecedent identiﬁcation followed by
+                                                             anaphoricity determination. ACM Transactions on
+ring expression and its referent need to be taken            Asian Language Information Processing (TALIP),
+into account. Finally, more investigation is needed          4(4):417–434.
+for considering other extra-linguistic information,
+                                                          A. Janin, D. Baron, J. Edwards, D. Ellis, D. Gelbart,
+such as eye-gaze, for exploring what kinds of in-           N. Morgan, B. Peskin, T. Pfau, E. Shriberg, A. Stol-
+formation is critical to recognising reference in di-       cke, and C. Wooters. 2003. The ICSI meeting cor-
+alogue.                                                     pus. In Proceedings of the IEEE International Con-
+                                                            ference on Acoustics, Speech and Signal Processing,
+                                                            pages 364–367.
+References                                                T. Joachims. 2002. Optimizing search engines using
+                                                             clickthrough data. In Proceedings of the ACM Con-
+D. K. Byron and J. F. Allen. 1998. Resolving demon-
+                                                             ference on Knowledge Discovery and Data Mining
+  strative pronouns in the trains93 corpus. In Proceed-
+                                                             (KDD), pages 133–142.
+  ings of the 2nd Colloquium on Discourse Anaphora
+  and Anaphor Resolution (DAARC2), pages 68–81.           R. Mitkov. 2002. Anaphora Resolution. Studies in
+                                                            Language and Linguistics. Pearson Education.
+D. K. Byron. 2005. Utilizing visual attention for
+  cross-model coreference interpretation. In CON-         C. Müller. 2006. Automatic detection of nonrefer-
+  TEXT 2005, pages 83–96.                                   ential It in spoken multi-party dialog. In Proceed-
+                                                            ings of the 11th Conference of the European Chap-
+J. Carletta, R. L. Hill, C. Nicol, T. Taylor, J. P.         ter of the Association for Computational Linguistics,
+   de Ruiter, and E. G. Bard. 2010. Eyetracking             pages 49–56.
+
+
+                                                      1266
+
+
+C. Müller. 2007. Resolving It, This, and That in un-         Proceedings of Annual Meeting of the Association
+   restricted multi-party dialog. In Proceedings of the       for Computational Linguistics (ACL): Human Lan-
+   45th Annual Meeting of the Association of Compu-           guage Technologies (HLT), pages 843–851.
+   tational Linguistics, pages 816–823.
+V. Ng and C. Cardie. 2002. Improving machine learn-
+   ing approaches to coreference resolution. In Pro-
+   ceedings of the 40th Annual Meeting of the Asso-
+   ciation for Computational Linguistics (ACL), pages
+   104–111.
+H. Poon and P. Domingos. 2008. Joint unsupervised
+  coreference resolution with Markov Logic. In Pro-
+  ceedings of the 2008 Conference on Empirical Meth-
+  ods in Natural Language Processing, pages 650–
+  659.
+Z. Prasov and J. Y. Chai. 2008. What’s in a gaze?:
+   the role of eye-gaze in reference resolution in mul-
+   timodal conversational interfaces. In Proceedings of
+   the 13th international conference on Intelligent user
+   interfaces (IUI ’08), pages 20–29.
+W. M. Soon, H. T. Ng, and D. C. Y. Lim. 2001. A
+  machine learning approach to coreference resolu-
+  tion of noun phrases. Computational Linguistics,
+  27(4):521–544.
+P. Spanger, Y. Masaaki, R. Iida, and T. Takenobu.
+   2009. Using extra linguistic information for gen-
+   erating demonstrative pronouns in a situated collab-
+   oration task. In Proceedings of Workshop on Pro-
+   duction of Referring Expressions: Bridging the gap
+   between computational and empirical approaches to
+   reference.
+M. Strube and C. Müller. 2003. A machine learning
+  approach to pronoun resolution in spoken dialogue.
+  In Proceedings of the 41st Annual Meeting of the As-
+  sociation for Computational Linguistics, pages 168–
+  175.
+K. van Deemter. 2007. TUNA: Towards a uniﬁed al-
+  gorithm for the generation of referring expressions.
+  Technical report, Aberdeen University.
+V. N. Vapnik. 1998. Statistical Learning Theory.
+   Adaptive and Learning Systems for Signal Process-
+   ing Communications, and control. John Wiley &
+   Sons.
+X. Yang, G. Zhou, J. Su, and C. L. Tan. 2003.
+  Coreference resolution using competition learning
+  approach. In Proceedings of the 41st Annual Meet-
+  ing of the Association for Computational Linguistics
+  (ACL), pages 176–183.
+X. Yang, J. Su, and C. L. Tan. 2005. Improving pro-
+  noun resolution using statistics-based semantic com-
+  patibility information. In Proceeding of the 43rd An-
+  nual Meeting of the Association for Computational
+  Linguistics (ACL), pages 165–172.
+X. Yang, J. Su, J. Lang, C. L. Tan, T. Liu, and S. Li.
+  2008. An entity-mention model for coreference
+  resolution with inductive logic programming. In
+
+
+                                                       1267
+

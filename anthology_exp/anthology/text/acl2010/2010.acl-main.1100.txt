@@ -1,0 +1,703 @@
+                 Learning Script Knowledge with Web Experiments
+
+       Michaela Regneri           Alexander Koller                Manfred Pinkal
+            Department of Computational Linguistics and Cluster of Excellence
+                           Saarland University, Saarbrücken
+             {regneri|koller|pinkal}@coli.uni-saarland.de
+
+
+
+                      Abstract                                 in which expert annotators create script knowledge
+                                                               bases clearly don’t scale. The same holds true of
+    We describe a novel approach to unsuper-                   the script-like structures called “scenario frames”
+    vised learning of the events that make up                  in FrameNet (Baker et al., 1998).
+    a script, along with constraints on their                     There has recently been a surge of interest in
+    temporal ordering. We collect natural-                     automatically learning script-like knowledge re-
+    language descriptions of script-specific                   sources from corpora (Chambers and Jurafsky,
+    event sequences from volunteers over the                   2008b; Manshadi et al., 2008); but while these
+    Internet. Then we compute a graph rep-                     efforts have achieved impressive results, they are
+    resentation of the script’s temporal struc-                limited by the very fact that a lot of scripts – such
+    ture using a multiple sequence alignment                   as SHOPPING – are shared implicit knowledge, and
+    algorithm. The evaluation of our system                    their events are therefore rarely elaborated in text.
+    shows that we outperform two informed                         In this paper, we propose a different approach
+    baselines.                                                 to the unsupervised learning of script-like knowl-
+                                                               edge. We focus on the temporal event structure of
+1   Introduction
+                                                               scripts; that is, we aim to learn what phrases can
+A script is “a standardized sequence of events that            describe the same event in a script, and what con-
+describes some stereotypical human activity such               straints must hold on the temporal order in which
+as going to a restaurant or visiting a doctor” (Barr           these events occur. We approach this problem by
+and Feigenbaum, 1981). Scripts are fundamental                 asking non-experts to describe typical event se-
+pieces of commonsense knowledge that are shared                quences in a given scenario over the Internet. This
+between the different members of the same cul-                 allows us to assemble large and varied collections
+ture, and thus a speaker assumes them to be tac-               of event sequence descriptions (ESDs), which are
+itly understood by a hearer when a scenario re-                focused on a single scenario. We then compute a
+lated to a script is evoked: When one person says              temporal script graph for the scenario by identify-
+“I’m going shopping”, it is an acceptable reply                ing corresponding event descriptions using a Mul-
+to say “did you bring enough money?”, because                  tiple Sequence Alignment algorithm from bioin-
+the SHOPPING script involves a ‘payment’ event,                formatics, and converting the alignment into a
+which again involves the transfer of money.                    graph. This graph makes statements about what
+   It has long been recognized that text under-                phrases can describe the same event of a scenario,
+standing systems would benefit from the implicit               and in what order these events can take place. Cru-
+information represented by a script (Cullingford,              cially, our algorithm exploits the sequential struc-
+1977; Mueller, 2004; Miikkulainen, 1995). There                ture of the ESDs to distinguish event descriptions
+are many other potential applications, includ-                 that occur at different points in the script storyline,
+ing automated storytelling (Swanson and Gordon,                even when they are semantically similar. We eval-
+2008), anaphora resolution (McTear, 1987), and                 uate our script graph algorithm on ten unseen sce-
+information extraction (Rau et al., 1989).                     narios, and show that it significantly outperforms
+   However, it is also commonly accepted that the              a clustering-based baseline.
+large-scale manual formalization of scripts is in-                The paper is structured as follows. We will
+feasible. While there have been a few attempts at              first position our research in the landscape of re-
+doing this (Mueller, 1998; Gordon, 2001), efforts              lated work in Section 2. We will then define how
+
+
+                                                         979
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 979–988,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+we understand scripts, and what aspect of scripts            script. Furthermore, the atomic units of our align-
+we model here, in Section 3. Section 4 describes             ment process are entire phrases, while in Barzilay
+our data collection method, and Section 5 explains           and Lee’s setting, the atomic units are words.
+how we use Multiple Sequence Alignment to com-                  Finally, it is worth pointing out that our work
+pute a temporal script graph. We evaluate our sys-           is placed in the growing landscape of research
+tem in Section 6 and conclude in Section 7.                  that attempts to learn linguistic information out of
+                                                             data directly collected from users over the Inter-
+2   Related Work                                             net. Some examples are the general acquisition of
+                                                             commonsense knowledge (Singh et al., 2002), the
+Approaches to learning script-like knowledge are             use of browser games for that purpose (von Ahn
+not new. For instance, Mooney (1990) describes               and Dabbish, 2008), and the collaborative anno-
+an early attempt to acquire causal chains, and               tation of anaphoric reference (Chamberlain et al.,
+Smith and Arnold (2009) use a graph-based algo-              2009). In particular, the use of the Amazon Me-
+rithm to learn temporal script structures. However,          chanical Turk, which we use here, has been evalu-
+to our knowledge, such approaches have never                 ated and shown to be useful for language process-
+been shown to generalize sufficiently for wide               ing tasks (Snow et al., 2008).
+coverage application, and none of them was rig-
+orously evaluated.                                           3   Scripts
+   More recently, there have been a number of ap-
+proaches to automatically learning event chains              Before we delve into the technical details, let us
+from corpora (Chambers and Jurafsky, 2008b;                  establish some terminology. In this paper, we dis-
+Chambers and Jurafsky, 2009; Manshadi et al.,                tinguish scenarios, as classes of human activities,
+2008). These systems typically employ a method               from scripts, which are stereotypical models of the
+for classifying temporal relations between given             internal structure of these activities. Where EAT-
+event descriptions (Chambers et al., 2007; Cham-             ING IN A RESTAURANT is a scenario, the script
+bers and Jurafsky, 2008a; Mani et al., 2006).                describes a number of events, such as ordering and
+They achieve impressive performance at extract-              leaving, that must occur in a certain order in order
+ing high-level descriptions of procedures such as            to constitute an EATING IN A RESTAURANT activ-
+a CRIMINAL PROCESS. Because our approach in-                 ity. The classical perspective on scripts (Schank
+volves directly asking people for event sequence             and Abelson, 1977) has been that next to defin-
+descriptions, it can focus on acquiring specific             ing some events with temporal constraints, a script
+scripts from arbitrary domains, and we can con-              also defines their participants and their causal con-
+trol the level of granularity at which scripts are           nections.
+described. Furthermore, we believe that much                    Here we focus on the narrower task of learning
+information about scripts is usually left implicit           the events that a script consists of, and of model-
+in texts and is therefore easier to learn from our           ing and learning the temporal ordering constraints
+more explicit data. Finally, our system automat-             that hold between them. Formally, we will spec-
+ically learns different phrases which describe the           ify a script (in this simplified sense) in terms of a
+same event together with the temporal ordering               directed graph Gs = (Es , Ts ), where Es is a set
+constraints.                                                 of nodes representing the events of a scenario s,
+   Jones and Thompson (2003) describe an ap-                 and Ts is a set of edges (ei , ek ) indicating that the
+proach to identifying different natural language re-         event ei typically happens before ek in s. We call
+alizations for the same event considering the tem-           Gs the temporal script graph (TSG) for s.
+poral structure of a scenario. However, they don’t              Each event in a TSG can usually be expressed
+aim to acquire or represent the temporal structure           with many different natural-language phrases. As
+of the whole script in the end.                              the TSG in Fig. 3 illustrates, the first event in the
+   In its ability to learn paraphrases using Mul-            script for EATING IN A FAST FOOD RESTAURANT
+tiple Sequence Alignment, our system is related              can be equivalently described as ‘walk to the
+to Barzilay and Lee (2003). Unlike Barzilay and              counter’ or ‘walk up to the counter’; even phrases
+Lee, we do not tackle the general paraphrase prob-           like ‘walk into restaurant’, which would not usu-
+lem, but only consider whether two phrases de-               ally be taken as paraphrases of these, can be ac-
+scribe the same event in the context of the same             cepted as describing the same event in the context
+
+
+                                                       980
+
+
+ 1. look at menu                 1. walk into restaurant                   We required the annotators to enter at least 5 and
+ 2. decide what you want         2. find the end of the line               at most 16 events. Participants were allowed to
+ 3. order at counter             3. stand in line
+ 4. pay at counter               4. look at menu board                     skip a scenario if they felt unable to enter events
+ 5. receive food at counter      5. decide on food and drink               for it, but had to indicate why. We did not restrict
+ 6. take food to table           6. tell cashier your order
+ 7. eat food                     7. listen to cashier repeat order
+                                                                           the participants (e.g. to native speakers).
+                                 8. listen for total price                    In this way, we collected 493 ESDs for the 22
+ 1. walk to the counter          9. swipe credit card in scanner
+ 2. place an order              10. put up credit card                     scenarios. People used the possibility to skip a
+ 3. pay the bill                11. take receipt                           form 57 times. The most frequent explanation for
+ 4. wait for the ordered food   12. look at order number
+ 5. get the food                13. take your cup                          this was that they didn’t know how a certain sce-
+ 6. move to a table             14. stand off to the side                  nario works: The scenario with the highest pro-
+ 7. eat food                    15. wait for number to be called           portion of skipped forms was CREATE A HOME -
+ 8. exit the place              16. get your drink
+                                                                           PAGE, whereas MAKING SCRAMBLED EGGS was
+                                                                           the only one in which nobody skipped a form. Be-
+    Figure 1: Three event sequence descriptions                            cause we did not restrict the participants’ inputs,
+                                                                           the data was fairly noisy. For the purpose of this
+                                                                           study, we manually corrected the data for orthog-
+of this scenario. We call a natural-language real-
+                                                                           raphy and filtered out forms that were written in
+ization of an individual event in the script an event
+                                                                           broken English or did not comply with the task
+description, and we call a sequence of event de-
+                                                                           (e.g. when users misunderstood the scenario, or
+scriptions that form one particular instance of the
+                                                                           did not list the event descriptions in temporal or-
+script an event sequence description (ESD). Ex-
+                                                                           der). Overall we discarded 15% of the ESDs.
+amples of ESDs for the FAST FOOD RESTAURANT
+script are shown in Fig. 1.                                                   Fig. 1 shows three of the ESDs we collected
+   One way to look at a TSG is thus that its nodes                         for EATING IN A FAST- FOOD RESTAURANT. As
+are equivalence classes of different phrases that                          the example illustrates, descriptions differ in their
+describe the same event; another is that valid ESDs                        starting points (‘walk into restaurant’ vs. ‘walk to
+can be generated from a TSG by randomly select-                            counter’), the granularity of the descriptions (‘pay
+ing phrases from some nodes and arranging them                             the bill’ vs. event descriptions 8–11 in the third
+in an order that respects the temporal precedence                          sequence), and the events that are mentioned in
+constraints in Ts . Our goal in this paper is to take                      the sequence (not even ‘eat food’ is mentioned in
+a set of ESDs for a given scenario as our input                            all ESDs). Overall, the ESDs we collected con-
+and then compute a TSG that clusters different de-                         sisted of 9 events on average, but their lengths var-
+scriptions of the same event into the same node,                           ied widely: For most scenarios, there were sig-
+and contains edges that generalize the temporal in-                        nificant numbers of ESDs both with the minimum
+formation encoded in the ESDs.                                             length of 5 and the maximum length of 16 and ev-
+                                                                           erything in between. Combined with the fact that
+4       Data Acquisition                                                   93% of all individual event descriptions occurred
+                                                                           only once, this makes it challenging to align the
+In order to automatically learn TSGs, we selected                          different ESDs with each other.
+22 scenarios for which we collect ESDs. We de-
+liberately included scenarios of varying complex-
+ity, including some that we considered hard to                             5   Temporal Script Graphs
+describe (CHILDHOOD, CREATE A HOMEPAGE),
+scenarios with highly variable orderings between
+                                                                           We will now describe how we compute a temporal
+events (MAKING SCRAMBLED EGGS), and sce-
+                                                                           script graph out of the collected data. We proceed
+narios for which we expected cultural differences
+                                                                           in two steps. First, we identify phrases from dif-
+(WEDDING).
+                                                                           ferent ESDs that describe the same event by com-
+   We used the Amazon Mechanical Turk1 to col-
+                                                                           puting a Multiple Sequence Alignment (MSA) of
+lect the data. For every scenario, we asked 25 peo-
+                                                                           all ESDs for the same scenario. Then we postpro-
+ple to enter a typical sequence of events in this sce-
+                                                                           cess the MSA and convert it into a temporal script
+nario, in temporal order and in “bullet point style”.
+                                                                           graph, which encodes and generalizes the tempo-
+    1
+        http://www.mturk.com/                                              ral information contained in the original ESDs.
+
+
+                                                                     981
+
+
+               row             s1                            s2                             s3                      s4
+                 1                                  walk into restaurant                                      enter restaurant
+                 2                                                                 walk to the counter         go to counter
+                 3                                  find the end of the line
+                 4                                        stand in line
+                 5       look at menu                 look at menu board
+                 6   decide what you want         decide on food and drink                                     make selection
+                 7      order at counter            tell cashier your order           place an order            place order
+                 8                              listen to cashier repeat order
+                 9       pay at counter                                                pay the bill             pay for food
+                10                                  listen for total price
+                11                              swipe credit card in scanner
+                12                                    put up credit card
+                13                                       take receipt
+                14                                 look at order number
+                15                                      take your cup
+                16                                  stand off to the side
+                17                              wait for number to be called     wait for the ordered food
+                18   receive food at counter            get your drink                  get the food            pick up order
+                19                                                                                           pick up condiments
+                20     take food to table                                            move to a table              go to table
+                21          eat food                                                   eat food                 consume food
+                22                                                                                                clear tray
+                22                                                                    exit the place
+
+
+                             Figure 2: A MSA of four event sequence descriptions
+
+
+5.1   Multiple Sequence Alignment                                          There is an algorithm that computes cheapest pair-
+The problem of computing Multiple Sequence                                 wise alignments (i.e. n = 2) in polynomial time
+Alignments comes from bioinformatics, where it                             (Needleman and Wunsch, 1970). For n > 2, the
+is typically used to find corresponding elements in                        problem is NP-complete, but there are efficient al-
+proteins or DNA (Durbin et al., 1998).                                     gorithms that approximate the cheapest MSAs by
+    A sequence alignment algorithm takes as its in-                        aligning two sequences first, considering the result
+put some sequences s1 , . . . , sn ∈ Σ∗ over some al-                      as a single sequence whose elements are pairs, and
+phabet Σ, along with a cost function cm : Σ×Σ →                            repeating this process until all sequences are incor-
+R for substitutions and gap costs cgap ∈ R for in-                         porated in the MSA (Higgins and Sharp, 1988).
+sertions and deletions. In bioinformatics, the ele-
+ments of Σ could be nucleotides and a sequence                             5.2     Semantic similarity
+could be a DNA sequence; in our case, Σ contains                           In order to apply MSA to the problem of aligning
+the individual event descriptions in our data, and                         ESDs, we choose Σ to be the set of all individ-
+the sequences are the ESDs.                                                ual event descriptions in a given scenario. Intu-
+    A Multiple Sequence Alignment A of these se-                           itively, we want the MSA to prefer the alignment
+quences is then a matrix as in Fig. 2: The i-th col-                       of two phrases if they are semantically similar, i.e.
+umn of A is the sequence si , possibly with some                           it should cost more to align ‘exit’ with ‘eat’ than
+gaps (“ ”) interspersed between the symbols of                             ‘exit’ with ‘leave’. Thus we take a measure of se-
+si , such that each row contains at least one non-                         mantic (dis)similarity as the cost function cm .
+gap. If a row contains two non-gaps, we take these
+                                                                              The phrases to be compared are written in
+symbols to be aligned; aligning a non-gap with a
+                                                                           bullet-point style. They are typically short and
+gap can be thought of as an insertion or deletion.
+                                                                           elliptic (no overt subject), they lack determiners
+    Each sequence alignment A can be assigned a
+                                                                           and use infinitive or present progressive form for
+cost c(A) in the following way:
+                                                                           the main verb. Also, the lexicon differs consider-
+                       n X
+                       X m                m
+                                          X                                ably from usual newspaper corpora. For these rea-
+c(A) = cgap · Σ +                                cm (aji , aki )           sons, standard methods for similarity assessment
+                       i=1    j=1,
+                             aji 6=
+                                       k=j+1,
+                                       aki 6=
+                                                                           are not straightforwardly applicable: Simple bag-
+                                                                           of-words approaches do not provide sufficiently
+where Σ is the number of gaps in A, n is the                               good results, and standard taggers and parsers can-
+number of rows and m the number of sequences.                              not process our descriptions with sufficient accu-
+In other words, we sum up the alignment cost for                           racy.
+any two symbols from Σ that are aligned with                                  We therefore employ a simple, robust heuristics,
+each other, and add the gap cost for each gap.                             which is tailored to our data and provides very
+
+
+                                                                     982
+
+
+      walk into the reasturant                                              order food               make payment
+      walk up to the counter                                                  i order it            keep my receipt                   pick up condiments
+       walk into restaurant                                          tell cashier your order          take receipt                       take your cup
+         go to restaurant                                         order items from wall menu                                              receive food
+       walk to the counter                                                order my food                                                take food to table
+                                      i decide what i want                place an order                                            receive tray with order
+                                                                                                         wait for my order
+                                       decide what to eat                order at counter                                               get condiments
+                                                                                                           look at prices
+                                    decide on food and drink                place order                                                   get the food
+             get in line                                                                                        wait
+                                    decide on what to order                                                                        receive food at counter
+          enter restaurant                                                                            look at order number
+                                         make selection                                                                           pick up food when ready
+            stand in line                                                                            wait for order to be done
+                                     decide what you want                                                                                 get my order
+                                                                          pay at counter             wait for food to be ready
+                                                                                                                                            get food
+                                                                         pay for the food                  wait for order
+               wait in line                   go to cashier                pay for food              wait for the ordered food
+        look at menu board               go to ordering counter    give order to the employee               expect order
+                                                                                                                                        move to a table
+    wait in line to order my food             go to counter                 pay the bill                    wait for food
+                                                                                                                                            sit down
+       examine menu board                                                      pay                                               wait for number to be called
+          look at the menu                                         pay for the food and drinks                                          seat at a table
+                                                                                                    collect utensils
+             look at menu                                                  pay for order                                               sit down at table
+                                                                                                     pay for order
+                                                                                                     pick up order                            leave
+
+
+
+
+        Figure 3: An extract from the graph computed for EATING IN A FAST FOOD RESTAURANT
+
+
+shallow dependency-style syntactic information.                                       5.3        Building Temporal Script Graphs
+We identify the first potential verb of the phrase
+                                                                                      We can now compute a low-cost MSA for each
+(according to the POS information provided by
+                                                                                      scenario out of the ESDs. From this alignment, we
+WordNet) as the predicate, the preceding noun (if
+                                                                                      extract a temporal script graph, in the following
+any) as subject, and all following potential nouns
+                                                                                      way. First, we construct an initial graph which has
+as objects. (With this fairly crude tagging method,
+                                                                                      one node for each row of the MSA as in Fig. 2. We
+we also count nouns in prepositional phrases as
+                                                                                      interpret each node of the graph as representing
+“objects”.)
+                                                                                      a single event in the script, and the phrases that
+  On the basis of this pseudo-parse, we compute                                       are collected in the node as different descriptions
+the similarity measure sim:                                                           of this event; that is, we claim that these phrases
+                                                                                      are paraphrases in the context of this scenario. We
+        sim = α · pred + β · subj + γ · obj                                           then add an edge (u, v) to the graph iff (1) u 6=
+                                                                                      v, (2) there was at least one ESD in the original
+                                                                                      data in which some phrase in u directly preceded
+where pred, subj, and obj are the similarity val-                                     some phrase in v, and (3) if a single ESD contains
+ues for predicates, subjects and objects respec-                                      a phrase from u and from v, the phrase from u
+tively, and α, β, γ are weights. If a constituent                                     directly precedes the one from v. In terms of the
+is not present in one of the phrases to compare,                                      MSA, this means that if a phrase from u comes
+we set its weight to zero and redistribute it over                                    from the same column as a phrase from v, there
+the other weights. We fix the individual simi-                                        are at most some gaps between them. This initial
+larity scores pred, subj, and obj depending on                                        graph represents exactly the same information as
+the WordNet relation between the most similar                                         the MSA, in a different notation.
+WordNet senses of the respective lemmas (100 for                                         The graph is automatically post-processed in
+synonyms, 0 for lemmas without any relation, and                                      a second step to simplify it and eliminate noise
+intermediate numbers for different kind of Word-                                      that caused MSA errors. At first we prune spu-
+Net links).                                                                           rious nodes which contain only one event descrip-
+   We optimized the values for pred, subj, and                                        tion. Then we refine the graph by merging nodes
+obj as well as the weights α, β and γ using a                                         whose elements should have been aligned in the
+held-out development set of scenarios. Our exper-                                     first place but were missed by the MSA. We merge
+iments showed that in most cases, the verb con-                                       two nodes if they satisfy certain structural and se-
+tributes the largest part to the similarity (accord-                                  mantic constraints.
+ingly, α needs to be higher than the other factors).                                     The semantic constraints check whether the
+We achieved improved accuracy by distinguishing                                       event descriptions of the merged node would be
+a class of verbs that contribute little to the meaning                                sufficiently consistent according to the similarity
+of the phrase (i.e., support verbs, verbs of move-                                    measure from Section 5.2. To check whether we
+ment, and the verb “get”), and assigning them a                                       can merge two nodes u and v, we use an unsuper-
+separate, lower α.                                                                    vised clustering algorithm (Flake et al., 2004) to
+
+
+                                                                                983
+
+
+first cluster the event descriptions in u and v sep-          from the OMICS corpus.2 The OMICS corpus is a
+arately. Then we combine the event descriptions               freely available, web-collected corpus by the Open
+from u and v and cluster the resulting set. If the            Mind Initiative (Singh et al., 2002). It contains
+union has more clusters than either u or v, we as-            several stories (≈ scenarios) consisting of multi-
+sume the nodes to be too dissimilar for merging.              ple ESDs. The corpus strongly resembles ours in
+   The structural constraints depend on the graph             language style and information provided, but is re-
+structure. We only merge two nodes u and v if                 stricted to “indoor activities” and contains much
+their event descriptions come from different se-              more data than our collection (175 scenarios with
+quences and one of the following conditions holds:            more than 40 ESDs each).
+                                                                 For each scenario, we created a paraphrase set
+    • u and v have the same parent;                           out of 30 randomly selected pairs of event de-
+    • u has only one parent, v is its only child;             scriptions which the system classified as para-
+                                                              phrases and 30 completely random pairs. The
+    • v has only one child and is the only child of           happens-before set consisted of 30 pairs classified
+      u;                                                      as happens-before, 30 random pairs and addition-
+                                                              ally all 60 pairs in reverse order. We added the
+    • all children of u (except for v) are also chil-         reversed pairs to check whether the raters really
+      dren of v.                                              prefer one direction or whether they accept both
+                                                              and were biased by the order of presentation.
+   These structural constraints prevent the merg-
+                                                                 We presented each pair to 5 non-experts, all
+ing algorithm from introducing new temporal re-
+                                                              US residents, via Mechanical Turk. For the para-
+lations that are not supported by the input ESDs.
+                                                              phrase set, an exemplary question we asked the
+   We take the output of this post-processing step
+                                                              rater looks as follows, instantiating the Scenario
+as the temporal script graph. An excerpt of the
+                                                              and the two descriptions to compare appropriately:
+graph we obtain for our running example is shown
+in Fig. 3. One node created by the node merg-                        Imagine two people, both telling a story
+ing step was the top left one, which combines one                    about SCENARIO. Could the first one
+original node containing ‘walk into restaurant’ and                  say event2 to describe the same part of
+another with ‘go to restaurant’. The graph mostly                    the story that the second one describes
+groups phrases together into event nodes quite                       with event1 ?
+well, although there are some exceptions, such as
+the ‘collect utensils’ node. Similarly, the tempo-            For the happens-before task, the question template
+ral information in the graph is pretty accurate. But          was the following:
+perhaps most importantly, our MSA-based algo-
+rithm manages to keep similar phrases like ‘wait                     Imagine somebody telling a story about
+in line’ and ‘wait for my order’ apart by exploiting                 SCENARIO in which the events event1
+the sequential structure of the input ESDs.                          and event2 occur. Would event1 nor-
+                                                                     mally happen before event2 ?
+6     Evaluation
+                                                              We constructed a gold standard by a majority deci-
+We evaluated the two core aspects of our sys-                 sion of the raters. An expert rater adjudicated the
+tem: its ability to recognize descriptions of the             pairs with a 3:2 vote ratio.
+same event (paraphrases) and the resulting tem-
+poral constraints it defines on the event descrip-            6.2    Upper Bound and Baselines
+tions (happens-before relation). We compare our
+                                                              To show the contributions of the different system
+approach to two baseline systems and show that
+                                                              components, we implemented two baselines:
+our system outperforms both baselines and some-
+                                                                 Clustering Baseline: We employed an unsu-
+times even comes close to our upper bound.
+                                                              pervised clustering algorithm (Flake et al., 2004)
+6.1    Method                                                 and fed it all event descriptions of a scenario. We
+                                                              first created a similarity graph with one node per
+We selected ten scenarios which we did not use
+                                                              event description. Each pair of nodes is connected
+for development purposes, five of them taken from
+                                                                2
+the corpus described in Section 4, the other five                   http://openmind.hri-us.com/
+
+
+                                                        984
+
+
+                                              P RECISION                    R ECALL                     F-S CORE
+            S CENARIO
+                                       sys     basecl baselev     sys       basecl baselev   sys    basecl baselev    upper
+            pay with credit card       0.52     0.43     0.50     0.84       0.89     0.11   0.64     0.58   • 0.17     0.60
+            eat in restaurant          0.70     0.42     0.75     0.88       1.00     0.25   0.78   • 0.59   • 0.38   • 0.92
+ MT URK
+
+
+
+
+            iron clothes I             0.52     0.32     1.00     0.94       1.00     0.12   0.67   • 0.48   • 0.21   • 0.82
+            cook scrambled eggs        0.58     0.34     0.50     0.86       0.95     0.10   0.69   • 0.50   • 0.16   • 0.91
+            take a bus                 0.65     0.42     0.40     0.87       1.00     0.09   0.74   • 0.59   • 0.14   • 0.88
+            answer the phone           0.93     0.45     0.70     0.85       1.00     0.21   0.89   • 0.71   • 0.33     0.79
+            buy from vending machine   0.59     0.43     0.59     0.83       1.00     0.54   0.69     0.60     0.57     0.80
+ OMICS
+
+
+
+
+            iron clothes II            0.57     0.30     0.33     0.94       1.00     0.22   0.71   • 0.46   • 0.27     0.77
+            make coffee                0.50     0.27     0.56     0.94       1.00     0.31   0.65   • 0.42   ◦ 0.40   • 0.82
+            make omelette              0.75     0.54     0.67     0.92       0.96     0.23   0.83   • 0.69   • 0.34     0.85
+                 AVERAGE               0.63     0.40     0.60     0.89       0.98     0.22   0.73    0.56      0.30    0.82
+
+          Figure 4: Results for paraphrasing task; significance of difference to sys: • : p ≤ 0.01, ◦ : p ≤ 0.1
+
+
+with a weighted edge; the weight reflects the se-                     set so as to produce the best possible alignment.
+mantic similarity of the nodes’ event descriptions                       Upper bound: We also compared our system
+as described in Section 5.2. To include all input in-                 to a human-performance upper bound. Because no
+formation on inequality of events, we did not allow                   single annotator rated all pairs of ESDs, we con-
+for edges between nodes containing two descrip-                       structed a “virtual annotator” as a point of com-
+tions occurring together in one ESD. The underly-                     parison, by randomly selecting one of the human
+ing assumption here is that two different event de-                   annotations for each pair.
+scriptions of the same ESD always represent dis-
+tinct events.                                                         6.3   Results
+   The clustering algorithm uses a parameter                          We calculated precision, recall, and f-score for our
+which influences the cluster granularity, without                     system, the baselines, and the upper bound as fol-
+determining the exact number of clusters before-                      lows, with allsystem being the number of pairs la-
+hand. We optimized this parameter automatically                       belled as paraphrase or happens-before, allgold as
+for each scenario: The system picks the value that                    the respective number of pairs in the gold standard
+yields the optimal result with respect to density                     and correct as the number of pairs labeled cor-
+and distance of the clusters (Flake et al., 2004),                    rectly by the system.
+i.e. the elements of each cluster are as similar as                                     correct                correct
+                                                                         precision =                recall =
+possible to each other, and as dissimilar as possi-                                    allsystem                allgold
+ble to the elements of all other clusters.                                                2 ∗ precision ∗ recall
+                                                                              f -score =
+   The clustering baseline considers two phrases                                            precision + recall
+as paraphrases if they are in the same cluster. It                     The tables in Fig. 4 and 5 show the results of our
+claims a happens-before relation between phrases                      system and the reference values; Fig. 4 describes
+e and f if some phrase in e’s cluster precedes                        the paraphrasing task and Fig. 5 the happens-
+some phrase in f ’s cluster in the original ESDs.                     before task. The upper half of the tables describes
+With this baseline, we can show the contribution                      the test sets from our own corpus, the remainder
+of MSA.                                                               refers to OMICS data. The columns labelled sys
+   Levenshtein Baseline: This system follows the                      contain the results of our system, basecl describes
+same steps as our system, but using Levenshtein                       the clustering baseline and baselev the Levenshtein
+distance as the measure of semantic similarity for                    baseline. The f-score for the upper bound is in the
+MSA and for node merging (cf. Section 5.3). This                      column upper. For the f-score values, we calcu-
+lets us measure the contribution of the more fine-                    lated the significance for the difference between
+grained similarity function. We computed Leven-                       our system and the baselines as well as the upper
+shtein distance as the character-wise edit distance                   bound, using a resampling test (Edgington, 1986).
+on the phrases, divided by the phrases’ character                     The values marked with • differ from our system
+length so as to get comparable values for shorter                     significantly at a level of p ≤ 0.01, ◦ marks a level
+and longer phrases. The gap costs for MSA with                        of p ≤ 0.1. The remaining values are not signifi-
+Levenshtein were optimized on our development                         cant with p ≤ 0.1. (For the average values, no sig-
+
+
+                                                                985
+
+
+                                            P RECISION                     R ECALL                     F-S CORE
+          S CENARIO
+                                     sys     basecl baselev     sys        basecl baselev   sys    basecl baselev    upper
+          pay with credit card       0.86     0.49     0.65     0.84        0.74     0.45   0.85   • 0.59   • 0.53     0.92
+          eat in restaurant          0.78     0.48     0.68     0.84        0.98     0.75   0.81   • 0.64     0.71   • 0.95
+ MT URK
+
+
+
+
+          iron clothes I             0.78     0.54     0.75     0.72        0.95     0.53   0.75     0.69   • 0.62   • 0.92
+          cook scrambled eggs        0.67     0.54     0.55     0.64        0.98     0.69   0.66     0.70     0.61   • 0.88
+          take a bus                 0.80     0.49     0.68     0.80        1.00     0.37   0.80   • 0.66   • 0.48   • 0.96
+          answer the phone           0.83     0.48     0.79     0.86        1.00     0.96   0.84   • 0.64     0.87     0.90
+          buy from vending machine   0.84     0.51     0.69     0.85        0.90     0.75   0.84   • 0.66   ◦ 0.71     0.83
+ OMICS
+
+
+
+
+          iron clothes II            0.78     0.48     0.75     0.80        0.96     0.66   0.79   • 0.64     0.70     0.84
+          make coffee                0.70     0.55     0.50     0.78        1.00     0.55   0.74     0.71   ◦ 0.53   ◦ 0.83
+          make omelette              0.70     0.55     0.79     0.83        0.93     0.82   0.76   ◦ 0.69     0.81   • 0.92
+               AVERAGE               0.77     0.51     0.68     0.80        0.95     0.65   0.78    0.66     0.66     0.90
+
+  Figure 5: Results for happens-before task; significance of difference to sys: • : p ≤ 0.01, ◦ : p ≤ 0.1
+
+
+nificance is calculated because this does not make                  tial information makes less of a difference.
+sense for scenario-wise evaluation.)                                   On average, the baselines do much better here
+   Paraphrase task: Our system outperforms                          than for the paraphrase task. This is because once
+both baselines clearly, reaching significantly                      a system decides on paraphrase clusters that are
+higher f-scores in 17 of 20 cases. Moreover, for                    essentially correct, it can retrieve correct informa-
+five scenarios, the upper bound does not differ sig-                tion about the temporal order directly from the
+nificantly from our system. For judging the pre-                    original ESDs.
+cision, consider that the test set is slightly biased:                 Both tables illustrate that the task complexity
+Labeling all pairs with the majority category (no                   strongly depends on the scenario: Scripts that al-
+paraphrase) would result in a precision of 0.64.                    low for a lot of variation with respect to ordering
+However, recall and f-score for this trivial lower                  (such as COOK SCRAMBLED EGGS) are particu-
+bound would be 0.                                                   larly challenging for our system. This is due to the
+   The only scenario in which our system doesn’t                    fact that our current system can neither represent
+score very well is BUY FROM A VENDING MA -                          nor find out that two events can happen in arbitrary
+CHINE , where the upper bound is not significantly                  order (e.g., ‘take out pan’ and ‘take out bowl’).
+better either. The clustering system, which can’t                      One striking difference between the perfor-
+exploit the sequential information from the ESDs,                   mance of our system on the OMICS data and on
+has trouble distinguishing semantically similar                     our own dataset is the relation to the upper bound:
+phrases (high recall, low precision). The Leven-                    On our own data, the upper bound is almost al-
+shtein similarity measure, on the other hand, is too                ways significantly better than our system, whereas
+restrictive and thus results in comparatively high                  significant differences are rare on OMICS. This
+precisions, but very low recall.                                    difference bears further analysis; we speculate it
+   Happens-before task: In most cases, and on                       might be caused either by the increased amount of
+average, our system is superior to both base-                       training data in OMICS or by differences in lan-
+lines. Where a baseline system performs better                      guage (e.g., fewer anaphoric references).
+than ours, the differences are not significant. In
+                                                                    7     Conclusion
+four cases, our system does not differ significantly
+from the upper bound. Regarding precision, our                      We conclude with a summary of this paper and
+system outperforms both baselines in all scenarios                  some discussion along with hints to future work
+except one (MAKE OMELETTE).                                         in the last part.
+   Again the clustering baseline is not fine-grained
+enough and suffers from poor precision, only                        7.1    Summary
+slightly better than the majority baseline. The Lev-                In this paper, we have described a novel approach
+enshtein baseline gets mostly poor recall, except                   to the unsupervised learning of temporal script in-
+for ANSWER THE PHONE: to describe this sce-                         formation. Our approach differs from previous
+nario, people used very similar wording. In such a                  work in that we collect training data by directly
+scenario, adding lexical knowledge to the sequen-                   asking non-expert users to describe a scenario, and
+
+
+                                                              986
+
+
+then apply a Multiple Sequence Alignment algo-                with several parsing experiments. In particular, we
+rithm to extract scenario-specific paraphrase and             thank the anonymous reviewers for their helpful
+temporal ordering information. We showed that                 comments. – This work was funded by the Cluster
+our system outperforms two baselines and some-                of Excellence “Multimodal Computing and Inter-
+times approaches human-level performance, espe-               action” in the German Excellence Initiative.
+cially because it can exploit the sequential struc-
+ture of the script descriptions to separate clusters
+of semantically similar events.                               References
+                                                              Collin F. Baker, Charles J. Fillmore, and John B. Lowe.
+7.2   Discussion and Future Work                                1998. The berkeley framenet project. In Proceed-
+We believe that we can scale this approach to                   ings of the 17th international conference on Compu-
+                                                                tational linguistics, pages 86–90, Morristown, NJ,
+model a large numbers of scenarios represent-                   USA. Association for Computational Linguistics.
+ing implicit shared knowledge. To realize this
+goal, we are going to automatize several process-             Avron Barr and Edward Feigenbaum. 1981. The
+ing steps that were done manually for the cur-                  Handbook of Artificial Intelligence, Volume 1.
+                                                                William Kaufman Inc., Los Altos, CA.
+rent study. We will restrict the user input to lex-
+icon words to avoid manual orthography correc-                Regina Barzilay and Lillian Lee. 2003. Learn-
+tion. Further, we will implement some heuristics                ing to paraphrase: An unsupervised approach us-
+to filter unusable instances by matching them with              ing multiple-sequence alignment. In Proceedings of
+                                                                HLT-NAACL 2003.
+the remaining data. As far as the data collection is
+concerned, we plan to replace the web form with a             Jon Chamberlain, Massimo Poesio, and Udo Kru-
+browser game, following the example of von Ahn                  schwitz. 2009. A demonstration of human compu-
+and Dabbish (2008). This game will feature an                   tation using the phrase detectives annotation game.
+                                                                In KDD Workshop on Human Computation. ACM.
+algorithm that can generate new candidate scenar-
+ios without any supervision, for instance by identi-          Nathanael Chambers and Dan Jurafsky. 2008a. Jointly
+fying suitable sub-events of collected scripts (e.g.            combining implicit constraints improves temporal
+inducing data collection for PAY as sub-event se-               ordering. In Proceedings of EMNLP 2008.
+quence of GO SHOPPING)                                        Nathanael Chambers and Dan Jurafsky. 2008b. Unsu-
+   On the technical side, we intend to address the              pervised learning of narrative event chains. In Pro-
+question of detecting participants of the scripts and           ceedings of ACL-08: HLT.
+integrating them into the graphs, Further, we plan            Nathanael Chambers and Dan Jurafsky. 2009. Unsu-
+to move on to more elaborate data structures than               pervised learning of narrative schemas and their par-
+our current TSGs, and then identify and repre-                  ticipants. In Proceedings of ACL-IJCNLP 2009.
+sent script elements like optional events, alterna-
+                                                              Nathanael Chambers, Shan Wang, and Dan Juraf-
+tive events for the same step, and events that can              sky. 2007. Classifying temporal relations between
+occur in arbitrary order.                                       events. In Proceedings of ACL-07: Interactive
+   Because our approach gathers information from                Poster and Demonstration Sessions.
+volunteers on the Web, it is limited by the knowl-
+                                                              Richard Edward Cullingford. 1977. Script applica-
+edge of these volunteers. We expect it will per-                tion: computer understanding of newspaper stories.
+form best for general commonsense knowledge;                    Ph.D. thesis, Yale University, New Haven, CT, USA.
+culture-specific knowledge or domain-specific ex-
+pert knowledge will be hard for it to learn. This             Richard Durbin, Sean Eddy, Anders Krogh, and
+                                                                Graeme Mitchison. 1998. Biological Sequence
+limitation could be addressed by targeting spe-                 Analysis. Cambridge University Press.
+cific groups of online users, or by complementing
+our approach with corpus-based methods, which                 Eugene S Edgington. 1986. Randomization tests.
+                                                                Marcel Dekker, Inc., New York, NY, USA.
+might perform well exactly where ours does not.
+                                                              Gary W. Flake, Robert E. Tarjan, and Kostas Tsiout-
+Acknowledgements                                                siouliklis. 2004. Graph clustering and minimum cut
+We want to thank Dustin Smith for the OMICS                     trees. Internet Mathematics, 1(4).
+data, Alexis Palmer for her support with Amazon               Andrew S. Gordon. 2001. Browsing image collec-
+Mechanical Turk, Nils Bendfeldt for the creation                tions with representations of common-sense activi-
+of all web forms and Ines Rehbein for her effort                ties. JASIST, 52(11).
+
+
+                                                        987
+
+
+Desmond G. Higgins and Paul M. Sharp. 1988.                    Reid Swanson and Andrew S. Gordon. 2008. Say any-
+  Clustal: a package for performing multiple sequence            thing: A massively collaborative open domain story
+  alignment on a microcomputer. Gene, 73(1).                     writing companion. In Proceedings of ICIDS 2008.
+
+Dominic R. Jones and Cynthia A. Thompson. 2003.                Luis von Ahn and Laura Dabbish. 2008. Designing
+  Identifying events using similarity and context. In            games with a purpose. Commun. ACM, 51(8).
+  Proceedings of CoNNL-2003.
+
+Inderjeet Mani, Marc Verhagen, Ben Wellner,
+   Chong Min Lee, and James Pustejovsky. 2006.
+   Machine learning of temporal relations.  In
+   COLING/ACL-2006.
+
+Mehdi Manshadi, Reid Swanson, and Andrew S. Gor-
+ don. 2008. Learning a probabilistic model of event
+ sequences from internet weblog stories. In Proceed-
+ ings of the 21st FLAIRS Conference.
+
+Michael McTear. 1987. The Articulate Computer.
+  Blackwell Publishers, Inc., Cambridge, MA, USA.
+
+Risto Miikkulainen. 1995. Script-based inference and
+  memory retrieval in subsymbolic story processing.
+  Applied Intelligence, 5(2), 04.
+
+Raymond J. Mooney. 1990. Learning plan schemata
+  from observation: Explanation-based learning for
+  plan recognition. Cognitive Science, 14(4).
+
+Erik T. Mueller. 1998. Natural Language Processing
+   with Thought Treasure. Signiform.
+
+Erik T. Mueller. 2004. Understanding script-based sto-
+   ries using commonsense reasoning. Cognitive Sys-
+   tems Research, 5(4).
+
+Saul B. Needleman and Christian D. Wunsch. 1970.
+  A general method applicable to the search for simi-
+  larities in the amino acid sequence of two proteins.
+  Journal of molecular biology, 48(3), March.
+
+Lisa F. Rau, Paul S. Jacobs, and Uri Zernik. 1989. In-
+   formation extraction and text summarization using
+   linguistic knowledge acquisition. Information Pro-
+   cessing and Management, 25(4):419 – 428.
+
+Roger C. Schank and Robert P. Abelson. 1977. Scripts,
+  Plans, Goals and Understanding. Lawrence Erl-
+  baum, Hillsdale, NJ.
+
+Push Singh, Thomas Lin, Erik T. Mueller, Grace Lim,
+  Travell Perkins, and Wan L. Zhu. 2002. Open
+  mind common sense: Knowledge acquisition from
+  the general public. In On the Move to Meaningful
+  Internet Systems - DOA, CoopIS and ODBASE 2002,
+  London, UK. Springer-Verlag.
+
+Dustin Smith and Kenneth C. Arnold. 2009. Learning
+  hierarchical plans by reading simple english narra-
+  tives. In Proceedings of the Commonsense Work-
+  shop at IUI-09.
+
+Rion Snow, Brendan O’Connor, Daniel Jurafsky, and
+  Andrew Y. Ng. 2008. Cheap and fast—but is it
+  good?: evaluating non-expert annotations for natu-
+  ral language tasks. In Proceedings of EMNLP 2008.
+
+
+                                                         988
+

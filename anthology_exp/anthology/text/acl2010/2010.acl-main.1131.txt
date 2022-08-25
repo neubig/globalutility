@@ -1,0 +1,672 @@
+                                Phylogenetic Grammar Induction
+
+                              Taylor Berg-Kirkpatrick and Dan Klein
+                                       Computer Science Division
+                                   University of California, Berkeley
+                                     {tberg, klein}@cs.berkeley.edu
+
+
+
+                      Abstract                                Our joint, hierarchical prior couples model param-
+                                                              eters for different languages in a way that respects
+    We present an approach to multilin-                       knowledge about how the languages evolved.
+    gual grammar induction that exploits a                       Aspects of this work are closely related to Co-
+    phylogeny-structured model of parameter                   hen and Smith (2009) and Bouchard-Côté et al.
+    drift. Our method does not require any                    (2007). Cohen and Smith (2009) present a model
+    translated texts or token-level alignments.               for jointly learning English and Chinese depen-
+    Instead, the phylogenetic prior couples                   dency grammars without bitexts. In their work,
+    languages at a parameter level. Joint in-                 structurally constrained covariance in a logistic
+    duction in the multilingual model substan-                normal prior is used to couple parameters between
+    tially outperforms independent learning,                  the two languages. Our work, though also differ-
+    with larger gains both from more articu-                  ent in technical approach, differs most centrally in
+    lated phylogenies and as well as from in-                 the extension to multiple languages and the use of
+    creasing numbers of languages. Across                     a phylogeny. Bouchard-Côté et al. (2007) consid-
+    eight languages, the multilingual approach                ers an entirely different problem, phonological re-
+    gives error reductions over the standard                  construction, but shares with this work both the
+    monolingual DMV averaging 21.1% and                       use of a phylogenetic structure as well as the use
+    reaching as high as 39%.                                  of log-linear parameterization of local model com-
+                                                              ponents. Our work differs from theirs primarily
+1 Introduction                                                in the task (syntax vs. phonology) and the vari-
+Learning multiple languages together should be                ables governed by the phylogeny: in our model it
+easier than learning them separately. For exam-               is the grammar parameters that drift (in the prior)
+ple, in the domain of syntactic parsing, a range              rather than individual word forms (in the likeli-
+of recent work has exploited the mutual constraint            hood model).
+between two languages’ parses of the same bi-                    Specifically, we consider dependency induction
+text (Kuhn, 2004; Burkett and Klein, 2008; Kuz-               in the DMV model of Klein and Manning (2004).
+man et al., 2009; Smith and Eisner, 2009; Sny-                Our data is a collection of standard dependency
+der et al., 2009a). Moreover, Snyder et al. (2009b)           data sets in eight languages: English, Dutch, Dan-
+in the context of unsupervised part-of-speech in-             ish, Swedish, Spanish, Portuguese, Slovene, and
+duction (and Bouchard-Côté et al. (2007) in the             Chinese. Our focus is not the DMV model itself,
+context of phonology) show that extending be-                 which is well-studied, but rather the prior which
+yond two languages can provide increasing ben-                couples the various languages’ parameters. While
+efit. However, multitexts are only available for              some choices of prior structure can greatly com-
+limited languages and domains. In this work, we               plicate inference (Cohen and Smith, 2009), we
+consider unsupervised grammar induction without               choose a hierarchical Gaussian form for the drift
+bitexts or multitexts. Without translation exam-              term, which allows the gradient of the observed
+ples, multilingual constraints cannot be exploited            data likelihood to be easily computed using stan-
+at the sentence token level. Rather, we capture               dard dynamic programming methods.
+multilingual constraints at a parameter level, us-               In our experiments, joint multilingual learning
+ing a phylogeny-structured prior to tie together the          substantially outperforms independent monolin-
+various individual languages’ learning problems.              gual learning. Using a limited phylogeny that
+
+
+                                                        1288
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1288–1297,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+only couples languages within linguistic families                                                        Global
+
+reduces error by 5.6% over the monolingual base-
+line. Using a flat, global phylogeny gives a greater
+reduction, almost 10%. Finally, a more articu-                                          Indo-                            Sino-
+                                                                                       European                         Tibetan
+lated phylogeny that captures both inter- and intra-
+family effects gives an even larger average relative
+error reduction of 21.1%.                                                                                     Balto-
+                                                                   Germanic                   Italic
+                                                                                                              Slavic
+
+2 Model
+                                                                                                                        Sinitic
+
+We define our model over two kinds of random                 West           North             Ibero-
+                                                                                                              Slavic
+variables: dependency trees and parameters. For             Germanic       Germanic          Romance
+
+each language ℓ in a set L, our model will generate
+a collection tℓ of dependency trees tiℓ . We assume
+                                                         English Dutch   Danish Swedish Spanish Portuguese    Slovene   Chinese
+that these dependency trees are generated by the
+DMV model of Klein and Manning (2004), which
+                                                         Figure 1: An example of a linguistically-plausible phylo-
+we write as tiℓ ∼ DMV(θℓ ). Here, θℓ is a vector         genetic tree over the languages in our training data. Leaves
+of the various model parameters for language ℓ.          correspond to (observed) modern languages, while internal
+The prior is what couples the θℓ parameter vectors       nodes represent (unobserved) ancestral languages.
+across languages; it is the focus of this work. We
+first consider the likelihood model before moving        actually word classes.
+on to the prior.                                         2.1.1 Log-Linear Parameterization
+2.1   Dependency Model with Valence                      The DMV’s local conditional distributions were
+                                                         originally given as simple multinomial distribu-
+A dependency parse is a directed tree t over tokens      tions with one parameter per outcome. However,
+in a sentence s. Each edge of the tree specifies a       they can be re-parameterized to give the following
+directed dependency from a head token to a de-           log-linear form (Eisner, 2002; Bouchard-Côté et
+pendent, or argument token. The DMV is a gen-            al., 2007; Berg-Kirkpatrick et al., 2010):
+erative model for trees t, which has been widely
+used for dependency parse induction. The ob-                  P CONTINUE (c|h, dir, adj; θℓ ) =
+served data likelihood, used for parameter estima-                          exp θℓ T f CONTINUE (c, h, dir, adj)
+                                                                                 ˆ                               ˜
+
+tion, is the marginal probability of generating the                      P         ˆ T                             ˜
+                                                                            c′ exp θℓ f CONTINUE (c , h, dir, adj)
+                                                                                                     ′
+
+observed sentences s, which are simply the leaves
+of the trees t. Generation in the DMV model in-                 P ATTACH (a|h, dir; θℓ ) =
+volves two types of local conditional probabilities:                        exp θℓ T f ATTACH (a, h, dir)
+                                                                                 ˆ                        ˜
+CONTINUE distributions that capture valence and                          P         ˆ T                      ˜
+                                                                            a′ exp θℓ f ATTACH (a , h, dir)
+                                                                                                   ′
+ATTACH distributions that capture argument selec-
+tion.                                                    The parameters are weights θℓ with one weight
+   First, the Bernoulli CONTINUE probability dis-        vector per language. In the case where the vec-
+tributions P CONTINUE(c|h, dir, adj; θℓ ) model the      tor of feature functions f has an indicator for each
+fertility of a particular head type h. The outcome       possible conjunction of outcome and conditions,
+c ∈ {stop, continue} is conditioned on the head          the original multinomial distributions are recov-
+type h, direction dir, and adjacency adj. If a head      ered. We refer to these full indicator features as
+type’s continue probability is low, tokens of this       the set of S PECIFIC features.
+type will tend to generate few arguments.
+   Second, the ATTACH multinomial probability            2.2 Phylogenetic Prior
+distributions P ATTACH (a|h, dir; θℓ ) capture attach-   The focus of this work is coupling each of the pa-
+ment preferences of heads, where a and h are both        rameters θℓ in a phylogeny-structured prior. Con-
+token types. We take the same approach as pre-           sider a phylogeny like the one shown in Fig-
+vious work (Klein and Manning, 2004; Cohen and           ure 1, where each modern language ℓ in L is a
+Smith, 2009) and use gold part-of-speech labels as       leaf. We would like to say that the leaves’ pa-
+tokens. Thus, the basic observed “word” types are        rameter vectors arise from a process which slowly
+
+
+                                                     1289
+
+
+drifts along each branch. A convenient choice is           S PECIFIC: Activate for only one conjunction of out-
+                                                                      come and conditions:
+to posit additional parameter variables θℓ+ at in-                    1(c = ·, h = ·, dir = ·, adj = ·)
+ternal nodes ℓ+ ∈ L+ , a set of ancestral lan-             S HARED: Activate for heads from multiple languages
+                                                                      using cross-lingual POS projection π(·):
+guages, and to assume that the conditional dis-                       1(c = ·, π(h) = ·, dir = ·, adj = ·)
+tribution P (θℓ |θpar(ℓ) ) at each branch in the phy-
+logeny is a Gaussian centered on θpar(ℓ) , where                CONTINUE distribution    feature templates.
+par(ℓ) is the parent of ℓ in the phylogeny and             S PECIFIC: Activate for only one conjunction of out-
+ℓ ranges over L ∪ L+ . The variance structure                         come and conditions:
+of the Gaussian would then determine how much                         1(a = ·, h = ·, dir = ·)
+                                                           S HARED: Activate for heads and arguments from
+drift (and in what directions) is expected. Con-                      multiple languages using cross-lingual
+cretely, we assume that each drift distribution is                    POS projection π(·):
+an isotropic Gaussian with mean θpar(ℓ) and scalar                    1(π(a) = ·, π(h) = ·, dir = ·)
+                                                                      1(π(a) = ·, h = ·, dir = ·)
+variance σ 2 . The root is centered at zero. We have                  1(a = ·, π(h) = ·, dir = ·)
+thus defined a joint distribution P (Θ|σ 2 ) where
+Θ = (θℓ : ℓ ∈ L∪L+ ). σ 2 is a hyperparameter for                 ATTACH   distribution feature templates.
+this prior which could itself be re-parameterized to    Table 1: Feature templates for CONTINUE and ATTACH con-
+depend on branch length or be learned; we simply        ditional distributions.
+set it to a plausible constant value.
+                                                        an English VBZ takes a left argument headed by a
+   Two primary challenges remain. First, infer-
+                                                        NNS, a feature will activate specific to VBZ - NNS -
+ence under arbitrary priors can become complex.
+                                                        LEFT. That feature will be used in the log-linear
+However, in the simple case of our diagonal co-
+                                                        attachment probability for English. However, be-
+variance Gaussians, the gradient of the observed
+                                                        cause that feature does not show up in any other
+data likelihood can be computed directly using the
+                                                        language, it is not usefully controlled by the prior.
+DMV’s expected counts and maximum-likelihood
+                                                        Therefore, we also include coarser features which
+estimation can be accomplished by applying stan-
+                                                        activate on more abstract, cross-linguistic config-
+dard gradient optimization methods. Second,
+                                                        urations. In the same example, a feature will fire
+while the choice of diagonal covariance is effi-
+                                                        indicating a coarse, direction-free NOUN - VERB at-
+cient, it causes components of θ that correspond
+                                                        tachment. This feature will now occur in multiple
+to features occurring in only one language to be
+                                                        languages and will contribute to each of those lan-
+marginally independent of the parameters of all
+                                                        guages’ attachment models. Although such cross-
+other languages. In other words, only features
+                                                        lingual features will have different weight param-
+which fire in more than one language are coupled
+                                                        eters in each language, those weights will covary,
+by the prior. In the next section, we therefore in-
+                                                        being correlated by the prior.
+crease the overlap between languages’ features by
+using coarse projections of parts-of-speech.               The coarse features are defined via a projec-
+                                                        tion π from language-specific part-of-speech la-
+                                                        bels to coarser, cross-lingual word classes, and
+2.3   Projected Features
+                                                        hence we refer to them as S HARED features. For
+With diagonal covariance in the Gaussian drift          each corpus used in this paper, we use the tagging
+terms, each parameter evolves independently of          annotation guidelines to manually define a fixed
+the others. Therefore, our prior will be most           mapping from the corpus tagset to the following
+informative when features activate in multiple          coarse tagset: noun, verb, adjective, adverb, con-
+languages. In phonology, it is useful to map            junction, preposition, determiner, interjection, nu-
+phonemes to the International Phonetic Alphabet         meral, and pronoun. Parts-of-speech for which
+(IPA) in order to have a language-independent           this coarse mapping is ambiguous or impossible
+parameterization. We introduce a similarly neu-         are not mapped, and do not have corresponding
+tral representation here by projecting language-        S HARED features.
+specific parts-of-speech to a coarse, shared inven-        We summarize the feature templates for the
+tory.                                                   CONTINUE and ATTACH conditional distributions
+   Indeed, we assume that each language has a dis-      in Table 1. Variants of all feature templates that
+tinct tagset, and so the basic configurational fea-     ignore direction and/or adjacency are included. In
+tures will be language specific. For example, when      practice, we found it beneficial for all language-
+
+
+                                                    1290
+
+
+independent features to ignore direction.                                        The expected gradient of the log joint likelihood
+   Again, only the coarse features occur in mul-                                 of sentences and parses is equal to the gradient of
+tiple languages, so all phylogenetic influence is                                the log marginal likelihood of just sentences, or
+through those. Nonetheless, the effect of the phy-                               the observed data likelihood (Salakhutdinov et al.,
+logeny turns out to be quite strong.                                             2003). ea,h,dir (sℓ ; θℓ ) is the expected count of the
+                                                                                 number of times head h is attached to a in direc-
+2.4     Learning
+                                                                                 tion dir given the observed sentences sℓ and DMV
+We now turn to learning with the phylogenetic                                    parameters θℓ . ec,h,dir,adj (sℓ ; θℓ ) is defined simi-
+prior. Since the prior couples parameters across                                 larly. Note that these are the same expected counts
+languages, this learning problem requires param-                                 required to perform EM on the DMV, and are com-
+eters for all languages be estimated jointly. We                                 putable by dynamic programming.
+seek to find Θ = (θℓ : ℓ ∈ L ∪ L+ ) which                                           The computation time is dominated by the com-
+optimizes log P (Θ|s), where s aggregates the ob-                                putation of each sentence’s posterior expected
+served leaves of all the dependency trees in all the                             counts, which are independent given the parame-
+languages. This can be written as                                                ters, so the time required per iteration is essentially
+          log P (Θ) + log P (s|Θ) − log P (s)                                    the same whether training all languages jointly or
+                                                                                 independently. In practice, the total number of it-
+The third term is a constant and can be ignored.
+                                                                                 erations was also similar.
+The first term can be written as
+                  X      1                                                       3 Experimental Setup
+  log P (Θ) =              2
+                             kθℓ − θpar(ℓ) k22 + C
+                      +
+                        2σ
+                       ℓ∈L∪L
+                                                                                 3.1 Data
+where C is a constant. The form of log P (Θ) im-
+                                                                                 We ran experiments with the following languages:
+mediately shows how parameters are penalized for
+                                                                                 English, Dutch, Danish, Swedish, Spanish, Por-
+being different across languages, more so for lan-
+                                                                                 tuguese, Slovene, and Chinese. For all languages
+guages that are near each other in the phylogeny.
+                                                                                 but English and Chinese, we used corpora from the
+The second term
+                         X                                                       2006 CoNLL-X Shared Task dependency parsing
+          log P (s|Θ) =     log P (sℓ |θℓ )                                      data set (Buchholz and Marsi, 2006). We used the
+                                     ℓ∈L                                         shared task training set to both train and test our
+is a sum of observed data likelihoods under                                      models. These corpora provide hand-labeled part-
+the standard DMV models for each language,                                       of-speech tags (except for Dutch, which is auto-
+computable by dynamic programming (Klein                                         matically tagged) and provide dependency parses,
+and Manning, 2004). Together, this yields the                                    which are either themselves hand-labeled or have
+following objective function:                                                    been converted from hand-labeled parses of other
+                                                                                 kinds. For English and Chinese we use sections
+                     1
+                                 − θpar(ℓ) k22 +
+         P                                          P
+l(Θ) =       ℓ∈L∪L+ 2σ2 kθℓ                             ℓ∈L log P (sℓ |θℓ )      2-21 of the Penn Treebank (PTB) (Marcus et al.,
+                                                                                 1993) and sections 1-270 of the Chinese Tree-
+which can be optimized using gradient methods                                    bank (CTB) (Xue et al., 2002) respectively. Sim-
+or (MAP) EM. Here we used L-BFGS (Liu et al.,                                    ilarly, these sections were used for both training
+1989). This requires computation of the gradient                                 and testing. The English and Chinese data sets
+of the observed data likelihood log P (sℓ |θℓ )                                  have hand-labeled constituency parses and part-of-
+which is given by:                                                               speech tags, but no dependency parses. We used
+                                                                               the Bikel Chinese head finder (Bikel and Chiang,
+    ∇ log P (sℓ |θℓ ) = Etℓ |sℓ ∇ log P (sℓ , tℓ |θℓ ) =
+                                                                                 2000) and the Collins English head finder (Collins,
+                                                                               1999) to transform the gold constituency parses
+                                          
+ P                                                                             into gold dependency parses. None of the corpora
+    c,h,dir,adj ec,h,dir,adj (sℓ ; θℓ ) · f CONTINUE (c, h, dir, adj) −
+                                                                            
+                                                                                 are bitexts. For all languages, we ran experiments
+                                                                            
+                                                                           
+             CONTINUE ′
+                        (c |h, dir, adj; θℓ )f CONTINUE(c′ , h, dir, adj)
+    P                                                                       
+        c′ P                                                                     on all sentences of length 10 or less after punctua-
+                                                                            
+                                                                            
+                                                                            
+                                                                                 tion has been removed.
+                                                                            
+                                                                            
+                                                                            
+                                                                                    When constructing phylogenies over the lan-
+                                                                           
+ P                                                                          
+
+    a,h,dir e a,h,dir (sℓ ; θ ℓ ) ·  f ATTACH (a, h, dir) −                  
+
+
+
+                                                             
+                                                                             
+                                                                             
+                                                                             
+                                                                                 guages we made use of their linguistic classifica-
+                      (a′ |h, dir; θℓ )f ATTACH (a′ , h, dir)
+     P       ATTACH
+        a′ P                                                                     tions. English and Dutch are part of the West Ger-
+
+
+                                                                             1291
+
+
+(a)                                                                    share a common parent node in the prior, meaning
+       West       North           Ibero-
+                                                 Slavic   Sinitic      that global regularities that are consistent across
+      Germanic   Germanic        Romance
+                                                                       all languages can be captured. We refer to this
+                                                                       structure as G LOBAL.
+English Dutch Danish Swedish Spanish Portuguese Slovene   Chinese
+                                                                          While the global model couples the parameters
+                                                                       for all eight languages, it does so without sensi-
+                                                                       tivity to the articulated structure of their descent.
+(b)                         Global
+                                                                       Figure 2(c) shows a more nuanced prior struc-
+                                                                       ture, L INGUISTIC, which groups languages first
+                                                                       by family and then under a global node. This
+English Dutch Danish Swedish Spanish Portuguese Slovene Chinese
+                                                                       structure allows global regularities as well as reg-
+                                                                       ularities within families to be learned.
+(c)                         Global                                     3.2.2 Parameterization and A LL PAIRS Model
+                                                                       Daumé III (2007) and Finkel and Manning (2009)
+       West       North           Ibero-
+                                                 Slavic   Sinitic      consider a formally similar Gaussian hierarchy for
+      Germanic   Germanic        Romance
+                                                                       domain adaptation. As pointed out in Finkel and
+                                                                       Manning (2009), there is a simple equivalence be-
+English Dutch Danish Swedish Spanish Portuguese Slovene   Chinese
+                                                                       tween hierarchical regularization as described here
+                                                                       and the addition of new tied features in a “flat”
+Figure 2: (a) Phylogeny for FAMILIES model. (b) Phylogeny              model with zero-meaned Gaussian regularization
+for G LOBAL model. (c) Phylogeny for L INGUISTIC model.
+                                                                       on all parameters. In particular, instead of param-
+                                                                       eterizing the objective in Section 2.4 in terms of
+manic family of languages, whereas Danish and                          multiple sets of weights, one at each node in the
+Swedish are part of the North Germanic family.                         phylogeny (the hierarchical parameterization, de-
+Spanish and Portuguese are both part of the Ibero-                     scribed in Section 2.4), it is equivalent to param-
+Romance family. Slovene is part of the Slavic                          eterize this same objective in terms of a single set
+family. Finally, Chinese is in the Sinitic family,                     of weights on a larger of group features (the flat
+and is not an Indo-European language like the oth-                     parameterization). This larger group of features
+ers. We interchangeably speak of a language fam-                       contains a duplicate set of the features discussed in
+ily and the ancestral node corresponding to that                       Section 2.3 for each node in the phylogeny, each
+family’s root language in a phylogeny.                                 of which is active only on the languages that are its
+                                                                       descendants. A linear transformation between pa-
+3.2      Models Compared                                               rameterizations gives equivalence. See Finkel and
+We evaluated three phylogenetic priors, each with                      Manning (2009) for details.
+a different phylogenetic structure. We compare                            In the flat parameterization, it seems equally
+with two monolingual baselines, as well as an all-                     reasonable to simply tie all pairs of languages by
+pairs multilingual model that does not have a phy-                     adding duplicate sets of features for each pair.
+logenetic interpretation, but which provides very                      This gives the A LL PAIRS setting, which we also
+similar capacity for parameter coupling.                               compare to the tree-structured phylogenetic mod-
+                                                                       els above.
+3.2.1       Phylogenetic Models
+The first phylogenetic model uses the shallow phy-                     3.3 Baselines
+logeny shown in Figure 2(a), in which only lan-                        To evaluate the impact of multilingual constraint,
+guages within the same family have a shared par-                       we compared against two monolingual baselines.
+ent node. We refer to this structure as FAMILIES.                      The first baseline is the standard DMV with
+Under this prior, the learning task decouples into                     only S PECIFIC features, which yields the standard
+independent subtasks for each family, but no reg-                      multinomial DMV (weak baseline). To facilitate
+ularities across families can be captured.                             comparison to past work, we used no prior for this
+   The family-level model misses the constraints                       monolingual model. The second baseline is the
+between distant languages. Figure 2(b) shows an-                       DMV with added S HARED features. This model
+other simple configuration, wherein all languages                      includes a simple isotropic Gaussian prior on pa-
+
+
+                                                                    1292
+
+
+                                                            Monolingual                         Multilingual
+                                                                                                                                Phylogenetic
+
+
+
+
+                                                                          Baseline w/ S HARED
+
+
+
+
+                                                                                                                                                   L INGUISTIC
+                                                                                                A LL PAIRS
+
+
+
+
+                                                                                                                        B EST PAIR
+                                                                                                             FAMILIES
+
+
+
+
+                                                                                                                                         G LOBAL
+                                                            Baseline
+                                   Corpus Size
+                        English           6008 47.1 51.3                                        48.5         51.3       51.3 (Ch)        51.2      62.3
+  West Germanic
+                        Dutch             6678 36.3 36.0                                        44.0         36.1       36.2 (Sw)        44.0      45.1
+                        Danish            1870 33.5 33.6                                        40.5         31.4       34.2 (Du)        39.6      41.6
+ North Germanic
+                        Swedish           3571 45.3 44.8                                        56.3         44.8       44.8 (Ch)        44.5      58.3
+                        Spanish             712 28.0 40.5                                       58.7         63.4       63.8 (Da)        59.4      58.4
+  Ibero-Romance
+                        Portuguese        2515 38.5 38.5                                        63.1         37.4       38.4 (Sw)        37.4      63.0
+             Slavic     Slovene             627 38.5 39.7                                       49.0         –          49.6 (En)        49.4      48.4
+             Sinitic    Chinese             959 36.3 43.3                                       50.7         –          49.7 (Sw)        50.1      49.6
+                            Macro-Avg. Relative Error Reduction                                 17.1         5.6        8.5              9.9       21.1
+
+Table 2: Directed dependency accuracy of monolingual and multilingual models, and relative error reduction over the monolin-
+gual baseline with S HARED features macro-averaged over languages. Multilingual models outperformed monolingual models
+in general, with larger gains from increasing numbers of languages. Additionally, more nuanced phylogenetic structures out-
+performed cruder ones.
+
+
+rameters. This second baseline is the more direct                            All models were trained by directly optimizing
+comparison to the multilingual experiments here                           the observed data likelihood using L-BFGS (Liu et
+(strong baseline).                                                        al., 1989). Berg-Kirkpatrick et al. (2010) suggest
+                                                                          that directly optimizing the observed data likeli-
+3.4    Evaluation                                                         hood may offer improvements over the more stan-
+For each setting, we evaluated the directed de-                           dard expectation-maximization (EM) optimization
+pendency accuracy of the minimum Bayes risk                               procedure for models such as the DMV, espe-
+(MBR) dependency parses produced by our mod-                              cially when the model is parameterized using fea-
+els under maximum (posterior) likelihood parame-                          tures. We stopped training after 200 iterations in
+ter estimates. We computed accuracies separately                          all cases. This fixed stopping criterion seemed to
+for each language in each condition. In addition,                         be adequate in all experiments, but presumably
+for multilingual models, we computed the relative                         there is a potential gain to be had in fine tuning.
+error reduction over the strong monolingual base-                         To initialize, we used the harmonic initializer pre-
+line, macro-averaged over languages.                                      sented in Klein and Manning (2004). This type of
+                                                                          initialization is deterministic, and thus we did not
+3.5    Training                                                           perform random restarts.
+Our implementation used the flat parameteriza-                               We found that for all models σ 2 = 0.2 gave rea-
+tion described in Section 3.2.2 for both the phy-                         sonable results, and we used this setting in all ex-
+logenetic and A LL PAIRS models. We originally                            periments. For most models, we found that vary-
+did this in order to facilitate comparison with the                       ing σ 2 in a reasonable range did not substantially
+non-phylogenetic A LL PAIRS model, which has no                           affect accuracy. For some models, the directed ac-
+equivalent hierarchical parameterization. In prac-                        curacy was less flat with respect to σ 2 . In these
+tice, optimizing with the hierarchical parameteri-                        less-stable cases, there seemed to be an interac-
+zation also seemed to underperform.1                                      tion between the variance and the choice between
+    1
+      We noticed that the weights of features shared across lan-          head conventions. For example, for some settings
+guages had larger magnitude early in the optimization proce-              of σ 2 , but not others, the model would learn that
+dure when using the flat parameterization compared to us-                 determiners head noun phrases. In particular, we
+ing the hierarchical parameterization, perhaps indicating that
+cross-lingual influences had a larger effect on learning in its           observed that even when direct accuracy did fluc-
+initial stages.                                                           tuate, undirected accuracy remained more stable.
+
+
+                                                                       1293
+
+
+4 Results                                                   It is reasonable to worry that the improvements
+                                                        from these multilingual models might be partially
+Table 2 shows the overall results. In all cases,        due to having more total training data in the mul-
+methods which coupled the languages in some             tilingual setting. However, we found that halv-
+way outperformed the independent baselines that         ing the amount of data used to train the English,
+considered each language independently.                 Dutch, and Swedish (the languages with the most
+4.1   Bilingual Models                                  training data) monolingual models did not sub-
+                                                        stantially affect their performance, suggesting that
+The weakest of the coupled models was FAMI -            for languages with several thousand sentences or
+LIES, which had an average relative error reduc-        more, the increase in statistical support due to ad-
+tion of 5.6% over the strong baseline. In this case,    ditional monolingual data was not an important ef-
+most of the average improvement came from a sin-        fect (the DMV is a relatively low-capacity model
+gle family: Spanish and Portuguese. The limited         in any case).
+improvement of the family-level prior compared
+to other phylogenies suggests that there are impor-     4.3 Comparison of Phylogenies
+tant multilingual interactions that do not happen       Recall the structures of the three phylogenies
+within families. Table 2 also reports the maximum       presented in Figure 2. These phylogenies dif-
+accuracy achieved for each language when it was         fer in the correlations they can represent. The
+paired with another language (same family or oth-       G LOBAL phylogeny captures only “universals,”
+erwise) and trained together with a single common       while FAMILIES captures only correlations be-
+parent. These results appear in the column headed       tween languages that are known to be similar. The
+by B EST PAIR, and show the best accuracy for the       L INGUISTIC model captures both of these effects
+language on that row over all possible pairings         simultaneously by using a two layer hierarchy.
+with other languages. When pairs of languages           Notably, the improvement due to the L INGUISTIC
+were trained together in isolation, the largest bene-   model is more than the sum of the improvements
+fit was seen for languages with small training cor-     due to the G LOBAL and FAMILIES models.
+pora, not necessarily languages with common an-
+cestry. In our setup, Spanish, Slovene, and Chi-        4.4 Phylogenetic vs. A LL PAIRS
+nese have substantially smaller training corpora        The phylogeny is capable of allowing appropri-
+than the rest of the languages considered. Other-       ate influence to pass between languages at mul-
+wise, the patterns are not particularly clear; com-     tiple levels. We compare these results to the
+bined with subsequent results, it seems that pair-      A LL PAIRS model in order to see whether limi-
+wise constraint is fairly limited.                      tation to a tree structure is helpful. The A LL -
+                                                        PAIRS model achieved an average relative error
+4.2   Multilingual Models
+                                                        reduction of 17.1%, certainly outperforming both
+Models that coupled multiple languages per-             the simple phylogenetic models. However, the
+formed better in general than models that only          rich phylogeny of the L INGUISTIC model, which
+considered pairs of languages. The G LOBAL              incorporates linguistic constraints, outperformed
+model, which couples all languages, if crudely,         the freer A LL PAIRS model. A large portion of
+yielded an average relative error reduction of          this improvement came from English, a language
+9.9%. This improvement comes as the number              for which the L INGUISTIC model greatly outper-
+of languages able to exert mutual constraint in-        formed all other models evaluated. We found that
+creases. For example, Dutch and Danish had large        the improved English analyses produced by the
+improvements, over and above any improvements           L INGUISTIC model were more consistent with this
+these two languages gained when trained with a          model’s analyses of other languages. This consis-
+single additional language. Beyond the simplistic       tency was not present for the English analyses pro-
+G LOBAL phylogeny, the more nuanced L INGUIS -          duced by other models. We explore consistency in
+TIC model gave large improvements for English,          more detail in Section 5.
+Swedish, and Portuguese. Indeed, the L INGUIS -
+TIC model is the only model we evaluated that           4.5 Comparison to Related Work
+gave improvements for all the languages we con-         The likelihood models for both the strong mono-
+sidered.                                                lingual baseline and the various multilingual mod-
+
+
+                                                    1294
+
+
+els are the same, both expanding upon the standard              counts. The area of a square is proportional to the
+DMV by adding coarse S HARED features. These                    number of order-collapsed dependencies where
+coarse features, even in a monolingual setting, im-             the column label is the head and the row label is
+proved performance slightly over the weak base-                 the argument in the parses from each system. For
+line, perhaps by encouraging consistent treatment               ease of comprehension, we use the cross-lingual
+of the different finer-grained variants of parts-               projections and only show counts for selected in-
+of-speech (Berg-Kirkpatrick et al., 2010).2 The                 teresting classes.
+only difference between the multilingual systems                   Comparing Figure 3(c), which shows depen-
+and the strong baseline is whether or not cross-                dency counts proposed by the L INGUISTIC model,
+language influence is allowed through the prior.                to Figure 3(a), which shows the same for the
+   While this progression of model structure is                 strong monolingual baseline, suggests that the
+similar to that explored in Cohen and Smith                     analyses proposed by the L INGUISTIC model are
+(2009), Cohen and Smith saw their largest im-                   more consistent across languages than are the
+provements from tying together parameters for the               analyses proposed by the monolingual model. For
+varieties of coarse parts-of-speech monolinugally,              example, the monolingual learners are divided
+and then only moderate improvements from allow-                 as to whether determiners or nouns head noun
+ing cross-linguistic influence on top of monolin-               phrases. There is also confusion about which la-
+gual sharing. When Cohen and Smith compared                     bels head whole sentences. Dutch has the problem
+their best shared logistic-normal bilingual mod-                that verbs modify pronouns more often than pro-
+els to monolingual counter-parts for the languages              nouns modify verbs, and pronouns are predicted
+they investigate (Chinese and English), they re-                to head sentences as often as verbs are. Span-
+ported a relative error reduction of 5.3%. In com-              ish has some confusion about conjunctions, hy-
+parison, with the L INGUISTIC model, we saw a                   pothesizing that verbs often attach to conjunctions,
+much larger 16.9% relative error reduction over                 and conjunctions frequently head sentences. More
+our strong baseline for these languages. Evaluat-               subtly, the monolingual analyses are inconsistent
+ing our L INGUISTIC model on the same test sets                 in the way they head prepositional phrases. In
+as (Cohen and Smith, 2009), sentences of length                 the monolingual Portuguese hypotheses, preposi-
+10 or less in section 23 of PTB and sections 271-               tions modify nouns more often than nouns mod-
+300 of CTB, we achieved an accuracy of 56.6 for                 ify prepositions. In English, nouns modify prepo-
+Chinese and 60.3 for English. The best models                   sitions, and prepositions modify verbs. Both the
+of Cohen and Smith (2009) achieved accuracies of                Dutch and Spanish models are ambivalent about
+52.0 and 62.0 respectively on these same test sets.             the attachment of prepositions.
+   Our results indicate that the majority of our
+                                                                   As has often been observed in other contexts
+model’s power beyond that of the standard DMV
+                                                                (Liang et al., 2008), promoting agreement can
+is derived from multilingual, and in particular,
+                                                                improve accuracy in unsupervised learning. Not
+more-than-bilingual, interaction. These are, to the
+                                                                only are the analyses proposed by the L INGUISTIC
+best of our knowledge, the first results of this kind
+                                                                model more consistent, they are also more in ac-
+for grammar induction without bitext.
+                                                                cordance with the gold analyses. Under the L IN -
+5 Analysis                                                      GUISTIC model, Dutch now attaches pronouns to
+                                                                verbs, and thus looks more like English, its sister
+By examining the proposed parses we found that                  in the phylogenetic tree. The L INGUISTIC model
+the L INGUISTIC and A LL PAIRS models produced                  has also chosen consistent analyses for preposi-
+analyses that were more consistent across lan-                  tional phrases and noun phrases, calling preposi-
+guages than those of the other models. We                       tions and nouns the heads of each, respectively.
+also observed that the most common errors can                   The problem of conjunctions heading Spanish sen-
+be summarized succinctly by looking at attach-                  tences has also been corrected.
+ment counts between coarse parts-of-speech. Fig-
+                                                                  Figure 3(b) shows dependency counts for the
+ure 3 shows matrix representations of dependency
+                                                                G LOBAL multilingual model. Unsurprisingly, the
+   2
+     Coarse features that only tie nouns and verbs are ex-      analyses proposed under global constraint appear
+plored in Berg-Kirkpatrick et al. (2010). We found that these
+were very effective for English and Chinese, but gave worse     somewhat more consistent than those proposed
+performance for other languages.                                under no multi-lingual constraint (now three lan-
+
+
+                                                            1295
+
+
+Figure 3: Dependency counts in proposed parses. Row label modifies column label. (a) Monolingual baseline with S HARED
+features. (b) G LOBAL model. (c) L INGUISTIC model. (d) Dependency counts in hand-labeled parses. Analyses proposed by
+monolingual baseline show significant inconsistencies across languages. Analyses proposed by L INGUISTIC model are more
+consistent across languages than those proposed by either the monolingual baseline or the G LOBAL model.
+
+
+guages agree that prepositional phrases are headed           prior on parameters can give substantial gains
+by prepositions), but not as consistent as those pro-        in grammar induction accuracy over treating lan-
+posed by the L INGUISTIC model.                              guages in isolation. Additionally, articulated phy-
+   Finally, Figure 3(d) shows dependency counts              logenies that are sensitive to evolutionary structure
+in the hand-labeled dependency parses. It appears            can outperform not only limited flatter priors but
+that even the very consistent L INGUISTIC parses             also unconstrained all-pairs interactions.
+do not capture the non-determinism of preposi-
+tional phrase attachment to both nouns and verbs.            7 Acknowledgements
+                                                             This project is funded in part by the NSF un-
+6 Conclusion
+                                                             der grant 0915265 and DARPA under grant
+Even without translated texts, multilingual con-             N10AP20007.
+straints expressed in the form of a phylogenetic
+
+
+                                                        1296
+
+
+References                                                D. C. Liu, J. Nocedal, and C. Dong. 1989. On the
+                                                            limited memory BFGS method for large scale opti-
+T. Berg-Kirkpatrick, A. Bouchard-Côté, J. DeNero,         mization. Mathematical Programming.
+   and D. Klein. 2010. Painless unsupervised learn-
+   ing with features. In North American Chapter of the    M. P. Marcus, M. A. Marcinkiewicz, and B. Santorini.
+   Association for Computational Linguistics.               1993. Building a large annotated corpus of English:
+                                                            the penn treebank. Computational Linguistics.
+D. M. Bikel and D. Chiang. 2000. Two statistical pars-
+   ing models applied to the Chinese treebank. In Sec-    R. Salakhutdinov, S. Roweis, and Z. Ghahramani.
+   ond Chinese Language Processing Workshop.                2003. Optimization with EM and expectation-
+                                                            conjugate-gradient. In International Conference on
+A. Bouchard-Côté, P. Liang, D. Klein, and T. L. Grif-     Machine Learning.
+  fiths. 2007. A probabilistic approach to diachronic
+  phonology. In Empirical Methods in Natural Lan-         D. A. Smith and J. Eisner. 2009. Parser adapta-
+  guage Processing.                                         tion and projection with quasi-synchronous gram-
+                                                            mar features. In Empirical Methods in Natural Lan-
+S. Buchholz and E. Marsi. 2006. Computational Nat-          guage Processing.
+   ural Language Learning-X shared task on multilin-
+   gual dependency parsing. In Conference on Compu-       B. Snyder, T. Naseem, and R. Barzilay. 2009a. Unsu-
+   tational Natural Language Learning.                       pervised multilingual grammar induction. In Asso-
+                                                             ciation for Computational Linguistics/International
+D. Burkett and D. Klein. 2008. Two languages are             Joint Conference on Natural Language Processing.
+  better than one (for syntactic parsing). In Empirical
+  Methods in Natural Language Processing.                 B. Snyder, T. Naseem, J. Eisenstein, and R. Barzi-
+                                                            lay. 2009b. Adding more languages improves un-
+S. B. Cohen and N. A. Smith. 2009. Shared logistic          supervised multilingual part-of-speech tagging: A
+   normal distributions for soft parameter tying in un-     Bayesian non-parametric approach. In North Amer-
+   supervised grammar induction. In North American          ican Chapter of the Association for Computational
+   Chapter of the Association for Computational Lin-        Linguistics.
+   guistics.
+                                                          N. Xue, F-D Chiou, and M. Palmer. 2002. Building
+M. Collins. 1999. Head-driven statistical models for        a large-scale annotated Chinese corpus. In Interna-
+  natural language parsing. In Ph.D. thesis, University     tional Conference on Computational Linguistics.
+  of Pennsylvania, Philadelphia.
+
+H. Daumé III. 2007. Frustratingly easy domain adap-
+  tation. In Association for Computational Linguis-
+  tics.
+
+J. Eisner. 2002. Parameter estimation for probabilistic
+   finite-state transducers. In Association for Compu-
+   tational Linguistics.
+
+J. R. Finkel and C. D. Manning. 2009. Hierarchi-
+   cal bayesian domain adaptation. In North American
+   Chapter of the Association for Computational Lin-
+   guistics.
+
+D. Klein and C. D. Manning. 2004. Corpus-based
+  induction of syntactic structure: Models of depen-
+  dency and constituency. In Association for Compu-
+  tational Linguistics.
+
+J. Kuhn. 2004. Experiments in parallel-text based
+   grammar induction. In Association for Computa-
+   tional Linguistics.
+
+G. Kuzman, J. Gillenwater, and B. Taskar. 2009. De-
+  pendency grammar induction via bitext projection
+  constraints. In Association for Computational Lin-
+  guistics/International Joint Conference on Natural
+  Language Processing.
+
+P. Liang, D. Klein, and M. I. Jordan.        2008.
+   Agreement-based learning. In Advances in Neural
+   Information Processing Systems.
+
+
+                                                      1297
+

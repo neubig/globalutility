@@ -1,0 +1,387 @@
+    Distributional Similarity vs. PU Learning for Entity Set Expansion
+
+
+                      Xiao-Li Li                                         Lei Zhang
+          Institute for Infocomm Research,                    University of Illinois at Chicago,
+        1 Fusionopolis Way #21-01 Connexis                   851 South Morgan Street, Chicago,
+                  Singapore 138632                             Chicago, IL 60607-7053, USA
+          xlli@i2r.a-star.edu.sg                                 zhang3@cs.uic.edu
+
+                      Bing Liu                                         See-Kiong Ng
+           University of Illinois at Chicago,                Institute for Infocomm Research,
+          851 South Morgan Street, Chicago,                1 Fusionopolis Way #21-01 Connexis
+            Chicago, IL 60607-7053, USA                              Singapore 138632
+                liub@cs.uic.edu                              skng@i2r.a-star.edu.sg
+
+                    Abstract                                  In machine learning, there is a class of semi-
+                                                           supervised learning algorithms that learns from
+    Distributional similarity is a classic tech-           positive and unlabeled examples (PU learning for
+    nique for entity set expansion, where the              short). The key characteristic of PU learning is
+    system is given a set of seed entities of a            that there is no negative training example availa-
+    particular class, and is asked to expand the           ble for learning. This class of algorithms is less
+    set using a corpus to obtain more entities             known to the natural language processing (NLP)
+    of the same class as represented by the                community compared to some other semi-
+    seeds. This paper shows that a machine                 supervised learning models and algorithms.
+    learning model called positive and unla-                  PU learning is a two-class classification mod-
+    beled learning (PU learning) can model                 el. It is stated as follows (Liu et al. 2002): Given
+    the set expansion problem better. Based                a set P of positive examples of a particular class
+    on the test results of 10 corpora, we show             and a set U of unlabeled examples (containing
+    that a PU learning technique outperformed              hidden positive and negative cases), a classifier
+    distributional similarity significantly.               is built using P and U for classifying the data in
+                                                           U or future test cases. The results can be either
+1    Introduction                                          binary decisions (whether each test case belongs
+                                                           to the positive class or not), or a ranking based
+The entity set expansion problem is defined as             on how likely each test case belongs to the posi-
+follows: Given a set S of seed entities of a partic-       tive class represented by P. Clearly, the set ex-
+ular class, and a set D of candidate entities (e.g.,       pansion problem can be mapped into PU learning
+extracted from a text corpus), we wish to deter-           exactly, with S and D as P and U respectively.
+mine which of the entities in D belong to S. In               This paper shows that a PU learning method
+other words, we “expand” the set S based on the            called S-EM (Liu et al. 2002) outperforms distri-
+given seeds. This is clearly a classification prob-        butional similarity considerably based on the
+lem which requires arriving at a binary decision           results from 10 corpora. The experiments in-
+for each entity in D (belonging to S or not).              volved extracting named entities (e.g., product
+However, in practice, the problem is often solved          and organization names) of the same type or
+as a ranking problem, i.e., ranking the entities in        class as the given seeds. Additionally, we also
+D based on their likelihoods of belonging to S.            compared S-EM with a recent method, called
+   The classic method for solving this problem is          Bayesian Sets (Ghahramani and Heller, 2005),
+based on distributional similarity (Pantel et al.          which was designed specifically for set expan-
+2009; Lee, 1998). The approach works by com-               sion. It also does not perform as well as PU
+paring the similarity of the surrounding word              learning. We will explain why PU learning per-
+distributions of each candidate entity with the            forms better than both methods in Section 5. We
+seed entities, and then ranking the candidate enti-        believe that this finding is of interest to the NLP
+ties using their similarity scores.                        community.
+
+                                                       359
+                      Proceedings of the ACL 2010 Conference Short Papers, pages 359–364,
+                Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+   There is another approach used in the Web             The positive examples in SP are called “spies”.
+environment for entity set expansion. It exploits        Then, a NB classifier is built using the set P– SP
+Web page structures to identify lists of items us-       as positive and the set U∪SP as negative (line 3,
+ing wrapper induction or other techniques. The           4, and 5). The NB classifier is applied to classify
+idea is that items in the same list are often of the     each u ∈ U∪SP, i.e., to assign a probabilistic
+same type. This approach is used by Google Sets          class label p(+|u) (+ means positive). The proba-
+(Google, 2008) and Boo!Wa! (Wang and Cohen,              bilistic labels of the spies are then used to decide
+2008). However, as it relies on Web page struc-          reliable negatives (RN). In particular, a probabili-
+tures, it is not applicable to general free texts.       ty threshold t is determined using the probabilis-
+                                                         tic labels of spies in SP and the input parameter l
+2    Three Different Techniques                          (noise level). Due to space constraints, we are
+2.1 Distributional Similarity                            unable to explain l. Details can be found in (Liu
+                                                         et al. 2002). t is then used to find RN from U
+Distributional similarity is a classic technique for     (lines 8-10). The idea of the spy technique is
+the entity set expansion problem. It is based on         clear. Since spy examples are from P and are put
+the hypothesis that words with similar meanings          into U in building the NB classifier, they should
+tend to appear in similar contexts (Harris, 1985).       behave similarly to the hidden positive cases in
+As such, a method based on distributional simi-          U. Thus, they can help us find the set RN.
+larity typically fetches the surrounding contexts
+for each term (i.e. both seeds and candidates) and       Algorithm Spy(P, U, s, l)
+represents them as vectors by using TF-IDF or            1. RN ← ∅;                    // Reliable negative set
+PMI (Pointwise Mutual Information) values (Lin,          2. SP ← Sample(P, s%);
+1998; Gorman and Curran, 2006; Paşca et al.              3. Assign each example in P – SP the class label +1;
+2006; Agirre et al. 2009; Pantel et al. 2009). Si-       4. Assign each example in U ∪ SP the class label -1;
+milarity measures such as Cosine, Jaccard, Dice,         5. C ←NB(P – S, U∪SP); // Produce a NB classifier
+etc, can then be employed to compute the simi-           6. Classify each u ∈U∪SP using C;
+larities between each candidate vector and the           7. Decide a probability threshold t using SP and l;
+seeds centroid vector (one centroid vector for all       8. for each u ∈U do
+seeds). Lee (1998) surveyed and discussed vari-          9.    if its probability p(+|u) < t then
+ous distribution similarity measures.                    10.      RN ← RN ∪ {u};
+                                                             Figure 1. Spy technique for extracting reliable
+2.2 PU Learning and S-EM
+                                                                        negatives (RN) from U.
+PU learning is a semi-supervised or partially su-
+                                                             Given the positive set P, the reliable negative
+pervised learning model. It learns from positive
+                                                         set RN and the remaining unlabeled set U–RN, an
+and unlabeled examples as opposed to the model
+                                                         Expectation-Maximization (EM) algorithm is
+of learning from a small set of labeled examples
+                                                         run. In S-EM, EM uses the naïve Bayesian clas-
+of every class and a large set of unlabeled exam-
+                                                         sification as its base method. The detailed algo-
+ples, which we call LU learning (L and U stand
+                                                         rithm is given in (Liu et al. 2002).
+for labeled and unlabeled respectively) (Blum
+and Mitchell, 1998; Nigam et al. 2000)                   2.3 Bayesian Sets
+    There are several PU learning algorithms (Liu
+et al. 2002; Yu et al. 2002; Lee and Liu, 2003; Li       Bayesian Sets, as its name suggests, is based on
+et al. 2003; Elkan and Noto, 2008). In this work,        Bayesian inference, and was designed specifical-
+we used the S-EM algorithm given in (Liu et al.          ly for the set expansion problem (Ghahramani
+2002). S-EM is efficient as it is based on naïve         and Heller, 2005). The algorithm learns from a
+Bayesian (NB) classification and also performs           seeds set (i.e., a positive set P) and an unlabeled
+well. The main idea of S-EM is to use a spy              candidate set U. Although it was not designed as
+technique to identify some reliable negatives            a PU learning method, it has similar characteris-
+(RN) from the unlabeled set U, and then use an           tics and produces similar results as PU learning.
+EM algorithm to learn from P, RN and U–RN.               However, there is a major difference. PU learn-
+    The spy technique in S-EM works as follows           ing is a classification model, while Bayesian Sets
+(Figure 1): First, a small set of positive examples      is a ranking method. This difference has a major
+(denoted by SP) from P is randomly sampled               implication on the results that they produce as we
+(line 2). The default sampling ratio in S-EM is s        will discuss in Section 5.3.
+= 15%, which we also used in our experiments.                In essence, Bayesian Sets learns a score func-
+
+
+                                                       360
+
+
+tion using P and U to generate a score for each          Positive and unlabeled sets: For each seed si ∈S,
+unlabeled case u ∈ U. The function is as follows:        each occurrence in the corpus forms a vector as a
+                            p (u | P )
+                                                         positive example in P. The vector is formed
+             score (u ) =                       (1)
+                              p (u )
+                                                         based on the surrounding words context (see
+                                                         above) of the seed mention. Similarly, for each
+where p(u|P) represents how probable u belongs           candidate d ∈ D (see above; D denotes the set of
+to the positive class represented by P. p(u) is the      all candidates), each occurrence also forms a
+prior probability of u. Using the Bayes’ rule, eq-       vector as an unlabeled example in U. Thus, each
+uation (1) can be re-written as:                         unique seed or candidate entity may produce
+             score (u ) =
+                              p (u , P )        (2)      multiple feature vectors, depending on the num-
+                            p (u ) p ( P )               ber of times that it appears in the corpus.
+                                                             The components in the feature vectors are
+   Following the idea, Ghahramani and Heller
+                                                         term frequencies for S-EM as S-EM uses naïve
+(2005) proposed a computable score function.
+                                                         Bayesian classification as its base classifier. For
+The scores can be used to rank the unlabeled
+                                                         Bayesian Sets, they are 1’s and 0’s as Bayesian
+candidates in U to reflect how likely each u ∈ U         Sets only takes binary vectors based on whether
+belongs to P. The mathematics for computing the          a term occurs in the context or not.
+score is involved. Due to the limited space, we
+cannot discuss it here. See (Ghahramani and Hel-         4   Candidate Ranking
+ler, 2005) for details. In (Heller and Ghahramani,
+2006), Bayesian Sets was also applied to an im-          For distributional similarity, ranking is done us-
+age retrieval application.                               ing the similarity value of each candidate’s cen-
+                                                         troid and the seeds’ centroid (one centroid vector
+3   Data Generation for Distributional                   for all seeds). Rankings for S-EM and Bayesian
+    Similarity, Bayesian Sets and S-EM                   Sets are more involved. We discuss them below.
+                                                            After it ends, S-EM produces a Bayesian clas-
+Preparing the data for distributional similarity is
+                                                         sifier C, which is used to classify each vector u ∈
+fairly straightforward. Given the seeds set S, a
+                                                         U and to assign a probability p(+|u) to indicate
+seeds centroid vector is produced using the sur-
+                                                         the likelihood that u belongs to the positive class.
+rounding word contexts (see below) of all occur-
+                                                         Similarly, Bayesian Sets produces a score
+rences of all the seeds in the corpus (Pantel et al,
+                                                         score(u) for each u (not a probability).
+2009). In a similar way, a centroid is also pro-
+                                                            Recall that for both S-EM and Bayesian Sets,
+duced for each candidate (or unlabeled) entity.
+                                                         each unique candidate entity may generate mul-
+Candidate entities: Since we are interested in           tiple feature vectors, depending on the number of
+named entities, we select single words or phrases        times that the candidate entity occurs in the cor-
+as candidate entities based on their correspond-         pus. As such, the rankings produced by S-EM
+ing part-of-speech (POS) tags. In particular, we         and Bayesian Sets are not the rankings of the
+choose the following POS tags as entity indica-          entities, but rather the rankings of the entities’
+tors — NNP (proper noun), NNPS (plural proper            occurrences. Since different vectors representing
+noun), and CD (cardinal number). We regard a             the same candidate entity can have very different
+phrase (could be one word) with a sequence of            probabilities (for S-EM) or scores (for Bayesian
+NNP, NNPS and CD POS tags as one candidate               Sets), we need to combine them and compute a
+entity (CD cannot be the first word unless it            single score for each unique candidate entity for
+starts with a letter), e.g., “Windows/NNP 7/CD”          ranking.
+and “Nokia/NNP N97/CD” are regarded as two                  To this end, we also take the entity frequency
+candidates “Windows 7” and “Nokia N97”.                  into consideration. Typically, it is highly desira-
+Context: For each seed or candidate occurrence,          ble to rank those correct and frequent entities at
+the context is its set of surrounding words within       the top because they are more important than the
+a window of size w, i.e. we use w words right            infrequent ones in applications. With this in
+before the seed or the candidate and w words             mind, we define a ranking method.
+right after it. Stop words are removed.                      Let the probabilities (or scores) of a candidate
+   For S-EM and Bayesian Sets, both the posi-            entity d ∈ D be Vd = {v1 , v2 …, vn} for the n fea-
+tive set P (based on the seeds set S) and the unla-      ture vectors of the candidate. Let Md be the me-
+beled candidate set U are generated differently.         dian of Vd. The final score (fs) for d is defined as:
+They are not represented as centroids.                              fs (d ) = M d × log(1 + n)            (3)
+
+
+                                                       361
+
+
+    The use of the median of Vd can be justified                  Table 1. Descriptions of the 10 corpora
+based on the statistical skewness (Neter et al.
+                                                              Domains # Sentences          Seed Entities
+1993). If the values in Vd are skewed towards the
+                                                              Bank        17394     Citi, Chase, Wesabe
+high side (negative skew), it means that the can-
+                                                              Blu-ray      7093     S300, Sony, Samsung
+didate entity is very likely to be a true entity, and
+we should take the median as it is also high                  Car          2095     Honda, A3, Toyota
+(higher than the mean). However, if the skew is               Drug         1504     Enbrel, Hurmia, Methotrexate
+towards the low side (positive skew), it means                Insurance   12419     Cobra, Cigna, Kaiser
+that the candidate entity is unlikely to be a true            LCD          1733     PZ77U, Samsung, Sony
+entity and we should again use the median as it is            Mattress    13191     Simmons, Serta, Heavenly
+low (lower than the mean) under this condition.               Phone       14884     Motorola, Nokia, N95
+    Note that here n is the frequency count of                Stove       25060     Kenmore, Frigidaire, GE
+candidate entity d in the corpus. The constant 1 is           Vacuum      13491     Dc17, Hoover, Roomba
+added to smooth the value. The idea is to push
+the frequent candidate entities up by multiplying            The regular evaluation metrics for named enti-
+the logarithm of frequency. log is taken in order         ty recognition such as precision and recall are not
+to reduce the effect of big frequency counts.             suitable for our purpose as we do not have the
+    The final score fs(d) indicates candidate d’s         complete sets of gold standard entities to com-
+overall likelihood to be a relevant entity. A high        pare with. We adopt rank precision, which is
+fs(d) implies a high likelihood that d is in the          commonly used for evaluation of entity set ex-
+expanded entity set. We can then rank all the             pansion techniques (Pantel et al., 2009):
+candidates based on their fs(d) values.                      Precision @ N: The percentage of correct enti-
+                                                          ties among the top N entities in the ranked list.
+5    Experimental Evaluation                              5.2 Experimental Results
+We empirically evaluate the three techniques in           The detailed experimental results for window
+this section. We implemented distribution simi-           size 3 (w=3) are shown in Table 2 for the 10 cor-
+larity and Bayesian Sets. S-EM was downloaded             pora. We present the precisions at the top 15-,
+from http://www.cs.uic.edu/~liub/S-EM/S-EM-               30- and 45-ranked positions (i.e., precisions
+download.html. For both Bayesian Sets and S-              @15, 30 and 45) for each corpus, with the aver-
+EM, we used their default parameters. EM in S-            age given in the last column. For distributional
+EM ran only two iterations. For distributional            similarity, to save space Table 2 only shows the
+similarity, we tested TF-IDF and PMI as feature           results of Distr-Sim-freq, which is the distribu-
+values of vectors, and Cosine and Jaccard as si-          tional similarity method with term frequency
+milarity measures. Due to space limitations, we           considered in the same way as for Bayesian Sets
+only show the results of the PMI and Cosine               and S-EM, instead of the original distributional
+combination as it performed the best. This com-           similarity, which is denoted by Distr-Sim. This
+bination was also used in (Pantel et al., 2009).          is because on average, Distr-Sim-freq performs
+5.1 Corpora and Evaluation Metrics                        better than Distr-Sim. However, the summary
+                                                          results of both Distr-Sim-freq and Distr-Sim are
+We used 10 diverse corpora to evaluate the tech-          given in Table 3.
+niques. They were obtained from a commercial                  From Table 2, we observe that on average S-
+company. The data were crawled and extracted              EM outperforms Distr-Sim-freq by about 12 –
+from multiple online message boards and blogs             20% in terms of Precision @ N. Bayesian-Sets
+discussing different products and services. We            is also more accurate than Distr-Sim-freq, but S-
+split each message into sentences, and the sen-           EM outperforms Bayesian-Sets by 9 – 10%.
+tences were POS-tagged using Brill’s tagger                   To test the sensitivity of window size w, we
+(Brill, 1995). The tagged sentences were used to          also experimented with w = 6 and w = 9. Due to
+extract candidate entities and their contexts. Ta-        space constraints, we present only their average
+ble 1 shows the domains and the number of sen-            results in Table 3. Again, we can see the same
+tences in each corpus, as well as the three seed          performance pattern as in Table 2 (w = 3): S-EM
+entities used in our experiments for each corpus.         performs the best, Bayesian-Sets the second, and
+The three seeds for each corpus were randomly             the two distributional similarity methods the
+selected from a set of common entities in the ap-         third and the fourth, with Distr-Sim-freq slightly
+plication domain.                                         better than Distr-Sim.
+
+
+                                                        362
+
+
+                  Table 2. Precision @ top N (with 3 seeds, and window size w = 3)
+                Bank Blu-ray    Car    Drug Insurance LCD            Mattress Phone Stove Vacuum Avg.
+                                                            Top 15
+Distr-Sim-freq 0.466 0.333     0.800 0.666     0.666        0.400     0.666     0.533 0.666   0.733   0.592
+Bayesian-Sets 0.533 0.266      0.600 0.666     0.600        0.733     0.666     0.533 0.800   0.800   0.617
+    S-EM       0.600 0.733     0.733 0.733     0.533        0.666     0.933     0.533 0.800   0.933   0.720
+                                                            Top 30
+Distr-Sim-freq 0.466 0.266     0.700 0.600     0.500        0.333     0.500     0.466 0.600   0.566   0.499
+Bayesian-Sets 0.433 0.300      0.633 0.666     0.400        0.566     0.700     0.333 0.833   0.700   0.556
+    S-EM       0.500 0.700     0.666 0.666     0.566        0.566     0.733     0.600 0.600   0.833   0.643
+                                                            Top 45
+Distr-Sim-freq 0.377 0.288     0.555 0.500     0.377        0.355     0.444     0.400 0.533   0.400   0.422
+Bayesian-Sets 0.377 0.333      0.666 0.555     0.377        0.511     0.644     0.355 0.733   0.600   0.515
+    S-EM       0.466 0.688     0.644 0.733     0.533        0.600     0.644     0.555 0.644   0.688   0.620
+
+          Table 3. Average precisions over the 10 corpora of different window size (3 seeds)
+                        Window-size w = 3           Window-size        w=6           Window-size   w=9
+     Top Results     Top 15 Top 30 Top 45         Top 15 Top 30        Top 45      Top 15 Top 30   Top 45
+      Distr-Sim       0.579 0.466    0.410         0.553 0.483          0.439       0.519 0.473     0.412
+    Distr-Sim-freq    0.592 0.499    0.422         0.553 0.492          0.441       0.559 0.476     0.410
+    Bayesian-Sets     0.617 0.556    0.515         0.593 0.539          0.524       0.539 0.522     0.497
+        S-EM          0.720 0.643    0.620         0.666 0.606          0.597       0.666 0.620     0.604
+
+5.3 Why does S-EM Perform Better?                       on ranking) classification methods produce better
+                                                        results than ranking methods? Clearly, our single
+From the tables, we can see that both S-EM and
+                                                        experiment cannot answer this question. But in-
+Bayesian Sets performed better than distribution-
+                                                        tuitively, classification, which separates positive
+al similarity. S-EM is better than Bayesian Sets.
+                                                        and negative cases by pulling them towards two
+We believe that the reason is as follows: Distri-
+                                                        opposite directions, should perform better than
+butional similarity does not use any information
+                                                        ranking which only pulls the data in one direc-
+in the candidate set (or the unlabeled set U). It
+                                                        tion. Further research on this issue is needed.
+tries to rank the candidates solely through simi-
+larity comparisons with the given seeds (or posi-       6     Conclusions and Future Work
+tive cases). Bayesian Sets is better because it
+considers U. Its learning method produces a             Although distributional similarity is a classic
+weight vector for features based on their occur-        technique for entity set expansion, this paper
+rence differences in the positive set P and the         showed that PU learning performs considerably
+unlabeled set U (Ghahramani and Heller 2005).           better on our diverse corpora. In addition, PU
+This weight vector is then used to compute the          learning also outperforms Bayesian Sets (de-
+final scores used in ranking. In this way, Baye-        signed specifically for the task). In our future
+sian Sets is able to exploit the useful information     work, we plan to experiment with various other
+in U that was ignored by distributional similarity.     PU learning methods (Liu et al. 2003; Lee and
+S-EM also considers these differences in its NB         Liu, 2003; Li et al. 2007; Elkan and Noto, 2008)
+classification; in addition, it uses the reliable       on this entity set expansion task, as well as other
+negative set (RN) to help distinguish negative          tasks that were tackled using distributional simi-
+and positive cases, which both Bayesian Sets and        larity. In addition, we also plan to combine some
+distributional similarity do not do. We believe         syntactic patterns (Etzioni et al. 2005; Sarmento
+this balanced attempt by S-EM to distinguish the        et al. 2007) to further improve the results.
+positive and negative cases is the reason for the
+                                                        Acknowledgements: Bing Liu and Lei Zhang
+better performance of S-EM. This raises an inter-
+                                                        acknowledge the support of HP Labs Innovation
+esting question. Since Bayesian Sets is a ranking
+                                                        Research Grant 2009-1062-1-A, and would like
+method and S-EM is a classification method, can
+                                                        to thank Suk Hwan Lim and Eamonn O'Brien-
+we say even for ranking (our evaluation is based
+                                                        Strain for many helpful discussions.
+
+                                                      363
+
+
+References                                                  port vector classifiers for named entity recog-
+                                                            nition. COLING.
+Agirre, E., Alfonseca, E., Hall, K., Kravalova, J.,
+  Pasca, M., and Soroa, A. 2009. A study on si-         Jiang, J. and Zhai, C. 2006. Exploiting domain
+  milarity and relatedness using distributional            structure for named entity recognition. HLT-
+  and WordNet-based approaches. NAACL                      NAACL.
+  HLT.                                                  Lafferty J., McCallum A., and Pereira F. 2001.
+Blum, A. and Mitchell, T. 1998. Combining la-              Conditional random fields: probabilistic
+   beled and unlabeled data with co-training. In           models for segmenting and labeling sequence
+   Proc. of Computational Learning Theory, pp.             data. ICML.
+   92–100, 1998.                                        Lee, L. 1999. Measures of distributional similar-
+Brill, E. 1995. Transformation-Based error-               ity. ACL.
+   Driven learning and natural language                 Lee, W-S. and Liu, B. 2003. Learning with Posi-
+   processing: a case study in part of speech             tive and Unlabeled Examples Using Weighted
+   tagging. Computational Linguistics.                    Logistic Regression. ICML.
+Bunescu, R. and Mooney, R. 2004. Collective             Li, X., Liu, B. 2003. Learning to classify texts
+  information extraction with relational Markov            using positive and unlabeled data, IJCAI.
+  Networks. ACL.
+                                                        Li, X., Liu, B., Ng, S. 2007. Learning to identify
+Cheng T., Yan X. and Chang C. K. 2007. Entity-              unexpected instances in the test sSet. IJCAI.
+  Rank: searching entities directly and holisti-
+  cally. VLDB.                                          Lin, D. 1998. Automatic retrieval and clustering
+                                                           of similar words. COLING/ACL.
+Chieu, H.L. and Ng, H. Tou. 2002. Name entity
+  recognition: a maximum entropy approach               Liu, B, Lee, W-S, Yu, P. S, and Li, X. 2002.
+  using global information. In The 6th Work-               Partially supervised text classification. ICML,
+  shop on Very Large Corpora.                              387-394.
+Downey, D., Broadhead, M. and Etzioni, O.               Liu, B, Dai, Y., Li, X., Lee, W-S., and Yu. P.
+  2007. Locating complex named entities in                 2003. Building text classifiers using positive
+  Web Text. IJCAI.                                         and unlabeled examples. ICDM, 179-188.
+Elkan, C. and Noto, K. 2008. Learning classifi-         Neter, J., Wasserman, W., and Whitmore, G. A.
+   ers from only positive and unlabeled data.             1993. Applied Statistics. Allyn and Bacon.
+   KDD, 213-220.                                        Nigam, K., McCallum, A., Thrun, S. and Mit-
+Etzioni, O., Cafarella, M., Downey. D., Popescu,          chell, T. 2000. Text classification from la-
+   A., Shaked, T., Soderland, S., Weld, D. Yates.         beled and unlabeled documents using EM.
+   2005. A. Unsupervised named-entity extrac-             Machine Learning, 39(2/3), 103–134.
+   tion from the Web: An Experimental Study.            Pantel, P., Eric Crestan, Arkady Borkovsky,
+   Artificial Intelligence, 165(1):91-134.                Ana-Maria Popescu, Vishnu, Vyas. 2009.
+Ghahramani, Z and Heller, K.A. 2005. Bayesian             Web-Scale Distributional similarity and entity
+  sets. NIPS.                                             set expansion, EMNLP.
+Google Sets. 2008. System and methods for au-           Paşca, M. Lin, D. Bigham, J. Lifchits, A. Jain, A.
+  tomatically creating lists. US Patent:                   2006. Names and similarities on the web: fast
+  US7350187, March 25.                                     extraction in the fast lane. ACL.
+Gorman, J. and Curran, J. R. 2006. Scaling dis-         Sarmento, L., Jijkuon, V. de Rijke, M. and
+  tributional similarity to large corpora. ACL.            Oliveira, E. 2007. “More like these”: growing
+                                                           entity classes from seeds. CIKM.
+Harris, Z. Distributional Structure. 1985. In:
+  Katz, J. J. (ed.), The philosophy of linguistics.     Wang, R. C. and Cohen, W. W. 2008. Iterative
+  Oxford University Press.                                set expansion of named entities using the web.
+                                                          ICDM.
+Heller, K. and Ghahramani, Z. 2006. A simple
+  Bayesian framework for content-based image            Yu, H., Han, J., K. Chang. 2002. PEBL: Positive
+  retrieval. CVPR.                                        example based learning for Web page classi-
+                                                          fication using SVM. KDD, 239-248.
+Isozaki, H. and Kazawa, H. 2002. Efficient sup-
+
+                                                      364
+

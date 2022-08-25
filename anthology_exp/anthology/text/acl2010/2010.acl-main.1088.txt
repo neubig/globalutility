@@ -1,0 +1,739 @@
+     Bucking the Trend: Large-Scale Cost-Focused Active Learning for
+                     Statistical Machine Translation
+                Michael Bloodgood                                                    Chris Callison-Burch
+             Human Language Technology                                              Center for Language and
+                Center of Excellence                                                   Speech Processing
+              Johns Hopkins University                                              Johns Hopkins University
+                Baltimore, MD 21211                                                   Baltimore, MD 21211
+              bloodgood@jhu.edu                                                       ccb@cs.jhu.edu
+
+                      Abstract                                                        JSyntax and JHier Learning Curves on the LDC
+                                                                                     Urdu−English Language Pack (BLEU vs Sentences)
+                                                                               30
+    We explore how to improve machine trans-
+    lation systems by adding more translation                                  25
+    data in situations where we already have
+    substantial resources. The main challenge                                  20
+
+
+
+
+                                                                  BLEU Score
+                                                                                                            where we begin our
+    is how to buck the trend of diminishing re-                                                           main investigations into
+                                                                               15                            bucking the trend
+    turns that is commonly encountered. We                                                                 of diminishing returns
+
+    present an active learning-style data solic-                                                   as far as previous
+                                                                               10
+    itation algorithm to meet this challenge.                                                    AL for SMT research
+                                                                                                studies were conducted
+    We test it, gathering annotations via Ama-                                  5                                             jHier
+    zon Mechanical Turk, and find that we get                                                                                 jSyntax
+    an order of magnitude increase in perfor-                                   0
+                                                                                 0          2              4             6           8       10
+    mance rates of improvement.                                                                                                          x 10
+                                                                                                                                              4
+                                                                                           Number of Sentences in Training Data
+
+1   Introduction
+                                                               Figure 1: Syntax-based and Hierarchical Phrase-
+Figure 1 shows the learning curves for two state of            Based MT systems’ learning curves on the LDC
+the art statistical machine translation (SMT) sys-             Urdu-English language pack. The x-axis measures
+tems for Urdu-English translation. Observe how                 the number of sentence pairs in the training data.
+the learning curves rise rapidly at first but then a           The y-axis measures BLEU score. Note the di-
+trend of diminishing returns occurs: put simply,               minishing returns as more data is added. Also
+the curves flatten.                                            note how relatively early on in the process pre-
+   This paper investigates whether we can buck the             vious studies were terminated. In contrast, the
+trend of diminishing returns, and if so, how we can            focus of our main experiments doesn’t even be-
+do it effectively. Active learning (AL) has been ap-           gin until much higher performance has already
+plied to SMT recently (Haffari et al., 2009; Haffari           been achieved with a period of diminishing returns
+and Sarkar, 2009) but they were interested in start-           firmly established.
+ing with a tiny seed set of data, and they stopped
+their investigations after only adding a relatively
+tiny amount of data as depicted in Figure 1.                      We conduct experiments for Urdu-English
+   In contrast, we are interested in applying AL               translation, gathering annotations via Amazon
+when a large amount of data already exists as is               Mechanical Turk (MTurk) and show that we can
+the case for many important lanuage pairs. We de-              indeed buck the trend of diminishing returns,
+velop an AL algorithm that focuses on keeping an-              achieving an order of magnitude increase in the
+notation costs (measured by time in seconds) low.              rate of improvement in performance.
+It succeeds in doing this by only soliciting trans-               Section 2 discusses related work; Section 3
+lations for parts of sentences. We show that this              discusses preliminary experiments that show the
+gets a savings in human annotation time above and              guiding principles behind the algorithm we use;
+beyond what the reduction in # words annotated                 Section 4 explains our method for soliciting new
+would have indicated by a factor of about three                translation data; Section 5 presents our main re-
+and speculate as to why.                                       sults; and Section 6 concludes.
+
+
+                                                         854
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 854–864,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2   Related Work                                              we turn around to use for our advantage when de-
+                                                              veloping our data selection algorithm. Haertel et
+Active learning has been shown to be effective                al. (2008) emphasize measuring costs carefully for
+for improving NLP systems and reducing anno-                  AL for POS tagging. They develop a model based
+tation burdens for a number of NLP tasks (see,                on a user study that can estimate the time required
+e.g., (Hwa, 2000; Sassano, 2002; Bloodgood                    for POS annotating. Kapoor et al. (2007) assign
+and Vijay-Shanker, 2008; Bloodgood and Vijay-                 costs for AL based on message length for a voice-
+Shanker, 2009b; Mairesse et al., 2010; Vickrey et             mail classification task. In contrast, we show for
+al., 2010)). The current paper is most highly re-             SMT that annotation times do not scale according
+lated to previous work falling into three main ar-            to length in words and we show our method can
+eas: use of AL when large corpora already exist;              achieve a speedup in annotation time above and
+cost-focused AL; and AL for SMT.                              beyond what the reduction in words would indi-
+   In a sense, the work of Banko and Brill (2001)             cate. Tomanek and Hahn (2009) measure cost by #
+is closely related to ours. Though their focus is             of tokens for an NER task. Their AL method only
+mainly on investigating the performance of learn-             solicits labels for parts of sentences in the interest
+ing methods on giant corpora many orders of mag-              of reducing annotation effort. Along these lines,
+nitude larger than previously used, they do lay out           our method is similar in the respect that we also
+how AL might be useful to apply to acquire data               will only solicit annotation for parts of sentences,
+to augment a large set cheaply because they rec-              though we prefer to measure cost with time and
+ognize the problem of diminishing returns that we             we show that time doesn’t track with token length
+discussed in Section 1.                                       for SMT.
+   The second area of work that is related to ours is
+previous work on AL that is cost-conscious. The                  Haffari et al. (2009), Haffari and Sarkar (2009),
+vast majority of AL research has not focused on               and Ambati et al. (2010) investigate AL for SMT.
+accurate cost accounting and a typical assumption             There are two major differences between our work
+is that each annotatable has equal annotation cost.           and this previous work. One is that our intended
+An early exception in the AL for NLP field was                use cases are very different. They deal with the
+the work of Hwa (2000), which makes a point of                more traditional AL setting of starting from an ex-
+using # of brackets to measure cost for a syntac-             tremely small set of seed data. Also, by SMT stan-
+tic analysis task instead of using # of sentences.            dards, they only add a very tiny amount of data
+Another relatively early work in our field along              during AL. All their simulations top out at 10,000
+these lines was the work of Ngai and Yarowsky                 sentences of labeled data and the models learned
+(2000), which measured actual times of annota-                have relatively low translation quality compared to
+tion to compare the efficacy of rule writing ver-             the state of the art.
+sus annotation with AL for the task of BaseNP                    On the other hand, in the current paper, we
+chunking. Osborne and Baldridge (2004) argued                 demonstrate how to apply AL in situations where
+for the use of discriminant cost over unit cost for           we already have large corpora. Our goal is to buck
+the task of Head Phrase Structure Grammar parse               the trend of diminishing returns and use AL to
+selection. King et al. (2004) design a robot that             add data to build some of the highest-performing
+tests gene functions. The robot chooses which                 MT systems in the world while keeping annota-
+experiments to conduct by using AL and takes                  tion costs low. See Figure 1 from Section 1, which
+monetary costs (in pounds sterling) into account              contrasts where (Haffari et al., 2009; Haffari and
+during AL selection and evaluation. Unlike our                Sarkar, 2009) stop their investigations with where
+situation for SMT, their costs are all known be-              we begin our studies.
+forehand because they are simply the cost of ma-
+terials to conduct the experiments, which are al-                The other major difference is that (Haffari et al.,
+ready known to the robot. Hachey et al. (2005)                2009; Haffari and Sarkar, 2009) measure annota-
+showed that selectively sampled examples for an               tion cost by # of sentences. In contrast, we bring
+NER task took longer to annotate and had lower                to light some potential drawbacks of this practice,
+inter-annotator agreement. This work is related to            showing it can lead to different conclusions than
+ours because it shows that how examples are se-               if other annotation cost metrics are used, such as
+lected can impact the cost of annotation, an idea             time and money, which are the metrics that we use.
+
+
+                                                        855
+
+
+3       Simulation Experiments                               Init:
+                                                                  Go through all available training
+Here we report on results of simulation experi-                   data (labeled and unlabeled)
+ments that help to illustrate and motivate the de-                and obtain frequency counts for
+sign decisions of the algorithm we present in Sec-                every n-gram (n in {1, 2, 3, 4})
+tion 4. We use the Urdu-English language pack1                    that occurs.
+from the Linguistic Data Consortium (LDC),                        sortedN Grams ← Sort n-grams by
+which contains ≈ 88000 Urdu-English sentence                      frequency in descending order.
+translation pairs, amounting to ≈ 1.7 million Urdu           Loop
+words translated into English. All experiments in            until stopping criterion (see Section 3.3) is met
+this paper evaluate on a genre-balanced split of the              1. trigger ← Go down sortedN Grams list
+NIST2008 Urdu-English test set. In addition, the                  and find the first n-gram that isn’t covered in
+language pack contains an Urdu-English dictio-                    the so far labeled training data.
+nary consisting of ≈ 114000 entries. In all the ex-               2. selectedSentence ← Find a sentence
+periments, we use the dictionary at every iteration               that contains trigger.
+of training. This will make it harder for us to show              3. Remove selectedSentence from unlabeled
+our methods providing substantial gains since the                 data and add it to labeled training data.
+dictionary will provide a higher base performance            End Loop
+to begin with. However, it would be artificial to
+ignore dictionary resources when they exist.
+   We experiment with two translation models: hi-
+                                                              Figure 2: The VG sentence selection algorithm
+erarchical phrase-based translation (Chiang, 2007)
+and syntax augmented translation (Zollmann and
+Venugopal, 2006), both of which are implemented              do not occur at all in our so-far labeled data. We
+in the Joshua decoder (Li et al., 2009). We here-            call an n-gram “covered” if it occurs at least once
+after refer to these systems as jHier and jSyntax,           in our so-far labeled data. VG has a preference
+respectively.                                                for covering frequent n-grams before covering in-
+   We will now present results of experiments with           frequent n-grams. The VG method is depicted in
+different methods for growing MT training data.              Figure 2.
+The results are organized into three areas of inves-            Figure 3 shows the learning curves for both
+tigations:                                                   jHier and jSyntax for VG selection and random
+                                                             selection. The y-axis measures BLEU score (Pap-
+    1. annotation costs;
+                                                             ineni et al., 2002),which is a fast automatic way of
+    2. managing uncertainty; and                             measuring translation quality that has been shown
+                                                             to correlate with human judgments and is perhaps
+    3. how to automatically detect when to stop so-          the most widely used metric in the MT commu-
+       liciting annotations from a pool of data.             nity. The x-axis measures the number of sen-
+                                                             tence translation pairs in the training data. The VG
+3.1      Annotation Costs
+                                                             curves are cut off at the point at which the stopping
+We begin our cost investigations with four sim-              criterion in Section 3.3 is met. From Figure 3 it
+ple methods for growing MT training data: ran-               might appear that VG selection is better than ran-
+dom, shortest, longest, and VocabGrowth sen-                 dom selection, achieving higher-performing sys-
+tence selection. The first three methods are self-           tems with fewer translations in the labeled data.
+explanatory. VocabGrowth (hereafter VG) selec-                  However, it is important to take care when mea-
+tion is modeled after the best methods from previ-           suring annotation costs (especially for relatively
+ous work (Haffari et al., 2009; Haffari and Sarkar,          complicated tasks such as translation). Figure 4
+2009), which are based on preferring sentences               shows the learning curves for the same systems
+that contain phrases that occur frequently in un-            and selection methods as in Figure 3 but now the
+labeled data and infrequently in the so-far labeled          x-axis measures the number of foreign words in
+data. Our VG method selects sentences for transla-           the training data. The difference between VG and
+tion that contain n-grams (for n in {1,2,3,4}) that          random selection now appears smaller.
+    1
+        LDC Catalog No.: LDC2006E110.                           For an extreme case, to illustrate the ramifica-
+
+
+                                                       856
+
+
+       jHier and jSyntax: VG vs Random selection (BLEU vs Sents)                                   jHier and jSyntax: VG vs Random selection (BLEU vs FWords)
+                30                                                                                   30
+
+
+                25                                                                                          25
+
+
+                20                                                                                          20
+   BLEU Score
+
+
+
+
+                                                                                               BLEU Score
+                                                  where we will
+                15                         start our main experiments                                       15
+
+                                 where previous AL for                                                                                  jHier: random selection
+                10               SMT research stopped                                                       10                          jHier: VG selection
+                                   their experiments                                                                                    jSyntax: random selection
+                                                         jHier: random selection                                                        jSyntax: VG selection
+                 5                                       jHier: VG selection
+                                                                                                            5
+                                                         jSyntax: random selection
+                                                         jSyntax: VG selection
+                 0
+                  0   10,000 20,000 30,000 40,000 50,000 60,000 70,000 80,000 90,000                        0
+                                                                                                             0        0.5           1             1.5                2
+                                                                                                                                                                    6
+                      Number of Sentence Pairs in the Training Data                                                                                           x 10
+                                                                                                                 Number of Foreign Words in Training Data
+
+Figure 3: Random vs VG selection. The x-axis                                                 Figure 4: Random vs VG selection. The x-axis
+measures the number of sentence pairs in the train-                                          measures the number of foreign words in the train-
+ing data. The y-axis measures BLEU score.                                                    ing data. The y-axis measures BLEU score.
+
+
+tions of measuring translation annotation cost by #                                          instead of the # of sentences translated (which
+of sentences versus # of words, consider Figures 5                                           might be quite a different thing) will be a corner-
+and 6. They both show the same three selection                                               stone of the algorithm we describe in Section 4.
+methods but Figure 5 measures the x-axis by # of
+sentences and Figure 6 measures by # of words. In                                            3.2             Managing Uncertainty
+Figure 5, one would conclude that shortest is a far                                          One of the most successful of all AL methods de-
+inferior selection method to longest but in Figure 6                                         veloped to date is uncertainty sampling and it has
+one would conclude the opposite.                                                             been applied successfully many times (e.g.,(Lewis
+   Measuring annotation time and cost in dol-                                                and Gale, 1994; Tong and Koller, 2002)). The
+lars are probably the most important measures                                                intuition is clear: much can be learned (poten-
+of annotation cost. We can’t measure these for                                               tially) if there is great uncertainty. However, with
+the simulated experiments but we will use time                                               MT being a relatively complicated task (compared
+(in seconds) and money (in US dollars) as cost                                               with binary classification, for example), it might
+measures in Section 5, which discusses our non-                                              be the case that the uncertainty approach has to
+simulated AL experiments. If # sentences or #                                                be re-considered. If words have never occurred
+words track these other more relevant costs in pre-                                          in the training data, then uncertainty can be ex-
+dictable known relationships, then it would suffice                                          pected to be high. But we are concerned that if a
+to measure # sentences or # words instead. But it’s                                          sentence is translated for which (almost) no words
+clear that different sentences can have very differ-                                         have been seen in training yet, though uncertainty
+ent annotation time requirements according to how                                            will be high (which is usually considered good for
+long and complicated they are so we will not use                                             AL), the word alignments may be incorrect and
+# sentences as an annotation cost any more. It is                                            then subsequent learning from that translation pair
+not as clear how # words tracks with annotation                                              will be severely hampered.
+time. In Section 5 we will present evidence show-                                               We tested this hypothesis and Figure 7 shows
+ing that time per word can vary considerably and                                             empirical evidence that it is true. Along with VG,
+also show a method for soliciting annotations that                                           two other selection methods’ learning curves are
+reduces time per word by nearly a factor of three.                                           charted in Figure 7: mostNew, which prefers to
+   As it is prudent to evaluate using accurate cost                                          select those sentences which have the largest # of
+accounting, so it is also prudent to develop new                                             unseen words in them; and moderateNew, which
+AL algorithms that take costs carefully into ac-                                             aims to prefer sentences that have a moderate #
+count. Hence, reducing annotation time burdens                                               of unseen words, preferring sentences with ≈ ten
+
+
+                                                                                       857
+
+
+                     jHiero: Random, Shortest, and Longest selection                                   jHiero: Longest, Shortest, and Random Selection
+               25                                                                                25
+
+
+               20                                                                                20
+  BLEU Score
+
+
+
+
+                                                                                    BLEU Score
+               15                                                                                15
+
+                                                 random
+               10                                shortest                                        10                              random
+                                                 longest                                                                         shortest
+                                                                                                                                 longest
+                5                                                                                 5
+
+
+                0                                                                                 0
+                 0          2         4          6          8        10                            0            0.5          1              1.5          2
+                                                                      4                                                                                  6
+                                                                 x 10                                                                            x 10
+                         Number of Sentences in Training Data                                            Number of Foreign Words in Training Data
+
+
+Figure 5: Random vs Shortest vs Longest selec-                                  Figure 6: Random vs Shortest vs Longest selec-
+tion. The x-axis measures the number of sentence                                tion. The x-axis measures the number of foreign
+pairs in the training data. The y-axis measures                                 words in the training data. The y-axis measures
+BLEU score.                                                                     BLEU score.
+
+
+unknown words in them. One can see that most-                                   has been commonly observed in AL settings (e.g.,
+New underperforms VG. This could have been due                                  (Bloodgood and Vijay-Shanker, 2009a; Schohn
+to VG’s frequency component, which mostNew                                      and Cohn, 2000)).
+doesn’t have. But moderateNew also doesn’t have
+a frequency preference so it is likely that mostNew                             4           Highlighted N-Gram Method
+winds up overwhelming the MT training system,                                   In this section we describe a method for solicit-
+word alignments are incorrect, and less is learned                              ing human translations that we have applied suc-
+as a result. In light of this, the algorithm we de-                             cessfully to improving translation quality in real
+velop in Section 4 will be designed to avoid this                               (not simulated) conditions. We call the method the
+word alignment danger.                                                          Highlighted N-Gram method, or HNG, for short.
+                                                                                HNG solicits translations only for trigger n-grams
+3.3            Automatic Stopping
+                                                                                and not for entire sentences. We provide senten-
+The problem of automatically detecting when to                                  tial context, highlight the trigger n-gram that we
+stop AL is a substantial one, discussed at length                               want translated, and ask for a translation of just the
+in the literature (e.g., (Bloodgood and Vijay-                                  highlighted trigger n-gram. HNG asks for transla-
+Shanker, 2009a; Schohn and Cohn, 2000; Vla-                                     tions for triggers in the same order that the triggers
+chos, 2008)). In our simulation, we stop VG once                                are encountered by the algorithm in Figure 2. A
+all n-grams (n in {1,2,3,4}) have been covered.                                 screenshot of our interface is depicted in Figure 8.
+Though simple, this stopping criterion seems to                                 The same stopping criterion is used as was used in
+work well as can be seen by where the curve for                                 the last section. When the stopping criterion be-
+VG is cut off in Figures 3 and 4. It stops af-                                  comes true, it is time to tap a new unlabeled pool
+ter 1,293,093 words have been translated, with                                  of foreign text, if available.
+jHier’s BLEU=21.92 and jSyntax’s BLEU=26.10                                        Our motivations for soliciting translations for
+at the stopping point. The ending BLEU scores                                   only parts of sentences are twofold, corresponding
+(with the full corpus annotated) are 21.87 and                                  to two possible cases. Case one is that a translation
+26.01 for jHier and jSyntax, respectively. So                                   model learned from the so-far labeled data will be
+our stopping criterion saves 22.3% of the anno-                                 able to translate most of the non-trigger words in
+tation (in terms of words) and actually achieves                                the sentence correctly. Thus, by asking a human
+slightly higher BLEU scores than if all the data                                to translate only the trigger words, we avoid wast-
+were used. Note: this ”less is more” phenomenon                                 ing human translation effort. (We will show in
+
+
+                                                                          858
+
+
+                      jHiero: VG vs mostNew vs moderateNew                                  #s of unseen words is likely to get word-aligned
+                25
+                                                                                            incorrectly and then learning from that translation
+                                                                                            could be hampered. By asking for a translation
+                20                                                                          of only the trigger words, we expect to be able to
+                                                                                            circumvent this problem in large part.
+                                                                                               The next section presents the results of experi-
+   BLEU Score
+
+
+
+
+                15
+                                                                                            ments that show that the HNG algorithm is indeed
+                                                                                            practically effective. Also, the next section ana-
+                10                                  VG
+                                                    mostNew
+                                                                                            lyzes results regarding various aspects of HNG’s
+                                                    moderateNew                             behavior in more depth.
+                 5
+
+                                                                                            5       Experiments and Discussion
+                 0
+                  0          0.5                   1                  1.5         2
+                                                                                  6
+                      Number of Foreign Words in Training Data
+                                                              x 10                          5.1      General Setup
+
+                                                                                            We set out to see whether we could use the HNG
+Figure 7: VG vs MostNew vs ModerateNew se-
+                                                                                            method to achieve translation quality improve-
+lection. The x-axis measures the number of sen-
+                                                                                            ments by gathering additional translations to add
+tence pairs in the training data. The y-axis mea-
+                                                                                            to the training data of the entire LDC language
+sures BLEU score.
+                                                                                            pack, including its dictionary. In particular, we
+                                                                                            wanted to see if we could achieve translation im-
+  XW)VU 8,9! &TS &TS &/ *@7R &' -6QG &P)#O! N3?:' 8M)L2 1!$K$" &J" &J"
+ \3R 8' %$[-"! Z:G 3HM 8' 3<.)YE 8#D! 432 C.! 432 ".0/ (.! -)*", 8'
+                                                                                            provements on top of already state-of-the-art per-
+                                            &<> 8P)#'> &E3' ])#5 =T)#5 .                    forming systems trained already on the entire LDC
+ )<!$#Hd *< &/ _S *9 c$" 8' b.-,5 &" XG$HU a>$`/ *' Z:+ &+C *(' *< _S : ^                   corpus. Note that at the outset this is an ambitious
+                                        Z:(" 2.1# 2.1# : g<3e f)@(e ? &+ .
+                                                                                            endeavor (recall the flattening of the curves in Fig-
+                                                                                            ure 1 from Section 1).
+ $+ 86:#5 &" %$,'C)' &' ' 54.3 ' I:G *< &+ )0H/ $+ *' )#E )+C )K ):' *@e *< .
+                                                                                               Snow et al. (2008) explored the use of the Ama-
+  )K ):' Z:(" f!-"! 3i" $' 1! C.! &+ Xh. )' IU &' IP)QG 9) ' 8! $76 ),(' )' 1!              zon Mechanical Turk (MTurk) web service for
+                                                                       )0H/ ' .
+                                                                                            gathering annotations for a variety of natural lan-
+ A/ 3@?/> $' =<; +*) (& $'&$% $#"! !-:9 8765 432 1)0/.-,+ *' )(' &" %$#"!                   guage processing tasks and recently MTurk has
+                                          &+ )0+)D )"3' I?HG FE C)D C!B+ .> .
+                                                                                            been shown to be a quick, cost-effective way to
+                                                                                            gather Urdu-English translations (Bloodgood and
+Figure 8: Screenshot of the interface we used for
+                                                                                            Callison-Burch, 2010). We used the MTurk web
+soliciting translations for triggers.
+                                                                                            service to gather our annotations. Specifically, we
+                                                                                            first crawled a large set of BBC articles on the in-
+the next section that we even get a much larger
+                                                                                            ternet in Urdu and used this as our unlabeled pool
+speedup above and beyond what the reduction in
+                                                                                            from which to gather annotations. We applied the
+number of translated words would give us.) Case
+                                                                                            HNG method from Section 4 to determine what to
+two is that a translation model learned from the so-
+                                                                                            post on MTurk for workers to translate.2 We gath-
+far labeled data will (in addition to not being able
+                                                                                            ered 20,580 n-gram translations for which we paid
+to translate the trigger words correctly) also not be
+                                                                                            $0.01 USD per translation, giving us a total cost
+able to translate most of the non-trigger words cor-
+                                                                                            of $205.80 USD. We also gathered 1632 randomly
+rectly. One might think then that this would be a
+                                                                                            chosen Urdu sentence translations as a control set,
+great sentence to have translated because the ma-
+                                                                                            for which we paid $0.10 USD per sentence trans-
+chine can potentially learn a lot from the transla-
+                                                                                            lation.3
+tion. Indeed, one of the overarching themes of AL
+research is to query examples where uncertainty is                                              2
+                                                                                                  For practical reasons we restricted ourselves to not con-
+greatest. But, as we showed evidence for in the                                             sidering sentences that were longer than 60 Urdu words, how-
+last section, for the case of SMT, too much un-                                             ever.
+                                                                                                3
+certainty could in a sense overwhelm the machine                                                  The prices we paid were not market-driven. We just
+                                                                                            chose prices we thought were reasonable. In hindsight, given
+and it might be better to provide new training data                                         how much quicker the phrase translations are for people we
+in a more gradual manner. A sentence with large                                             could have had a greater disparity in price.
+
+
+                                                                                      859
+
+
+5.2    Accounting for Translation Time                                                       jHier: HNG Collection vs Random Collection of
+                                                                                                       Annotations from MTurk
+MTurk returns with each assignment the “Work-                                        22.8
+TimeInSeconds.” This is the amount of time be-                                                   random
+                                                                                     22.6        HNG
+tween when a worker accepts an assignment and
+when the worker submits the completed assign-
+                                                                                     22.4
+ment. We use this value to estimate annotation
+
+
+
+
+                                                                        BLEU Score
+times.4
+                                                                                     22.2
+   Figure 9 shows HNG collection versus random
+collection from MTurk. The x-axis measures the                                        22
+number of seconds of annotation time. Note that
+HNG is more effective. A result that may be par-                                     21.8
+ticularly interesting is that HNG results in a time
+speedup by more than just the reduction in trans-                                    21.6
+                                                                                         0       1        2     3       4       5       6
+lated words would indicate. The average time to                                                                                         x 10
+                                                                                                                                             5
+                                                                                                 Number of Seconds of Annotation Time
+translate a word of Urdu with the sentence post-
+ings to MTurk was 32.92 seconds. The average
+                                                                       Figure 9: HNG vs Random collection of new data
+time to translate a word with the HNG postings to
+                                                                       via MTurk. y-axis measures BLEU. x-axis mea-
+MTurk was 11.98 seconds. This is nearly three
+                                                                       sures annotation time in seconds.
+times faster. Figure 10 shows the distribution of
+speeds (in seconds per word) for HNG postings
+versus complete sentence postings. Note that the                       angle around the last 700,000 words of the LDC
+HNG postings consistently result in faster transla-                    data is wide and short (it has a height of 0.9 BLEU
+tion speeds than the sentence postings5 .                              points and a width of 700,000 words) but the rect-
+   We hypothesize that this speedup comes about                        angle around the newly added translations is nar-
+because when translating a full sentence, there’s                      row and tall (a height of 1 BLEU point and a
+the time required to examine each word and trans-                      width of 54,500 words). Visually, it appears we
+late them in some sense (even if not one-to-one)                       are succeeding in bucking the trend of diminish-
+and then there is an extra significant overhead time                   ing returns. We further confirmed this by running
+to put it all together and synthesize into a larger                    a least-squares linear regression on the points of
+sentence translation. The factor of three speedup                      the last 700,000 words annotated in the LDC data
+is evidence that this overhead is significant effort                   and also for the points in the new data that we ac-
+compared to just quickly translating short n-grams                     quired via MTurk for $205.80 USD. We find that
+from a sentence. This speedup is an additional                         the slope fit to our new data is 6.6245E-06 BLEU
+benefit of the HNG approach.                                           points per Urdu word, or 6.6245 BLEU points for
+                                                                       a million Urdu words. The slope fit to the LDC
+5.3    Bucking the Trend
+                                                                       data is only 7.4957E-07 BLEU points per word,
+We gathered translations for ≈ 54,500 Urdu words                       or only 0.74957 BLEU points for a million words.
+via the use of HNG on MTurk. This is a rela-                           This is already an order of magnitude difference
+tively small amount, ≈ 3% of the LDC corpus.                           that would make the difference between it being
+Figure 11 shows the performance when we add                            worth adding more data and not being worth it;
+this training data to the LDC corpus. The rect-                        and this is leaving aside the added time speedup
+   4                                                                   that our method enjoys.
+      It’s imperfect because of network delays and if a person
+is multitasking or pausing between their accept and submit                Still, we wondered why we could not have
+times. Nonetheless, the times ought to be better estimates as          raised BLEU scores even faster. The main hur-
+they are taken over larger samples.
+    5
+      The average speed for the HNG postings seems to be
+                                                                       dle seems to be one of coverage. Of the 20,580 n-
+slower than the histogram indicates. This is because there             grams we collected, only 571 (i.e., 2.77%) of them
+were a few extremely slow outlier speeds for a handful of              ever even occur in the test set.
+HNG postings. These are almost certainly not cases when the
+turker is working continuously on the task and so the average
+speed we computed for the HNG postings might be slower                 5.4             Beyond BLEU Scores
+than the actual speed and hence the true speedup may even
+be faster than indicated by the difference between the aver-           BLEU is an imperfect metric (Callison-Burch et
+age speeds we reported.                                                al., 2006). One reason is that it rates all ngram
+
+
+                                                                 860
+
+
+                            Histogram showing the distribution of translation speeds                               Bucking the Trend: JHiero Translation Quality versus
+                                (in seconds per foreign word) when translations                                           Number of Foreign Words Annotated
+                            are collected via n−grams versus via complete sentences                         23.5
+                                                                                                                                         the approx. 54,500 foreign words
+                     0.25                                                                                                                     we selectively sampled
+                                                                                                                                                  for annotation
+                                                                                                             23                                   cost = $205.80
+                                                                                                                        last approx. 700,000
+                                                                                                                            foreign words
+                      0.2                                                                                              annotated in LDC data
+
+
+
+
+                                                                                               BLEU Score
+                                                      n−grams                                               22.5
+Relative Frequency
+
+
+
+
+                                                      sentences
+                     0.15                             average time per                                       22
+                                                      word for sentences
+                                                      average time per
+                                                      word for n−grams                                      21.5
+                      0.1
+
+                                                                                                             21
+                                                                                                                   1                1.2              1.4              1.6      1.8
+                                                                                                                                                                                 6
+                     0.05                                                                                                      Number of Foreign Words Annotated
+                                                                                                                                                                            x 10
+
+
+                                                                                              Figure 11: Bucking the trend: performance of
+                       0
+                        0          20        40       60        80      100       120         HNG-selected additional data from BBC web
+                            Time (in seconds) per foreign word translated                     crawl data annotated via Amazon Mechanical
+                                                                                              Turk. y-axis measures BLEU. x-axis measures
+Figure 10: Distribution of translation speeds (in                                             number of words annotated.
+seconds per word) for HNG postings versus com-
+plete sentence postings. The y-axis measures rel-
+ative frequency. The x-axis measures translation
+speed in seconds per word (so farther to the left is
+faster).
+
+
+mismatches equally although some are much more
+important than others. Another reason is it’s not
+intuitive what a gain of x BLEU points means in
+practice. Here we show some concrete example
+translations to show the types of improvements
+we’re achieving and also some examples which
+suggest improvements we can make to our AL se-
+lection algorithm in the future. Figure 12 shows a
+                                                                                                             Figure 12: Example of strategy working.
+prototypical example of our system working.
+   Figure 13 shows an example where the strategy
+is working partially but not as well as it might. The
+Urdu phrase was translated by turkers as “gowned                                              single word on the ‘one’ side. For example, we
+veil”. However, since the word aligner just aligns                                            would force both ‘gowned’ and ‘veil’ to be aligned
+the word to “gowned”, we only see “gowned” in                                                 to the single Urdu word instead of allowing the au-
+our output. This prompts a number of discussion                                               tomatic aligner to only align ‘gowned’.
+points. First, the ‘after system’ has better transla-                                            Figure 14 shows an example where our “before”
+tions but they’re not rewarded by BLEU scores be-                                             system already got the translation correct without
+cause the references use the words ‘burqah’ or just                                           the need for the additional phrase translation. This
+‘veil’ without ‘gowned’. Second, we hypothesize                                               is because though the “before” system had never
+that we may be able to see improvements by over-                                              seen the Urdu expression for “12 May”, it had seen
+riding the automatic alignment software when-                                                 the Urdu words for “12” and “May” in isolation
+ever we obtain a many-to-one or one-to-many (in                                               and was able to successfully compose them. An
+terms of words) translation for one of our trigger                                            area of future work is to use the “before” system to
+phrases. In such cases, we’d like to make sure that                                           determine such cases automatically and avoid ask-
+every word on the ‘many’ side is aligned to the                                               ing humans to provide translations in such cases.
+
+
+                                                                                        861
+
+
+                                                               chine translation. In Proceedings of the Seventh con-
+                                                               ference on International Language Resources and
+                                                               Evaluation (LREC’10), Valletta, Malta, may. Euro-
+                                                               pean Language Resources Association (ELRA).
+
+                                                             Michele Banko and Eric Brill. 2001. Scaling to very
+                                                               very large corpora for natural language disambigua-
+                                                               tion. In Proceedings of 39th Annual Meeting of the
+                                                               Association for Computational Linguistics, pages
+                                                               26–33, Toulouse, France, July. Association for Com-
+                                                               putational Linguistics.
+Figure 13: Example showing where we can im-                  Michael Bloodgood and Chris Callison-Burch. 2010.
+prove our selection strategy.                                  Using mechanical turk to build machine translation
+                                                               evaluation sets. In Proceedings of the Workshop on
+                                                               Creating Speech and Language Data With Amazon’s
+                                                               Mechanical Turk, Los Angeles, California, June.
+                                                               Association for Computational Linguistics.
+
+                                                             Michael Bloodgood and K Vijay-Shanker. 2008. An
+                                                               approach to reducing annotation costs for bionlp.
+                                                               In Proceedings of the Workshop on Current Trends
+                                                               in Biomedical Natural Language Processing, pages
+                                                               104–105, Columbus, Ohio, June. Association for
+                                                               Computational Linguistics.
+
+                                                             Michael Bloodgood and K Vijay-Shanker. 2009a. A
+Figure 14: Example showing where we can im-
+                                                               method for stopping active learning based on stabi-
+prove our selection strategy.                                  lizing predictions and the need for user-adjustable
+                                                               stopping. In Proceedings of the Thirteenth Confer-
+                                                               ence on Computational Natural Language Learning
+6   Conclusions and Future Work                                (CoNLL-2009), pages 39–47, Boulder, Colorado,
+                                                               June. Association for Computational Linguistics.
+We succeeded in bucking the trend of diminishing
+returns and improving translation quality while              Michael Bloodgood and K Vijay-Shanker. 2009b. Tak-
+                                                               ing into account the differences between actively
+keeping annotation costs low. In future work we                and passively acquired data: The case of active
+would like to apply these ideas to domain adap-                learning with support vector machines for imbal-
+tation (say, general-purpose MT system to work                 anced datasets. In Proceedings of Human Lan-
+for scientific domain such as chemistry). Also, we             guage Technologies: The 2009 Annual Conference
+                                                               of the North American Chapter of the Association
+would like to test with more languages, increase               for Computational Linguistics (NAACL), pages 137–
+the amount of data we can gather, and investigate              140, Boulder, Colorado, June. Association for Com-
+stopping criteria further. Also, we would like to              putational Linguistics.
+investigate increasing the efficiency of the selec-
+                                                             Chris Callison-Burch, Miles Osborne, and Philipp
+tion algorithm by addressing issues such as the one            Koehn. 2006. Re-evaluating the role of Bleu in ma-
+raised by the 12 May example presented earlier.                chine translation research. In 11th Conference of the
+                                                               European Chapter of the Association for Computa-
+Acknowledgements                                               tional Linguistics (EACL-2006), Trento, Italy.
+
+This work was supported by the Johns Hopkins                 David Chiang. 2007. Hierarchical phrase-based trans-
+University Human Language Technology Center                    lation. Computational Linguistics, 33(2):201–228.
+of Excellence. Any opinions, findings, conclu-
+                                                             Ben Hachey, Beatrice Alex, and Markus Becker. 2005.
+sions, or recommendations expressed in this mate-              Investigating the effects of selective sampling on the
+rial are those of the authors and do not necessarily           annotation task. In Proceedings of the Ninth Confer-
+reflect the views of the sponsor.                              ence on Computational Natural Language Learning
+                                                               (CoNLL-2005), pages 144–151, Ann Arbor, Michi-
+                                                               gan, June. Association for Computational Linguis-
+References                                                     tics.
+
+Vamshi Ambati, Stephan Vogel, and Jaime Carbonell.           Robbie Haertel, Eric Ringger, Kevin Seppi, James Car-
+  2010. Active learning and crowd-sourcing for ma-             roll, and Peter McClanahan. 2008. Assessing the
+
+
+                                                       862
+
+
+  costs of sampling methods in active learning for an-               Meeting of the Association for Computational Lin-
+  notation. In Proceedings of ACL-08: HLT, Short Pa-                 guistics (ACL), Uppsala, Sweden, July. Association
+  pers, pages 65–68, Columbus, Ohio, June. Associa-                  for Computational Linguistics.
+  tion for Computational Linguistics.
+                                                                   Grace Ngai and David Yarowsky. 2000. Rule writ-
+Gholamreza Haffari and Anoop Sarkar. 2009. Active                    ing or annotation: cost-efficient resource usage for
+  learning for multilingual statistical machine trans-               base noun phrase chunking. In Proceedings of the
+  lation. In Proceedings of the Joint Conference of                  38th Annual Meeting of the Association for Compu-
+  the 47th Annual Meeting of the ACL and the 4th In-                 tational Linguistics. Association for Computational
+  ternational Joint Conference on Natural Language                   Linguistics.
+  Processing of the AFNLP, pages 181–189, Suntec,
+  Singapore, August. Association for Computational                 Miles Osborne and Jason Baldridge. 2004. Ensemble-
+  Linguistics.                                                       based active learning for parse selection.    In
+                                                                     Daniel Marcu Susan Dumais and Salim Roukos, ed-
+Gholamreza Haffari, Maxim Roy, and Anoop Sarkar.                     itors, HLT-NAACL 2004: Main Proceedings, pages
+  2009. Active learning for statistical phrase-based                 89–96, Boston, Massachusetts, USA, May 2 - May
+  machine translation. In Proceedings of Human                       7. Association for Computational Linguistics.
+  Language Technologies: The 2009 Annual Confer-
+  ence of the North American Chapter of the Associa-               Kishore Papineni, Salim Roukos, Todd Ward, and Wei-
+  tion for Computational Linguistics, pages 415–423,                 Jing Zhu. 2002. Bleu: a method for automatic
+  Boulder, Colorado, June. Association for Computa-                  evaluation of machine translation. In Proceedings
+  tional Linguistics.                                                of 40th Annual Meeting of the Association for Com-
+                                                                     putational Linguistics, pages 311–318, Philadelphia,
+Rebecca Hwa. 2000. Sample selection for statistical                  Pennsylvania, USA, July. Association for Computa-
+  grammar induction. In Hinrich Schütze and Keh-                    tional Linguistics.
+  Yih Su, editors, Proceedings of the 2000 Joint SIG-
+  DAT Conference on Empirical Methods in Natural                   Manabu Sassano. 2002. An empirical study of active
+  Language Processing, pages 45–53. Association for                 learning with support vector machines for japanese
+  Computational Linguistics, Somerset, New Jersey.                  word segmentation. In ACL ’02: Proceedings of the
+                                                                    40th Annual Meeting on Association for Computa-
+Ashish Kapoor, Eric Horvitz, and Sumit Basu. 2007.                  tional Linguistics, pages 505–512, Morristown, NJ,
+  Selective supervision: Guiding supervised learn-                  USA. Association for Computational Linguistics.
+  ing with decision-theoretic active learning. In
+  Manuela M. Veloso, editor, IJCAI 2007, Proceed-                  Greg Schohn and David Cohn. 2000. Less is more:
+  ings of the 20th International Joint Conference on                 Active learning with support vector machines. In
+  Artificial Intelligence, Hyderabad, India, January 6-              Proc. 17th International Conf. on Machine Learn-
+  12, 2007, pages 877–882.                                           ing, pages 839–846. Morgan Kaufmann, San Fran-
+                                                                     cisco, CA.
+Ross D. King, Kenneth E. Whelan, Ffion M.
+  Jones, Philip G. K. Reiser, Christopher H. Bryant,               Rion Snow, Brendan O’Connor, Daniel Jurafsky, and
+  Stephen H. Muggleton, Douglas B. Kell, and                         Andrew Ng. 2008. Cheap and fast – but is it
+  Stephen G. Oliver. 2004. Functional genomic hy-                    good? evaluating non-expert annotations for natu-
+  pothesis generation and experimentation by a robot                 ral language tasks. In Proceedings of the 2008 Con-
+  scientist. Nature, 427:247–252, 15 January.                        ference on Empirical Methods in Natural Language
+                                                                     Processing, pages 254–263, Honolulu, Hawaii, Oc-
+David D. Lewis and William A. Gale. 1994. A se-                      tober. Association for Computational Linguistics.
+  quential algorithm for training text classifiers. In SI-
+  GIR ’94: Proceedings of the 17th annual interna-                 Katrin Tomanek and Udo Hahn.          2009.     Semi-
+  tional ACM SIGIR conference on Research and de-                    supervised active learning for sequence labeling. In
+  velopment in information retrieval, pages 3–12, New                Proceedings of the Joint Conference of the 47th An-
+  York, NY, USA. Springer-Verlag New York, Inc.                      nual Meeting of the ACL and the 4th International
+                                                                     Joint Conference on Natural Language Processing
+Zhifei Li, Chris Callison-Burch, Chris Dyer, Juri Gan-               of the AFNLP, pages 1039–1047, Suntec, Singapore,
+  itkevitch, Sanjeev Khudanpur, Lane Schwartz, Wren                  August. Association for Computational Linguistics.
+  Thornton, Jonathan Weese, and Omar Zaidan. 2009.
+  Joshua: An open source toolkit for parsing-based                 Simon Tong and Daphne Koller. 2002. Support vec-
+  machine translation. In Proceedings of the Fourth                  tor machine active learning with applications to text
+  Workshop on Statistical Machine Translation, pages                 classification. Journal of Machine Learning Re-
+  135–139, Athens, Greece, March. Association for                    search (JMLR), 2:45–66.
+  Computational Linguistics.
+                                                                   David Vickrey, Oscar Kipersztok, and Daphne Koller.
+Francois Mairesse, Milica Gasic, Filip Jurcicek, Simon               2010. An active learning approach to finding related
+  Keizer, Jorge Prombonas, Blaise Thomson, Kai Yu,                   terms. In Proceedings of the 48th Annual Meet-
+  and Steve Young. 2010. Phrase-based statistical                    ing of the Association for Computational Linguis-
+  language generation using graphical models and ac-                 tics (ACL), Uppsala, Sweden, July. Association for
+  tive learning. In Proceedings of the 48th Annual                   Computational Linguistics.
+
+
+                                                             863
+
+
+Andreas Vlachos. 2008. A stopping criterion for
+  active learning. Computer Speech and Language,
+  22(3):295–312.
+
+Andreas Zollmann and Ashish Venugopal. 2006. Syn-
+  tax augmented machine translation via chart pars-
+  ing. In Proceedings of the NAACL-2006 Workshop
+  on Statistical Machine Translation (WMT06), New
+  York, New York.
+
+
+
+
+                                                      864
+

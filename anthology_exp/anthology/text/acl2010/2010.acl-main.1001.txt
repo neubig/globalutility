@@ -1,0 +1,711 @@
+                           Efficient Third-order Dependency Parsers
+
+                                      Terry Koo and Michael Collins
+                                  MIT CSAIL, Cambridge, MA, 02139, USA
+                                 {maestro,mcollins}@csail.mit.edu
+
+
+
+                        Abstract                                    must be balanced against any resulting increase in
+                                                                    the computational cost of the parsing algorithm.
+    We present algorithms for higher-order de-                      Consequently, recent work in dependency pars-
+    pendency parsing that are “third-order”                         ing has been restricted to applications of second-
+    in the sense that they can evaluate sub-                        order parsers, the most powerful of which (Car-
+    structures containing three dependencies,                       reras, 2007) requires O(n4 ) time and O(n3 ) space,
+    and “efficient” in the sense that they re-                      while being limited to second-order parts.
+    quire only O(n4 ) time. Importantly, our                           In this paper, we present new third-order pars-
+    new parsers can utilize both sibling-style                      ing algorithms that increase both the size and vari-
+    and grandchild-style interactions. We                           ety of the parts participating in the factorization,
+    evaluate our parsers on the Penn Tree-                          while simultaneously maintaining computational
+    bank and Prague Dependency Treebank,                            requirements of O(n4 ) time and O(n3 ) space. We
+    achieving unlabeled attachment scores of                        evaluate our parsers on the Penn WSJ Treebank
+    93.04% and 87.38%, respectively.                                (Marcus et al., 1993) and Prague Dependency
+1    Introduction                                                   Treebank (Hajič et al., 2001), achieving unlabeled
+                                                                    attachment scores of 93.04% and 87.38%. In sum-
+Dependency grammar has proven to be a very use-                     mary, we make three main contributions:
+ful syntactic formalism, due in no small part to the
+                                                                        1. Efficient new third-order parsing algorithms.
+development of efficient parsing algorithms (Eis-
+ner, 2000; McDonald et al., 2005b; McDonald                             2. Empirical evaluations of these parsers.
+and Pereira, 2006; Carreras, 2007), which can be                        3. A free distribution of our implementation.2
+leveraged for a wide variety of learning methods,
+such as feature-rich discriminative models (Laf-                    The remainder of this paper is divided as follows:
+ferty et al., 2001; Collins, 2002; Taskar et al.,                   Sections 2 and 3 give background, Sections 4 and
+2003). These parsing algorithms share an impor-                     5 describe our new parsing algorithms, Section 6
+tant characteristic: they factor dependency trees                   discusses related work, Section 7 presents our ex-
+into sets of parts that have limited interactions. By               perimental results, and Section 8 concludes.
+exploiting the additional constraints arising from
+the factorization, maximizations or summations
+                                                                    2       Dependency parsing
+over the set of possible dependency trees can be                    In dependency grammar, syntactic relationships
+performed efficiently and exactly.                                  are represented as head-modifier dependencies:
+   A crucial limitation of factored parsing algo-                   directed arcs between a head, which is the more
+rithms is that the associated parts are typically                   “essential” word in the relationship, and a modi-
+quite small, losing much of the contextual in-                      fier, which supplements the meaning of the head.
+formation within the dependency tree. For the                       For example, Figure 1 contains a dependency be-
+purposes of improving parsing performance, it is                    tween the verb “report” (the head) and its object
+desirable to increase the size and variety of the                   “sales” (the modifier). A complete analysis of a
+parts used by the factorization.1 At the same                       sentence is given by a dependency tree: a set of de-
+time, the need for more expressive factorizations                   pendencies that forms a rooted, directed tree span-
+    1
+      For examples of how performance varies with the degree        ning the words of the sentence. Every dependency
+of the parser’s factorization see, e.g., McDonald and Pereira       tree is rooted at a special “*” token, allowing the
+(2006, Tables 1 and 2), Carreras (2007, Table 2), Koo et al.
+                                                                        2
+(2008, Tables 2 and 4), or Suzuki et al. (2009, Tables 3–6).                http://groups.csail.mit.edu/nlp/dpo3/
+
+
+
+                                                                1
+           Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1–11,
+                  Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                                      (a)             =            +
+                                                                            h     e       h    m       m     e
+*   Insiders must report purchases and sales immediately
+                                                                      (b)             =            +
+    Figure 1: An example dependency structure.                              h    m        h    r       r+1 m
+
+selection of the sentential head to be modeled as if            Figure 2: The dynamic-programming structures
+it were a dependency.                                           and derivations of the Eisner (2000) algorithm.
+   For a sentence x, we define dependency parsing               Complete spans are depicted as triangles and in-
+as a search for the highest-scoring analysis of x:              complete spans as trapezoids. For brevity, we elide
+                                                                the symmetric right-headed versions.
+           y ∗ (x) = argmax S CORE(x, y)              (1)
+                         y∈Y(x)
+
+Here, Y(x) is the set of all trees compatible with              3.1   First-order factorization
+x and S CORE(x, y) evaluates the event that tree y              The first type of parser we describe uses a “first-
+is the analysis of sentence x. Since the cardinal-              order” factorization, which decomposes a depen-
+ity of Y(x) grows exponentially with the length of              dency tree into its individual dependencies. Eis-
+the sentence, directly solving Eq. 1 is impractical.            ner (2000) introduced a widely-used dynamic-
+A common strategy, and one which forms the fo-                  programming algorithm for first-order parsing; as
+cus of this paper, is to factor each dependency tree            it is the basis for many parsers, including our new
+into small parts, which can be scored in isolation.             algorithms, we summarize its design here.
+Factored parsing can be formalized as follows:                      The Eisner (2000) algorithm is based on two
+     S CORE(x, y) =               S CORE PART(x, p)
+                           X
+                                                                interrelated types of dynamic-programming struc-
+                           p∈y                                  tures: complete spans, which consist of a head-
+That is, we treat the dependency tree y as a set                word and its descendents on one side, and incom-
+of parts p, each of which makes a separate contri-              plete spans, which consist of a dependency and the
+bution to the score of y. For certain factorizations,           region between the head and modifier.
+efficient parsing algorithms exist for solving Eq. 1.               Formally, we denote a complete span as Ch,e
+   We define the order of a part according to the               where h and e are the indices of the span’s head-
+number of dependencies it contains, with analo-                 word and endpoint. An incomplete span is de-
+gous terminology for factorizations and parsing al-             noted as Ih,m where h and m are the index of the
+gorithms. In the remainder of this paper, we focus              head and modifier of a dependency. Intuitively,
+on factorizations utilizing the following parts:                a complete span represents a “half-constituent”
+                                                                headed by h, whereas an incomplete span is only
+                                                                a partial half-constituent, since the constituent can
+     h     m         h      s m         g   h     m             be extended by adding more modifiers to m.
+    dependency           sibling        grandchild                  Each type of span is created by recursively
+                                                                combining two smaller, adjacent spans; the con-
+                                                                structions are specified graphically in Figure 2.
+       g      h     s m            h      t    s m              An incomplete span is constructed from a pair
+           grand-sibling               tri-sibling
+                                                                of complete spans, indicating the division of the
+Specifically, Sections 4.1, 4.2, and 4.3 describe               range [h, m] into constituents headed by h and
+parsers that, respectively, factor trees into grand-            m. A complete span is created by “complet-
+child parts, grand-sibling parts, and a mixture of              ing” an incomplete span with the other half of
+grand-sibling and tri-sibling parts.                            m’s constituent. The point of concatenation in
+                                                                each construction—m in Figure 2(a) or r in Fig-
+3    Existing parsing algorithms
+                                                                ure 2(b)—is the split point, a free index that must
+Our new third-order dependency parsers build on                 be enumerated to find the optimal construction.
+ideas from existing parsing algorithms. In this                     In order to parse a sentence x, it suffices to
+section, we provide background on two relevant                  find optimal constructions for all complete and
+parsers from previous work.                                     incomplete spans defined on x. This can be
+
+
+                                                            2
+
+
+      (a)             =            +                       (a)                      =                   +
+            h     e       h   m        m    e                    g      h       e       g    h     m        h   m      e
+
+      (b)             =            +                       (b)                      =                   +
+            h    m        h    s       s   m                     g      h       m       g    h      r       h   r+1 m
+
+      (c)             =            +
+            s    m        s   r        r+1 m               (c)                      =                   +
+                                                                 h          e   g       h    m      g       h   m      e
+Figure 3: The dynamic-programming structures
+and derivations of the second-order sibling parser;        (d)                      =                   +
+sibling spans are depicted as boxes. For brevity,
+                                                                 h          m   g       h     r     g       h   r+1 m
+we elide the right-headed versions.
+                                                           Figure 4: The dynamic-programming structures
+accomplished by adapting standard chart-parsing            and derivations of Model 0. For brevity, we elide
+techniques (Cocke and Schwartz, 1970; Younger,             the right-headed versions. Note that (c) and (d)
+1967; Kasami, 1965) to the recursive derivations           differ from (a) and (b) only in the position of g.
+defined in Figure 2. Since each derivation is de-
+fined by two fixed indices (the boundaries of the          still defined by a span and split point, so the parser
+span) and a third free index (the split point), the        requires O(n3 ) time and O(n2 ) space.
+parsing algorithm requires O(n3 ) time and O(n2 )
+space (Eisner, 1996; McAllester, 1999).                    4     New third-order parsing algorithms
+3.2   Second-order sibling factorization                   In this section we describe our new third-order de-
+As remarked by Eisner (1996) and McDonald                  pendency parsing algorithms. Our overall method
+and Pereira (2006), it is possible to rearrange the        is characterized by the augmentation of each span
+dynamic-programming structures to conform to an            with a “grandparent” index: an index external to
+improved factorization that decomposes each tree           the span whose role will be made clear below. This
+into sibling parts—pairs of dependencies with a            section presents three parsing algorithms based on
+shared head. Specifically, a sibling part consists         this idea: Model 0, a second-order parser, and
+of a triple of indices (h, m, s) where (h, m) and          Models 1 and 2, which are third-order parsers.
+(h, s) are dependencies, and where s and m are
+                                                           4.1       Model 0: all grandchildren
+successive modifiers to the same side of h.
+   In order to parse this factorization, the second-       The first parser, Model 0, factors each dependency
+order parser introduces a third type of dynamic-           tree into a set of grandchild parts—pairs of de-
+programming structure: sibling spans, which rep-           pendencies connected head-to-tail. Specifically,
+resent the region between successive modifiers of          a grandchild part is a triple of indices (g, h, m)
+some head. Formally, we denote a sibling span              where (g, h) and (h, m) are dependencies.3
+as Ss,m where s and m are a pair of modifiers in-             In order to parse this factorization, we augment
+volved in a sibling relationship. Modified versions        both complete and incomplete spans with grand-
+of sibling spans will play an important role in the        parent indices; for brevity, we refer to these aug-
+new parsing algorithms described in Section 4.             mented structures as g-spans. Formally, we denote
+                                                                                    g
+   Figure 3 provides a graphical specification of          a complete g-span as Ch,e   , where Ch,e is a normal
+the second-order parsing algorithm. Note that in-          complete span and g is an index lying outside the
+complete spans are constructed in a new way: the           range [h, e], with the implication that (g, h) is a
+second-order parser combines a smaller incom-              dependency. Incomplete g-spans are defined anal-
+                                                                                          g
+plete span, representing the next-innermost depen-         ogously and are denoted as Ih,m    .
+dency, with a sibling span that covers the region             Figure 4 depicts complete and incomplete g-
+between the two modifiers. Sibling parts (h, m, s)         spans and provides a graphical specification of the
+can thus be obtained from Figure 3(b). Despite                3
+                                                                The Carreras (2007) parser also uses grandchild parts but
+the use of second-order parts, each derivation is          only in restricted cases; see Section 6 for details.
+
+
+                                                       3
+
+
+O PTIMIZE A LL S PANS(x)
+1. ∀ g, i Ci,ig
+                 =0                                / base case       (a)                     =               +
+2. for w = 1 . . . (n − 1)                       / span width              g      h      e       g   h   m       h   m   e
+3.    for i = 1 . . . (n − w)            / span start index
+4.       j =i+w                             / span end index         (b)                     =               +
+5.       for g < i or g > j            / grandparent index
+             g                   g                                         g      h      m       g   h   s       h   s   m
+6.          Ii,j = max i≤r<j {Ci,r  + Cj,r+1
+                                          i      }+
+                    S CORE G(x, g, i, j)
+             g                   g             j
+7.          Ij,i = max i≤r<j {Cj,r+1    + Ci,r   }+                  (c)                     =               +
+                    S CORE G(x, g, j, i)                                   h      s      m       h   s   r       h   r+1 m
+              g                   g
+8.          Ci,j = max i<m≤j {Ii,m     + Cm,ji }
+              g                   g          j
+9.          Cj,i = max i≤m<j {Ij,m + Cm,i        }                   Figure 6: The dynamic-programming structures
+10.      endfor                                                      and derivations of Model 1. Right-headed and
+11. endfor                                                           right-grandparented versions are omitted.
+12. endfor
+
+Figure 5: A bottom-up chart parser for Model 0.                      span to have non-contiguous structure. For ex-
+S CORE G is the scoring function for grandchild                      ample, in Figure 4(a) the words between g and h
+parts. We use the g-span identities as shorthand                     will be controlled by some other g-span. Due to
+                                g
+for their chart entries (e.g., Ii,j refers to the entry              these discontinuities, the correctness of the Model
+containing the maximum score of that g-span).                        0 dynamic-programming algorithm may not be
+                                                                     immediately obvious. While a full proof of cor-
+                                                                     rectness is beyond the scope of this paper, we note
+Model 0 dynamic-programming algorithm. The                           that each structure on the right-hand side of Fig-
+algorithm resembles the first-order parser, except                   ure 4 lies completely within the structure on the
+that every recursive construction must also set the                  left-hand side. This nesting of structures implies,
+grandparent indices of the smaller g-spans; for-                     in turn, that the usual properties required to ensure
+tunately, this can be done deterministically in all                  the correctness of dynamic programming hold.
+cases. For example, Figure 4(a) depicts the de-
+                   g
+composition of Ch,e    into an incomplete half and                   4.2       Model 1: all grand-siblings
+a complete half. The grandparent of the incom-                       We now describe our first third-order parsing al-
+                             g
+plete half is copied from Ch,e  while the grandpar-                  gorithm. Model 1 decomposes each tree into a
+ent of the complete half is set to h, the head of m                  set of grand-sibling parts—combinations of sib-
+as defined by the construction. Clearly, grandchild                  ling parts and grandchild parts. Specifically, a
+parts (g, h, m) can be read off of the incomplete                    grand-sibling is a 4-tuple of indices (g, h, m, s)
+g-spans in Figure 4(b,d). Moreover, since each                       where (h, m, s) is a sibling part and (g, h, m) and
+derivation copies the grandparent index g into suc-                  (g, h, s) are grandchild parts. For example, in Fig-
+cessively smaller g-spans, grandchild parts will be                  ure 1, the words “must,” “report,” “sales,” and
+produced for all grandchildren of g.                                 “immediately” form a grand-sibling part.
+   Model 0 can be parsed by adapting standard                           In order to parse this factorization, we intro-
+top-down or bottom-up chart parsing techniques.                      duce sibling g-spans Sm,s
+                                                                                             h , which are composed of
+For concreteness, Figure 5 provides a pseudocode                     a normal sibling span Sm,s and an external index
+sketch of a bottom-up chart parser for Model 0;                      h, with the implication that (h, m, s) forms a valid
+although the sketch omits many details, it suf-                      sibling part. Figure 6 provides a graphical specifi-
+fices for the purposes of illustration. The algo-                    cation of the dynamic-programming algorithm for
+rithm progresses from small widths to large in                       Model 1. The overall structure of the algorithm re-
+the usual manner, but after defining the endpoints                   sembles the second-order sibling parser, with the
+(i, j) there is an additional loop that enumerates                   addition of grandparent indices; as in Model 0, the
+all possible grandparents. Since each derivation is                  grandparent indices can be set deterministically in
+defined by three fixed indices (the g-span) and one                  all cases. Note that the sibling g-spans are crucial:
+free index (the split point), the complexity of the                  they allow grand-sibling parts (g, h, m, s) to be
+algorithm is O(n4 ) time and O(n3 ) space.                           read off of Figure 6(b), while simultaneously prop-
+   Note that the grandparent indices cause each g-                   agating grandparent indices to smaller g-spans.
+
+
+                                                                 4
+
+
+                                                                 shows how an incomplete s-span can be converted
+(a)                      =                   +                   into an incomplete g-span by exchanging the in-
+      g      h       e       g   h       m       h   m   e       ternal sibling index for an external grandparent in-
+                                                                 dex; in the process, grand-sibling parts (g, h, m, s)
+(b)                      =                                       are enumerated. Since every derivation is defined
+      g      h      m        h       s   m                       by an augmented span and a split point, Model 2
+                                                                 can be parsed in O(n4 ) time and O(n3 ) space.
+(c)                      =                   +                      It should be noted that unlike Model 1, Model
+      h      s      m        h       t   s       h   s   m       2 produces grand-sibling parts only for the outer-
+                                                                 most pair of grandchildren,4 similar to the behav-
+                                                                 ior of the Carreras (2007) parser. In fact, the re-
+(d)                      =                   +                   semblance is more than passing, as Model 2 can
+      h      s      m        h   s       r       h   r+1 m
+                                                                 emulate the Carreras (2007) algorithm by “demot-
+Figure 7: The dynamic-programming structures                     ing” each third-order part into a second-order part:
+and derivations of Model 2. Right-headed and                     S CORE GS(x, g, h, m, s) = S CORE G(x, g, h, m)
+right-grandparented versions are omitted.                        S CORE TS(x, h, m, s, t) = S CORE S(x, h, m, s)
+
+                                                                 where S CORE G, S CORE S, S CORE GS and
+   Like Model 0, Model 1 can be parsed via adap-
+                                                                 S CORE TS are the scoring functions for grand-
+tations of standard chart-parsing techniques; we
+                                                                 children, siblings, grand-siblings and tri-siblings,
+omit the details for brevity. Despite the move to
+                                                                 respectively. The emulated version has the same
+third-order parts, each derivation is still defined by
+                                                                 computational complexity as the original, so there
+a g-span and a split point, so that parsing requires
+                                                                 is no practical reason to prefer it over the original.
+only O(n4 ) time and O(n3 ) space.
+                                                                 Nevertheless, the relationship illustrated above
+4.3       Model 2: grand-siblings and tri-siblings               highlights the efficiency of our approach: we
+                                                                 are able to recover third-order parts in place of
+Higher-order parsing algorithms have been pro-
+                                                                 second-order parts, at no additional cost.
+posed which extend the second-order sibling fac-
+torization to parts containing multiple siblings                 4.4    Discussion
+(McDonald and Pereira, 2006, also see Section 6
+                                                                 The technique of grandparent-index augmentation
+for discussion). In this section, we show how our
+                                                                 has proven fruitful, as it allows us to parse ex-
+g-span-based techniques can be combined with a
+                                                                 pressive third-order factorizations while retaining
+third-order sibling parser, resulting in a parser that
+                                                                 an efficient O(n4 ) runtime. In fact, our third-
+captures both grand-sibling parts and tri-sibling
+                                                                 order parsing algorithms are “optimally” efficient
+parts—4-tuples of indices (h, m, s, t) such that
+                                                                 in an asymptotic sense. Since each third-order part
+both (h, m, s) and (h, s, t) are sibling parts.
+                                                                 is composed of four separate indices, there are
+   In order to parse this factorization, we intro-
+                                                                 Θ(n4 ) distinct parts. Any third-order parsing al-
+duce a new type of dynamic-programming struc-
+                                                                 gorithm must at least consider the score of each
+ture: sibling-augmented spans, or s-spans. For-
+                                                                 part, hence third-order parsing is Ω(n4 ) and it fol-
+mally, we denote an incomplete s-span as Ih,m,s
+                                                                 lows that the asymptotic complexity of Models 1
+where Ih,m is a normal incomplete span and s is an
+                                                                 and 2 cannot be improved.
+index lying in the strict interior of the range [h, m],
+                                                                    The key to the efficiency of our approach is a
+such that (h, m, s) forms a valid sibling part.
+                                                                 fundamental asymmetry in the structure of a di-
+   Figure 7 provides a graphical specification of                rected tree: a head can have any number of mod-
+the Model 2 parsing algorithm. An incomplete                     ifiers, while a modifier always has exactly one
+s-span is constructed by combining a smaller in-                 head. Factorizations like that of Carreras (2007)
+complete s-span, representing the next-innermost                 obtain grandchild parts by augmenting spans with
+pair of modifiers, with a sibling g-span, covering               the indices of modifiers, leading to limitations on
+the region between the outer two modifiers. As
+                                                                     4
+in Model 1, sibling g-spans are crucial for propa-                     The reason for the restriction is that in Model 2, grand-
+                                                                 siblings can only be derived via Figure 7(b), which does not
+gating grandparent indices, while allowing the re-               recursively copy the grandparent index for reuse in smaller
+covery of tri-sibling parts (h, m, s, t). Figure 7(b)            g-spans as Model 1 does in Figure 6(b).
+
+
+                                                             5
+
+
+the grandchildren that can participate in the fac-         ancestors above each span. Each additional an-
+torization. Our method, by “inverting” the modi-           cestor lengthens the vertical scope of the factor-
+fier indices into grandparent indices, exploits the        ization (e.g., from grand-siblings to “great-grand-
+structural asymmetry.                                      siblings”), while increasing complexity by a factor
+   As a final note, the parsing algorithms described       of O(n). Horizontal context can also be increased
+in this section fall into the category of projective       by adding internal sibling indices; each additional
+dependency parsers, which forbid crossing depen-           sibling widens the scope of the factorization (e.g.,
+dencies. If crossing dependencies are allowed, it          from grand-siblings to “grand-tri-siblings”), while
+is possible to parse a first-order factorization by        increasing complexity by a factor of O(n).
+finding the maximum directed spanning tree (Chu
+and Liu, 1965; Edmonds, 1967; McDonald et al.,             6       Related work
+2005b). Unfortunately, designing efficient higher-         Our method augments each span with the index
+order non-projective parsers is likely to be chal-         of the head that governs that span, in a manner
+lenging, based on recent hardness results (McDon-          superficially similar to parent annotation in CFGs
+ald and Pereira, 2006; McDonald and Satta, 2007).          (Johnson, 1998). However, parent annotation is
+                                                           a grammar transformation that is independent of
+5     Extensions                                           any particular sentence, whereas our method an-
+We briefly outline a few extensions to our algo-           notates spans with indices into the current sen-
+rithms; we hope to explore these in future work.           tence. These indices allow the use of arbitrary fea-
+                                                           tures predicated on the position of the grandparent
+5.1    Probabilistic inference                             (e.g., word identity, POS tag, contextual POS tags)
+                                                           without affecting the asymptotic complexity of the
+Many statistical modeling techniques are based on          parsing algorithm. Efficiently encoding this kind
+partition functions and marginals—summations               of information into a sentence-independent gram-
+over the set of possible trees Y(x). Straightfor-          mar transformation would be challenging at best.
+ward adaptations of the inside-outside algorithm
+                                                              Eisner (2000) defines dependency parsing mod-
+(Baker, 1979) to our dynamic-programming struc-
+                                                           els where each word has a set of possible “senses”
+tures would suffice to compute these quantities.
+                                                           and the parser recovers the best joint assignment
+                                                           of syntax and senses. Our new parsing algorithms
+5.2    Labeled parsing
+                                                           could be implemented by defining the “sense” of
+Our parsers are easily extended to labeled depen-          each word as the index of its head. However, when
+dencies. Direct integration of labels into Models 1        parsing with senses, the complexity of the Eisner
+and 2 would result in third-order parts composed           (2000) parser increases by factors of O(S 3 ) time
+of three labeled dependencies, at the cost of in-          and O(S 2 ) space (ibid., Section 4.2). Since each
+creasing the time and space complexities by fac-           word has n potential heads, a direct application
+tors of O(L3 ) and O(L2 ), respectively, where L           of the word-sense parser leads to time and space
+bounds the number of labels per dependency.                complexities of O(n6 ) and O(n4 ), respectively, in
+                                                           contrast to our O(n4 ) and O(n3 ).5
+5.3    Word senses                                            Eisner (2000) also uses head automata to score
+If each word in x has a set of possible “senses,”          or recognize the dependents of each head. An in-
+our parsers can be modified to recover the best            teresting question is whether these automata could
+joint assignment of syntax and senses for x, by            be coerced into modeling the grandparent indices
+adapting methods in Eisner (2000). Complex-                used in our parsing algorithms. However, note
+ity would increase by factors of O(S 4 ) time and          that the head automata are defined in a sentence-
+O(S 3 ) space, where S bounds the number of                independent manner, with two automata per word
+senses per word.                                           in the vocabulary (ibid., Section 2). The automata
+                                                           are thus analogous to the rules of a CFG and at-
+5.4    Increased context                                       5
+                                                                In brief, the reason for the inefficiency is that the word-
+If more vertical context is desired, the dynamic-          sense parser is unable to exploit certain constraints, such as
+                                                           the fact that the endpoints of a sibling g-span must have the
+programming structures can be extended with ad-            same head. The word-sense parser would needlessly enumer-
+ditional ancestor indices, resulting in a “spine” of       ate all possible pairs of heads in this case.
+
+
+                                                       6
+
+
+tempts to use them to model grandparent indices                        measured with unlabeled attachment score (UAS):
+would face difficulties similar to those already de-                   the percentage of words with the correct head.8
+scribed for grammar transformations in CFGs.
+   It should be noted that third-order parsers                         7.1   Features for third-order parsing
+have previously been proposed by McDonald and                          Our parsing algorithms can be applied to scores
+Pereira (2006), who remarked that their second-                        originating from any source, but in our experi-
+order sibling parser (see Figure 3) could easily                       ments we chose to use the framework of structured
+be extended to capture m > 1 successive modi-                          linear models, deriving our scores as:
+fiers in O(nm+1 ) time (ibid., Section 2.2). To our
+                                                                               S CORE PART(x, p) = w · f (x, p)
+knowledge, however, Models 1 and 2 are the first
+third-order parsing algorithms capable of model-                       Here, f is a feature-vector mapping and w is a
+ing grandchild parts. In our experiments, we find                      vector of associated parameters. Following stan-
+that grandchild interactions make important con-                       dard practice for higher-order dependency parsing
+tributions to parsing performance (see Table 3).                       (McDonald and Pereira, 2006; Carreras, 2007),
+   Carreras (2007) presents a second-order parser                      Models 1 and 2 evaluate not only the relevant
+that can score both sibling and grandchild parts,                      third-order parts, but also the lower-order parts
+with complexities of O(n4 ) time and O(n3 ) space.                     that are implicit in their third-order factoriza-
+An important limitation of the parser’s factoriza-                     tions. For example, Model 1 defines feature map-
+tion is that it only defines grandchild parts for                      pings for dependencies, siblings, grandchildren,
+outermost grandchildren: (g, h, m) is scored only                      and grand-siblings, so that the score of a depen-
+when m is the outermost modifier of h in some di-                      dency parse is given by:
+rection. Note that Models 1 and 2 have the same
+complexity as Carreras (2007), but strictly greater                      M ODEL 1S CORE(x, y) =
+expressiveness: for each sibling or grandchild part                                             wdep · fdep (x, h, m)
+                                                                                        X
+used in the Carreras (2007) factorization, Model 1                                    (h,m)∈y
+defines an enclosing grand-sibling, while Model 2
+                                                                                                  wsib · fsib (x, h, m, s)
+                                                                                         X
+defines an enclosing tri-sibling or grand-sibling.
+                                                                                      (h,m,s)∈y
+   The factored parsing approach we focus on is
+                                                                                                  wgch · fgch (x, g, h, m)
+                                                                                         X
+sometimes referred to as “graph-based” parsing;
+                                                                                      (g,h,m)∈y
+a popular alternative is “transition-based” parsing,
+                                                                                                    wgsib · fgsib (x, g, h, m, s)
+                                                                                          X
+in which trees are constructed by making a se-
+ries of incremental decisions (Yamada and Mat-                                        (g,h,m,s)∈y
+sumoto, 2003; Attardi, 2006; Nivre et al., 2006;
+McDonald and Nivre, 2007). Transition-based                            Above, y is simultaneously decomposed into sev-
+parsers do not impose factorizations, so they can                      eral different types of parts; trivial modifications
+define arbitrary features on the tree as it is being                   to the Model 1 parser allow it to evaluate all of
+built. As a result, however, they rely on greedy or                    the necessary parts in an interleaved fashion. A
+approximate search algorithms to solve Eq. 1.                          similar treatment of Model 2 yields five feature
+                                                                       mappings: the four above plus ftsib (x, h, m, s, t),
+7    Parsing experiments                                               which represents tri-sibling parts.
+                                                                          The lower-order feature mappings fdep , fsib , and
+In order to evaluate the effectiveness of our parsers                  fgch are based on feature sets from previous work
+in practice, we apply them to the Penn WSJ Tree-                       (McDonald et al., 2005a; McDonald and Pereira,
+bank (Marcus et al., 1993) and the Prague De-                          2006; Carreras, 2007), to which we added lexical-
+pendency Treebank (Hajič et al., 2001; Hajič,                        ized versions of several features. For example, fdep
+1998).6 We use standard training, validation, and                      contains lexicalized “in-between” features that de-
+test splits7 to facilitate comparisons. Accuracy is                    pend on the head and modifier words as well as a
+    6                                                                  word lying in between the two; in contrast, pre-
+      For English, we extracted dependencies using Joakim
+Nivre’s Penn2Malt tool with standard head rules (Yamada                vious work has generally defined in-between fea-
+and Matsumoto, 2003); for Czech, we “projectivized” the                tures for POS tags only. As another example, our
+training data by finding best-match projective trees.
+    7                                                                     8
+      For Czech, the PDT has a predefined split; for English,               As in previous work, English evaluation ignores any to-
+we split the Sections as: 2–21 training, 22 validation, 23 test.       ken whose gold-standard POS tag is one of {‘‘ ’’ : , .}.
+
+
+                                                                   7
+
+
+second-order mappings fsib and fgch define lexical                         Beam Pass Orac Acc1 Acc2 Time1 Time2
+trigram features, while previous work has gener-                          0.0001 26.5 99.92 93.49 93.49 49.6m 73.5m
+ally used POS trigrams only.                                               0.001 16.7 99.72 93.37 93.29 25.9m 24.2m
+   Our third-order feature mappings fgsib and ftsib                         0.01 9.1 99.19 93.26 93.16 6.7m 7.9m
+consist of four types of features. First, we define                    Table 1: Effect of the marginal-probability beam
+4-gram features that characterize the four relevant                    on English parsing. For each beam value, parsers
+indices using words and POS tags; examples in-                         were trained on the English training set and evalu-
+clude POS 4-grams and mixed 4-grams with one                           ated on the English validation set; the same beam
+word and three POS tags. Second, we define 4-                          value was applied to both training and validation
+gram context features consisting of POS 4-grams                        data. Pass = %dependencies surviving the beam in
+augmented with adjacent POS tags: for exam-                            training data, Orac = maximum achievable UAS
+ple, fgsib (x, g, h, m, s) includes POS 7-grams for                    on validation data, Acc1/Acc2 = UAS of Models
+the tags at positions (g, h, m, s, g+1, h+1, m+1).                     1/2 on validation data, and Time1/Time2 = min-
+Third, we define backed-off features that track bi-                    utes per perceptron training iteration for Models
+gram and trigram interactions which are absent                         1/2, averaged over all 10 iterations. For perspec-
+in the lower-order feature mappings: for exam-                         tive, the English training set has a total of 39,832
+ple, ftsib (x, h, m, s, t) contains features predicated                sentences and 950,028 words. A beam of 0.0001
+on the trigram (m, s, t) and the bigram (m, t),                        was used in all experiments outside this table.
+neither of which exist in any lower-order part.
+Fourth, noting that coordinations are typically an-
+notated as grand-siblings (e.g., “report purchases                     rameters from the iteration that achieves the best
+and sales” in Figure 1), we define coordination                        score on the validation set.
+features for certain grand-sibling parts. For exam-
+ple, fgsib (x, g, h, m, s) contains features examin-                   7.3    Coarse-to-fine pruning
+ing the implicit head-modifier relationship (g, m)                     In order to decrease training times, we follow
+that are only activated when the POS tag of s is a                     Carreras et al. (2008) and eliminate unlikely de-
+coordinating conjunction.                                              pendencies using a form of coarse-to-fine pruning
+   Finally, we make two brief remarks regarding                        (Charniak and Johnson, 2005; Petrov and Klein,
+the use of POS tags. First, we assume that input                       2007). In brief, we train a log-linear first-order
+sentences have been automatically tagged in a pre-                     parser11 and for every sentence x in training, val-
+processing step.9 Second, for any feature that de-                     idation, and test data we compute the marginal
+pends on POS tags, we include two copies of the                        probability P (h, m | x) of each dependency. Our
+feature: one using normal POS tags and another                         parsers are then modified to ignore any depen-
+using coarsened versions10 of the POS tags.                            dency (h, m) whose marginal probability is below
+                                                                       0.0001 × maxh0 P (h0 , m | x). Table 1 provides in-
+7.2    Averaged perceptron training                                    formation on the behavior of the pruning method.
+There are a wide variety of parameter estima-
+tion methods for structured linear models, such                        7.4    Main results
+as log-linear models (Lafferty et al., 2001) and                       Table 2 lists the accuracy of Models 1 and 2 on the
+max-margin models (Taskar et al., 2003). We                            English and Czech test sets, together with some
+chose the averaged structured perceptron (Freund                       relevant results from related work.12 The mod-
+and Schapire, 1999; Collins, 2002) as it combines                      els marked “†” are not directly comparable to our
+highly competitive performance with fast training                      work as they depend on additional sources of in-
+times, typically converging in 5–10 iterations. We                     formation that our models are trained without—
+train each parser for 10 iterations and select pa-                     unlabeled data in the case of Koo et al. (2008) and
+    9                                                                     11
+      For Czech, the PDT provides automatic tags; for English,               For English, we generate marginals using a projective
+we used MXPOST (Ratnaparkhi, 1996) to tag validation and               parser (Baker, 1979; Eisner, 2000); for Czech, we generate
+test data, with 10-fold cross-validation on the training set.          marginals using a non-projective parser (Smith and Smith,
+Note that the reliance on POS-tagged input can be relaxed              2007; McDonald and Satta, 2007; Koo et al., 2007). Param-
+slightly by treating POS tags as word senses; see Section 5.3          eters for these models are obtained by running exponentiated
+and McDonald (2006, Table 6.1).                                        gradient training for 10 iterations (Collins et al., 2008).
+   10                                                                     12
+      For Czech, we used the first character of the tag; for En-             Model 0 was not tested as its factorization is a strict sub-
+glish, we used the first two characters, except PRP and PRP$.          set of the factorization of Model 1.
+
+
+                                                                   8
+
+
+    Parser                           Eng     Cze                  Parser                      Eng     Cze
+    McDonald et al. (2005a,2005b)    90.9    84.4                 Model 0                     93.07   87.39
+    McDonald and Pereira (2006)      91.5    85.2                 Carreras (2007) emulation   93.14   87.25
+    Koo et al. (2008), standard      92.02   86.13                Model 1                     93.49   87.64
+    Model 1                          93.04   87.38                Model 1, no-3rd             93.17   87.57
+    Model 2                          92.93   87.37                Model 2                     93.49   87.46
+    Koo et al. (2008), semi-sup†     93.16   87.13                Model 2, no-3rd             93.20   87.43
+    Suzuki et al. (2009)†            93.79   88.05                Model 2, no-G               92.92   86.76
+    Carreras et al. (2008)†          93.5
+                                                             Table 3: UAS for modified versions of our parsers
+Table 2: UAS of Models 1 and 2 on test data, with            on validation data. The term no-3rd indicates a
+relevant results from related work. Note that Koo            parser that was trained and tested with the third-
+et al. (2008) is listed with standard features and           order feature mappings fgsib and ftsib deactivated,
+semi-supervised features. †: see main text.                  though lower-order features were retained; note
+                                                             that “Model 2, no-3rd ” is not identical to the Car-
+Suzuki et al. (2009) and phrase-structure annota-            reras (2007) parser as it defines grandchild parts
+tions in the case of Carreras et al. (2008). All three       for the pair of grandchildren. The term no-G indi-
+of the “†” models are based on versions of the Car-          cates a parser that was trained and tested with the
+reras (2007) parser, so modifying these methods to           grandchild-based feature mappings fgch and fgsib
+work with our new third-order parsing algorithms             deactivated; note that “Model 2, no-G” emulates
+would be an interesting topic for future research.           the third-order sibling parser proposed by McDon-
+For example, Models 1 and 2 obtain results com-              ald and Pereira (2006).
+parable to the semi-supervised parsers of Koo et
+al. (2008), and additive gains might be realized by              There are several possibilities for further re-
+applying their cluster-based feature sets to our en-         search involving our third-order parsing algo-
+riched factorizations.                                       rithms. One idea would be to consider extensions
+                                                             and modifications of our parsers, some of which
+7.5    Ablation studies                                      have been suggested in Sections 5 and 7.4. A sec-
+In order to better understand the contributions of           ond area for future work lies in applications of de-
+the various feature types, we ran additional abla-           pendency parsing. While we have evaluated our
+tion experiments; the results are listed in Table 3,         new algorithms on standard parsing benchmarks,
+in addition to the scores of Model 0 and the emu-            there are a wide variety of tasks that may bene-
+lated Carreras (2007) parser (see Section 4.3). In-          fit from the extended context offered by our third-
+terestingly, grandchild interactions appear to pro-          order factorizations; for example, the 4-gram sub-
+vide important information: for example, when                structures enabled by our approach may be useful
+Model 2 is used without grandchild-based features            for dependency-based language modeling in ma-
+(“Model 2, no-G” in Table 3), its accuracy suffers           chine translation (Shen et al., 2008). Finally, in
+noticeably. In addition, it seems that grandchild            the hopes that others in the NLP community may
+interactions are particularly useful in Czech, while         find our parsers useful, we provide a free distribu-
+sibling interactions are less important: consider            tion of our implementation.2
+that Model 0, a second-order grandchild parser
+with no sibling-based features, can easily outper-           Acknowledgments
+form “Model 2, no-G,” a third-order sibling parser           We would like to thank the anonymous review-
+with no grandchild-based features.                           ers for their helpful comments and suggestions.
+                                                             We also thank Regina Barzilay and Alexander
+8     Conclusion                                             Rush for their much-appreciated input during the
+We have presented new parsing algorithms that are            writing process. The authors gratefully acknowl-
+capable of efficiently parsing third-order factoriza-        edge the following sources of support: Terry
+tions, including both grandchild and sibling inter-          Koo and Michael Collins were both funded by
+actions. Due to space restrictions, we have been             a DARPA subcontract under SRI (#27-001343),
+necessarily brief at some points in this paper; some         and Michael Collins was additionally supported
+additional details can be found in Koo (2010).               by NTT (Agmt. dtd. 06/21/98).
+
+
+                                                         9
+
+
+References                                                     Jan Hajič, Eva Hajičová, Petr Pajas, Jarmila Panevova,
+                                                                  and Petr Sgall. 2001. The Prague Dependency Tree-
+Giuseppe Attardi. 2006. Experiments with a Multilan-              bank 1.0, LDC No. LDC2001T10. Linguistics Data
+  guage Non-Projective Dependency Parser. In Pro-                 Consortium.
+  ceedings of the 10th CoNLL, pages 166–170. Asso-
+  ciation for Computational Linguistics.                       Jan Hajič. 1998. Building a Syntactically Annotated
+                                                                  Corpus: The Prague Dependency Treebank. In Eva
+James Baker. 1979. Trainable Grammars for Speech
+                                                                  Hajičová, editor, Issues of Valency and Meaning.
+  Recognition. In Proceedings of the 97th meeting of
+                                                                  Studies in Honor of Jarmila Panevová, pages 12–19.
+  the Acoustical Society of America.
+
+Xavier Carreras, Michael Collins, and Terry Koo.               Mark Johnson. 1998. PCFG Models of Linguistic
+  2008. TAG, Dynamic Programming, and the Per-                  Tree Representations. Computational Linguistics,
+  ceptron for Efficient, Feature-rich Parsing. In Pro-          24(4):613–632.
+  ceedings of the 12th CoNLL, pages 9–16. Associa-
+  tion for Computational Linguistics.                          Tadao Kasami. 1965. An Efficient Recognition and
+                                                                 Syntax-analysis Algorithm for Context-free Lan-
+Xavier Carreras. 2007. Experiments with a Higher-                guages. Technical Report AFCRL-65-758, Air
+  Order Projective Dependency Parser. In Proceed-                Force Cambridge Research Lab.
+  ings of the CoNLL Shared Task Session of EMNLP-
+  CoNLL, pages 957–961. Association for Computa-               Terry Koo, Amir Globerson, Xavier Carreras, and
+  tional Linguistics.                                            Michael Collins. 2007. Structured Prediction Mod-
+                                                                 els via the Matrix-Tree Theorem. In Proceedings
+Eugene Charniak and Mark Johnson. 2005. Coarse-                  of EMNLP-CoNLL, pages 141–150. Association for
+  to-fine N -best Parsing and MaxEnt Discriminative              Computational Linguistics.
+  Reranking. In Proceedings of the 43rd ACL.
+                                                               Terry Koo, Xavier Carreras, and Michael Collins.
+Y.J. Chu and T.H. Liu. 1965. On the Shortest Ar-                 2008. Simple Semi-supervised Dependency Pars-
+   borescence of a Directed Graph. Science Sinica,               ing. In Proceedings of the 46th ACL, pages 595–603.
+   14:1396–1400.                                                 Association for Computational Linguistics.
+
+John Cocke and Jacob T. Schwartz. 1970. Program-               Terry Koo. 2010. Advances in Discriminative Depen-
+  ming Languages and Their Compilers: Preliminary                dency Parsing. Ph.D. thesis, Massachusetts Institute
+  Notes. Technical report, New York University.                  of Technology, Cambridge, MA, USA, June.
+Michael Collins, Amir Globerson, Terry Koo, Xavier             John Lafferty, Andrew McCallum, and Fernando
+  Carreras, and Peter L. Bartlett. 2008. Exponenti-              Pereira. 2001. Conditional Random Fields: Prob-
+  ated Gradient Algorithms for Conditional Random                abilistic Models for Segmenting and Labeling Se-
+  Fields and Max-Margin Markov Networks. Journal                 quence Data. In Proceedings of the 18th ICML,
+  of Machine Learning Research, 9:1775–1822, Aug.                pages 282–289. Morgan Kaufmann.
+Michael Collins. 2002. Discriminative Training Meth-           Mitchell P. Marcus, Beatrice Santorini, and Mary Ann
+  ods for Hidden Markov Models: Theory and Exper-                Marcinkiewicz. 1993. Building a Large Annotated
+  iments with Perceptron Algorithms. In Proceedings              Corpus of English: The Penn Treebank. Computa-
+  of the 7th EMNLP, pages 1–8. Association for Com-              tional Linguistics, 19(2):313–330.
+  putational Linguistics.
+
+Jack R. Edmonds. 1967. Optimum Branchings. Jour-               David A. McAllester. 1999. On the Complexity
+   nal of Research of the National Bureau of Standards,          Analysis of Static Analyses. In Proceedings of
+   71B:233–240.                                                  the 6th Static Analysis Symposium, pages 312–329.
+                                                                 Springer-Verlag.
+Jason Eisner. 1996. Three New Probabilistic Models
+   for Dependency Parsing: An Exploration. In Pro-             Ryan McDonald and Joakim Nivre. 2007. Character-
+   ceedings of the 16th COLING, pages 340–345. As-               izing the Errors of Data-Driven Dependency Parsers.
+   sociation for Computational Linguistics.                      In Proceedings of EMNLP-CoNLL, pages 122–131.
+                                                                 Association for Computational Linguistics.
+Jason Eisner. 2000. Bilexical Grammars and Their
+   Cubic-Time Parsing Algorithms. In Harry Bunt                Ryan McDonald and Fernando Pereira. 2006. Online
+   and Anton Nijholt, editors, Advances in Probabilis-           Learning of Approximate Dependency Parsing Al-
+   tic and Other Parsing Technologies, pages 29–62.              gorithms. In Proceedings of the 11th EACL, pages
+   Kluwer Academic Publishers.                                   81–88. Association for Computational Linguistics.
+
+Yoav Freund and Robert E. Schapire. 1999. Large                Ryan McDonald and Giorgio Satta. 2007. On the
+  Margin Classification Using the Perceptron Algo-               Complexity of Non-Projective Data-Driven Depen-
+  rithm. Machine Learning, 37(3):277–296.                        dency Parsing. In Proceedings of IWPT.
+
+
+                                                          10
+
+
+Ryan McDonald, Koby Crammer, and Fernando
+  Pereira. 2005a. Online Large-Margin Training of
+  Dependency Parsers. In Proceedings of the 43rd
+  ACL, pages 91–98. Association for Computational
+  Linguistics.
+Ryan McDonald, Fernando Pereira, Kiril Ribarov, and
+  Jan Hajič. 2005b. Non-Projective Dependency
+  Parsing using Spanning Tree Algorithms. In Pro-
+  ceedings of HLT-EMNLP, pages 523–530. Associa-
+  tion for Computational Linguistics.
+Ryan McDonald. 2006. Discriminative Training and
+  Spanning Tree Algorithms for Dependency Parsing.
+  Ph.D. thesis, University of Pennsylvania, Philadel-
+  phia, PA, USA, July.
+Joakim Nivre, Johan Hall, Jens Nilsson, Gülşen
+  Eryiǧit, and Svetoslav Marinov. 2006. Labeled
+  Pseudo-Projective Dependency Parsing with Sup-
+  port Vector Machines. In Proceedings of the 10th
+  CoNLL, pages 221–225. Association for Computa-
+  tional Linguistics.
+Slav Petrov and Dan Klein. 2007. Improved Inference
+   for Unlexicalized Parsing. In Proceedings of HLT-
+   NAACL, pages 404–411. Association for Computa-
+   tional Linguistics.
+Adwait Ratnaparkhi. 1996. A Maximum Entropy
+  Model for Part-Of-Speech Tagging. In Proceedings
+  of the 1st EMNLP, pages 133–142. Association for
+  Computational Linguistics.
+Libin Shen, Jinxi Xu, and Ralph Weischedel. 2008.
+  A New String-to-Dependency Machine Translation
+  Algorithm with a Target Dependency Language
+  Model. In Proceedings of the 46th ACL, pages 577–
+  585. Association for Computational Linguistics.
+David A. Smith and Noah A. Smith. 2007. Proba-
+  bilistic Models of Nonprojective Dependency Trees.
+  In Proceedings of EMNLP-CoNLL, pages 132–140.
+  Association for Computational Linguistics.
+Jun Suzuki, Hideki Isozaki, Xavier Carreras, and
+  Michael Collins. 2009. An Empirical Study of
+  Semi-supervised Structured Conditional Models for
+  Dependency Parsing. In Proceedings of EMNLP,
+  pages 551–560. Association for Computational Lin-
+  guistics.
+Ben Taskar, Carlos Guestrin, and Daphne Koller. 2003.
+  Max margin markov networks. In Sebastian Thrun,
+  Lawrence K. Saul, and Bernhard Schölkopf, editors,
+  NIPS. MIT Press.
+Hiroyasu Yamada and Yuji Matsumoto. 2003. Statis-
+  tical Dependency Analysis with Support Vector Ma-
+  chines. In Proceedings of the 8th IWPT, pages 195–
+  206. Association for Computational Linguistics.
+David H. Younger. 1967. Recognition and parsing of
+  context-free languages in time n3 . Information and
+  Control, 10(2):189–208.
+
+
+
+                                                        11
+

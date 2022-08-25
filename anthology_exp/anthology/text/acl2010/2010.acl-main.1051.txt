@@ -1,0 +1,634 @@
+              Minimized models and grammar-informed initialization
+                 for supertagging with highly ambiguous lexicons
+           Sujith Ravi1                         Jason Baldridge2                          Kevin Knight1
+
+          1                                                           2
+           University of Southern California                         Department of Linguistics
+            Information Sciences Institute                       The University of Texas at Austin
+           Marina del Rey, California 90292                           Austin, Texas 78712
+           {sravi,knight}@isi.edu                               jbaldrid@mail.utexas.edu
+
+                      Abstract                                 or trigram Hidden Markov Model (HMM). Ravi
+    We combine two complementary ideas                         and Knight (2009) achieved the best results thus
+    for learning supertaggers from highly am-                  far (92.3% word token accuracy) via a Minimum
+    biguous lexicons: grammar-informed tag                     Description Length approach using an integer pro-
+    transitions and models minimized via in-                   gram (IP) that finds a minimal bigram grammar
+    teger programming. Each strategy on its                    that obeys the tag dictionary constraints and cov-
+    own greatly improves performance over                      ers the observed data.
+    basic expectation-maximization training                       A more challenging task is learning supertag-
+    with a bitag Hidden Markov Model, which                    gers for lexicalized grammar formalisms such as
+    we show on the CCGbank and CCG-TUT                         Combinatory Categorial Grammar (CCG) (Steed-
+    corpora. The strategies provide further er-                man, 2000). For example, CCGbank (Hocken-
+    ror reductions when combined. We de-                       maier and Steedman, 2007) contains 1241 dis-
+    scribe a new two-stage integer program-                    tinct supertags (lexical categories) and the most
+    ming strategy that efficiently deals with                  ambiguous word has 126 supertags. This pro-
+    the high degree of ambiguity on these                      vides a much more challenging starting point
+    datasets while obtaining the full effect of                for the semi-supervised methods typically ap-
+    model minimization.                                        plied to the task. Yet, this is an important task
+                                                               since creating grammars and resources for CCG
+1   Introduction                                               parsers for new domains and languages is highly
+Creating accurate part-of-speech (POS) taggers                 labor- and knowledge-intensive. Baldridge (2008)
+using a tag dictionary and unlabeled data is an                uses grammar-informed initialization for HMM
+interesting task with practical applications. It               tag transitions based on the universal combinatory
+has been explored at length in the literature since            rules of the CCG formalism to obtain 56.1% accu-
+Merialdo (1994), though the task setting as usu-               racy on ambiguous word tokens, a large improve-
+ally defined in such experiments is somewhat arti-             ment over the 33.0% accuracy obtained with uni-
+ficial since the tag dictionaries are derived from             form initialization for tag transitions.
+tagged corpora. Nonetheless, the methods pro-                     The strategies employed in Ravi and Knight
+posed apply to realistic scenarios in which one                (2009) and Baldridge (2008) are complementary.
+has an electronic part-of-speech tag dictionary or             The former reduces the model size globally given
+a hand-crafted grammar with limited coverage.                  a data set, while the latter biases bitag transitions
+   Most work has focused on POS-tagging for                    toward those which are more likely based on a uni-
+English using the Penn Treebank (Marcus et al.,                versal grammar without reference to any data. In
+1993), such as (Banko and Moore, 2004; Gold-                   this paper, we show how these strategies may be
+water and Griffiths, 2007; Toutanova and John-                 combined straightforwardly to produce improve-
+son, 2008; Goldberg et al., 2008; Ravi and Knight,             ments on the task of learning supertaggers from
+2009). This generally involves working with the                lexicons that have not been filtered in any way.1
+standard set of 45 POS-tags employed in the Penn               We demonstrate their cross-lingual effectiveness
+Treebank. The most ambiguous word has 7 dif-                   on CCGbank (English) and the Italian CCG-TUT
+ferent POS tags associated with it. Most methods                  1
+                                                                   See Banko and Moore (2004) for a description of how
+have employed some variant of Expectation Max-                 many early POS-tagging papers in fact used a number of
+imization (EM) to learn parameters for a bigram                heuristic cutoffs that greatly simplify the problem.
+
+
+                                                         495
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 495–503,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                                              Data              Distinct   Max     Type ambig   Tok ambig
+corpus (Bos et al., 2009). We find a consistent im-             CCGbank          1241      126        1.69        18.71
+proved performance by using each of the methods                 CCG-TUT
+compared to basic EM, and further improvements                NPAPER+CIVIL        849       64        1.48        11.76
+by using them in combination.                                 NPAPER              644       48        1.42        12.17
+                                                              CIVIL               486       39        1.52        11.33
+   Applying the approach of Ravi and Knight
+(2009) naively to CCG supertagging is intractable            Table 1: Statistics for the training data used to ex-
+due to the high level of ambiguity. We deal with             tract lexicons for CCGbank and CCG-TUT. Dis-
+this by defining a new two-stage integer program-            tinct: # of distinct lexical categories; Max: # of
+ming formulation that identifies minimal gram-               categories for the most ambiguous word; Type
+mars efficiently and effectively.                            ambig: per word type category ambiguity; Tok
+                                                             ambig: per word token category ambiguity.
+2   Data
+CCGbank. CCGbank was created by semi-                        trast, supertags are detailed, structured labels; a
+automatically converting the Penn Treebank to                universal set of grammatical rules defines how cat-
+CCG derivations (Hockenmaier and Steedman,                   egories may combine with one another to project
+2007). We use the standard splits of the data                syntactic structure.2 Because of this, properties of
+used in semi-supervised tagging experiments (e.g.            the CCG formalism itself can be used to constrain
+Banko and Moore (2004)): sections 0-18 for train-            learning—prior to considering any particular lan-
+ing, 19-21 for development, and 22-24 for test.              guage, grammar or data set. Baldridge (2008) uses
+CCG-TUT. CCG-TUT was created by semi-                        this observation to create grammar-informed tag
+automatically converting dependencies in the Ital-           transitions for a bitag HMM supertagger based on
+ian Turin University Treebank to CCG deriva-                 two main properties. First, categories differ in
+tions (Bos et al., 2009). It is much smaller than            their complexity and less complex categories tend
+CCGbank, with only 1837 sentences. It is split               to be used more frequently. For example, two cat-
+into three sections: newspaper texts (NPAPER),               egories for buy in CCGbank are (S[dcl]\NP)/NP
+civil code texts (CIVIL), and European law texts             and ((((S[b]\NP)/PP)/PP)/(S[adj]\NP))/NP; the
+from the JRC-Acquis Multilingual Parallel Corpus             former occurs 33 times, the latter once. Second,
+(JRC). For test sets, we use the first 400 sentences         categories indicate the form of categories found
+of NPAPER, the first 400 of CIVIL, and all of JRC.           adjacent to them; for example, the category for
+This leaves 409 and 498 sentences from NPAPER                sentential complement verbs ((S\NP)/S) expects
+and CIVIL, respectively, for training (to acquire a          an NP to its left and an S to its right.
+lexicon and run EM). For evaluation, we use two                 Categories combine via rules such as applica-
+different settings of train/test splits:                     tion and composition (see Steedman (2000) for de-
+                                                             tails). Given a lexicon containing the categories
+TEST 1 Evaluate on the NPAPER section of test                for each word, these allow derivations like:
+   using a lexicon extracted only from NPAPER                Ed          might                  see            a      cat
+   section of train.                                         NP     (S \NP )/(S \NP )      (S \NP )/NP       NP /N    N
+TEST 2 Evaluate on the entire test using lexi-                                                        >B                  >
+                                                                               (S \NP )/NP                      NP
+   cons extracted from (a) NPAPER + CIVIL,                                                                                >
+                                                                                           S \NP
+   (b) NPAPER, and (c) CIVIL.                                                                          >
+                                                                                  S
+   Table 1 shows statistics for supertag ambiguity           Other derivations are possible. In fact, every pair
+in CCGbank and CCG-TUT. As a comparison, the                 of adjacent words above may be combined di-
+POS word token ambiguity in CCGbank is 2.2: the              rectly. For example, see and a may combine
+corresponding value of 18.71 for supertags is in-            through forward composition to produce the cate-
+dicative of the (challenging) fact that supertag am-         gory (S\NP)/N, and Ed’s category may type-raise
+biguity is greatest for the most frequent words.             to S/(S\NP) and compose with might’s category.
+                                                                Baldridge uses these properties to define tag
+3   Grammar informed initialization for
+    supertagging                                                 2
+                                                                   Note that supertags can be lexical categories of CCG
+                                                             (Steedman, 2000), elementary trees of Tree-adjoining Gram-
+Part-of-speech tags are atomic labels that in and of         mar (Joshi, 1988), or types in a feature hierarchy as in Head-
+themselves encode no internal structure. In con-             driven Phrase Structure Grammar (Pollard and Sag, 1994).
+
+
+                                                       496
+
+
+transition distributions that have higher likeli-               we propose a new two-stage method that scales to
+hood for simpler categories that are able to                    the larger tagsets and data involved.
+combine.      For example, for the distribution
+p(ti |ti−1 =N P ), (S\NP)\NP is more likely than                4.1    IP method for supertagging
+((S\NP)/(N/N))\NP because both categories may                   Our goal for supertagging is to build a minimized
+combine with a preceding NP but the former is                   model with the following objective:
+simpler. In turn, the latter is more likely than NP: it
+                                                                      IPoriginal : Find the smallest supertag gram-
+is more complex but can combine with the preced-
+                                                                      mar (i.e., tag bigrams) that can explain the en-
+ing NP. Finally, NP is more likely than (S/NP)/NP
+                                                                      tire text (the test word token sequence).
+since neither can combine, but NP is simpler.
+   By starting EM with these tag transition dis-                   Using the full grammar and lexicon to perform
+tributions and an unfiltered lexicon (word-to-                  model minimization results in a very large, diffi-
+supertag dictionary), Baldridge obtains a tagging               cult to solve integer program involving billions of
+accuracy of 56.1% on ambiguous words—a large                    variables and constraints. This renders the mini-
+improvement over the accuracy of 33.0% obtained                 mization objective IPoriginal intractable. One way
+by starting with uniform transition distributions.              of combating this is to use a reduced grammar
+We refer to a model learned from basic EM (uni-                 and lexicon as input to the integer program. We
+formly initialized) as EM, and to a model with                  do this without further supervision by using the
+grammar-informed initialization as EMGI .                       HMM model trained using basic EM: entries are
+                                                                pruned based on the tag sequence it predicts on
+4   Minimized models for supertagging                           the test data. This produces an observed grammar
+                                                                of distinct tag bigrams (Gobs ) and lexicon of ob-
+The idea of searching for minimized models is                   served lexical assignments (Lobs ). For CCGbank,
+related to classic Minimum Description Length                   Gobs and Lobs have 12,363 and 18,869 entries,
+(MDL) (Barron et al., 1998), which seeks to se-                 respectively—far less than the millions of entries
+lect a small model that captures the most regularity            in the full grammar and lexicon.
+in the observed data. This modeling strategy has                   Even though EM minimizes the model some-
+been shown to produce good results for many nat-                what, many bad entries remain in the grammar.
+ural language tasks (Goldsmith, 2001; Creutz and                We prune further by supplying Gobs and Lobs as
+Lagus, 2002; Ravi and Knight, 2009). For tagging,               input (G, L) to the IP-minimization procedure.
+the idea has been implemented using Bayesian                    However, even with the EM-reduced grammar and
+models with priors that indirectly induce sparsity              lexicon, the IP-minimization is still very hard to
+in the learned models (Goldwater and Griffiths,                 solve. We thus split it into two stages. The first
+2007); however, Ravi and Knight (2009) show a                   stage (Minimization 1) finds the smallest grammar
+better approach is to directly minimize the model               Gmin1 ⊂ G that explains the set of word bigram
+using an integer programming (IP) formulation.                  types observed in the data rather than the word
+Here, we build on this idea for supertagging.                   sequence itself, and the second (Minimization 2)
+   There are many challenges involved in using IP               finds the smallest augmentation of Gmin1 that ex-
+minimization for supertagging. The 1241 distinct                plains the full word sequence.
+supertags in the tagset result in 1.5 million tag bi-
+gram entries in the model and the dictionary con-               Minimization 1 (M IN 1). We begin with a sim-
+tains almost 3.5 million word/tag pairs that are rel-           pler minimization problem than the original one
+evant to the test data. The set of 45 POS tags for              (IPoriginal ), with the following objective:
+the same data yields 2025 tag bigrams and 8910
+                                                                      IPmin 1 : Find the smallest set of tag bigrams
+dictionary entries. We also wish to scale our meth-
+                                                                      Gmin1 ⊂ G, such that there is at least one
+ods to larger data settings than the 24k word tokens
+                                                                      tagging assignment possible for every word bi-
+in the test data used in the POS tagging task.
+                                                                      gram type observed in the data.
+   Our objective is to find the smallest supertag
+grammar (of tag bigram types) that explains the                 We formulate this as an integer program, creat-
+entire text while obeying the lexicon’s constraints.            ing binary variables gvari for every tag bigram
+However, the original IP method of Ravi and                     gi = tj tk in G. Binary link variables connect tag
+Knight (2009) is intractable for supertagging, so               bigrams with word bigrams; these are restricted
+
+
+                                                          497
+
+
+                      IP Minimization 1
+                                                     word bigrams:          Input Grammar (G)               word bigrams:         Input Grammar (G)
+
+                                                           w 1 w2                     :                           w 1 w2                   :
+                                                           w 2 w3                     :                           w 2 w3                   :
+                                                              :                     ti tj                            :                   ti tj
+                                                              :                       :         MIN 1                :                     :
+                                                           w i wj                     :                           w i wj                   :
+                                                              :                                                      :
+                                                              :                                                      :
+
+
+                      IP Minimization 2
+
+                             word sequence: w1        w2      w3      w4     w5                            word sequence: w1        w2      w3      w4    w5
+
+                                   t1                                                                             t1
+                       supertags   t2                                                                 supertags   t2
+                                   t3                                                       MIN 2                 t3
+                                   :                                                                              :
+                                   :                                                                              :
+                                   tk                                                                             tk
+
+                                    tag bigrams chosen in first minimization step (Gmin1)                         tag bigrams chosen in second minimization step (Gmin2)
+                                            (does not explain the word sequence)
+
+
+
+
+                Figure 1: Two-stage IP method for selecting minimized models for supertagging.
+
+to the set of links that respect the lexicon L pro-                                                                              P
+                                                                                                    Minimize:                         ∀gi ∈G
+                                                                                                                                                   gvari
+vided as input, i.e., there exists a link variable
+linkjklm connecting tag bigram tj tk with word bi-                                                  Subject to constraints:
+gram wl wm only if the word/tag pairs (wl , tj ) and
+                                                                                                    1. For every word bigram wl wm , there exists at least
+(wm , tk ) are present in L. The entire integer pro-                                                one tagging that respects the lexicon L.
+gramming formulation is shown Figure 2.                                                                     P
+   The IP solver3 solves the above integer program                                                                ∀ tj ∈L(wl ), tk ∈L(wm )
+                                                                                                                                                         linkjklm ≥ 1
+and we extract the set of tag bigrams Gmin1 based                                                   where L(wl ) and L(wm ) represent the set of tags seen
+on the activated grammar variables. For the CCG-                                                    in the lexicon for words wl and wm respectively.
+bank test data, M IN 1 yields 2530 tag bigrams.
+                                                                                                    2. The link variable assignments are constrained to re-
+However, a second stage is needed since there is                                                    spect the grammar variables chosen by the integer pro-
+no guarantee that Gmin1 can explain the test data:                                                  gram.
+it contains tags for all word bigram types, but it
+                                                                                                                       linkjklm ≤ gvari
+cannot necessarily tag the full word sequence. Fig-
+ure 1 illustrates this. Using only tag bigrams from                                                 where gvari is the binary variable corresponding to tag
+M IN 1 (shown in blue), there is no fully-linked tag                                                bigram tj tk in the grammar G.
+path through the network. There are missing links
+between words w2 and w3 and between words w3                                                         Figure 2: IP formulation for Minimization 1.
+and w4 in the word sequence. The next stage fills
+in these missing links.                                                                           cantly, and CPLEX finishes in just a few hours.
+Minimization 2 (M IN 2). This stage uses the                                                      The details of this method are described below.
+original minimization formulation for the su-                                                        We instantiate binary variables gvari and lvari
+pertagging problem IPoriginal , again using an in-                                                for every tag bigram (in G) and lexicon entry (in
+teger programming method similar to that pro-                                                     L). We then create a network of possible taggings
+posed by Ravi and Knight (2009). If applied to                                                    for the word token sequence w1 w2 ....wn in the
+the observed grammar Gobs , the resulting integer                                                 corpus and assign a binary variable to each link
+program is hard to solve.4 However, by using the                                                  in the network. We name these variables linkcjk ,
+partial solution Gmin1 obtained in M IN 1 the IP                                                  where c indicates the column of the link’s source
+optimization speeds up considerably. We imple-                                                    in the network, and j and k represent the link’s
+ment this by fixing the values of all binary gram-                                                source and destination (i.e., linkcjk corresponds to
+mar variables present in Gmin1 to 1 before opti-                                                  tag bigram tj tk in column c). Next, we formulate
+mization. This reduces the search space signifi-                                                  the integer program given in Figure 3.
+   3
+       We use the commercial CPLEX solver.                                                           Figure 1 illustrates how M IN 2 augments the
+   4
+       The solver runs for days without returning a solution.                                     grammar Gmin1 (links shown in blue) with addi-
+
+
+                                                                                            498
+
+
+                    P                                              but with certain restrictions. We build the transi-
+ Minimize:               ∀gi ∈G
+                                  gvari
+                                                                   tion model using only entries from the minimized
+ Subject to constraints:                                           grammar set Gmin2 , and instantiate an emission
+                                                                   model using the word/tag pairs seen in L (pro-
+ 1. Chosen link variables form a left-to-right path
+ through the tagging network.                                      vided as input to the minimization procedure). All
+                        P                  P                       the parameters in the HMM model are initialized
+       ∀c=1..n−2 ∀k        j
+                               linkcjk =   j
+                                               link(c+1)kj         with uniform probabilities, and we run EM for 40
+ 2. Link variable assignments should respect the chosen            iterations. The trained model is used to find the
+ grammar variables.                                                Viterbi tag sequence for the corpus. We refer to
+                                                                   this model (where the EM output (Gobs , Lobs ) was
+             for every link: linkcjk ≤ gvari
+                                                                   provided to the IP-minimization as initial input)
+ where gvari corresponds to tag bigram tj tk                       as EM+IP.
+ 3. Link variable assignments should respect the chosen            Bootstrapped minimization. The quality of the
+ lexicon variables.
+                                                                   observed grammar and lexicon improves consid-
+             for every link: linkcjk ≤ lvarwc tj                   erably at the end of a single EM+IP run. Ravi
+                                                                   and Knight (2009) exploited this to iteratively im-
+             for every link: linkcjk ≤ lvarwc+1 tk
+                                                                   prove their POS tag model: since the first mini-
+ where wc is the cth word in the word sequence w1 ...wn ,          mization procedure is seeded with a noisy gram-
+ and lvarwc tj is the binary variable corresponding to the         mar and tag dictionary, iterating the IP procedure
+ word/tag pair wc /tj in the lexicon L.
+                                                                   with progressively better grammars further im-
+ 4. The final solution should produce at least one com-            proves the model. We do likewise, bootstrapping a
+ plete tagging path through the network.                           new EM+IP run using as input, the observed gram-
+             P
+                        link1jk ≥ 1                                mar Gobs and lexicon Lobs from the last tagging
+                 ∀j,k
+                                                                   output of the previous iteration. We run this until
+ 5. Provide minimized grammar from M IN 1as partial                the chosen grammar set Gmin2 does not change.5
+ solution to the integer program.
+                                                                   4.2    Minimization with grammar-informed
+             ∀gi ∈Gmin1 gvari = 1
+                                                                          initialization
+
+  Figure 3: IP formulation for Minimization 2.                     There are two complementary ways to use
+                                                                   grammar-informed initialization with the IP-
+                                                                   minimization approach: (1) using EMGI output
+tional tag bigrams (shown in red) to form a com-
+                                                                   as the starting grammar/lexicon and (2) using the
+plete tag path through the network. The minimized
+                                                                   tag transitions directly in the IP objective function.
+grammar set in the final solution Gmin2 contains
+                                                                   The first takes advantage of the earlier observation
+only 2810 entries, significantly fewer than the
+                                                                   that the quality of the grammar and lexicon pro-
+original grammar Gobs ’s 12,363 tag bigrams.
+                                                                   vided as initial input to the minimization proce-
+   We note that the two-stage minimization pro-                    dure can affect the quality of the final supertagging
+cedure proposed here is not guaranteed to yield                    output. For the second, we modify the objective
+the optimal solution to our original objective                     function used in the two IP-minimization steps to
+IPoriginal . On the simpler task of unsupervised                   be:
+POS tagging with a dictionary, we compared
+our method versus directly solving IPoriginal and                                             X
+                                                                                Minimize:            wi · gvari          (1)
+found that the minimization (in terms of grammar                                            ∀gi ∈G
+size) achieved by our method is close to the opti-
+mal solution for the original objective and yields                 where, G is the set of tag bigrams provided as in-
+the same tagging accuracy far more efficiently.                    put to IP, gvari is a binary variable in the integer
+                                                                   program corresponding to tag bigram (ti−1 , ti ) ∈
+Fitting the minimized model. The IP-                               G, and wi is negative logarithm of pgii (ti |ti−1 )
+minimization procedure gives us a minimal                          as given by Baldridge (2008).6 All other parts of
+grammar, but does not fit the model to the data.                      5
+                                                                       In our experiments, we run three bootstrap iterations.
+In order to estimate probabilities for the HMM                        6
+                                                                       Other numeric weights associated with the tag bi-
+model for supertagging, we use the EM algorithm                    grams could be considered, such as 0/1 for uncombin-
+
+
+                                                             499
+
+
+the integer program including the constraints re-                           Model           ambig    ambig     all      all
+main unchanged, and, we acquire a final tagger in                                                    -punc            -punc
+the same manner as described in the previous sec-                           Random           17.9     16.2     27.4    21.9
+tion. In this way, we combine the minimization                              EM               38.7     35.6     45.6    39.8
+and GI strategies into a single objective function                          EM+IP            52.1     51.0     57.3    53.9
+that finds a minimal grammar set while keeping                              EMGI             56.3     59.4     61.0    61.7
+                                                                            EMGI +IPGI       59.6     62.3     63.8    64.3
+the more likely tag bigrams in the chosen solution.
+EMGI +IPGI is used to refer to the method that                            Table 2: Supertagging accuracy for CCGbank sec-
+uses GI information in both ways: EMGI output                             tions 22-24. Accuracies are reported for four
+as the starting grammar/lexicon and GI weights in                         settings—(1) ambiguous word tokens in the test
+the IP-minimization objective.                                            corpus, (2) ambiguous word tokens, ignoring
+                                                                          punctuation, (3) all word tokens, and (4) all word
+5    Experiments                                                          tokens except punctuation.
+We compare the four strategies described in Sec-
+tions 3 and 4, summarized below:                                          recall for each model on the observed bitag gram-
+                                                                          mar and observed lexicon on the test set. We cal-
+EM HMM uniformly initialized, EM training.                                culate them as follows, for an observed grammar
+EM+IP IP minimization using initial grammar                               or lexicon X:
+   provided by EM.                                                                             |{X} ∩ {Observedgold }|
+EMGI HMM with grammar-informed initializa-                                      P recision =
+                                                                                                       |{X}|
+   tion, EM training.
+EMGI +IPGI IP minimization using initial gram-                                              |{X} ∩ {Observedgold }|
+                                                                                 Recall =
+   mar/lexicon provided by EMGI and addi-                                                      |{Observedgold }|
+   tional grammar-informed IP objective.
+                                                                          This provides a measure of model performance on
+                                                                          bitag types for the grammar and lexical entry types
+For EM+IP and EMGI +IPGI , the minimization
+                                                                          for the lexicon, rather than tokens.
+and EM training processes are iterated until the
+resulting grammar and lexicon remain unchanged.                           5.1   English CCGbank results
+Forty EM iterations are used for all cases.
+                                                                          Accuracy on ambiguous tokens. Table 2 gives
+   We also include a baseline which randomly
+                                                                          performance on the CCGbank test sections. All
+chooses a tag from those associated with each
+                                                                          models are well above the random baseline, and
+word in the lexicon, averaged over three runs.
+                                                                          both of the strategies individually boost perfor-
+Accuracy on ambiguous word tokens. We                                     mance over basic EM by a large margin. For the
+evaluate the performance in terms of tagging accu-                        models using GI, accuracy ignoring punctuation is
+racy with respect to gold tags for ambiguous words                        higher than for all almost entirely due to the fact
+in held-out test sets for English and Italian. We                         that “.” has the supertags “.” and S, and the GI
+consider results with and without punctuation.7                           gives a preference to S since it can in fact combine
+   Recall that unlike much previous work, we do                           with other categories, unlike “.”—the effect is that
+not collect the lexicon (tag dictionary) from the                         nearly every sentence-final period (˜5.5k tokens) is
+test set: this means the model must handle un-                            tagged S rather than “.”.
+known words and the possibility of having missing                            EMGI is more effective than EM+IP; however,
+lexical entries for covering the test set.                                it should be kept in mind that IP-minimization
+                                                                          is a general technique that can be applied to
+Precision and recall of grammar and lexicon.                              any sequence prediction task, whereas grammar-
+In addition to accuracy, we measure precision and                         informed initialization may be used only with
+                                                                          tasks in which the interactions of adjacent labels
+able/combinable bigrams.
+    7
+      The reason for this is that the “categories” for punctua-           may be derived from the labels themselves. In-
+tion in CCGbank are for the most part not actual categories;              terestingly, the gap between the two approaches
+for example, the period “.” has the categories “.” and “S”.               is greater when punctuation is ignored (51.0 vs.
+As such, these supertags are outside of the categorial system:
+their use in derivations requires phrase structure rules that are         59.4)—this is unsurprising because, as noted al-
+not derivable from the CCG combinatory rules.                             ready, punctuation supertags are not actual cate-
+
+
+                                                                    500
+
+
+                 EM     EM+IP     EMGI     EMGI +IPGI              achieves better recall because of the sheer num-
+ Grammar                                                           ber of bitags it proposes (12,363). EM+IP prunes
+   Precision     7.5     32.9      52.6         68.1
+   Recall       26.9     13.2      34.0         19.8
+                                                                   that set of bitags considerably, leading to better
+ Lexicon                                                           precision at the cost of recall. EMGI ’s higher re-
+   Precision    58.4     63.0      78.0         80.6               call and precision indicate the tag transition dis-
+   Recall       50.9     56.0      71.5         67.6               tributions do capture general patterns of linkage
+                                                                   between adjacent CCG categories, while EM en-
+Table 3: Comparison of grammar/lexicon ob-                         sures that the data filters out combinable, but un-
+served in the model tagging vs. gold tagging                       necessary, bitags. With EMGI +IPGI , we again
+in terms of precision and recall measures for su-                  see that IP-minimization prunes even more entries,
+pertagging on CCGbank data.                                        improving precision at the loss of some recall.
+                                                                      Similar trends are seen for precision and recall
+gories, so EMGI is unable to model their distribu-                 on the lexicon. IP-minimization’s pruning of inap-
+tion. Most importantly, the complementary effects                  propriate taggings means more common words are
+of the two approaches can be seen in the improved                  not assigned highly infrequent supertags (boosting
+results for EMGI +IPGI , which obtains about 3%                    precision) while unknown words are generally as-
+better accuracy than EMGI .                                        signed more sensible supertags (boosting recall).
+                                                                   EMGI again focuses taggings on combinable con-
+Accuracy on all tokens. Table 2 also gives per-
+                                                                   texts, boosting precision and recall similarly to
+formance when taking all tokens into account. The
+                                                                   EM+IP, but in greater measure. EMGI +IPGI then
+HMM when using full supervision obtains 87.6%
+                                                                   prunes some of the spurious entries, boosting pre-
+accuracy (Baldridge, 2008),8 so the accuracy of
+                                                                   cision at some loss of recall.
+63.8% achieved by EMGI +IPGI nearly halves the
+gap between the supervised model and the 45.6%                     Tag frequencies predicted on the test set. Ta-
+obtained by basic EM semi-supervised model.                        ble 4 compares gold tags to tags generated by
+                                                                   all four methods for the frequent and highly am-
+Effect of GI information in EM and/or IP-
+                                                                   biguous words the and in. Basic EM wanders
+minimization stages. We can also consider the
+                                                                   far away from the gold assignments; it has little
+effect of GI information in either EM training or
+                                                                   guidance in the very large search space available
+IP-minimization to see whether it can be effec-
+                                                                   to it. IP-minimization identifies a smaller set of
+tively exploited in both. The latter, EM+IPGI ,
+                                                                   tags that better matches the gold tags; this emerges
+obtains 53.2/51.1 for all/no-punc—a small gain
+                                                                   because other determiners and prepositions evoke
+compared to EM+IP’s 52.1/51.0. The former,
+                                                                   similar, but not identical, supertags, and the gram-
+EMGI +IP, obtains 58.9/61.6—a much larger gain.
+                                                                   mar minimization pushes (but does not force)
+Thus, the better starting point provided by EMGI
+                                                                   them to rely on the same supertags wherever pos-
+has more impact than the integer program that in-
+                                                                   sible. However, the proportions are incorrect;
+cludes GI in its objective function. However, we
+                                                                   for example, the tag assigned most frequently to
+note that it should be possible to exploit the GI
+                                                                   in is ((S\NP)\(S\NP))/NP though (NP\NP)/NP
+information more effectively in the integer pro-
+                                                                   is more frequent in the test set. EMGI ’s tags
+gram than we have here. Also, our best model,
+                                                                   correct that balance and find better proportions,
+EMGI +IPGI , uses GI information in both stages
+                                                                   but also some less common categories, such as
+to obtain our best accuracy of 59.6/62.3.
+                                                                   (((N/N)\(N/N))\((N/N)\(N/N)))/N, sneak in be-
+P/R for grammars and lexicons. We can ob-                          cause they combine with frequent categories like
+tain a more-fine grained understanding of how the                  N/N and N. Bringing the two strategies together
+models differ by considering the precision and re-                 with EMGI +IPGI filters out the unwanted cate-
+call values for the grammars and lexicons of the                   gories while getting better overall proportions.
+different models, given in Table 3. The basic EM
+model has very low precision for the grammar, in-                  5.2   Italian CCG-TUT results
+dicating it proposes many unnecessary bitags; it                   To demonstrate that both methods and their com-
+   8
+                                                                   bination are language independent, we apply them
+    A state-of-the-art, fully-supervised maximum entropy
+tagger (Clark and Curran, 2007) (which also uses part-of-          to the Italian CCG-TUT corpus. We wanted
+speech labels) obtains 91.4% on the same train/test split.         to evaluate performance out-of-the-box because
+
+
+                                                             501
+
+
+                 Lexicon                                  Gold        EM        EM+IP         EMGI        EMGI +IPGI
+                 the → (41 distinct tags in Ltrain )    (14 tags)   (18 tags)   (9 tags)     (25 tags)      (12 tags)
+
+                   NP[nb]/N                                 5742            0       4544         4176            4666
+                   ((S\NP)\(S\NP))/N                          14            5        642          122             107
+                   (((N/N)\(N/N))\((N/N)\(N/N)))/N              0           0           0         698                0
+                   ((S/S)/S[dcl])/(S[adj]\NP)                   0        733            0            0               0
+                   PP/N                                         0       1755            0            3               1
+                           :                                    :           :           :            :               :
+                 in → (76 distinct tags in Ltrain )     (35 tags)   (20 tags)   (17 tags)    (37 tags)       (14 tags)
+
+                  (NP\NP)/NP                                 883            0          649        708               904
+                  ((S\NP)\(S\NP))/NP                         793            0          911        320               424
+                  PP/NP                                      177            1           33         12                82
+                  ((S[adj]\NP)/(S[adj]\NP))/NP                 0          215            0          0                 0
+                          :                                    :            :            :          :                 :
+
+Table 4: Comparison of tag assignments from the gold tags versus model tags obtained on the test set.
+The table shows tag assignments (and their counts for each method) for the and in in the CCGbank test
+sections. The number of distinct tags assigned by each method is given in parentheses. Ltrain is the
+lexicon obtained from sections 0-18 of CCGbank that is used as the basis for EM training.
+
+    Model         TEST 1       TEST 2 (using lexicon from:)                              EM      EM+IP      EMGI      EMGI +IPGI
+                            NPAPER+CIVIL NPAPER CIVIL                    Grammar
+    Random          9.6          9.7             8.4       9.6             Precision      23.1     26.4      44.9         46.7
+    EM              26.4        26.8            27.2      29.3
+                                                                           Recall        18.4      15.9      24.9         22.7
+    EM+IP           34.8        32.4            34.8      34.6
+    EMGI            43.1        43.9            44.0      40.3           Lexicon
+    EMGI +IPGI      45.8        43.6            47.5      40.9             Precision     51.2      52.0      54.8         55.1
+                                                                           Recall        43.6      42.8      46.0         44.9
+Table 5: Comparison of supertagging results for
+CCG-TUT. Accuracies are for ambiguous word                             Table 6: Comparison of grammar/lexicon ob-
+tokens in the test corpus, ignoring punctuation.                       served in the model tagging vs. gold tagging
+                                                                       in terms of precision and recall measures for su-
+                                                                       pertagging on CCG-TUT.
+bootstrapping a supertagger for a new language is
+one of the main use scenarios we envision: in such
+a scenario, there is no development data for chang-                    forwardly integrated. We verify the benefits of
+ing settings and parameters. Thus, we determined                       both cross-lingually, on English and Italian data.
+a train/test split beforehand and ran the methods                      We also provide a new two-stage integer program-
+exactly as we had for CCGbank.                                         ming setup that allows model minimization to be
+   The results, given in Table 5, demonstrate the                      tractable for supertagging without sacrificing the
+same trends as for English: basic EM is far more                       quality of the search for minimal bitag grammars.
+accurate than random, EM+IP adds another 8-10%
+                                                                          The experiments in this paper use large lexi-
+absolute accuracy, and EMGI adds an additional 8-
+                                                                       cons, but the methodology will be particularly use-
+10% again. The combination of the methods gen-
+                                                                       ful in the context of bootstrapping from smaller
+erally improves over EMGI , except when the lex-
+                                                                       ones. This brings further challenges; in particular,
+icon is extracted from NPAPER+CIVIL. Table 6
+                                                                       it will be necessary to identify novel entries con-
+gives precision and recall for the grammars and
+                                                                       sisting of seen word and seen category and to pre-
+lexicons for CCG-TUT—the values are lower than
+                                                                       dict unseen, but valid, categories which are needed
+for CCGbank (in line with the lower baseline), but
+                                                                       to explain the data. For this, it will be necessary
+exhibit the same trends.
+                                                                       to forgo the assumption that the provided lexicon
+6     Conclusion                                                       is always obeyed. The methods we introduce here
+                                                                       should help maintain good accuracy while open-
+We have shown how two complementary                                    ing up these degrees of freedom. Because the lexi-
+strategies—grammar-informed tag transitions and                        con is the grammar in CCG, learning new word-
+IP-minimization—for learning of supertaggers                           category associations is grammar generalization
+from highly ambiguous lexicons can be straight-                        and is of interest for grammar acquisition.
+
+
+                                                                 502
+
+
+   Finally, such lexicon refinement and generaliza-            M. Creutz and K. Lagus. 2002. Unsupervised discov-
+tion is directly relevant for using CCG in syntax-               ery of morphemes. In Proceedings of the ACL Work-
+                                                                 shop on Morphological and Phonological Learning,
+based machine translation models (Hassan et al.,
+                                                                 pages 21–30, Morristown, NJ, USA.
+2009). Such models are currently limited to lan-
+guages for which corpora annotated with CCG                    Y. Goldberg, M. Adler, and M. Elhadad. 2008. EM can
+derivations are available. Clark and Curran (2006)                find pretty good HMM POS-taggers (when given a
+                                                                  good start). In Proceedings of the ACL, pages 746–
+show that CCG parsers can be learned from sen-                    754, Columbus, Ohio, June.
+tences labeled with just supertags—without full
+derivations—with little loss in accuracy. The im-              J. Goldsmith. 2001. Unsupervised learning of the mor-
+                                                                  phology of a natural language. Computational Lin-
+provements we show here for learning supertag-
+                                                                  guistics, 27(2):153–198.
+gers from lexicons without labeled data may be
+able to help create annotated resources more ef-               S. Goldwater and T. L. Griffiths. 2007. A fully
+ficiently, or enable CCG parsers to be learned with               Bayesian approach to unsupervised part-of-speech
+                                                                  tagging. In Proceedings of the ACL, pages 744–751,
+less human-coded knowledge.                                       Prague, Czech Republic, June.
+Acknowledgements                                               H. Hassan, K. Sima’an, and A. Way. 2009. A syntac-
+                                                                 tified direct translation model with linear-time de-
+The authors would like to thank Johan Bos, Joey                  coding. In Proceedings of the 2009 Conference on
+Frazee, Taesun Moon, the members of the UT-                      Empirical Methods in Natural Language Process-
+NLL reading group, and the anonymous review-                     ing, pages 1182–1191, Singapore, August.
+ers. Ravi and Knight acknowledge the support                   J. Hockenmaier and M. Steedman. 2007. CCGbank:
+of the NSF (grant IIS-0904684) for this work.                     A corpus of CCG derivations and dependency struc-
+Baldridge acknowledges the support of a grant                     tures extracted from the Penn Treebank. Computa-
+                                                                  tional Linguistics, 33(3):355–396.
+from the Morris Memorial Trust Fund of the New
+York Community Trust.                                          A. Joshi. 1988. Tree Adjoining Grammars. In David
+                                                                 Dowty, Lauri Karttunen, and Arnold Zwicky, ed-
+                                                                 itors, Natural Language Parsing, pages 206–250.
+References                                                       Cambridge University Press, Cambridge.
+
+J. Baldridge. 2008. Weakly supervised supertagging             M. P. Marcus, M. A. Marcinkiewicz, and B. Santorini.
+   with grammar-informed initialization. In Proceed-             1993. Building a large annotated corpus of En-
+   ings of the 22nd International Conference on Com-             glish: The Penn Treebank. Computational Linguis-
+   putational Linguistics (Coling 2008), pages 57–64,            tics, 19(2).
+   Manchester, UK, August.
+                                                               B. Merialdo. 1994. Tagging English text with a
+M. Banko and R. C. Moore. 2004. Part of speech                   probabilistic model. Computational Linguistics,
+  tagging in context. In Proceedings of the Inter-               20(2):155–171.
+  national Conference on Computational Linguistics
+  (COLING), page 556, Morristown, NJ, USA.                     C. Pollard and I. Sag. 1994. Head Driven Phrase
+                                                                 Structure Grammar.     CSLI/Chicago University
+A. R. Barron, J. Rissanen, and B. Yu. 1998. The                  Press, Chicago.
+  minimum description length principle in coding and
+  modeling. IEEE Transactions on Information The-              S. Ravi and K. Knight. 2009. Minimized models
+  ory, 44(6):2743–2760.                                           for unsupervised part-of-speech tagging. In Pro-
+                                                                  ceedings of the Joint Conference of the 47th Annual
+J. Bos, C. Bosco, and A. Mazzei. 2009. Converting a               Meeting of the ACL and the 4th International Joint
+   dependency treebank to a categorial grammar tree-              Conference on Natural Language Processing of the
+   bank for Italian. In Proceedings of the Eighth In-             AFNLP, pages 504–512, Suntec, Singapore, August.
+   ternational Workshop on Treebanks and Linguistic
+   Theories (TLT8), pages 27–38, Milan, Italy.                 M. Steedman. 2000. The Syntactic Process. MIT
+                                                                 Press, Cambridge, MA.
+S. Clark and J. Curran. 2006. Partial training for
+   a lexicalized-grammar parser. In Proceedings of             Kristina Toutanova and Mark Johnson. 2008. A
+   the Human Language Technology Conference of the               Bayesian LDA-based model for semi-supervised
+   NAACL, Main Conference, pages 144–151, New                    part-of-speech tagging. In Proceedings of the Ad-
+   York City, USA, June.                                         vances in Neural Information Processing Systems
+                                                                 (NIPS), pages 1521–1528, Cambridge, MA. MIT
+S. Clark and J. Curran. 2007. Wide-coverage efficient            Press.
+   statistical parsing with CCG and log-linear models.
+   Computational Linguistics, 33(4).
+
+
+                                                         503
+

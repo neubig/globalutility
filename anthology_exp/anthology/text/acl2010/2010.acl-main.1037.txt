@@ -1,0 +1,649 @@
+                 Using Smaller Constituents Rather Than Sentences
+                in Active Learning for Japanese Dependency Parsing
+                 Manabu Sassano                                         Sadao Kurohashi
+              Yahoo Japan Corporation                             Graduate School of Informatics,
+                  Midtown Tower,                                         Kyoto University
+             9-7-1 Akasaka, Minato-ku,                             Yoshida-honmachi, Sakyo-ku,
+               Tokyo 107-6211, Japan                                  Kyoto 606-8501, Japan
+           msassano@yahoo-corp.jp                                  kuro@i.kyoto-u.ac.jp
+
+                      Abstract                                 sentence has been considered to be a basic unit for
+                                                               selection. Small constituents such as chunks have
+    We investigate active learning methods for                 not been used in sample selection for parsing. We
+    Japanese dependency parsing. We propose                    use Japanese dependency parsing as a target task
+    active learning methods of using partial                   in this study since a simple and efficient algorithm
+    dependency relations in a given sentence                   of parsing is proposed and, to our knowledge, ac-
+    for parsing and evaluate their effective-                  tive learning for Japanese dependency parsing has
+    ness empirically. Furthermore, we utilize                  never been studied.
+    syntactic constraints of Japanese to ob-                      The remainder of the paper is organized as fol-
+    tain more labeled examples from precious                   lows. Section 2 describes the basic framework of
+    labeled ones that annotators give. Ex-                     active learning which is employed in this research.
+    perimental results show that our proposed                  Section 3 describes the syntactic characteristics of
+    methods improve considerably the learn-                    Japanese and the parsing algorithm that we use.
+    ing curve of Japanese dependency parsing.                  Section 4 briefly reviews previous work on active
+    In order to achieve an accuracy of over                    learning for parsing and discusses several research
+    88.3%, one of our methods requires only                    challenges. In Section 5 we describe our proposed
+    34.4% of labeled examples as compared to                   methods and others of active learning for Japanese
+    passive learning.                                          dependency parsing. Section 6 describes experi-
+                                                               mental evaluation and discussion. Finally, in Sec-
+1 Introduction                                                 tion 7 we conclude this paper and point out some
+Reducing annotation cost is very important be-                 future directions.
+cause supervised learning approaches, which have
+been successful in natural language processing, re-            2 Active Learning
+quire typically a large number of labeled exam-
+                                                               2.1 Pool-based Active Learning
+ples. Preparing many labeled examples is time
+consuming and labor intensive.                                 Our base framework of active learning is based on
+   One of most promising approaches to this is-                the algorithm of (Lewis and Gale, 1994), which is
+sue is active learning. Recently much attention has            called pool-based active learning. Following their
+been paid to it in the field of natural language pro-          sequential sampling algorithm, we show in Fig-
+cessing. Various tasks have been targeted in the               ure 1 the basic flow of pool-based active learning.
+research on active learning. They include word                 Various methods for selecting informative exam-
+sense disambiguation, e.g., (Zhu and Hovy, 2007),              ples can be combined with this framework.
+POS tagging (Ringger et al., 2007), named entity
+recognition (Laws and Schütze, 2008), word seg-               2.2 Selection Algorithm for Large Margin
+mentation, e.g., (Sassano, 2002), and parsing, e.g.,               Classifiers
+(Tang et al., 2002; Hwa, 2004).                                One of the most accurate approaches to classifica-
+   It is the main purpose of this study to propose             tion tasks is an approach with large margin classi-
+methods of improving active learning for parsing               fiers. Suppose that we are given data points {xi }
+by using a smaller constituent than a sentence as              such that the associated label yi will be either −1
+a unit that is selected at each iteration of active            or 1, and we have a hyperplane of some large mar-
+learning. Typically in active learning for parsing a           gin classifier defined by {x : f (x) = 0} where the
+
+
+                                                         356
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 356–365,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+    1. Build an initial classifier from an initial la-         Lisa-ga, kare-ni, ano, pen-wo, and age-ta where
+       beled training set.                                     ga, ni, and wo are postpositions and ta is a verb
+    2. While resources for labeling examples are               ending for past tense.
+       available                                               3.2 Constraints of Japanese Dependency
+        (a) Apply the current classifier to each un-               Analysis
+            labeled example                                    Japanese is a head final language and in written
+        (b) Find the m examples which are most in-             Japanese we usually hypothesize the following:
+            formative for the classifier
+                                                                  • Each bunsetsu has only one head except the
+        (c) Have annotators label the m examples
+                                                                    rightmost one.
+        (d) Train a new classifier on all labeled ex-
+            amples                                                • Dependency links between bunsetsus go
+                                                                    from left to right.
+
+Figure 1: Flow of the pool-based active learning                  • Dependencies do not cross one another.
+
+     Lisa-ga       kare-ni   ano pen-wo     age-ta.            We can see that these constraints are satisfied in
+     Lisa-subj     to him    that pen-acc   give-past.         the sample sentence in Figure 2. In this paper we
+ID 0               1         2 3            4                  also assume that the above constraints hold true
+Head 4             4         3 4            -                  when we discuss algorithms of Japanese parsing
+                                                               and active learning for it.
+Figure 2: Sample sentence. An English translation              3.3 Algorithm of Japanese Dependency
+is “Lisa gave that pen to him.”                                    Parsing
+                                                               We use Sassano’s algorithm (Sassano, 2004) for
+classification function is G(x) = sign{f (x)}. In              Japanese dependency parsing. The reason for this
+pool-based active learning with large margin clas-             is that it is very accurate and efficient1 . Further-
+sifiers, selection of examples can be done as fol-             more, it is easy to implement. His algorithm is
+lows:                                                          one of the simplest form of shift-reduce parsers
+                                                               and runs in linear-time.2 Since Japanese is a head
+    1. Compute f (xi ) over all unlabeled examples
+                                                               final language and its dependencies are projective
+       xi in the pool.
+                                                               as described in Section 3.2, that simplification can
+    2. Sort xi with |f (xi )| in ascending order.              be made.
+    3. Select top m examples.                                     The basic flow of Sassano’s algorithm is shown
+                                                               in Figure 3, which is slightly simplified from the
+This type of selection methods with SVMs is dis-               original by Sassano (2004). When we use this al-
+cussed in (Tong and Koller, 2000; Schohn and                   gorithm with a machine learning-based classifier,
+Cohn, 2000). They obtain excellent results on text             function Dep() in Figure 3 uses the classifier to
+classification. These selection methods are simple             decide whether two bunsetsus have a dependency
+but very effective.                                            relation. In order to prepare training examples for
+                                                               the trainable classifier used with his algorithm, we
+3     Japanese Parsing                                         first have to convert a treebank to suitable labeled
+3.1 Syntactic Units                                            instances by using the algorithm in Figure 4. Note
+                                                                    1
+A basic syntactic unit used in Japanese parsing is                    Iwatate et al. (2008) compare their proposed algorithm
+                                                               with various ones that include Sassano’s, cascaded chunk-
+a bunsetsu, the concept of which was initially in-             ing (Kudo and Matsumoto, 2002), and one in (McDonald et
+troduced by Hashimoto (1934). We assume that                   al., 2005). Kudo and Matsumoto (2002) compare cascaded
+in Japanese we have a sequence of bunsetsus be-                chunking with the CYK method (Kudo and Matsumoto,
+                                                               2000). After considering these results, we have concluded
+fore parsing a sentence. A bunsetsu contains one               so far that Sassano’s is a reasonable choice for our purpose.
+or more content words and zero or more function                     2
+                                                                      Roughly speaking, Sassano’s is considered to be a sim-
+words.                                                         plified version, which is modified for head final languages, of
+                                                               Nivre’s (Nivre, 2003). Classifiers with Nivre’s are required
+   A sample sentence in Japanese is shown in Fig-              to handle multiclass prediction, while binary classifiers can
+ure 2. This sentence consists of five bunsetsus:               work with Sassano’s for Japanese.
+
+
+                                                         357
+
+
+Input: wi : bunsetsus in a given sentence.                               Input: hi : the head IDs of bunsetsus wi .
+   N : the number of bunsetsus.                                          Function: Dep(j, i, w, h): returns true if hj = i.
+Output: hj : the head IDs of bunsetsus wj .                                 Otherwise returns false. Also prints a
+Functions: Push(i, s): pushes i on the stack s.                             feature vector with a label according to hj .
+   Pop(s): pops a value off the stack s.                                 procedure Generate(w, N , h)
+   Dep(j, i, w): returns true when wj should                             begin
+   modify wi . Otherwise returns false.                                     Push(−1, s);
+procedure Analyze(w, N , h)                                                 Push(0, s);
+var s: a stack for IDs of modifier bunsetsus                                for i ← 1 to N − 1 do begin
+begin                                                                          j ← Pop(s);
+   {−1 indicates no modifier candidate}                                        while (j 6= −1
+   Push(−1, s);                                                                  and ((i = N − 1) or Dep(j, i, w, h)) ) do
+   Push(0, s);                                                                 begin
+   for i ← 1 to N − 1 do begin                                                    j ← Pop(s)
+     j ← Pop(s);                                                               end
+     while (j 6= −1                                                            Push(j, s);
+            and ((i = N − 1) or Dep(j, i, w)) ) do                             Push(i, s)
+     begin                                                                  end
+         hj ← i;                                                         end
+         j ← Pop(s)
+     end
+     Push(j, s);                                                         Figure 4: Algorithm of generating training exam-
+     Push(i, s)                                                          ples
+   end
+end                                                                      based on some entropy-based measure of a given
+                                                                         sentence (e.g., (Tang et al., 2002)). We cannot
+                                                                         use this kind of measures when we want to select
+Figure 3: Algorithm of Japanese dependency pars-
+                                                                         other smaller constituents than sentences. Other
+ing
+                                                                         bigger problem is an algorithm of parsing itself.
+                                                                         If we sample smaller units rather than sentences,
+that the algorithm in Figure 4 does not generate                         we have partially annotated sentences and have to
+every pair of bunsetsus.3                                                use a parsing algorithm that can be trained from
+                                                                         incompletely annotated sentences. Therefore, it is
+4    Active Learning for Parsing                                         difficult to use some of probabilistic models for
+                                                                         parsing. 4
+Most of the methods of active learning for parsing
+in previous work use selection of sentences that                         5 Active Learning for Japanese
+seem to contribute to the improvement of accuracy                          Dependency Parsing
+(Tang et al., 2002; Hwa, 2004; Baldridge and Os-
+borne, 2004). Although Hwa suggests that sample                          In this section we describe sample selection meth-
+selection for parsing would be improved by select-                       ods which we investigated.
+ing finer grained constituents rather than sentences                     5.1 Sentence-wise Sample Selection
+(Hwa, 2004), such methods have not been investi-
+gated so far.                                                            Passive Selection (Passive) This method is to
+   Typical methods of selecting sentences are                            select sequentially sentences that appear in the
+                                                                         training corpus. Since it gets harder for the read-
+    3
+      We show a sample set of generated examples for training            ers to reproduce the same experimental setting, we
+the classifier of the parser in Figure 3. By using the algorithm
+                                                                             4
+in Figure 4, we can obtain labeled examples from the sample                    We did not employ query-by-committee (QBC) (Seung
+sentences in Figure 2: {0, 1, “O”}, {1, 2, “O”}, {2, 3, “D”},            et al., 1992), which is another important general framework
+and {1, 3, “O”}. Please see Section 5.2 for the notation                 of active learning, since the selection strategy with large mar-
+used here. For example, an actual labeled instance generated             gin classifiers (Section 2.2) is much simpler and seems more
+from {2, 3, “D”} will be like ”label=D, features={modifier-              practical for active learning in Japanese dependency parsing
+content-word=ano, ..., head-content-word=pen, ...}.”                     with smaller constituents.
+
+
+                                                                   358
+
+
+avoid to use random sampling in this paper.                  annotators would label either “D” for the two bun-
+                                                             setsu having a dependency relation or “O”, which
+Minimum Margin Selection (Min) This                          represents the two does not.
+method is to select sentences that contain bun-
+setsu pairs which have smaller margin values                 Modified Simple Selection (ModSimple) Al-
+of outputs of the classifier used in parsing. The            though NAIVE seems to work well, it did not (dis-
+procedure of selection of M IN are summarized as             cussed later). M OD S IMPLE is to select bunsetsu
+follows. Assume that we have sentences si in the             pairs that have smaller margin values of outputs
+pool of unlabeled sentences.                                 of the classifier, which is the same as in NAIVE.
+                                                             The difference between M OD S IMPLE and NAIVE
+  1. Parse si in the pool with the current model.            is the way annotators label examples. Assume that
+                                                             we have an annotator and the learner selects some
+  2. Sort si with min |f (xk )| where xk are bun-            bunsetsu pair of the j-th bunsetsu and the i-th bun-
+     setsu pairs in the sentence si . Note that xk           setsu such that j < i. The annotator is then asked
+     are not all possible bunsetsu pairs in si and           what the head of the j-th bunsetsu is. We define
+     they are limited to bunsetsu pairs checked in           here the head bunsetsu is the k-th one.
+     the process of parsing si .                                We differently generate labeled examples from
+  3. Select top m sentences.                                 the information annotators give according to the
+                                                             relation among bunsetsus j, i, and k.
+Averaged Margin Selection (Avg) This method                     Below we use the notation {s, t, “D”} to de-
+is to select sentences that have smaller values of           note that the s-th bunsetsu modifies the t-th one.
+averaged margin values of outputs of the classi-             The use of “O” instead of “D” indicates that the
+fier in a give sentences over the number of deci-            s-th does not modify the t-th. That is generating
+sions which are carried out in parsing. The differ-          {s, t, “D”} means outputting an example with the
+ence between AVG and M IN is that for AVG we                 label “D”.
+     ∑
+use |f (xk )|/l where l is the number of calling             Case 1 if j < i < k, then generate {j, i, “O”} and
+Dep() in Figure 3 for the sentence si instead of                 {j, k, “D”}.
+min |f (xk )| for M IN.
+                                                             Case 2 if j < i = k, then generate {j, k, “D”}.
+5.2 Chunk-wise Sample Selection                              Case 3 if j < k < i, then generate {j, k, “D”}.
+                                                                 Note that we do not generate {j, i, “O”} in
+In chunk-wise sample selection, we select bun-
+                                                                 this case because in Sassano’s algorithm we
+setsu pairs rather than sentences. Bunsetsu pairs
+                                                                 do not need such labeled examples if j de-
+are selected from different sentences in a pool.
+                                                                 pends on k such that k < i.
+This means that structures of sentences in the pool
+are partially annotated.                                     Syntactically Extended Selection (Syn) This
+   Note that we do not use every bunsetsu pair in            selection method is one based on M OD S IMPLE
+a sentence. When we use Sassano’s algorithm, we              and extended to generate more labeled examples
+have to generate training examples for the classi-           for the classifier. You may notice that more labeled
+fier by using the algorithm in Figure 4. In other            examples for the classifier can be generated from
+words, we should not sample bunsetsu pairs inde-             a single label which the annotator gives. Syntac-
+pendently from a given sentence.                             tic constraints of the Japanese language allow us
+   Therefore, we select bunsetsu pairs that have             to extend labeled examples.
+smaller margin values of outputs given by the clas-             For example, suppose that we have four bunset-
+sifier during the parsing process. All the sentences         sus A, B, C, and D in this order. If A depends
+in the pool are processed by the current parser. We          on C, i.e., the head of A is C, then it is automati-
+cannot simply split the sentences in the pool into           cally derived that B also should depend on C be-
+labeled and unlabeled ones because we do not se-             cause the Japanese language has the no-crossing
+lect every bunsetsu pair in a given sentence.                constraint for dependencies (Section 3.2). By uti-
+                                                             lizing this property we can obtain more labeled ex-
+Naive Selection (Naive) This method is to select             amples from a single labeled one annotators give.
+bunsetsu pairs that have smaller margin values of            In the example above, we obtain {A, B, “O”} and
+outputs of the classifier. Then it is assumed that           {B, C, “D”} from {A, C, “D”}.
+
+
+                                                       359
+
+
+   Although we can employ various extensions to                 the same features here. They are divided into three
+M OD S IMPLE, we use a rather simple extension in               groups: modifier bunsetsu features, head bunsetsu
+this research.                                                  features, and gap features. A summary of the fea-
+                                                                tures is described in Table 1.
+Case 1 if (j < i < k), then generate
+                                                                6.4 Implementation
+        • {j, i, “O”},
+        • {k − 1, k, “D”} if k − 1 > j,                         We implemented a parser and a tool for the av-
+        • and {j, k, “D”}.                                      eraged perceptron in C++ and used them for ex-
+                                                                periments. We wrote the main program of active
+Case 2 if (j < i = k), then generate                            learning and some additional scripts in Perl and sh.
+        • {k − 1, k, “D”} if k − 1 > j,
+                                                                6.5 Settings of Active Learning
+        • and {j, k, “D”}.
+                                                                For initial seed sentences, first 500 sentences are
+Case 3 if (j < k < i), then generate
+                                                                taken from the articles on January 1st. In ex-
+        • {k − 1, k, “D”} if k − 1 > j,                         periments about sentence wise selection, 500 sen-
+        • and {j, k, “D”}.                                      tences are selected at each iteration of active learn-
+                                                                ing and labeled5 and added into the training data.
+  In S YN as well as M OD S IMPLE, we generate                  In experiments about chunk wise selection 4000
+examples with ”O” only for bunsetsu pairs that oc-              pairs of bunsetsus, which are roughly equal to the
+cur to the left of the correct head (i.e., case 1).             averaged number of bunsetsus in 500 sentences,
+                                                                are selected at each iteration of active learning.
+6   Experimental Evaluation and
+    Discussion                                                  6.6 Dependency Accuracy
+6.1 Corpus                                                      We use dependency accuracy as a performance
+In our experiments we used the Kyoto University                 measure of a parser. The dependency accuracy is
+Corpus Version 2 (Kurohashi and Nagao, 1998).                   the percentage of correct dependencies. This mea-
+Initial seed sentences and a pool of unlabeled sen-             sure is commonly used for the Kyoto University
+tences for training are taken from the articles on              Corpus.
+January 1st through 8th (7,958 sentences) and the
+                                                                6.7 Results and Discussion
+test data is a set of sentences in the articles on Jan-
+uary 9th (1,246 sentences). The articles on Jan-                Learning Curves First we compare methods for
+uary 10th were used for development. The split of               sentence wise selection. Figure 5 shows that M IN
+these articles for training/test/development is the             is the best among them, while AVG is not good
+same as in (Uchimoto et al., 1999).                             and similar to PASSIVE. It is observed that active
+                                                                learning with large margin classifiers also works
+6.2 Averaged Perceptron                                         well for Sassano’s algorithm of Japanese depen-
+We used the averaged perceptron (AP) (Freund                    dency parsing.
+and Schapire, 1999) with polynomial kernels. We                    Next we compare chunk-wise selection with
+set the degree of the kernels to 3 since cubic ker-             sentence-wise one. The comparison is shown in
+nels with SVM have proved effective for Japanese                Figure 6. Note that we must carefully consider
+dependency parsing (Kudo and Matsumoto, 2000;                   how to count labeled examples. In sentence wise
+Kudo and Matsumoto, 2002). We found the best                    selection we obviously count the number of sen-
+value of the epoch T of the averaged perceptron                 tences. However, it is impossible to count such
+by using the development set. We fixed T = 12                   number when we label bunsetsus pairs.
+through all experiments for simplicity.                            Therefore, we use the number of bunsetsus that
+                                                                have an annotated head. Although we know this
+6.3 Features                                                    may not be a completely fair comparison, we be-
+There are features that have been commonly used                 lieve our choice in this experiment is reasonable
+for Japanese dependency parsing among related                      5
+                                                                     In our experiments human annotators do not give labels.
+papers, e.g., (Kudo and Matsumoto, 2002; Sas-                   Instead, labels are given virtually from correct ones that the
+sano, 2004; Iwatate et al., 2008). We also used                 Kyoto University Corpus has.
+
+
+                                                          360
+
+
+       Bunsetsu features for modifiers        rightmost content word, rightmost function word, punctuation,
+       and heads                              parentheses, location (BOS or EOS)
+       Gap features                           distance (1, 2–5, or 6 ≤), particles, parentheses, punctuation
+
+Table 1: Features for deciding a dependency relation between two bunsetsus. Morphological features
+for each word (morpheme) are major part-of-speech (POS), minor POS, conjugation type, conjugation
+form, and surface form.
+
+for assessing the effect of reduction by chunk-wise
+selection.
+   In Figure 6 NAIVE has a better learning curve
+compared to M IN at the early stage of learning.
+However, the curve of NAIVE declines at the later                                 0.89
+
+stage and gets worse than PASSIVE and M IN.                                      0.885
+   Why does this phenomenon occur? It is because                                  0.88
+each bunsetsu pair is not independent and pairs in
+
+
+                                                                      Accuracy
+                                                                                 0.875
+the same sentence are related to each other. They
+satisfy the constraints discussed in Section 3.2.                                 0.87
+
+Furthermore, the algorithm we use, i.e., Sassano’s,                              0.865
+assumes these constraints and has the specific or-                                                               Passive
+                                                                                  0.86                               Min
+der for processing bunsetsu pairs as we see in Fig-                                                              Average
+                                                                                 0.855
+ure 3. Let us consider the meaning of {j, i, “O”} if                                     0   1000 2000 3000 4000 5000 6000 7000 8000
+the head of the j-th bunsetsu is the k-th one such                                              Number of Labeled Sentences
+that j < k < i. In the context of the algorithm in
+Figure 3, {j, i, “O”} actually means that the j-th                    Figure 5: Learning curves of methods for sentence
+bunsetsu modifies th l-th one such that i < l. That                   wise selection
+is “O” does not simply mean that two bunsetsus
+does not have a dependency relation. Therefore,
+we should not generate {j, i, “O”} in the case of
+j < k < i. Such labeled instances are not needed
+and the algorithm in Figure 4 does not generate
+them even if a fully annotated sentence is given.
+Based on the analysis above, we modified NAIVE
+and defined M OD S IMPLE, where unnecessary la-
+beled examples are not generated.                                                 0.89
+
+   Now let us compare NAIVE with M OD S IMPLE                                    0.885
+(Figure 7). M OD S IMPLE is almost always better                                  0.88
+than PASSIVE and does not cause a significant de-
+                                                                      Accuracy
+
+
+
+
+                                                                                 0.875
+terioration of accuracy unlike NAIVE.6
+   Comparison of M OD S IMPLE and S YN is shown                                   0.87
+
+in Figure 8. Both exhibit a similar curve. Figure 9                              0.865
+shows the same comparison in terms of required                                                                   Passive
+                                                                                  0.86                              Min
+queries to human annotators. It shows that S YN is                                                                Naive
+                                                                                 0.855
+better than M OD S IMPLE especially at the earlier                                       0      10000 20000 30000 40000 50000
+stage of active learning.                                                                    Number of bunsetsus which have a head
+
+Reduction of Annotations Next we examined                             Figure 6: Learning curves of M IN (sentence-wise)
+the number of labeled bunsetsus to be required in                     and NAIVE (chunk-wise).
+   6
+     We have to carefully see the curves of NAIVE and M OD -
+S IMPLE. In Figure 7 at the early stage NAIVE is slightly
+better than M OD S IMPLE, while in Figure 9 NAIVE does not
+outperform M OD S IMPLE. This is due to the difference of the
+way of accessing annotation efforts.
+
+
+                                                                361
+
+
+            0.89
+                                                                                                       40000
+
+
+
+
+                                                                     # of bunsetsus that have a head
+           0.885                                                                                       35000
+            0.88                                                                                       30000
+                                                                                                       25000
+Accuracy
+
+
+
+
+           0.875
+                                                                                                       20000
+            0.87
+                                                                                                       15000
+           0.865                                                                                       10000
+                                          Passive
+            0.86                        ModSimple                                                       5000
+                                            Naive                                                         0
+           0.855
+                   0      10000 20000 30000 40000 50000                                                            Passive Min  Avg Naive Mod Syn
+                                                                                                                                             Simple
+                       Number of bunsetsus which have a head
+                                                                                                                             Selection strategy
+
+Figure 7: Learning curves of NAIVE, M OD S IM -
+                                                                     Figure 10: Number of labeled bunsetsus to be re-
+PLE and PASSIVE in terms of the number of bun-
+                                                                     quired to achieve an accuracy of over 88.3%.
+setsus that have a head.
+
+
+
+            0.89
+                                                                                                       25000
+           0.885
+                                                                     Number of Support Vectors
+
+
+
+                                                                                                       20000
+            0.88
+Accuracy
+
+
+
+
+           0.875                                                                                       15000
+            0.87
+                                                                                                       10000
+           0.865
+                                          Passive
+            0.86                        ModSimple                                                       5000
+                                           Syntax                                                                                      Passive
+           0.855                                                                                                                          Min
+                   0      10000 20000 30000 40000 50000                                                   0
+                                                                                                               0   1000 2000 3000 4000 5000 6000 7000 8000
+                       Number of bunsetsus which have a head
+                                                                                                                      Number of Labeled Sentences
+
+Figure 8: Learning curves of M OD S IMPLE and
+                                                                     Figure 11: Changes of number of support vectors
+S YN in terms of the number of bunsetsus which
+                                                                     in sentence-wise active learning
+have a head.
+
+
+
+            0.89
+                                                                                                       25000
+           0.885
+                                                                     Number of Support Vectors
+
+
+
+
+                                                                                                       20000
+            0.88
+Accuracy
+
+
+
+
+           0.875                                                                                       15000
+            0.87
+                                                                                                       10000
+           0.865
+                                        ModSimple
+            0.86                           Syntax                                                       5000
+                                            Naive
+           0.855                                                                                                                     ModSimple
+                   0    10000 20000 30000 40000 50000 60000                                               0
+                                                                                                               0    10000 20000 30000 40000 50000 60000
+                       Number of queris to human annotators
+                                                                                                                           Number of Queries
+
+Figure 9: Comparison of M OD S IMPLE and S YN
+                                                                     Figure 12: Changes of number of support vectors
+in terms of the number of queries to human anno-
+                                                                     in chunk-wise active learning (M OD S IMPLE)
+tators
+
+
+
+                                                               362
+
+
+order to achieve a certain level of accuracy. Fig-                       pus. They also will be useful for domain adapta-
+ure 10 shows that the number of labeled bunsetsus                        tion of a dependency parser.10
+to achieve an accuracy of over 88.3% depending
+on the active learning methods discussed in this                         Applicability to Other Languages and Other
+research.                                                                Parsing Algorithms We discuss here whether
+   PASSIVE needs 37766 labeled bunsetsus which                           or not the proposed methods and the experiments
+have a head to achieve an accuracy of 88.48%,                            are useful for other languages and other parsing
+while S YN needs 13021 labeled bunsetsus to                              algorithms. First we take languages similar to
+achieve an accuracy of 88.56%. S YN requires only                        Japanese in terms of syntax, i.e., Korean and Mon-
+34.4% of the labeled bunsetsu pairs that PASSIVE                         golian. These two languages are basically head-
+requires.                                                                final languages and have similar constraints in
+                                                                         Section 3.2. Although no one has reported appli-
+Stopping Criteria It is known that increment                             cation of (Sassano, 2004) to the languages so far,
+rate of the number of support vectors in SVM in-                         we believe that similar parsing algorithms will be
+dicates saturation of accuracy improvement dur-                          applicable to them and the discussion in this study
+ing iterations of active learning (Schohn and Cohn,                      would be useful.
+2000). It is interesting to examine whether the                             On the other hand, the algorithm of (Sassano,
+observation for SVM is also useful for support                           2004) cannot be applied to head-initial languages
+vectors7 of the averaged perceptron. We plotted                          such as English. If target languages are assumed
+changes of the number of support vectors in the                          to be projective, the algorithm of (Nivre, 2003)
+cases of both PASSIVE and M IN in Figure 11 and                          can be used. It is highly likely that we will invent
+changes of the number of support vectors in the                          the effective use of finer-grained constituents, e.g.,
+case of M OD S IMPLE in Figure 12. We observed                           head-modifier pairs, rather than sentences in active
+that the increment rate of support vectors mildly                        learning for Nivre’s algorithm with large margin
+gets smaller. However, it is not so clear as in the                      classifiers since Sassano’s seems to be a simplified
+case of text classification in (Schohn and Cohn,                         version of Nivre’s and they have several properties
+2000).                                                                   in common. However, syntactic constraints in Eu-
+                                                                         ropean languages like English may be less helpful
+Issues on Accessing the Total Cost of Annota-                            than those in Japanese because their dependency
+tion In this paper, we assume that each annota-                          links do not have a single direction.
+tion cost for dependency relations is constant. It                          Even though the use of syntactic constraints is
+is however not true in an actual annotation work.8                       limited, smaller constituents will still be useful for
+In addition, we have to note that it may be easier                       other parsing algorithms that use some determin-
+to annotate a whole sentence than some bunsetsu                          istic methods with machine learning-based classi-
+pairs in a sentence9 . In a real annotation task, it                     fiers. There are many algorithms that have such
+will be better to show a whole sentence to anno-                         a framework, which include (Yamada and Mat-
+tators even when annotating some part of the sen-                        sumoto, 2003) for English and (Kudo and Mat-
+tence.                                                                   sumoto, 2002; Iwatate et al., 2008) for Japanese.
+   Nevertheless, it is noteworthy that our research                      Therefore, effective use of smaller constituents in
+shows the minimum number of annotations in                               active learning would not be limited to the specific
+preparing training examples for Japanese depen-                          algorithm.
+dency parsing. The methods we have proposed
+must be helpful when checking repeatedly anno-                           7 Conclusion
+tations that are important and might be wrong or
+difficult to label while building an annotated cor-                      We have investigated that active learning methods
+                                                                         for Japanese dependency parsing. It is observed
+   7
+      Following (Freund and Schapire, 1999), we use the term             that active learning of parsing with the averaged
+“support vectors” for AP as well as SVM. “Support vectors”               perceptron, which is one of the large margin clas-
+of AP means vectors which are selected in the training phase
+and contribute to the prediction.                                        sifiers, works also well for Japanese dependency
+    8
+      Thus it is very important to construct models for estimat-         analysis.
+ing the actual annotation cost as Haertel et al. (2008) do.
+    9                                                                      10
+      Hwa (2004) discusses similar aspects of researches on                   Ohtake (2006) examines heuristic methods of selecting
+active learning.                                                         sentences.
+
+
+                                                                   363
+
+
+   In addition, as far as we know, we are the first             Taku Kudo and Yuji Matsumoto. 2000. Japanese de-
+to propose the active learning methods of using                   pendency structure analysis based on support vector
+                                                                  machines. In Proc. of EMNLP/VLC 2000, pages 18–
+partial dependency relations in a given sentence
+                                                                  25.
+for parsing and we have evaluated the effective-
+ness of our methods. Furthermore, we have tried                 Taku Kudo and Yuji Matsumoto. 2002. Japanese
+to obtain more labeled examples from precious la-                 dependency analysis using cascaded chunking. In
+beled ones that annotators give by utilizing syntac-              Proc. of CoNLL-2002, pages 63–69.
+tic constraints of the Japanese language. It is note-           Sadao Kurohashi and Makoto Nagao. 1998. Building a
+worthy that linguistic constraints have been shown                Japanese parsed corpus while improving the parsing
+useful for reducing annotations in active learning                system. In Proc. of LREC-1998, pages 719–724.
+for NLP.
+                                                                Florian Laws and Hinrich Schütze. 2008. Stopping cri-
+   Experimental results show that our proposed                     teria for active learning of named entity recognition.
+methods have improved considerably the learning                    In Proc. of COLING 2008, pages 465–472.
+curve of Japanese dependency parsing.
+                                                                David D. Lewis and William A. Gale. 1994. A se-
+   We are currently building a new annotated cor-
+                                                                  quential algorithm for training text classifiers. In
+pus with an annotation tool. We have a plan to in-                Proc. of the Seventeenth Annual International ACM-
+corporate our proposed methods to the annotation                  SIGIR Conference on Research and Development in
+tool. We will use it to accelerate building of the                Information Retrieval, pages 3–12.
+large annotated corpus to improved our Japanese
+                                                                Ryan McDonald, Koby Crammer, and Fernando
+parser.                                                           Pereira. 2005. Online large-margin training of de-
+   It would be interesting to explore the use of par-             pendency parsers. In Proc. of ACL-2005, pages
+tially labeled constituents in a sentence in another              523–530.
+language, e.g., English, for active learning.
+                                                                Joakim Nivre. 2003. An efficient algorithm for pro-
+                                                                  jective dependency parsing. In Proc. of IWPT-03,
+Acknowledgements                                                  pages 149–160.
+
+We would like to thank the anonymous review-                    Kiyonori Ohtake. 2006. Analysis of selective strate-
+ers and Tomohide Shibata for their valuable com-                  gies to build a dependency-analyzed corpus. In
+ments.                                                            Proc. of COLING/ACL 2006 Main Conf. Poster Ses-
+                                                                  sions, pages 635–642.
+
+                                                                Eric Ringger, Peter McClanahan, Robbie Haertel,
+References                                                         George Busby, Marc Carmen, James Carroll, Kevin
+                                                                   Seppi, and Deryle Lonsdale. 2007. Active learn-
+Jason Baldridge and Miles Osborne. 2004. Active                    ing for part-of-speech tagging: Accelerating corpus
+   learning and the total cost of annotation. In Proc.             annotation. In Proc. of the Linguistic Annotation
+   of EMNLP 2004, pages 9–16.                                      Workshop, pages 101–108.
+Yoav Freund and Robert E. Schapire. 1999. Large                 Manabu Sassano. 2002. An empirical study of active
+  margin classification using the perceptron algorithm.          learning with support vector machines for Japanese
+  Machine Learning, 37(3):277–296.                               word segmentation. In Proc. of ACL-2002, pages
+                                                                 505–512.
+Robbie Haertel, Eric Ringger, Kevin Seppi, James Car-
+  roll, and Peter McClanahan. 2008. Assessing the               Manabu Sassano. 2004. Linear-time dependency anal-
+  costs of sampling methods in active learning for an-           ysis for Japanese. In Proc. of COLING 2004, pages
+  notation. In Proc. of ACL-08: HLT, short papers                8–14.
+  (Companion Volume), pages 65–68.
+                                                                Greg Schohn and David Cohn. 2000. Less is more:
+Shinkichi Hashimoto. 1934. Essentials of Japanese                 Active learning with support vector machines. In
+  Grammar (Kokugoho Yousetsu) (in Japanese).                      Proc. of ICML-2000, pages 839–846.
+
+Rebecca Hwa. 2004. Sample selection for statistical             H. S. Seung, M. Opper, and H. Sompolinsky. 1992.
+  parsing. Computational Linguistics, 30(3):253–276.              Query by committee. In Proc. of COLT ’92, pages
+                                                                  287–294.
+Masakazu Iwatate, Masayuki Asahara, and Yuji Mat-
+ sumoto. 2008. Japanese dependency parsing us-                  Min Tang, Xaoqiang Luo, and Salim Roukos. 2002.
+ ing a tournament model. In Proc. of COLING 2008,                 Active learning for statistical natural language pars-
+ pages 361–368.                                                   ing. In Proc. of ACL-2002, pages 120–127.
+
+
+                                                          364
+
+
+Simon Tong and Daphne Koller. 2000. Support vec-
+  tor machine active learning with applications to text
+  classification. In Proc. of ICML-2000, pages 999–
+  1006.
+
+Kiyotaka Uchimoto, Satoshi Sekine, and Hitoshi Isa-
+  hara. 1999. Japanese dependency structure analy-
+  sis based on maximum entropy models. In Proc. of
+  EACL-99, pages 196–203.
+Hiroyasu Yamada and Yuji Matsumoto. 2003. Statis-
+  tical dependency analysis with support vector ma-
+  chines. In Proc. of IWPT 2003, pages 195–206.
+Jingbo Zhu and Eduard Hovy. 2007. Active learning
+   for word sense disambiguation with methods for ad-
+   dressing the class imbalance problem. In Proc. of
+   EMNLP-CoNLL 2007, pages 783–790.
+
+
+
+
+                                                          365
+

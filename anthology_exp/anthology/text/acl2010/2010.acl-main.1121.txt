@@ -1,0 +1,822 @@
+           Complexity Metrics in an Incremental Right-corner Parser
+
+          Stephen Wu Asaf Bachrach† Carlos Cardenas∗ William Schuler◦
+                 Department of Computer Science, University of Minnesota
+                     †
+                       Unit de Neuroimagerie Cognitive INSERM-CEA
+     ∗
+       Department of Brain & Cognitive Sciences, Massachussetts Institute of Technology
+                  ◦
+                    University of Minnesota and The Ohio State University
+                           †                    ∗                         ◦
+     swu@cs.umn.edu            asaf@mit.edu         cardenas@mit.edu          schuler@ling.ohio-state.edu
+
+
+
+
+                      Abstract                                   A parser-derived complexity metric such as sur-
+    Hierarchical HMM (HHMM) parsers                           prisal can only be as good (empirically) as the
+    make promising cognitive models: while                    model of language from which it derives (Frank,
+    they use a bounded model of working                       2009). Ideally, a psychologically-plausible lan-
+    memory and pursue incremental hypothe-                    guage model would produce a surprisal that would
+    ses in parallel, they still achieve parsing               correlate better with linguistic complexity. There-
+    accuracies competitive with chart-based                   fore, the specification of how to encode a syntac-
+    techniques. This paper aims to validate                   tic language model is of utmost importance to the
+    that a right-corner HHMM parser is also                   quality of the metric.
+    able to produce complexity metrics, which                    However, it is difficult to quantify linguis-
+    quantify a reader’s incremental difficulty                tic complexity and reading difficulty. The two
+    in understanding a sentence. Besides                      commonly-used empirical quantifications of read-
+    defining standard metrics in the HHMM                     ing difficulty are eye-tracking measurements and
+    framework, a new metric, embedding                        word-by-word reading times; this paper uses read-
+    difference, is also proposed, which tests                 ing times to find the predictiveness of several
+    the hypothesis that HHMM store elements                   parser-derived complexity metrics. Various fac-
+    represents syntactic working memory.                      tors (i.e., from syntax, semantics, discourse) are
+    Results show that HHMM surprisal                          likely necessary for a full accounting of linguis-
+    outperforms all other evaluated metrics                   tic complexity, so current computational models
+    in predicting reading times, and that                     (with some exceptions) narrow the scope to syn-
+    embedding difference makes a significant,                 tactic or lexical complexity.
+    independent contribution.                                    Three complexity metrics will be calculated in
+                                                              a Hierarchical Hidden Markov Model (HHMM)
+1   Introduction
+                                                              parser that recognizes trees in right-corner form
+Since the introduction of a parser-based calcula-             (the left-right dual of left-corner form). This type
+tion for surprisal by Hale (2001), statistical tech-          of parser performs competitively on standard pars-
+niques have been become common as models of                   ing tasks (Schuler et al., 2010); also, it reflects
+reading difficulty and linguistic complexity. Sur-            plausible accounts of human language processing
+prisal has received a lot of attention in recent lit-         as incremental (Tanenhaus et al., 1995; Brants and
+erature due to nice mathematical properties (Levy,            Crocker, 2000), as considering hypotheses proba-
+2008) and predictive ability on eye-tracking move-            bilistically in parallel (Dahan and Gaskell, 2007),
+ments (Demberg and Keller, 2008; Boston et al.,               as bounding memory usage to short-term mem-
+2008a). Many other complexity metrics have                    ory limits (Cowan, 2001), and as requiring more
+been suggested as mutually contributing to reading            memory storage for center-embedding structures
+difficulty; for example, entropy reduction (Hale,             than for right- or left-branching ones (Chomsky
+2006), bigram probabilities (McDonald and Shill-              and Miller, 1963; Gibson, 1998). Also, unlike
+cock, 2003), and split-syntactic/lexical versions of          most other parsers, this parser preserves the arc-
+other metrics (Roark et al., 2009).                           eager/arc-standard ambiguity of Abney and John-
+
+
+                                                         1189
+       Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 1189–1198,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+son (1991). Typical parsing strategies are arc-       defined to represent short-term memory elements;
+standard, keeping all right-descendants open for      additional states are utilized whenever center-
+subsequent attachment; but since there can be an      embedded syntactic structures are present. Simi-
+unbounded number of such open constituents, this      lar models such as Crocker and Brants (2000) im-
+assumption is not compatible with simple mod-         plicitly allow an infinite memory size, but Schuler
+els of bounded memory. A consistently arc-eager       et al. (2008; 2010) showed that a right-corner
+strategy acknowledges memory bounds, but yields       HHMM parser can parse most sentences in En-
+dead-end parses. Both analyses are considered in      glish with 4 or fewer center-embedded-depth lev-
+right-corner HHMM parsing.                            els. This behavior is similar to the hypothesized
+   The purpose of this paper is to determine          size of a human short-term memory store (Cowan,
+whether the language model defined by the             2001). A positive result in predicting reading
+HHMM parser can also predict reading times —          times will lend additional validity to the claim
+it would be strange if a psychologically plausi-      that the HHMM parser’s bounded memory cor-
+ble model did not also produce viable complex-        responds to bounded memory in human sentence
+ity metrics. In the course of showing that the        processing.
+HHMM parser does, in fact, predict reading times,        The rest of this paper is organized as fol-
+we will define surprisal and entropy reduction in     lows: Section 2 defines the language model of the
+the HHMM parser, and introduce a third metric         HHMM parser, including definitions of the three
+called embedding difference.                          complexity metrics. The methodology for evalu-
+   Gibson (1998; 2000) hypothesized two types         ating the complexity metrics is described in Sec-
+of syntactic processing costs: integration cost, in   tion 3, with actual results in Section 4. Further dis-
+which incremental input is combined with exist-       cussion on results, and comparisons to other work,
+ing structures; and memory cost, where unfinished     are in Section 5.
+syntactic constructions may incur some short-term
+                                                      2 Parsing Model
+memory usage. HHMM surprisal and entropy
+reduction may be considered forms of integra-         This section describes an incremental parser in
+tion cost. Though typical PCFG surprisal has          which surprisal and entropy reduction are sim-
+been considered a forward-looking metric (Dem-        ple calculations (Section 2.1). The parser uses a
+berg and Keller, 2008), the incremental nature of     Hierarchical Hidden Markov Model (Section 2.2)
+the right-corner transform causes surprisal and en-   and recognizes trees in a right-corner form (Sec-
+tropy reduction in the HHMM parser to measure         tion 2.3 and 2.4). The new complexity metric, em-
+the likelihood of grammatical structures that were    bedding difference (Section 2.5), is a natural con-
+hypothesized before evidence was observed for         sequence of this HHMM definition. The model
+them. Therefore, these HHMM metrics resemble          is equivalent to previous HHMM parsers (Schuler,
+an integration cost encompassing both backward-       2009), but reorganized into 5 cases to clarify the
+looking and forward-looking information.              right-corner structure of the parsed sentences.
+   On the other hand, embedding difference is
+designed to model the cost of storing center-         2.1 Surprisal and Entropy in HMMs
+embedded structures in working memory. Chen,          Hidden Markov Models (HMMs) probabilistically
+Gibson, and Wolf (2005) showed that sentences         connect sequences of observed states ot and hid-
+requiring more syntactic memory during sen-           den states qt at corresponding time steps t. In pars-
+tence processing increased reading times, and it      ing, observed states are words; hidden states can
+is widely understood that center-embedding incurs     be a conglomerate state of linguistic information,
+significant syntactic processing costs (Miller and    here taken to be syntactic.
+Chomsky, 1963; Gibson, 1998). Thus, we would             The HMM is an incremental, time-series struc-
+expect for the usage of the center-embedding          ture, so one of its by-products is the prefix prob-
+memory store in an HHMM parser to correlate           ability, which will be used to calculate surprisal.
+with reading times (and therefore linguistic com-     This is the probability that that words o1..t have
+plexity).                                             been observed at time t, regardless of which syn-
+   The HHMM parser processes syntactic con-           tactic states q1..t produced them. Bayes’ Law and
+structs using a bounded number of store states,       Markov independence assumptions allow this to
+
+
+                                                  1190
+
+
+be calculated from two generative probability dis-                 This mitigates the problems of large state spaces
+tributions.1                                                       (e.g., that of all possible grammatical derivations).
+              X                                                    Since beams have been shown to perform well
+Pre(o1..t ) =    P(o1..t q1..t )               (1)                 (Brants and Crocker, 2000; Roark, 2001; Boston
+                 q1..t                                             et al., 2008b), complexity metrics in this paper
+                 t
+          def
+                XY
+           =                 PΘA(qτ | qτ–1 )·PΘB(oτ | qτ ) (2)     are calculated on a beam rather than over all (un-
+                q1..t τ =1                                         bounded) possible derivations Dt . The equations
+                                                                   above, then, will replace the assumption q1..t ∈ Dt
+   Here, probabilities arise from a Transition                     with qt ∈ Bt .
+Model (ΘA ) between hidden states and an Ob-
+servation Model (ΘB ) that generates an observed                   2.2 Hierarchical Hidden Markov Models
+state from a hidden state. These models are so                     Hidden states q can have internal structure; in Hi-
+termed for historical reasons (Rabiner, 1990).                     erarchical HMMs (Fine et al., 1998; Murphy and
+   Surprisal (Hale, 2001) is then a straightforward                Paskin, 2001), this internal structure will be used
+calculation from the prefix probability.                           to represent syntax trees and looks like several
+                                        Pre(o1..t–1 )              HMMs stacked on top of each other. As such, qt
+           Surprisal(t) = log2                             (3)
+                                        Pre(o1..t )                is factored into sequences of depth-specific vari-
+This framing of prefix probability and surprisal in                ables — one for each of D levels in the HMM hi-
+a time-series model is equivalent to Hale’s (2001;                 erarchy. In addition, an intermediate variable ft is
+2006), assuming that q1..t ∈ Dt , i.e., that the syn-              introduced to interface between the levels.
+tactic states we are considering form derivations                                             def
+                                                                                          qt = hqt1 . . . qtD i                (6)
+Dt , or partial trees, consistent with the observed
+                                                                                              def
+words. We will see that this is the case for our                                          ft = hft1 . . . ftD i                (7)
+parser in Sections 2.2–2.4.
+   Entropy is a measure of uncertainty, defined as                    Transition probabilities PΘA (qt | qt–1 ) over com-
+H(x) = −P(x) log2 P(x). Now, the entropy Ht                        plex hidden states qt are calculated in two phases:
+of a t-word string o1..t in an HMM can be written:
+                                                                     • Reduce phase.         Yields an intermediate
+                                                                       state ft , in which component HMMs may ter-
+           X
+    Ht =       P(q1..t o1..t ) log2 P(q1..t o1..t ) (4)
+            q1..t                                                      minate. This ft tells “higher” HMMs to hold
+                                                                       over their information if “lower” levels are in
+and entropy reduction (Hale, 2003; Hale, 2006) at                      operation at any time step t, and tells lower
+the tth word is then                                                   HMMs to signal when they’re done.
+
+            ER(ot ) = max(0, Ht−1 − Ht )                   (5)       • Shift phase. Yields a modeled hidden state qt ,
+                                                                       in which unterminated HMMs transition, and
+   Both of these metrics fall out naturally from the                   terminated HMMs are re-initialized from
+time-series representation of the language model.                      their parent HMMs.
+The third complexity metric, embedding differ-
+                                                                     Each phase is factored according to level-
+ence, will be discussed after additional back-
+                                                                   specific reduce and shift models, ΘF and ΘQ :
+ground in Section 2.5.
+   In the implementation of an HMM, candidate                                      X
+                                                                  PΘA(qt |qt–1 ) =   P(ft |qt–1 )·P(qt |ft qt–1 ) (8)
+states at a given time qt are kept in a trel-
+                                                                                     ft
+lis, with step-by-step backpointers to the highest-
+                                                                                   D
+probability q1..t–1 .2 Also, the best qt are often kept                    def
+                                                                                 X Y
+                                                                           =                  PΘF(ftd |ftd+1 qt–1
+                                                                                                              d d–1
+                                                                                                                  qt–1 )
+in a beam Bt , discarding low-probability states.
+                                                                                 ft1..D d=1      · PΘQ(qtd |ftd+1 ftd qt–1
+                                                                                                                       d d–1
+                                                                                                                           qt ) (9)
+   1
+      Technically, a prior distribution over hidden states,
+P(q0 ), is necessary. This q0 is factored and taken to be a de-
+terministic constant, and is therefore unimportant as a proba-     with ftD+1 and qt0 defined as constants. Note that
+bility model.                                                      only qt is present at the end of the probability cal-
+    2
+      Typical tasks in an HMM include finding the most likely      culation. In step t, ft–1 will be unused, so the
+sequence via the Viterbi algorithm, which stores these back-
+pointers to maximum-probability previous states and can            marginalization of Equation 9 does not lose any
+uniquely find the most likely sequence.                            information.
+
+
+                                                              1191
+
+
+                  1                                             t=1         t=2             t=3       t=4           t=5          t=6             t=7       t=8
+                ft−1                   ft1
+ ...                      1
+                                                  qt1
+
+
+
+
+                                                                            NP
+                         qt−1
+
+
+
+
+                                                                                                                                 S/N
+
+
+
+
+                                                                                                                                                 S/N
+                                                                                            S/V
+
+
+
+
+                                                                                                      S/V
+
+
+
+
+                                                                                                                    S/N
+                                                          d=1
+
+
+
+
+                                                                dt
+
+
+
+
+                                                                                                                                                           S
+                                                                              /N
+
+
+
+
+                                                                                                                                   N
+
+
+
+
+                                                                                                                                                  N
+                                                                                             P
+
+
+
+
+                                                                                                           P
+
+
+
+
+                                                                                                                      P
+                                                                               N
+                  2
+                ft−1                   ft2
+ ...                      2
+                         qt−1                     qt2
+
+
+
+
+                                                                                                      VB
+                                                          d=2
+
+
+
+
+                                                                                            vbd
+
+
+
+
+                                                                                                       D/
+                                                                ◦
+
+
+                                                                             ◦
+
+
+
+
+                                                                                                                    ◦
+
+
+                                                                                                                                 ◦
+
+
+                                                                                                                                                 ◦
+                                                                                                         PR
+                  3
+                ft−1                   ft3
+
+
+
+
+                                                                                                           T
+ ...                      3
+                         qt−1                     qt3     d=3
+
+
+
+
+                                                                ◦
+
+
+                                                                             ◦ en
+
+
+                                                                                            ◦
+
+
+                                                                                                       ◦
+
+
+                                                                                                                    ◦
+
+
+                                                                                                                                 ◦ eng
+
+
+                                                                                                                                                 ◦
+                                                                                             pul
+                                                                                 gin
+
+
+
+
+                                                                                                                                      ine
+
+
+                                                                                                                                                   tric
+                                                                    the
+                                                         word
+
+
+
+
+                                                                                                           off
+
+
+                                                                                                                          an
+ ...                     ot−1                     ot
+
+
+
+
+                                                                                                led
+                                                                                    eer
+
+
+
+
+                                                                                                                                         eri
+
+
+                                                                                                                                                       k
+                                                                                                                                            ng
+                                                                                        s
+  (a) Dependency structure in the HHMM                  (b) HHMM parser as a store whose elements at each time step are listed
+  parser. Conditional probabilities at a node are       vertically, showing a good hypothesis on a sample sentence out of many
+  dependent on incoming arcs.                           kept in parallel. Variables corresponding to qtd are shown.
+                      S                                                                                             S
+                                                                                                                               S/NN                     NN
+           NP                         VP
+                                                                                                               S/NN                        NN          trick
+    DT          NN         VBD               NP                                                   S/NP               DT                engineering
+
+     the   engineers VBD PRT DT                   NN                               S/VP                          VBD an
+                                                                                   NP                 VBD/PRT PRT
+                       pulled   off    an NN            NN                                                     off
+                                                                          NP/NN        NN              VBD
+                                        engineering     trick              DT        engineers             pulled
+                                                                           the
+
+                   (c) A sample sentence in CNF.                              (d) The right-corner transformed version of (c).
+
+Figure 1: Various graphical representations of HHMM parser operation. (a) shows probabilistic depen-
+dencies. (b) considers the qtd store to be incremental syntactic information. (c)–(d) demonstrate the
+right-corner transform, similar to a left-to-right traversal of (c). In ‘NP/NN’ we say that NP is the active
+constituent and NN is the awaited.
+
+   The Observation Model ΘB is comparatively                              HHMM when parsing right-corner trees. There
+much simpler. It is only dependent on the syntac-                         is one unique set of HHMM state values for each
+tic state at D (or the deepest active HHMM level).                        tree, so the operations can be seen on either the
+                                                                          tree or the store elements.
+                                def
+                 PΘB (ot | qt ) = P(ot | qtD )               (10)            At each time step t, a certain number of el-
+                                                                          ements (maximum D) are kept in memory, i.e.,
+   Figure 1(a) gives a schematic of the dependency                        in the store. New words are observed input, and
+structure of Equations 8–10 for D = 3. Evalua-                            the bottom occupied element (the “frontier” of the
+tions in this paper are done with D = 4, following                        store) is the context; together, they determine what
+the results of Schuler, et al. (2008).                                    the store will look like at t+1. We can characterize
+2.3 Parsing right-corner trees                                            the types of store-element changes by when they
+                                                                          happen in Figures 1(b) and 1(d):
+In this HHMM formulation, states and dependen-
+cies are optimized for parsing right-corner trees                         Cross-level Expansion (CLE). Occupies a new
+(Schuler et al., 2008; Schuler et al., 2010). A sam-                          store element at a given time step. For exam-
+ple transformation between CNF and right-corner                               ple, at t = 1, a new store element is occupied
+trees is in Figures 1(c)–1(d).                                                which can interact with the observed word,
+   Figure 1(b) shows the corresponding store-                                 “the.” At t = 3, an expansion occupies the
+element interpretation3 of the right corner tree                              second store element.
+in 1(d). These can be used as a case study to
+see what kind of operations need to occur in an                           In-level Reduction (ILR). Completes an active
+                                                                               constituent that is a unary child in the right-
+    3
+      This is technically a pushdown automoton (PDA), where                    corner tree; always accompanied by an in-
+the store is limited to D elements. When referring to direc-
+tions (e.g., up, down), PDAs are typically described opposite                  level expansion. At t = 2, “engineers” com-
+of the one in Figure 1(b); here, we push “up” instead of down.                 pletes the active NP constituent; however, the
+
+
+                                                                1192
+
+
+     level is not yet complete since the NP is along     First, kftd is a switching variable that differenti-
+     the left-branching trunk of the tree.               ates between ILT, CLE/CLR, and ILE/ILR. This
+                                                         switching is the most important aspect of ftd , so
+In-level Expansion (ILE). Starts a new active
+                                                         regardless of what gftd is, we will use:
+     constituent at an already-occupied store ele-
+     ment; always follows an in-level reduction.              • ftd ∈ F0 when kftd = 0,                            (ILT/no-op)
+     With the NP complete in t = 2, a new active
+     constituent S is produced at t = 3.                      • ftd ∈ F1 when kftd = 1,                            (CLE/CLR)
+                                                              • ftd ∈ FG when kftd ∈ G.                              (ILE/ILR)
+In-level Transition (ILT). Transitions the store
+     to a new state in the next time step at the same    Then, gftd is used to keep track of a completely-
+     level, where the awaited constituent changes        recognized constituent whenever a reduction oc-
+     and the active constituent remains the same.        curs (ILR or CLR). For example, in Figure 1(b),
+     This describes each of the steps from t = 4 to      after time step 2, an NP has been completely rec-
+     t = 8 at d = 1 .                                    ognized and precipitates an ILR. The NP gets
+Cross-level Reduction (CLR). Vacates a store             stored in gf31 for use in the ensuing ILE instead
+    element on seeing a complete active con-             of appearing in the store-elements.
+    stituent. This occurs after t = 4; “off”                This leads us to a specification of the reduce and
+    completes the active (at depth 2) VBD con-           shift probability models. The reduce step happens
+    stituent, and vacates store element 2. This          first at each time step. True to its name, the re-
+    is accompanied with an in-level transition at        duce step handles in-level and cross-level reduc-
+    depth 1, producing the store at t = 5. It should     tions (the second and third case below):
+    be noted that with some probability, complet-
+                                                                                            def
+    ing the active constituent does not vacate the       PΘF (ftd | ftd+1 qt−1
+                                                                           d    d−1
+                                                                               qt−1 )=
+    store element, and the in-level reduction case        ( d+1
+                                                                if ft 6∈ FG            d
+                                                                                        : Jft = 0K
+    would have to be invoked.                                   if ftd+1∈ FG , ftd ∈ F1 : P̃ΘF-ILR,d (ftd | qtd−1 qtd−−11 )   (13)
+                                                                if ftd+1∈ FG , ftd ∈ FG : P̃ΘF-CLR,d (ftd | qtd−1 qtd−−11 )
+   The in-level/cross-level ambiguity occurs in the
+expansion as well as the reduction, similar to Ab-
+ney and Johnson’s arc-eager/arc-standard compo-          with edge cases qt0 and ftD+1 defined as appropri-
+sition strategies (1991). At t = 3, another possible     ate constants. The first case is just store-element
+hypothesis would be to remain on store element           maintenance, in which the variable is not on the
+1 using an ILE instead of a CLE. The HHMM                “frontier” and therefore inactive.
+parser, unlike most other parsers, will preserve this       Examining ΘF-ILR,d and ΘF-CLR,d , we see that
+in-level/cross-level ambiguity by considering both       the produced ftd variables are also used in the “if”
+hypotheses in parallel.                                  statement. These models can be thought of as
+                                                         picking out a ftd first, finding the matching case,
+2.4 Reduce and Shift Models                              then applying the probability models that matches.
+With the understanding of what operations need to        These models are actually two parts of the same
+occur, a formal definition of the language model is      model when learned from trees.
+in order. Let us begin with the relevant variables.         Probabilities in the shift step are also split into
+   A shift variable qtd at depth d and time step t is    cases based on the reduce variables. More main-
+a syntactic state that must represent the active and     tenance operations (first case) accompany transi-
+awaited constituents of right-corner form:               tions producing new awaited constituents (second
+                                                         case below) and expansions producing new active
+                      def
+                  qtd = hgqAtd , gqWtd i         (11)    constituents (third and fourth case):
+e.g., in Figure 1(b), q21 =hNP, NNi=NP / NN. Each g is                                            def
+a constituent from the pre-right-corner grammar,            PΘQ (qtd | ftd+1 ftd qt−1
+                                                                                  d
+                                                                                      qtd−1 ) =
+G.
+                                                              d+1
+                                                                                         : Jqtd = qtd−1 K
+                                                             if ftd+16∈ FG d
+                                                             
+   Reduce variables f are then enlisted to ensure               if ft ∈ FG , ft ∈ F0 : P̃ΘQ-ILT,d (qt | ftd+1 qtd−1 qtd−1 )
+                                                                                                         d
+                                                                     d+1         d                     d      d d      d−1
+that in-level and cross-level operations are correct.          if ftd+1∈ FG , ftd ∈ F1 : P̃ΘQ-ILE,d (qtd | ftd−q1t−1 qt )
+                                                               
+                                                                if ft ∈ FG , ft ∈ FG : P̃ΘQ-CLE,d (qt | qt )
+                      def                                                                                                     (14)
+                 ftd = hkftd , gftd i            (12)
+
+
+                                                     1193
+
+
+ FACTOR              D ESCRIPTION                                                                                E XPECTED
+ Word order in       For each story, words were indexed. Subjects would tend to read faster later in a story.    negative
+ narrative                                                                                                       slope
+ Reciprocal          Log of the reciprocal of the number of letters in each word. A decrease in the reciprocal   positive
+ length              (increase in length) might mean longer reading times.                                       slope
+ Unigram             A log-transformed empirical count of word occurrences in the Brown Corpus section of        negative
+ frequency           the Penn Treebank. Higher frequency should indicate shorter reading times.                  slope
+ Bigram              A log-transformed empirical count of two-successive-word occurrences, with Good-            negative
+ probability         Turing smoothing on words occuring less than 10 times.                                      slope
+ Embedding           Amount of change in HHMM weighted-average embedding depth. Hypothesized to in-              positive
+ difference          crease with larger working memory requirements, which predict longer reading times.         slope
+ Entropy             Amount of decrease in the HHMM’s uncertainty about the sentence. Larger reductions          positive
+ reduction           in uncertainty are hypothesized to take longer.                                             slope
+ Surprisal           “Surprise value” of a word in the HHMM parser; models were trained on the Wall Street       positive
+                     Journal, sections 02–21. More surprising words may take longer to read.                     slope
+
+  Table 1: A list of factors hypothesized to contribute to reading times. All data was mean-centered.
+
+
+A final note: the notation P̃Θ (· | ·) has been used              this, we rewrite Equations 1 and 3:
+to indicate probability models that are empirical,                                  X
+trained directly from frequency counts of right-                      Pre(o1..t ) =    P(o1..t q1..t )                  (1′ )
+corner transformed trees in a large corpus. Alter-                                   qt ∈Bt
+natively, a standard PCFG could be trained on a                       Surprisal(t) = log2 Pre(o1..t–1 ) − log2 Pre(o1..t )
+corpus (or hand-specified), and then the grammar                                                                     (3′ )
+itself can be right-corner transformed (Schuler,
+2009).                                                            Both surprisal and embedding difference include
+                                                                  summations over the elements of the beam, and
+   Taken together, Equations 11–14 define the
+                                                                  are calculated as a difference between previous
+probabilistic structure of the HHMM for parsing
+                                                                  and current beam states.
+right-corner trees.
+                                                                     Most differences between these metrics are rel-
+                                                                  atively inconsequential. For example, the dif-
+2.5 Embedding difference in the HHMM                              ference in order of subtraction only assures that
+                                                                  a positive correlation with reading times is ex-
+It should be clear from Figure 1 that at any time                 pected. Also, the presence of a logarithm is rel-
+step while parsing depth-bounded right-corner                     atively minor. Embedding difference weighs the
+trees, the candidate hidden state qt will have a                  probabilities with center-embedding depths and
+“frontier” depth d(qt ). At time t, the beam of                   then normalizes the values; since the measure is
+possible hidden states qt stores the syntactic state              a weighted average of embedding depths rather
+(and a backpointer) along with its probability,                   than a probability distribution, µEMB is not always
+P(o1..t q1..t ). The average embedding depth at a                 less than 1 and the correspondence with Kullback-
+time step is then                                                 Leibler divergence (Levy, 2008) does not hold, so
+                                                                  it does not make sense to take the logs.
+                                                                     Therefore, the inclusion of the embedding
+                   X                    P(o1..t q1..t )           depth, d(qt ), is the only significant difference
+ µEMB (o1..t ) =            d(qt ) · P                  ′
+                   qt ∈Bt            q ′ ∈Bt P(o1..t q1..t )
+                                         t
+                                                                  between the two metrics. The result is a met-
+                                          (15)                    ric that, despite numerical correspondence to sur-
+where we have directly used the beam notation.                    prisal, models the HHMM’s hypotheses about
+The embedding difference metric is:                               memory cost.
+
+                                                                  3 Evaluation
+  EmbDiff(o1..t ) = µEMB (o1..t ) − µEMB (o1..t−1 )               Surprisal, entropy reduction, and embedding dif-
+                                                (16)              ference from the HHMM parser were evaluated
+  There is a strong computational correspondence                  against a full array of factors (Table 1) on a cor-
+between this definition of embedding difference                   pus of word-by-word reading times using a linear
+and the previous definition of surprisal. To see                  mixed-effects model.
+
+
+                                                               1194
+
+
+   The corpus of reading times for 23 native En-             mixed-effects models) a χ21 value and correspond-
+glish speakers was collected on a set of four nar-           ing probability that the smaller model could have
+ratives (Bachrach et al., 2009), each composed of            produced the same estimates as the larger model.
+sentences that were syntactically complex but con-           A lower probability indicates that the additional
+structed to appear relatively natural. Using Linger          factors in the larger model are significant.
+2.88, words appeared one-by-one on the screen,                  Second, models with different fixed effects can
+and required a button-press in order to advance;             be compared to each other through various infor-
+they were displayed in lines with 11.5 words on              mation criteria; these trade off between having
+average.                                                     a more explanatory model vs. a simpler model,
+   Following Roark et al.’s (2009) work on the               and can be calculated on any model. Here, we
+same corpus, reading times above 1500 ms (for                use Akaike’s Information Criterion (AIC), where
+diverted attention) or below 150 ms (for button              lower values indicate better models.
+presses planned before the word appeared) were                  All these statistics were calculated in R, using
+discarded. In addition, the first and last word of           the lme4 package (Bates et al., 2008).
+each line on the screen were removed; this left
+2926 words out of 3540 words in the corpus.                  4 Results
+   For some tests, a division between open- and
+closed-class words was made, with 1450 and 1476              Using the full list of factors in Table 1, fixed-effect
+words, respectively. Closed-class words (e.g., de-           coefficients were estimated in Table 2. Fitting the
+terminers or auxiliary verbs) usually play some              best model by AIC would actually prune away
+kind of syntactic function in a sentence; our evalu-         some of the factors as relatively insignificant, but
+ations used Roark et al.’s list of stop words. Open          these smaller models largely accord with the sig-
+class words (e.g., nouns and other verbs) more               nificance values in the table and are therefore not
+commonly include new words. Thus, one may ex-                presented.
+pect reading times to differ for these two types of              The first data column shows the regression on
+words.                                                       all data; the second and third columns divide the
+   Linear mixed-effect regression analysis was               data into open and closed classes, because an eval-
+used on this data; this entails a set of fixed effects       uation (not reported in detail here) showed statis-
+and another of random effects. Reading times y               tically significant interactions between word class
+were modeled as a linear combination of factors              and 3 of the predictors. Additionally, this facil-
+x, listed in Table 1 (fixed effects); some random            itates comparison with Roark et al. (2009), who
+variation in the corpus might also be explained by           make the same division.
+groupings according to subject i, word j, or sen-                Out of the non-parser-based metrics, word order
+tence k (random effects).                                    and bigram probability are statistically significant
+                                                             regardless of the data subset; though reciprocal
+                  m
+                  X                                          length and unigram frequency do not reach signif-
+    yijk = β0 +         βℓ xijkℓ + bi + bj + bk + ε   (17)
+                  ℓ=1
+                                                             icance here, likelihood ratio tests (not shown) con-
+                                                             firm that they contribute to the model as a whole.
+This equation is solved for each of m fixed-                 It can be seen that nearly all the slopes have been
+effect coefficients β with a measure of confidence           estimated with signs as expected, with the excep-
+(t-value = β̂/SE(β̂), where SE is the standard er-           tion of reciprocal length (which is not statistically
+ror). β0 is the standard intercept to be estimated           significant).
+along with the rest of the coefficients, to adjust for           Most notably, HHMM surprisal is seen here to
+affine relationships between the dependent and in-           be a standout predictive measure for reading times
+dependent variables. We report factors as statisti-          regardless of word class. If the HHMM parser is
+cally significant contributors to reading time if the        a good psycholinguistic model, we would expect
+absolute value of the t-value is greater than 2.             it to at least produce a viable surprisal metric, and
+   Two more types of comparisons will be made to             Table 2 attests that this is indeed the case. Though
+see the significance of factors. First, a model of           it seems to be less predictive of open classes, a
+data with the full list of factors can be compared           surprisal-only model has the best AIC (-7804) out
+to a model with a subset of those factors. This is           of any open-class model. Considering the AIC
+done with a likelihood ratio test, producing (for            on the full data, the worst model with surprisal
+
+
+                                                         1195
+
+
+                      F ULL DATA                             O PEN CLASS                           C LOSED CLASS
+             Coefficient    Std. Err.   t-value     Coefficient    Std. Err.   t-value     Coefficient    Std. Err.   t-value
+ (Intcpt)   -9.340·10−3 5.347·10−2       -0.175    -1.237·10−2 5.217·10−2       -0.237    -6.295·10−2 7.930·10−2       -0.794
+ order      -3.746·10−5 7.808·10−6       -4.797∗   -3.697·10−5 8.002·10−6       -4.621∗   -3.748·10−5 8.854·10−6       -4.232∗
+ rlength    -2.002·10−2 1.635·10−2       -1.225     9.849·10−3 1.779·10−2        0.554    -2.839·10−2 3.283·10−2       -0.865
+ unigrm     -8.090·10−2 3.690·10−1       -0.219    -1.047·10−1 2.681·10−1       -0.391    -3.847·10+0 5.976·10+0       -0.644
+ bigrm      -2.074·10+0 8.132·10−1       -2.551∗   -2.615·10+0 8.050·10−1       -3.248∗   -5.052·10+1 1.910·10+1       -2.645∗
+ embdiff     9.390·10−3 3.268·10−3        2.873∗    2.432·10−3 4.512·10−3        0.539     1.598·10−2 5.185·10−3        3.082∗
+ etrpyrd     2.753·10−2 6.792·10−3        4.052∗    6.634·10−4 1.048·10−2        0.063     4.938·10−2 1.017·10−2        4.857∗
+ srprsl      3.950·10−3 3.452·10−4      11.442∗     2.892·10−3 4.601·10−4        6.285∗    5.201·10−3 5.601·10−4        9.286∗
+
+Table 2: Results of linear mixed-effect modeling. Significance (indicated by ∗ ) is reported at p < 0.05.
+
+            (Intr) order rlngth ungrm bigrm emdiff entrpy        5 Discussion
+ order       .000
+ rlength    -.006 -.003
+                                                                 As with previous work on large-scale parser-
+ unigrm      .049 .000 -.479
+ bigrm       .001 .005 -.006 -.073                               derived complexity metrics, the linear mixed-
+ emdiff      .000 .009 -.049 -.089 .095                          effect models suggest that sentence-level factors
+ etrpyrd     .000 .003 .016 -.014 .020 -.010
+ srprsl      .000 -.008 -.033 -.079 .107 .362 .171
+                                                                 are effective predictors for reading difficulty — in
+                                                                 these evaluations, better than commonly-used lex-
+     Table 3: Correlations in the full model.                    ical and near-neighbor predictors (Pollatsek et al.,
+                                                                 2006; Engbert et al., 2005). The fact that HHMM
+                                                                 surprisal outperforms even n-gram metrics points
+                                                                 to the importance of including a notion of sentence
+(AIC=-10589) outperformed the best model with-                   structure. This is particularly true when the sen-
+out it (AIC=-10478), indicating that the HHMM                    tence structure is defined in a language model that
+surprisal is well worth including in the model re-               is psycholinguistically plausible (here, bounded-
+gardless of the presence of other significant fac-               memory right-corner form).
+tors.                                                               This accords with an understated result of
+   HHMM entropy reduction predicts reading                       Boston et al.’s eye-tracking study (2008a): a
+times on the full dataset and on closed-class                    richer language model predicts eye movements
+words. However, its effect on open-class words is                during reading better than an oversimplified one.
+insignificant; if we compare the model of column                 The comparison there is between phrase struc-
+2 against one without entropy reduction, a likeli-               ture surprisal (based on Hale’s (2001) calculation
+hood ratio test gives χ21 = 0.0022, p = 0.9623                   from an Earley parser), and dependency grammar
+(the smaller model could easily generate the same                surprisal (based on Nivre’s (2007) dependency
+data).                                                           parser). Frank (2009) similarly reports improve-
+                                                                 ments in the reading-time predictiveness of unlexi-
+   The HHMM’s average embedding difference                       calized surprisal when using a language model that
+is also significant except in the case of open-                  is more plausible than PCFGs.
+class words — removing embedding difference on                      The difference in predictivity due to word class
+open-class data yields χ21 = 0.2739, p = 0.6007.                 is difficult to explain. One theory may be that
+But what is remarkable is that there is any signifi-             closed-class words are less susceptible to random
+cance for this metric at all. Embedding difference               effects because there is a finite set of them for
+and surprisal were relatively correlated compared                any language, making them overall easier to pre-
+to other predictors (see Table 3), which is expected             dict via parser-derived metrics. Or, we could note
+because embedding difference is calculated like                  that since closed-class words often serve grammat-
+a weighted version of surprisal. Despite this, it                ical functions in addition to their lexical content,
+makes an independent contribution to the full-data               they contribute more information to parser-derived
+and closed-class models. Thus, we can conclude                   measures than open-class words. Previous work
+that the average embedding depth component af-                   with complexity metrics on this corpus (Roark et
+fects reading times — i.e., the HHMM’s notion of                 al., 2009) suggests that these explanations only ac-
+working memory behaves as we would expect hu-                    count for part of the word-class variation in the
+man working memory to behave.                                    performance of predictors.
+
+
+                                                            1196
+
+
+   Further comparsion to Roark et al. will show          reading times regardless of word class. Our for-
+other differences, such as the lesser role of word       mulation of entropy reduction is also significant
+length and unigram frequency, lower overall cor-         except in open-class words.
+relations between factors, and the greater predic-          The new metric, embedding difference, uses the
+tivity of their entropy metric. In addition, their       average center-embedding depth of the HHMM
+metrics are different from ours in that they are de-     to model syntactic-processing memory cost. This
+signed to tease apart lexical and syntactic contri-      metric can only be calculated on parsers with an
+butions to reading difficulty. Their notion of en-       explicit representation for short-term memory el-
+tropy, in particular, estimates Hale’s definition of     ements like the right-corner HHMM parser. Re-
+entropy on whole derivations (2006) by isolating         sults show that embedding difference does predict
+the predictive entropy; they then proceed to define      reading times except in open-class words, yielding
+separate lexical and syntactic predictive entropies.     a significant contribution independent of surprisal
+Drawing more directly from Hale, our definition          despite the fact that its definition is similar to that
+is a whole-derivation metric based on the condi-         of surprisal.
+tional entropy of the words, given the root. (The
+root constituent, though unwritten in our defini-        Acknowledgments
+tions, is always included in the HHMM start state,
+q0 .)                                                    Thanks to Brian Roark for help on the reading
+   More generally, the parser used in these evalu-       times corpus, Tim Miller for the formulation of
+ations differs from other reported parsers in that       entropy reduction, Mark Holland for statistical in-
+it is not lexicalized. One might expect for this         sight, and the anonymous reviewers for their input.
+to be a weakness, allowing distributions of prob-        This research was supported by National Science
+abilities at each time step in places not licensed       Foundation CAREER/PECASE award 0447685.
+by the observed words, and therefore giving poor         The views expressed are not necessarily endorsed
+probability-based complexity metrics. However,           by the sponsors.
+we see that this language model performs well
+despite its lack of lexicalization. This indicates
+that lexicalization is not a requisite part of syntac-   References
+tic parser performance with respect to predicting        Steven P. Abney and Mark Johnson. 1991. Memory
+linguistic complexity, corroborating the evidence           requirements and local ambiguities of parsing strate-
+of Demberg and Keller’s (2008) ‘unlexicalized’              gies. J. Psycholinguistic Research, 20(3):233–250.
+(POS-generating, not word-generating) parser.
+                                                         Asaf Bachrach, Brian Roark, Alex Marantz, Susan
+   Another difference is that previous parsers have        Whitfield-Gabrieli, Carlos Cardenas, and John D.E.
+produced useful complexity metrics without main-           Gabrieli. 2009. Incremental prediction in naturalis-
+taining arc-eager/arc-standard ambiguity. Results          tic language processing: An fMRI study.
+show that including this ambiguity in the HHMM
+at least does not invalidate (and may in fact im-        Douglas Bates, Martin Maechler, and Bin Dai. 2008.
+                                                           lme4: Linear mixed-effects models using S4 classes.
+prove) surprisal or entropy reduction as reading-          R package version 0.999375-31.
+time predictors.
+                                                         Marisa Ferrara Boston, John T. Hale, Reinhold Kliegl,
+6   Conclusion                                            U. Patil, and Shravan Vasishth. 2008a. Parsing costs
+                                                          as predictors of reading difficulty: An evaluation us-
+The task at hand was to determine whether the             ing the Potsdam Sentence Corpus. Journal of Eye
+                                                          Movement Research, 2(1):1–12.
+HHMM could consistently be considered a plau-
+sible psycholinguistic model, producing viable           Marisa Ferrara Boston, John T. Hale, Reinhold Kliegl,
+complexity metrics while maintaining other char-          and Shravan Vasishth. 2008b. Surprising parser ac-
+acteristics such as bounded memory usage. The             tions and reading difficulty. In Proceedings of ACL-
+linear mixed-effects models on reading times val-         08: HLT, Short Papers, pages 5–8, Columbus, Ohio,
+                                                          June. Association for Computational Linguistics.
+idate this claim. The HHMM can straightfor-
+wardly produce highly-predictive, standard com-          Thorsten Brants and Matthew Crocker. 2000. Prob-
+plexity metrics (surprisal and entropy reduction).         abilistic parsing and psychological plausibility. In
+HHMM surprisal performs very well in predicting            Proceedings of COLING ’00, pages 111–118.
+
+
+                                                     1197
+
+
+Evan Chen, Edward Gibson, and Florian Wolf. 2005.          Scott A. McDonald and Richard C. Shillcock. 2003.
+  Online syntactic storage costs in sentence com-            Low-level predictive inference in reading: The influ-
+  prehension. Journal of Memory and Language,                ence of transitional probabilities on eye movements.
+  52(1):144–169.                                             Vision Research, 43(16):1735–1751.
+
+Noam Chomsky and George A. Miller. 1963. Intro-            George Miller and Noam Chomsky. 1963. Finitary
+  duction to the formal analysis of natural languages.       models of language users. In R. Luce, R. Bush,
+  In Handbook of Mathematical Psychology, pages              and E. Galanter, editors, Handbook of Mathematical
+  269–321. Wiley.                                            Psychology, volume 2, pages 419–491. John Wiley.
+
+Nelson Cowan. 2001. The magical number 4 in short-         Kevin P. Murphy and Mark A. Paskin. 2001. Lin-
+  term memory: A reconsideration of mental storage           ear time inference in hierarchical HMMs. In Proc.
+  capacity. Behavioral and Brain Sciences, 24:87–            NIPS, pages 833–840, Vancouver, BC, Canada.
+  185.
+                                                           Joakim Nivre. 2007. Inductive dependency parsing.
+Matthew Crocker and Thorsten Brants. 2000. Wide-             Computational Linguistics, 33(2).
+ coverage probabilistic sentence processing. Journal
+ of Psycholinguistic Research, 29(6):647–669.              Alexander Pollatsek, Erik D. Reichle, and Keith
+                                                             Rayner. 2006. Tests of the EZ Reader model:
+Delphine Dahan and M. Gareth Gaskell. 2007. The              Exploring the interface between cognition and eye-
+  temporal dynamics of ambiguity resolution: Evi-            movement control. Cognitive Psychology, 52(1):1–
+  dence from spoken-word recognition. Journal of             56.
+  Memory and Language, 57(4):483–501.
+                                                           Lawrence R. Rabiner. 1990. A tutorial on hid-
+Vera Demberg and Frank Keller. 2008. Data from eye-          den Markov models and selected applications in
+  tracking corpora as evidence for theories of syntactic     speech recognition. Readings in speech recognition,
+  processing complexity. Cognition, 109(2):193–210.          53(3):267–296.
+
+Ralf Engbert, Antje Nuthmann, Eike M. Richter, and         Brian Roark, Asaf Bachrach, Carlos Cardenas, and
+  Reinhold Kliegl. 2005. SWIFT: A dynamical model            Christophe Pallier. 2009. Deriving lexical and
+  of saccade generation during reading. Psychological        syntactic expectation-based measures for psycholin-
+  Review, 112:777–813.                                       guistic modeling via incremental top-down parsing.
+                                                             Proceedings of the 2009 Conference on Empirical
+Shai Fine, Yoram Singer, and Naftali Tishby. 1998.           Methods in Natural Langauge Processing, pages
+  The hierarchical hidden markov model: Analysis             324–333.
+  and applications. Machine Learning, 32(1):41–62.
+                                                           Brian Roark. 2001. Probabilistic top-down parsing
+Stefan L. Frank. 2009. Surprisal-based comparison be-        and language modeling. Computational Linguistics,
+   tween a symbolic and a connectionist model of sen-        27(2):249–276.
+   tence processing. In Proc. Annual Meeting of the
+   Cognitive Science Society, pages 1139–1144.             William Schuler, Samir AbdelRahman, Tim
+                                                             Miller, and Lane Schwartz. 2008. Toward a
+Edward Gibson. 1998. Linguistic complexity: Local-           psycholinguistically-motivated model of language.
+  ity of syntactic dependencies. Cognition, 68(1):1–         In Proceedings of COLING, pages 785–792,
+  76.                                                        Manchester, UK, August.
+
+Edward Gibson. 2000. The dependency locality the-          William Schuler, Samir AbdelRahman, Tim Miller, and
+  ory: A distance-based theory of linguistic complex-        Lane Schwartz. 2010. Broad-coverage incremen-
+  ity. In Image, language, brain: Papers from the first      tal parsing using human-like memory constraints.
+  mind articulation project symposium, pages 95–126.         Computational Linguistics, 36(1).
+
+John Hale. 2001. A probabilistic earley parser as a        William Schuler. 2009. Parsing with a bounded
+  psycholinguistic model. In Proceedings of the Sec-         stack using a model-based right-corner transform.
+  ond Meeting of the North American Chapter of the           In Proceedings of the North American Association
+  Association for Computational Linguistics, pages           for Computational Linguistics (NAACL ’09), pages
+  159–166, Pittsburgh, PA.                                   344–352, Boulder, Colorado.
+
+John Hale. 2003. Grammar, Uncertainty and Sentence         Michael K. Tanenhaus, Michael J. Spivey-Knowlton,
+  Processing. Ph.D. thesis, Cognitive Science, The           Kathy M. Eberhard, and Julie E. Sedivy. 1995. In-
+  Johns Hopkins University.                                  tegration of visual and linguistic information in spo-
+                                                             ken language comprehension. Science, 268:1632–
+John Hale. 2006. Uncertainty about the rest of the           1634.
+  sentence. Cognitive Science, 30(4):609–642.
+
+Roger Levy. 2008. Expectation-based syntactic com-
+  prehension. Cognition, 106(3):1126–1177.
+
+
+                                                       1198
+

@@ -1,0 +1,684 @@
+                   Convolution Kernel over Packed Parse Forest
+
+
+                            Min Zhang Hui Zhang Haizhou Li
+                               Institute for Infocomm Research
+                                      A-STAR, Singapore
+                        {mzhang,vishz,hli}@i2r.a-star.edu.sg
+
+
+
+                                                             tured objects using vectors of reasonable dimen-
+                     Abstract                                sions without losing too much information. For
+                                                             example, it is computationally infeasible to enu-
+    This paper proposes a convolution forest ker-            merate all subtree features (using subtree a fea-
+    nel to effectively explore rich structured fea-          ture) for a parse tree into a linear feature vector.
+    tures embedded in a packed parse forest. As              Kernel-based machine learning method is a good
+    opposed to the convolution tree kernel, the              way to overcome this problem. Kernel methods
+    proposed forest kernel does not have to com-
+                                                             employ a kernel function, that must satisfy the
+    mit to a single best parse tree, is thus able to
+    explore very large object spaces and much                properties of being symmetric and positive, to
+    more structured features embedded in a forest.           measure the similarity between two objects by
+    This makes the proposed kernel more robust               computing implicitly the dot product of certain
+    against parsing errors and data sparseness is-           features of the input objects in high (or even in-
+    sues than the convolution tree kernel. The pa-           finite) dimensional feature spaces without enu-
+    per presents the formal definition of convolu-           merating all the features (Vapnik, 1998).
+    tion forest kernel and also illustrates the com-            Many learning algorithms, such as SVM
+    puting algorithm to fast compute the proposed            (Vapnik, 1998), the Perceptron learning algo-
+    convolution forest kernel. Experimental results          rithm (Rosenblatt, 1962) and Voted Perceptron
+    on two NLP applications, relation extraction
+                                                             (Freund and Schapire, 1999), can work directly
+    and semantic role labeling, show that the pro-
+    posed forest kernel significantly outperforms            with kernels by replacing the dot product with a
+    the baseline of the convolution tree kernel.             particular kernel function. This nice property of
+                                                             kernel methods, that implicitly calculates the dot
+1    Introduction                                            product in a high-dimensional space over the
+                                                             original representations of objects, has made
+Parse tree and packed forest of parse trees are              kernel methods an effective solution to modeling
+two widely used data structures to represent the             structured objects in NLP.
+syntactic structure information of sentences in                 In the context of parse tree, convolution tree
+natural language processing (NLP). The struc-                kernel (Collins and Duffy, 2002) defines a fea-
+tured features embedded in a parse tree have                 ture space consisting of all subtree types of parse
+been well explored together with different ma-               trees and counts the number of common subtrees
+chine learning algorithms and proven very useful             as the syntactic similarity between two parse
+in many NLP applications (Collins and Duffy,                 trees. The tree kernel has shown much success in
+2002; Moschitti, 2004; Zhang et al., 2007). A                many NLP applications like parsing (Collins and
+forest (Tomita, 1987) compactly encodes an ex-               Duffy, 2002), semantic role labeling (Moschitti,
+ponential number of parse trees. In this paper, we           2004; Zhang et al., 2007), relation extraction
+study how to effectively explore structured fea-             (Zhang et al., 2006), pronoun resolution (Yang et
+tures embedded in a forest using convolution                 al., 2006), question classification (Zhang and
+kernel (Haussler, 1999).                                     Lee, 2003) and machine translation (Zhang and
+   As we know, feature-based machine learning                Li, 2009), where the tree kernel is used to com-
+methods are less effective in modeling highly                pute the similarity between two NLP application
+structured objects (Vapnik, 1998), such as parse             instances that are usually represented by parse
+tree or semantic graph in NLP. This is due to the            trees. However, in those studies, the tree kernel
+fact that it is usually very hard to represent struc-        only covers the features derived from single 1-
+
+
+                                                         875
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 875–885,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+                                 PP               PP                     PP                     PP
+                                                                                         IN DT NN            IN
+                             IN DT NN         IN DT NN          IN DT NN
+                                                                                         in the              in
+         PP                  in the bank         the bank       in   bank
+     IN DT NN
+     in the bank                 PP               PP                  PP                    PP
+                                                                                                            DT           NN
+                             IN DT NN         IN DT NN         IN    DT NN               IN DT NN
+                                                                                                             the        bank
+                             in                  the                   bank
+
+              Figure 1. A parse tree and its 11 subtree features covered by convolution tree kernel
+
+
+best parse tree. This may largely compromise the            of its 11 subtree features covered by the convolu-
+performance of tree kernel due to parsing errors            tion tree kernel. In the tree kernel, a parse tree T
+and data sparseness.                                        is represented by a vector of integer counts of
+   To address the above issues, this paper con-             each subtree type (i.e., subtree regardless of its
+structs a forest-based convolution kernel to mine           ancestors, descendants and span covered):
+structured features directly from packed forest. A
+packet forest compactly encodes exponential                   (T )  (# subtreetype1(T), …, # subtreetypen(T))
+number of n-best parse trees, and thus containing
+much more rich structured features than a single            where # subtreetypei(T) is the occurrence number
+parse tree. This advantage enables the forest ker-          of the ith subtree type in T. The tree kernel counts
+nel not only to be more robust against parsing              the number of common subtrees as the syntactic
+errors, but also to be able to learn more reliable          similarity between two parse trees. Since the
+feature values and help to solve the data sparse-           number of subtrees is exponential with the tree
+ness issue that exists in the traditional tree kernel.      size, it is computationally infeasible to directly
+We evaluate the proposed kernel in two real NLP             use the feature vector  (T ) . To solve this com-
+applications, relation extraction and semantic              putational issue, Collins and Duffy (2002) pro-
+role labeling. Experimental results on the                  posed the following tree kernel to calculate the
+benchmark data show that the forest kernel sig-             dot product between the above high dimensional
+nificantly outperforms the tree kernel.                     vectors implicitly.
+   The rest of the paper is organized as follows.
+Section 2 reviews the convolution tree kernel                K (T1 , T2 )   (T1 ),  (T2 ) 
+                                                                  # subtreetypei (T1 )  # subtreetypei (T2 )
+while section 3 discusses the proposed forest
+kernel in details. Experimental results are re-                      i
+ported in section 4. Finally, we conclude the pa-
+                                                                                                                                   
+per in section 5.                                                          I       (n1 )   
+                                                                                     subtreei               I       subtreei   (n2 ) 
+                                                                  i        n1N1                        n2 N 2                    
+2    Convolution Kernel over Parse Tree
+                                                                           (n1 , n2 )
+                                                                    n1N1 n2 N 2
+Convolution kernel was proposed as a concept of
+kernels for discrete structures by Haussler (1999)
+and related but independently conceived ideas on            where N1 and N2 are the sets of nodes in trees T1
+string kernels first presented in (Watkins, 1999).          and T2, respectively, and I subtreei (n) is a function
+The framework defines the kernel function be-               that is 1 iff the subtreetypei occurs with root at
+tween input objects as the convolution of “sub-             node n and zero otherwise, and (n1 , n2 ) is the
+kernels”, i.e. the kernels for the decompositions
+(parts) of the input objects.                               number of the common subtrees rooted at n1 and
+   The parse tree kernel (Collins and Duffy, 2002)          n2, i.e.,
+is an instantiation of convolution kernel over
+syntactic parse trees. Given a parse tree, its fea-                      (n1 , n2 )  i I subtreei (n1 )  I subtreei (n2 )
+tures defined by a tree kernel are all of its subtree
+types and the value of a given feature is the                (n1 , n2 ) can be computed by the following recur-
+number of the occurrences of the subtree in the
+parse tree. Fig. 1 illustrates a parse tree with all        sive rules:
+
+
+                                                       876
+
+
+                                    IP[1,7]                                                                           IP
+      a) A Forest f                                                                         c) A Parse Tree T1
+                                                                                                                            VP
+                                              VP[2,7]                                                            VP
+
+                                                                                                                      NP               PP
+
+                                  VP[2,4]               NP[3,7]                               NNP    VV     DT             NN     IN    DT NN
+                                                                                              John   saw     a             man in       the bank
+
+                                      NP[3,4]                         PP[5,7]
+
+
+   NNP[1,1] VV[2,2]         DT[3,3]         NN[4,4]       IN[5,5]    DT[6,6] NN[7,7]
+                                                                                                                      IP
+                                                                                            d) A Parse Tree T2
+     John    saw              a               man           in         the      bank
+                                                                                                                             VP
+
+                                                                                                                                 NP
+                      b) A Hyper-edge e                 IP[1,7]
+                                                                                                                      NP               PP
+                                                                                               NNP    VV     DT            NN     IN    DT NN
+                                                                 VP[2,7]
+                                                                                              John    saw    a             man    in    the bank
+                                      NNP[1,1]
+
+
+    Figure 2. An example of a packed forest, a hyper-edge and two parse trees covered by the packed forest
+
+
+Rule 1: if the productions (CFG rules) at n1 and                                packed forest to address the above issues by ex-
+                                                                                ploring structured features embedded in a forest.
+         n2 are different,  (n1 , n2 )  0 ;
+                                                                                3      Convolution Kernel over Forest
+Rule 2: else if both n1 and n2 are pre-terminals
+                                                                                In this section, we first illustrate the concept of
+        (POS tags),  ( n1 , n2 )  1  ;                                      packed forest and then give a detailed discussion
+                                                                                on the covered feature space, fractional count,
+Rule 3: else,                                                                   feature value and the forest kernel function itself.
+                nc ( n1 )
+(n1 , n2 )     (1  (ch(n1 , j ), ch(n2 , j ))) ,
+                                                                                3.1     Packed forest of parse trees
+                   j 1                                                         Informally, a packed parse forest, or (packed)
+                                                                                forest in short, is a compact representation of all
+where nc(n1 ) is the child number of n1 , ch(n,j) is                            the derivations (i.e. parse trees) for a given sen-
+the jth child of node n and  (0<  ≤1) is the de-                              tence under context-free grammar (Tomita, 1987;
+cay factor in order to make the kernel value less                               Billot and Lang, 1989; Klein and Manning,
+variable with respect to the subtree sizes (Collins                             2001). It is the core data structure used in natural
+and Duffy, 2002). The recursive Rule 3 holds                                    language parsing and other downstream NLP
+because given two nodes with the same children,                                 applications, such as syntax-based machine
+one can construct common subtrees using these                                   translation (Zhang et al., 2008; Zhang et al.,
+children and common subtrees of further                                         2009a). In parsing, a sentence corresponds to
+offspring. The time complexity for computing                                    exponential number of parse trees with different
+this kernel is O (| N1 |  | N 2 |) .
+                                                                                tree probabilities, where a forest can compact all
+                                                                                the parse trees by sharing their common subtrees
+   As discussed in previous section, when convo-                                in a bottom-up manner. Formally, a packed for-
+lution tree kernel is applied to NLP applications,                              est 𝐹 can be described as a triple:
+its performance is vulnerable to the errors from
+the single parse tree and data sparseness. In this                                             𝐹 = < 𝑉, 𝐸, 𝑆 >
+paper, we present a convolution kernel over                                     where 𝑉is the set of non-terminal nodes, 𝐸 is the
+                                                                                set of hyper-edges and 𝑆 is a sentence
+
+
+                                                                             877
+
+
+represented as an ordered word sequence. A hy-                         probability is the total probability of generating
+per-edge 𝑒 is a group of edges in a parse tree                         node 𝑣 𝑝, 𝑞 and words outside 𝑆[𝑝, 𝑞] from the
+which connects a father node and its all child                         root of forest. The inside probability can be cal-
+nodes, representing a CFG rule. A non-terminal                         culated using dynamic programming in a bottom-
+node in a forest is represented as a “label [start,                    up fashion while the outside probability can be
+end]”, where the “label” is its syntax category                        calculated using dynamic programming in a top-
+and “[start, end]” is the span of words it covers.                     to-down way.
+As shown in Fig. 2, these two parse trees (𝑇1
+and 𝑇2) can be represented as a single forest by                       3.2     Convolution forest kernel
+sharing their common subtrees (such as NP[3,4]                         In this subsection, we first define the feature
+and PP[5,7]) and merging common non-terminal                           space covered by forest kernel, and then define
+nodes covering the same span (such as VP[2,7],                         the forest kernel function.
+where there are two hyper-edges attach to it).
+   Given the definition of forest, we introduce                        3.2.1    Feature space, object space and fea-
+the concepts of inside probability β . and out-                                 ture value
+side probability α(. ) that are widely-used in                         The forest kernel counts the number of common
+parsing (Baker, 1979; Lari and Young, 1990) and                        subtrees as the syntactic similarity between two
+are also to be used in our kernel calculation.                         forests. Therefore, in the same way as tree kernel,
+                                                                       its feature space is also defined as all the possible
+β 𝑣 𝑝, 𝑝    = 𝑃(𝑣 → 𝑆[𝑝])                                              subtree types that a CFG grammar allows. In a
+                                                                       forest kernel, forest 𝐹 is represented by a vector
+                                                                       of fractional counts of each subtree type (subtree
+                                                                       regardless of its ancestors, descendants and span
+β 𝑣 𝑝, 𝑞    =                                    𝑃 𝑒                   covered):
+                𝑒 𝑖𝑠 𝑎 𝑕𝑦𝑝𝑒𝑟 −𝑒𝑑𝑔𝑒
+                   𝑎𝑡𝑡𝑎𝑐 𝑕𝑒𝑑 𝑡𝑜 𝑣                                           ( F )  (# subtreetype1(F), …,
+                  ∙                             𝛽(𝑐𝑖 [𝑝𝑖 , 𝑞𝑖 ])                    # subtreetypen(F))
+                      𝑐 𝑖 𝑝 𝑖 ,𝑞 𝑖 𝑖𝑠 𝑎 𝑙𝑒𝑎𝑓
+                                                                             = (#subtreetype1(n-best parse trees), …, (1)
+                           𝑛𝑜𝑑𝑒 𝑜𝑓 𝑒                                           # subtreetypen(n-best parse trees))
+                                                                       where # subtreetypei(F) is the occurrence number
+                                                                       of the ith subtree type (subtreetypei) in forest F,
+α 𝑟𝑜𝑜𝑡(𝑓) = 1                                                          i.e., a n-best parse tree lists with a huge n.
+                                                                          Although the feature spaces of the two kernels
+                                                                       are the same, their object spaces (tree vs. forest)
+ α 𝑣 𝑝, 𝑞    =                             α 𝑟𝑜𝑜𝑡 𝑒           ∙𝑃 𝑒     and feature values (integer counts vs. fractional
+                 𝑒 𝑖𝑠 𝑎 𝑕𝑦𝑝𝑒𝑟 −
+                                                                       counts) differ very much. A forest encodes expo-
+                  𝑒𝑑𝑔𝑒 𝑎𝑛𝑑 𝑣                                           nential number of parse trees, and thus contain-
+                    𝑖𝑠 𝑖𝑡𝑠 𝑜𝑛𝑒                                         ing exponential times more subtrees than a single
+                    𝑙𝑒𝑎𝑓 𝑛𝑜𝑑𝑒
+                                                                       parse tree. This ensures forest kernel to learn
+                      ∙                         𝛽(𝑐𝑖 [𝑝𝑖 , 𝑞𝑖 ]))      more reliable feature values and is also able to
+                            𝑐 𝑖 𝑝 𝑖 ,𝑞 𝑖 𝑖𝑠 𝑎                          help to address the data sparseness issues in a
+                          𝑐𝑕𝑖𝑙𝑑𝑟𝑒𝑛 𝑛𝑜𝑑𝑒                                better way than tree kernel does. Forest kernel is
+                           𝑜𝑓 𝑒 𝑒𝑥𝑐𝑒𝑝𝑡 𝑣
+                                                                       also expected to yield more non-zero feature val-
+                                                                       ues than tree kernel. Furthermore, different parse
+where 𝑣 is a forest node, 𝑆[𝑝] is the 𝑝𝑡𝑕 word of                      tree in a forest represents different derivation and
+input sentence 𝑆, 𝑃(𝑣 → 𝑆[𝑝]) is the probability                       interpretation for a given sentence. Therefore,
+of the CFG rule 𝑣 → 𝑆[𝑝], 𝑟𝑜𝑜𝑡(. ) returns the                         forest kernel should be more robust to parsing
+root node of input structure, [𝑝𝑖 , 𝑞𝑖 ] is a sub-span                 errors than tree kernel.
+of 𝑝, 𝑞 , being covered by 𝑐𝑖 , and 𝑃 𝑒 is the                            In tree kernel, one occurrence of a subtree
+PCFG probability of 𝑒. From these definitions,                         contributes 1 to the value of its corresponding
+we can see that the inside probability is total                        feature (subtree type), so the feature value is an
+probability of generating words 𝑆 𝑝, 𝑞 from                            integer count. However, the case turns out very
+non-terminal node 𝑣 𝑝, 𝑞 while the outside                             complicated in forest kernel. In a forest, each of
+                                                                       its parse trees, when enumerated, has its own
+
+                                                                     878
+
+
+probability. So one subtree extracted from differ-              Given a subtree, we can easily compute its
+ent parse trees should have different fractional             fractional count (i.e. its feature value) directly
+count with regard to the probabilities of different          using eq. (3) and (4) without the need of enume-
+parse trees. Following the previous work (Char-              rating each parse trees as shown at eq. (2) 1 .
+niak and Johnson, 2005; Huang, 2008), we de-                 Nonetheless, it is still computationally infeasible
+fine the fractional count of the occurrence of a             to directly use the feature vector 𝜙(𝐹) (see eq.
+subtree in a parse tree 𝑡𝑖 as                                (1)) by explicitly enumerating all subtrees al-
+                                                             though its fractional count is easily calculated. In
+                   0             𝑖𝑓 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 ∉ 𝑡𝑖             the next subsection, we present the forest kernel
+𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑡𝑖 =
+                   𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑡𝑖 |𝑓, 𝑠 𝑜𝑡𝑕𝑒𝑟𝑤𝑖𝑠𝑒             that implicitly calculates the dot-product between
+                                                             two 𝜙(𝐹)s in a polynomial time.
+                   0                  𝑖𝑓 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 ∉ 𝑡𝑖
+               =
+                   𝑃 𝑡𝑖 |𝑓, 𝑠              𝑜𝑡𝑕𝑒𝑟𝑤𝑖𝑠𝑒         3.2.2          Convolution forest kernel
+                                                             The forest kernel counts the fractional numbers
+where we have 𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑡𝑖 |𝑓, 𝑠 = 𝑃 𝑡𝑖 |𝑓, 𝑠 if            of common subtrees as the syntactic similarity
+𝑠𝑢𝑏𝑡𝑟𝑒𝑒 ∈ 𝑡𝑖 . Then we define the fractional count           between two forests. We define the forest kernel
+of the occurrence of a subtree in a forest f as
+                                                             function 𝐾𝑓 𝑓1 , 𝑓2 in the following way.
+𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑓 = 𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒|𝑓, 𝑠                                    𝐾𝑓 𝑓1 , 𝑓2 =< 𝜙 𝑓1 , 𝜙 𝑓2 >                       (5)
+             = 𝑡 𝑖 𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑡𝑖 |𝑓, 𝑠      (2)
+             = 𝑡 𝑖 𝐼𝑠𝑢𝑏𝑡𝑟𝑒𝑒 𝑡𝑖 ∙ 𝑃 𝑡𝑖 |𝑓, 𝑠                      =          #𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑡𝑦𝑝𝑒𝑖 (𝑓1 ). #𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑡𝑦𝑝𝑒𝑖 (𝑓2 )
+                                                                       𝑖
+where 𝐼𝑠𝑢𝑏𝑡𝑟𝑒𝑒 𝑡𝑖 is a binary function that is 1                 =                     𝐼𝑒𝑞 𝑠𝑢𝑏𝑡𝑟𝑒𝑒1, 𝑠𝑢𝑏𝑡𝑟𝑒𝑒2
+iif the 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 ∈ 𝑡𝑖 and zero otherwise. Ob-                         𝑠𝑢𝑏𝑡𝑟𝑒𝑒 1∈𝑓1
+viously, it needs exponential time to compute the                    𝑠𝑢𝑏𝑡𝑟𝑒𝑒 2∈𝑓2
+above fractional counts. However, due to the                                         ∙ 𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒1, 𝑓1
+property of forest that compactly represents all                                     ∙ 𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒2, 𝑓2
+the parse trees, the posterior probability of a                                            ′
+                                                                 =        𝑣1 ∈𝑁1   𝑣2 ∈𝑁2 Δ    𝑣1 , 𝑣2
+subtree in a forest, 𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒|𝑓, 𝑠 , can be easi-
+ly computed in an Inside-Outside fashion as the              where
+product of three parts: the outside probability of                          𝐼𝑒𝑞 ∙,∙ is a binary function that is 1 iif
+its root node, the probabilities of parse hyper-                             the input two subtrees are identical (i.e.
+edges involved in the subtree, and the inside                                they have the same typology and node
+probabilities of its leaf nodes (Lari and Young,                             labels) and zero otherwise;
+1990; Mi and Huang, 2008).                                                  𝑐 ∙,∙ is the fractional count defined at
+                                                                             eq. (3);
+      𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒, 𝑓 = 𝑃 𝑠𝑢𝑏𝑡𝑟𝑒𝑒|𝑓, 𝑠                  (3)                    𝑁1 and 𝑁2 are the sets of nodes in fo-
+                       𝛼𝛽(𝑠𝑢𝑏𝑡𝑟𝑒𝑒)                                           rests 𝑓1 and 𝑓2 ;
+                     =
+                       𝛼𝛽(𝑟𝑜𝑜𝑡 𝑓 )                                          Δ′ 𝑣1 , 𝑣2 returns the accumulated value
+where                                                                        of products between each two fractional
+                                                                             counts of the common subtrees rooted at
+      𝛼𝛽 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 = 𝛼 𝑟𝑜𝑜𝑡 𝑠𝑢𝑏𝑡𝑟𝑒𝑒                    (4)                     𝑣1 and 𝑣2 , i.e.,
+                      ∙               𝑃 𝑒                    Δ′ 𝑣1 , 𝑣2
+                          𝑒∈𝑠𝑢𝑏𝑡𝑟𝑒𝑒
+                                                                 =                             𝐼𝑒𝑞 𝑠𝑢𝑏𝑡𝑟𝑒𝑒1, 𝑠𝑢𝑏𝑡𝑟𝑒𝑒2
+                       ∙                    𝛽 𝑣                      𝑟𝑜𝑜𝑡 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 1 =𝑣1
+                           𝑣∈𝑙𝑒𝑎𝑓 𝑠𝑢𝑏𝑡𝑟𝑒𝑒                            𝑟𝑜𝑜𝑡 𝑠𝑢𝑏𝑡𝑟𝑒𝑒 2 =𝑣2
+and                                                                                   ∙ 𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒1, 𝑓1
+                                                                                      ∙ 𝑐 𝑠𝑢𝑏𝑡𝑟𝑒𝑒2, 𝑓2
+      𝛼𝛽 𝑟𝑜𝑜𝑡 𝑓    = 𝛼 𝑟𝑜𝑜𝑡 𝑓           ∙ 𝛽 𝑟𝑜𝑜𝑡 𝑓
+                   = 𝛽 𝑟𝑜𝑜𝑡 𝑓
+                                                             1
+                                                               It has been proven in parsing literatures (Baker,
+where 𝛼 . and 𝛽(. ) denote the outside and in-               1979; Lari and Young, 1990) that eq. (3) defined by
+side probabilities. They can be easily obtained              Inside-Outside probabilities is exactly to compute the
+using the equations introduced at section 3.1.               sum of those parse tree probabilities that cover the
+                                                             subtree of being considered as defined at eq. (2).
+
+                                                           879
+
+
+   We next show that Δ′ 𝑣1 , 𝑣2 can be computed           Algorithm 1.
+recursively in a polynomial time as illustrated at        Input:
+Algorithm 1. To facilitate discussion, we tempo-              𝑓1 , 𝑓2 : two packed forests
+rarily ignore all fractional counts in Algorithm 1.           𝑣1 , 𝑣2 : any two nodes of 𝑓1 and 𝑓2
+Indeed, Algorithm 1 can be viewed as a natural            Notation:
+extension of convolution kernel from over tree to             𝐼𝑒𝑞 ∙,∙ : defined at eq. (5)
+over forest. In forest2, a node can root multiple             𝑛𝑙 𝑒1 : number of leaf node of 𝑒1
+hyper-edges and each hyper-edge is independent                𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 : the jth leaf node of 𝑒1
+to each other. Therefore, Algorithm 1 iterates            Output: Δ′ 𝑣1 , 𝑣2
+each hyper-edge pairs with roots at 𝑣1 and 𝑣2
+(line 3-4), and sums over (eq. (7) at line 9) each        1. Δ′ 𝑣1 , 𝑣2 = 0
+recursively-accumulated sub-kernel scores of              2. if 𝑣1 . 𝑙𝑎𝑏𝑒𝑙 ≠ 𝑣2 . 𝑙𝑎𝑏𝑒𝑙 exit
+subtree pairs extended from the hyper-edge pair           3. for each hyper-edge 𝑒1 attached to 𝑣1 do
+ 𝑒1 , 𝑒2 (eq. (6) at line 8). Eq. (7) holds because       4.    for each hyper-edge 𝑒2 attached to 𝑣2 do
+the hyper-edges attached to the same node are             5.         if 𝐼𝑒𝑞 𝑒1 , 𝑒2 == 0 do
+independent to each other. Eq. (6) is very similar        6.              goto line 3
+to the Rule 3 of tree kernel (see section 2) except       7.         else do
+its inputs are hyper-edges and its further expan-                                        𝑛𝑙 𝑒
+                                                          8.              Δ′′ 𝑒1 , 𝑒2 = 𝑗 =1 1 1 +
+sion is based on forest nodes. Similar to tree ker-
+nel (Collins and Duffy, 2002), eq. (6) holds be-                             Δ′ 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 , 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗     (6)
+cause a common subtree by extending from                  9.             Δ′ 𝑣1 , 𝑣2 += Δ′′ 𝑒1 , 𝑒2           (7)
+(𝑒1 , 𝑒2 ) can be formed by taking the hyper-edge         10.         end if
+(𝑒1 , 𝑒2 ), together with a choice at each of their       11.      end for
+leaf nodes of simply taking the non-terminal at           12.   end for
+the leaf node, or any one of the common subtrees
+with root at the leaf node. Thus there are
+  1 + Δ′ 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 , 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗          possible      Same as tree kernel, forest kernel is running
+                    th                                    more efficiently in practice since only two nodes
+choices at the j leaf node. In total, there are           with the same label needs to be further processed
+Δ′′ 𝑒1 , 𝑒2 (eq. (6)) common subtrees by extend-          (line 2 of Algorithm 1).
+ing from (𝑒1 , 𝑒2 ) and Δ′ 𝑣1 , 𝑣2 (eq. (7)) com-            Now let us see how to integrate fractional
+mon subtrees with root at 𝑣1 , 𝑣2 .                       counts into forest kernel. According to Algo-
+   Obviously Δ′ 𝑣1 , 𝑣2 calculated by Algorithm           rithm 1 (eq. (7)), we have (𝑒1 /𝑒2 are attached to
+1 is a proper convolution kernel since it simply          𝑣1 /𝑣2 , respectively)
+counts the number of common subtrees under the
+root 𝑣1 , 𝑣2 . Therefore, 𝐾𝑓 𝑓1 , 𝑓2 defined at eq.                   Δ′ 𝑣1 , 𝑣2 =    𝑒1 =𝑒2 Δ
+                                                                                              ′′
+                                                                                                   𝑒1 , 𝑒2
+(5) and calculated through Δ′ 𝑣1 , 𝑣2 is also a              Recall eq. (4), a fractional count consists of
+proper convolution kernel. From eq. (5) and Al-           outside, inside and subtree probabilities. It is
+gorithm 1, we can see that each hyper-edge pair           more straightforward to incorporate the outside
+(𝑒1 , 𝑒2 ) is only visited at most one time in com-       and subtree probabilities since all the subtrees
+puting the forest kernel. Thus the time complexi-         with roots at 𝑣1 , 𝑣2 share the same outside
+ty for computing 𝐾𝑓 𝑓1 , 𝑓2 is 𝑂(|𝐸1 | ∙ |𝐸2 |) ,         probability and each hyper-edge pair is only vi-
+where 𝐸1 and 𝐸2 are the set of hyper-edges in             sited one time. Thus we can integrate the two
+forests 𝑓1 and 𝑓2 , respectively. Given a forest          probabilities into Δ′ 𝑣1 , 𝑣2 as follows.
+and the best parse trees, the number of hyper-
+edges is only several times (normally <=3 after               Δ′ 𝑣1 , 𝑣2 = 𝜆 ∙ 𝛼 𝑣1 ∙ 𝛼 𝑣2
+pruning) than that of tree nodes in the parse tree3.                ∙ 𝑒1 =𝑒2 𝑃 𝑒1 ∙ 𝑃 𝑒2 ∙ Δ′′ 𝑒1 , 𝑒2       (8)
+                                                          where, following tree kernel, a decay factor
+                                                          𝜆(0 < 𝜆 ≤ 1) is also introduced in order to make
+2
+  Tree can be viewed as a special case of forest with
+only one hyper-edge attached to each tree node.           the kernel value less variable with respect to the
+3
+  Suppose there are K forest nodes in a forest, each      subtree sizes (Collins and Duffy, 2002). It func-
+node has M associated hyper-edges fan out and each        tions like multiplying each feature value by
+hyper-edge has N children. Then the forest is capable
+              𝐾 −1                                        𝜆𝑠𝑖𝑧𝑒 𝑖 , where 𝑠𝑖𝑧𝑒𝑖 is the number of hyper-edges
+of encoding 𝑀𝑁 −1 parse trees at most (Zhang et al.,      in 𝑠𝑢𝑏𝑡𝑟𝑒𝑒𝑖 .
+2009b).
+
+                                                        880
+
+
+    The inside probability is only involved when a               Convolution tree kernel is a special case of the
+ node does not need to be further expanded. The               proposed forest kernel. From feature exploration
+ integer 1 at eq. (6) represents such case. So the            viewpoint, although theoretically they explore
+ inside probability is integrated into eq. (6) by             the same subtree feature spaces (defined recur-
+ replacing the integer 1 as follows.                          sively by CFG parsing rules), their feature values
+                                                              are different. Forest encodes exponential number
+                𝑛𝑙 𝑒1
+                                                              of trees. So the number of subtree instances ex-
+Δ′′ 𝑒1 , 𝑒2 =           𝛽 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 ∙ 𝛽 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗         tracted from a forest is exponential number of
+                 𝑗 =1                                         times greater than that from its corresponding
+                           Δ′ 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 , 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗
+                     +                                    (9) parse tree. The significant difference of the
+                        𝛼 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 ∙ 𝛼 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗         amount of subtree instances makes the parame-
+                                                              ters learned from forests more reliable and also
+ where in the last expression the two outside                 can help to address the data sparseness issue. To
+ probabilities 𝛼 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 and 𝛼 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗                some degree, forest kernel can be viewed as a
+ are removed. This is because 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 and                 tree kernel with very powerful back-off mechan-
+ 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗 are not roots of the subtrees of being           ism. In addition, forest kernel is much more ro-
+ explored (only outside probabilities of the root of          bust against parsing errors than tree kernel.
+ a subtree should be counted in its fractional                   Aiolli et al. (2006; 2007) propose using Direct
+                     ′
+ count), and Δ 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 , 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗 already              Acyclic Graphs (DAG) as a compact representa-
+ contains the two outside probabilities of                    tion of tree kernel-based models. This can largely
+ 𝑙𝑒𝑎𝑓 𝑒1 , 𝑗 and 𝑙𝑒𝑎𝑓 𝑒2 , 𝑗 .                                reduce the computational burden and storage re-
+    Referring to eq. (3), each fractional count               quirements by sharing the common structures
+ needs to be normalized by 𝛼𝛽(𝑟𝑜𝑜𝑡 𝑓 ). Since                 and feature vectors in the kernel-based model.
+ 𝛼𝛽(𝑟𝑜𝑜𝑡 𝑓 ) is independent to each individual                There are a few other previous works done by
+ fractional count, we do the normalization outside            generalizing convolution tree kernels (Kashima
+ the recursive function Δ′′ 𝑒1 , 𝑒2 . Then we can             and Koyanagi, 2003; Moschitti, 2006; Zhang et
+ re-formulize eq. (5) as                                      al., 2007). However, all of these works limit
+                                                              themselves to single tree structure from modeling
+    𝐾𝑓 𝑓1 , 𝑓2 =< 𝜙 𝑓1 , 𝜙 𝑓2 >                               viewpoint in nature.
+                                         ′
+                       𝑣1 ∈𝑁1 𝑣2 ∈𝑁2 Δ 𝑣1 , 𝑣2                   From a broad viewpoint, as suggested by one
+             =                                          (10)  reviewer of the paper, we can consider the forest
+                 𝛼𝛽 𝑟𝑜𝑜𝑡 𝑓1 ∙ 𝛼𝛽 𝑟𝑜𝑜𝑡 𝑓2
+                                                              kernel as an alternative solution proposed for the
+    Finally, since the size of input forests is not           general problem of noisy inference pipelines (eg.
+ constant, the forest kernel value is normalized              speech translation by composition of FSTs, ma-
+ using the following equation.                                chine translation by translating over 'lattices' of
+                                                              segmentations (Dyer et al., 2008) or using parse
+                                  𝐾𝑓 𝑓1 , 𝑓2                  tree info for downstream applications in our cas-
+         𝐾𝑓 𝑓1 , 𝑓2 =                                   (11)  es) . Following this line, Bunescu (2008) and
+                            𝐾𝑓 𝑓1 , 𝑓1 ∙ 𝐾𝑓 𝑓2 , 𝑓2
+                                                              Finkel et al. (2006) are two typical related works
+    From the above discussion, we can see that the            done in reducing cascading noisy. However, our
+ proposed forest kernel is defined together by eqs.           works are not overlapped with each other as
+ (11), (10), (9) and (8). Thanks to the compact               there are two totally different solutions for the
+ representation of trees in forest and the recursive          same general problem. In addition, the main mo-
+ nature of the kernel function, the introduction of           tivation of this paper is also different from theirs.
+ fractional counts and normalization do not
+ change the convolution property and the time                 4 Experiments
+ complexity of the forest kernel. Therefore, the              Forest kernel has a broad application potential in
+ forest kernel 𝐾𝑓 𝑓1 , 𝑓2 is still a proper convolu-          NLP. In this section, we verify the effectiveness
+ tion kernel with quadratic time complexity.                  of the forest kernel on two NLP applications,
+                                                              semantic role labeling (SRL) (Gildea, 2002) and
+ 3.3 Comparison with previous work
+                                                              relation extraction (RE) (ACE, 2002-2006).
+ To the best of our knowledge, this is the first                 In our experiments, SVM (Vapnik, 1998) is
+ work to address convolution kernel over packed               selected as our classifier and the one vs. others
+ parse forest.                                                strategy is adopted to select the one with the
+
+
+                                                        881
+
+
+largest margin as the final answer. In our imple-          amount of unmatched argument increases a little
+mentation, we use the binary SVMLight (Joa-                bit to 3.1%, its generated total candidate amount
+chims, 1998) and borrow the framework of the               decreases substantially to only 1.31 times of that
+Tree Kernel Tools (Moschitti, 2004) to integrate           from 1-best parse tree. This clearly shows the
+our forest kernel into the SVMLight. We modify             advantages of the forest-based method over tree-
+Charniak parser (Charniak, 2001) to output a               based in SRL.
+packed forest. Following previous forest-based                The best-reported tree kernel method for SRL
+studies (Charniak and Johnson, 2005), we use the           𝐾𝑕𝑦𝑏𝑟𝑖𝑑 = 𝜃 ∙ 𝐾𝑝𝑎𝑡 𝑕 + (1 − 𝜃) ∙ 𝐾𝑐𝑠 (0 ≤ 𝜃 ≤
+marginal probabilities of hyper-edges (i.e., the           1), proposed by Che et al. (2006)5, is adopted as
+Viterbi-style inside-outside probabilities and set         our baseline kernel. We implemented the 𝐾𝑕𝑦𝑏𝑟𝑖𝑑
+the pruning threshold as 8) for forest pruning.            in tree case ( 𝐾𝑇−𝑕𝑦𝑏𝑟𝑖𝑑 , using tree kernel to
+4.1    Semantic role labeling                              compute 𝐾𝑝𝑎𝑡 𝑕 and 𝐾𝑐𝑠 ) and in forest case
+                                                           (𝐾𝐹−𝑕𝑦𝑏𝑟𝑖𝑑 , using tree kernel to compute 𝐾𝑝𝑎𝑡 𝑕
+Given a sentence and each predicate (either a
+                                                           and 𝐾𝑐𝑠 ).
+target verb or a noun), SRL recognizes and maps
+all the constituents in the sentence into their cor-                              Precision    Recall    F-Score
+responding semantic arguments (roles, e.g., A0             𝐾𝑇−𝑕𝑦𝑏𝑟𝑖𝑑 (Tree)         76.02       67.38      71.44
+for Agent, A1 for Patient …) of the predicate or
+                                                           𝐾𝐹−𝑕𝑦𝑏𝑟𝑖𝑑 (Forest)       79.06       69.12      73.76
+non-argument. We use the CoNLL-2005 shared
+task on Semantic Role Labeling (Carreras and                   Table 1: Performance comparison of SRL (%)
+Marquez, 2005) for the evaluation of our forest
+kernel method. To speed up the evaluation                     Table 1 shows that the forest kernel significant-
+process, the same as Che et al. (2008), we use a           ly outperforms (𝜒 2 test with p=0.01) the tree ker-
+subset of the entire training corpus (WSJ sections         nel with an absolute improvement of 2.32 (73.76-
+02-05 of the entire sections 02-21) for training,          71.42) percentage in F-Score, representing a rela-
+section 24 for development and section 23 for              tive error rate reduction of 8.19% (2.32/(100-
+test, where there are 35 roles including 7 Core            71.64)). This convincingly demonstrates the ad-
+(A0–A5, AA), 14 Adjunct (AM-) and 14 Refer-                vantage of the forest kernel over the tree kernel. It
+ence (R-) arguments.                                       suggests that the structured features represented
+   The state-of-the-art SRL methods (Carreras              by subtree are very useful to SRL. The perfor-
+and Marquez, 2005) use constituents as the labe-           mance improvement is mainly due to the fact that
+ling units to form the labeled arguments. Due to           forest encodes much more such structured features
+the errors from automatic parsing, it is impossi-          and the forest kernel is able to more effectively
+ble for all arguments to find their matching con-          capture such structured features than the tree ker-
+stituents in the single 1-best parse trees. Statistics     nel. Besides F-Score, both precision and recall
+on the training data shows that 9.78% of argu-             also show significantly improvement (𝜒 2 test with
+ments have no matching constituents using the              p=0.01). The reason for recall improvement is
+Charniak parser (Charniak, 2001), and the num-             mainly due to the lower rate of unmatched argu-
+ber increases to 11.76% when using the Collins             ment (3.1% only) with only a little bit overhead
+parser (Collins, 1999). In our method, we break            (1.31 times) (see the previous discussion in this
+the limitation of 1-best parse tree and regard each        section). The precision improvement is mainly
+span rooted by a single forest node (i.e., a sub-          attributed to fact that we use sub-forest to
+forest with one or more roots) as a candidate ar-          represent argument instances, rather than sub-
+gument. This largely reduces the unmatched ar-             tree used in tree kernel, where the sub-tree is on-
+guments from 9.78% to 1.31% after forest prun-             ly one tree encoded in the sub-forest.
+ing. However, it also results in a very large
+amount of argument candidates that is 5.6 times            SRL and thus makes the amounts of positive and neg-
+as many as that from 1-best tree. Fortunately,             ative training instances (arguments) more balanced.
+after the pre-processing stage of argument prun-           We apply the same pruning strategies to forest plus
+ing (Xue and Palmer, 2004) 4 , although the                our heuristic rules to prune out some of the arguments
+                                                           with span overlapped with each other and those ar-
+                                                           guments with very small inside probabilities, depend-
+4
+  We extend (Xue and Palmer, 2004)’s argument              ing on the numbers of candidates in the span.
+                                                           5
+pruning algorithm from tree-based to forest-based.           Kpath and Kcs are two standard convolution tree ker-
+The algorithm is very effective. It can prune out          nels to describe predicate-argument path substructures
+around 90% argument candidates in parse tree-based         and argument syntactic substructures, respectively.
+
+                                                         882
+
+
+4.2    Relation extraction                                  modeling NLP structured data. In summary, we
+                                                            further observe the high precision improvement
+As a subtask of information extraction, relation
+                                                            that is consistent with the SRL experiments. How-
+extraction is to extract various semantic relations
+                                                            ever, the recall improvement is not as significant
+between entity pairs from text. For example, the
+                                                            as observed in SRL. This is because unlike SRL,
+sentence “Bill Gates is chairman and chief soft-
+                                                            RE has no un-matching issues in generating rela-
+ware architect of Microsoft Corporation” con-
+                                                            tion instances. Moreover, we find that the perfor-
+veys the semantic relation “EMPLOY-
+                                                            mance improvement in RE is not as good as that
+MENT.executive” between the entities “Bill
+                                                            in SRL. Although we know that performance is
+Gates” (person) and “Microsoft Corporation”
+                                                            task-dependent, one of the possible reasons is
+(company). We adopt the method reported in
+                                                            that SRL tends to be long-distance grammatical
+Zhang et al. (2006) as our baseline method as it
+                                                            structure-related while RE is local and semantic-
+reports the state-of-the-art performance using
+                                                            related as observed from the two experimental
+tree kernel-based composite kernel method for
+                                                            benchmark data.
+RE. We replace their tree kernels with our forest
+kernels and use the same experimental settings as           5    Conclusions and Future Work
+theirs. We carry out the same five-fold cross va-
+lidation experiment on the same subset of ACE               Many NLP applications have benefited from the
+2004 data (LDC2005T09, ACE 2002-2004) as                    success of convolution kernel over parse tree.
+that in Zhang et al. (2006). The data contain 348           Since a packed parse forest contains much richer
+documents and 4400 relation instances.                      structured features than a parse tree, we are mo-
+   In SRL, constituents are used as the labeling            tivated to develop a technology to measure the
+units to form the labeled arguments. However,               syntactic similarity between two forests.
+previous work (Zhang et al., 2006) shows that if               To achieve this goal, in this paper, we design a
+we use complete constituent (MCT) as done in                convolution kernel over packed forest by genera-
+SRL to represent relation instance, there is a              lizing the tree kernel. We analyze the object
+large performance drop compared with using the              space of the forest kernel, the fractional count for
+path-enclosed tree (PT)6. By simulating PT, we              feature value computing and design a dynamic
+use the minimal fragment of a forest covering the           programming algorithm to realize the forest ker-
+two entities and their internal words to represent          nel with quadratic time complexity. Compared
+a relation instance by only parsing the span cov-           with the tree kernel, the forest kernel is more ro-
+ering the two entities and their internal words.            bust against parsing errors and data sparseness
+                                                            issues. Among the broad potential NLP applica-
+                         Precision Recall F-Score           tions, the problems in SRL and RE provide two
+Zhang et al. (2006):Tree  68.6      59.3 6 63.6             pointed scenarios to verify our forest kernel. Ex-
+Ours: Forest              70.3      60.0 64.7
+                                                            perimental results demonstrate the effectiveness
+                                                            of the proposed kernel in structured NLP data
+      Table 2: Performance Comparison of RE (%)
+                                                            modeling and the advantages over tree kernel.
+        over 23 subtypes on the ACE 2004 data                  In the future, we would like to verify the forest
+                                                            kernel in more NLP applications. In addition, as
+   Table 2 compares the performance of the for-             suggested by one reviewer, we may consider res-
+est kernel and the tree kernel on relation extrac-          caling the probabilities (exponentiating them by
+tion. We can see that the forest kernel significant-        a constant value) that are used to compute the
+ly outperforms (𝜒 2 test with p=0.05) the tree ker-         fractional counts. We can sharpen or flatten the
+nel by 1.1 point of F-score. This further verifies          distributions. This basically says "how seriously
+the effectiveness of the forest kernel method for           do we want to take the very best derivation"
+                                                            compared to the rest. However, the challenge is
+6                                                           that we compute the fractional counts together
+  MCT is the minimal constituent rooted by the near-
+                                                            with the forest kernel recursively by using the
+est common ancestor of the two entities under consid-
+eration while PT is the minimal portion of the parse
+                                                            Inside-Outside probabilities. We cannot differen-
+tree (may not be a complete subtree) containing the         tiate the individual parse tree’s contribution to a
+two entities and their internal lexical words. Since in     fractional count on the fly. One possible solution
+many cases, the two entities and their internal words       is to do the probability rescaling off-line before
+cannot form a grammatical constituent, MCT may              kernel calculation. This would be a very interest-
+introduce too many noisy context features and thus          ing research topic of our future work.
+lead to the performance drop.
+
+                                                          883
+
+
+References                                               D. Haussler. 1999. Convolution Kernels on Discrete
+                                                           Structures. Technical Report UCS-CRL-99-10,
+ACE (2002-2006). The Automatic Content Extraction          University of California, Santa Cruz
+  Projects. http://www.ldc.upenn.edu/Projects/ACE/
+                                                         Liang Huang. 2008. Forest reranking: Discriminative
+Fabio Aiolli, Giovanni Da San Martino, Alessandro           parsing with non-local features. ACL-2008
+  Sperduti and Alessandro Moschitti. 2006. Fast On-
+  line Kernel Learning for Trees. ICDM-2006              Karim Lari and Steve J. Young. 1990. The estimation
+                                                           of stochastic context-free grammars using the in-
+Fabio Aiolli, Giovanni Da San Martino, Alessandro          side-outside algorithm. Computer Speech and Lan-
+  Sperduti and Alessandro Moschitti. 2007. Efficient       guage. 4(35–56)
+  Kernel-based Learning for Trees. IEEE Sympo-
+  sium on Computational Intelligence and Data Min-       H. Kashima and T. Koyanagi. 2003. Kernels for Semi-
+  ing (CIDM-2007)                                           Structured Data. ICML-2003
+J. Baker. 1979. Trainable grammars for speech rec-       Dan Klein and Christopher D. Manning. 2001. Pars-
+   ognition. The 97th meeting of the Acoustical So-        ing and Hypergraphs. IWPT-2001
+   ciety of America                                      T. Joachims. 1998. Text Categorization with Support
+S. Billot and S. Lang. 1989. The structure of shared        Vecor Machine: learning with many relevant fea-
+   forest in ambiguous parsing. ACL-1989                    tures. ECML-1998
+Razvan Bunescu. 2008. Learning with Probabilistic        Haitao Mi and Liang Huang. 2008. Forest-based
+  Features for Improved Pipeline Models. EMNLP-            Translation Rule Extraction. EMNLP-2008
+  2008                                                   Alessandro Moschitti. 2004. A Study on Convolution
+X. Carreras and Lluıs Marquez. 2005. Introduction to       Kernels for Shallow Semantic Parsing. ACL-2004
+  the CoNLL-2005 shared task: SRL. CoNLL-2005            Alessandro Moschitti. 2006. Syntactic kernels for
+E. Charniak. 2001. Immediate-head Parsing for Lan-         natural language learning: the semantic role labe-
+   guage Models. ACL-2001                                  ling case. HLT-NAACL-2006 (short paper)
+
+E. Charniak and Mark Johnson. 2005. Corse-to-fine-       Martha Palmer, Dan Gildea and Paul Kingsbury.
+   grained n-best parsing and discriminative re-           2005. The proposition bank: An annotated corpus
+   ranking. ACL-2005                                       of semantic roles. Computational Linguistics. 31(1)
+
+Wanxiang Che, Min Zhang, Ting Liu and Sheng Li.          F. Rosenblatt. 1962. Principles of Neurodynamics:
+ 2006. A hybrid convolution tree kernel for seman-          Perceptrons and the theory of brain mechanisms.
+ tic role labeling. COLING-ACL-2006 (poster)                Spartan Books, Washington D.C.
+
+WanXiang Che, Min Zhang, Aiti Aw, Chew Lim Tan,          Masaru Tomita. 1987. An Efficient Augmented-
+ Ting Liu and Sheng Li. 2008. Using a Hybrid               Context-Free Parsing Algorithm. Computational
+ Convolution Tree Kernel for Semantic Role Labe-           Linguistics 13(1-2): 31-46
+ ling. ACM Transaction on Asian Language Infor-          Vladimir N. Vapnik. 1998. Statistical Learning
+ mation Processing                                         Theory. Wiley
+M. Collins. 1999. Head-driven statistical models for     C. Watkins. 1999. Dynamic alignment kernels. In A. J.
+  natural language parsing. Ph.D. dissertation,             Smola, B. Sch¨olkopf, P. Bartlett, and D. Schuur-
+  Pennsylvania University                                   mans (Eds.), Advances in kernel methods. MIT
+M. Collins and N. Duffy. 2002. Convolution Kernels          Press
+  for Natural Language. NIPS-2002                        Nianwen Xue and Martha Palmer. 2004. Calibrating
+Christopher Dyer, Smaranda Muresan and Philip Res-         features for semantic role labeling. EMNLP-2004
+  nik. 2008. Generalizing Word Lattice Translation.      Xiaofeng Yang, Jian Su and Chew Lim Tan. 2006.
+  ACL-HLT-2008                                             Kernel-Based Pronoun Resolution with Structured
+Jenny Rose Finkel, Christopher D. Manning and And-         Syntactic Knowledge. COLING-ACL-2006
+   rew Y. Ng. 2006. Solving the Problem of Cascad-       Dell Zhang and W. Lee. 2003. Question classification
+   ing Errors: Approximate Bayesian Inference for          using support vector machines. SIGIR-2003
+   Linguistic Annotation Pipelines. EMNLP-2006
+                                                         Hui Zhang, Min Zhang, Haizhou Li, Aiti Aw and
+Y. Freund and R. E. Schapire. 1999. Large margin           Chew Lim Tan. 2009a. Forest-based Tree Se-
+  classification using the perceptron algorithm. Ma-       quence to String Translation Model. ACL-
+  chine Learning, 37(3):277-296                            IJCNLP-2009
+D. Guldea. 2002. Probabilistic models of verb-           Hui Zhang, Min Zhang, Haizhou Li and Chew Lim
+  argument structure. COLING-2002                          Tan. 2009b. Fast Translation Rule Matching for
+
+
+                                                       884
+
+
+  Syntax-based Statistical Machine Translation.
+  EMNLP-2009
+Min Zhang, Jie Zhang, Jian Su and GuoDong Zhou.
+  2006. A Composite Kernel to Extract Relations be-
+  tween Entities with Both Flat and Structured Fea-
+  tures. COLING-ACL-2006
+Min Zhang, W. Che, A. Aw, C. Tan, G. Zhou, T. Liu
+  and S. Li. 2007. A Grammar-driven Convolution
+  Tree Kernel for Semantic Role Classification.
+  ACL-2007
+Min Zhang, Hongfei Jiang, Aiti Aw, Haizhou Li,
+  Chew Lim Tan and Sheng Li. 2008. A Tree Se-
+  quence Alignment-based Tree-to-Tree Translation
+  Model. ACL-2008
+Min Zhang and Haizhou Li. 2009. Tree Kernel-based
+  SVM with Structured Syntactic Knowledge for
+  BTG-based Phrase Reordering. EMNLP-2009
+
+
+
+
+                                                      885
+

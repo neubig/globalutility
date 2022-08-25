@@ -1,0 +1,702 @@
+                    Towards Open-Domain Semantic Role Labeling
+
+               Danilo Croce, Cristina Giannone, Paolo Annesi, Roberto Basili
+              {croce,giannone,annesi,basili}@info.uniroma2.it
+                  Department of Computer Science, Systems and Production
+                              University of Roma, Tor Vergata
+
+
+
+                      Abstract                                 work of (Gildea and Jurafsky, 2002) and the suc-
+                                                               cessful CoNLL evaluation campaigns (Carreras
+    Current Semantic Role Labeling technolo-                   and Màrquez, 2005). Statistical machine learning
+    gies are based on inductive algorithms                     methods, ranging from joint probabilistic models
+    trained over large scale repositories of                   to support vector machines, have been success-
+    annotated examples. Frame-based sys-                       fully adopted to provide very accurate semantic
+    tems currently make use of the FrameNet                    labeling, e.g. (Carreras and Màrquez, 2005).
+    database but fail to show suitable general-                   SRL based on FrameNet is thus not a novel task,
+    ization capabilities in out-of-domain sce-                 although very few systems are known capable of
+    narios. In this paper, a state-of-art system               completing a general frame-based annotation pro-
+    for frame-based SRL is extended through                    cess over raw texts, noticeable exceptions being
+    the encapsulation of a distributional model                discussed for example in (Erk and Pado, 2006),
+    of semantic similarity. The resulting argu-                (Johansson and Nugues, 2008b) and (Coppola et
+    ment classification model promotes a sim-                  al., 2009). Some critical limitations have been out-
+    pler feature space that limits the potential               lined in literature, some of them independent from
+    overfitting effects. The large scale em-                   the underlying semantic paradigm.
+    pirical study here discussed confirms that                    Parsing Accuracy. Most of the employed
+    state-of-art accuracy can be obtained for                  learning algorithms are based on complex sets of
+    out-of-domain evaluations.                                 syntagmatic features, as deeply investigated in (Jo-
+                                                               hansson and Nugues, 2008b). The resulting recog-
+1   Introduction
+                                                               nition is thus highly dependent on the accuracy of
+The availability of large scale semantic lexicons,             the underlying parser, whereas wrong structures
+such as FrameNet (Baker et al., 1998), allowed the             returned by the parser usually imply large misclas-
+adoption of a wide family of learning paradigms                sification errors.
+in the automation of semantic parsing. Building                   Annotation costs. Statistical learning ap-
+upon the so called frame semantic model (Fill-                 proaches applied to SRL are very demanding with
+more, 1985), the Berkeley FrameNet project has                 respect to the amount and quality of the train-
+developed a semantic lexicon for the core vocab-               ing material. The complex SRL architectures
+ulary of English, since 1997. A frame is evoked                proposed (usually combining local and global,
+in texts through the occurrence of its lexical units           i.e. joint, models of argument classification, e.g.
+(LU ), i.e. predicate words such verbs, nouns, or              (Toutanova et al., 2008)) require a large number
+adjectives, and specifies the participants and prop-           of annotated examples. The amount and quality of
+erties of the situation it describes, the so called            the training data required to reach a significant ac-
+frame elements (F Es).                                         curacy is a serious limitation to the exploitation of
+   Semantic Role Labeling (SRL) is the task of                 SRL in many NLP applications.
+automatic recognition of individual predicates to-                Limited Linguistic Generalization. Several
+gether with their major roles (e.g. frame ele-                 studies showed that even when large training
+ments) as they are grammatically realized in in-               sets exist the corresponding learning exhibits
+put sentences. It has been a popular task since                poor generalization power. Most of the CoNLL
+the availability of the PropBank and FrameNet an-              2005 systems show a significant performance drop
+notated corpora (Palmer et al., 2005), the seminal             when the tested corpus, i.e. Brown, differs from
+
+
+                                                         237
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 237–246,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+the training one (i.e. Wall Street Journal), e.g.              and Lapata, 2007). As we will see, the accu-
+(Toutanova et al., 2008). More recently, the state-            racy reachable through a restricted feature space is
+of-art frame-based semantic role labeling system               still quite close to the state-of-art, but interestingly
+discussed in (Johansson and Nugues, 2008b) re-                 the performance drops in out-of-domain tests are
+ports a 19% drop in accuracy for the argument                  avoided.
+classification task when a different test domain is               In the following, after discussing existing ap-
+targeted (i.e. NTI corpus). Out-of-domain tests                proaches to SRL (Section 2), a distributional ap-
+seem to suggest the models trained on BNC do not               proach is defined in Section 3. Section 3.2 dis-
+generalize well to novel grammatical and lexical               cusses the proposed HMM-based treatment of
+phenomena. As also suggested in (Pradhan et al.,               joint inferences in argument classification. The
+2008), the major drawback is the poor generaliza-              large scale experiments described in Section 4 will
+tion power affecting lexical features. Notice how              allow to draw the conclusions of Section 5.
+this is also a general problem of statistical learning
+processes, as large fine grain feature sets are more           2   Related Work
+exposed to the risks of overfitting.
+                                                               State-of-art approaches to frame-based SRL are
+   The above problems are particularly critical                based on Support Vector Machines, trained over
+for frame-based shallow semantic parsing where,                linear models of syntactic features, e.g. (Jo-
+as opposed to more syntactic-oriented semantic                 hansson and Nugues, 2008b), or tree-kernels, e.g.
+labeling schemes (as Propbank (Palmer et al.,                  (Coppola et al., 2009). SRL proceeds through two
+2005)), a significant mismatch exists between the              main steps: the localization of arguments in a sen-
+semantic descriptors and the underlying syntac-                tence, called boundary detection (BD), and the as-
+tic annotation level. In (Johansson and Nugues,                signment of the proper role to the detected con-
+2008b) an upper bound of about 83.9% for the ac-               stituents, that is the argument classification, (AC)
+curacy of the argument identification task is re-              step. In (Toutanova et al., 2008) a SRL model
+ported, it is due to the complexity in projecting              over Propbank that effectively exploits the seman-
+frame element boundaries out from the depen-                   tic argument frame as a joint structure, is pre-
+dency graph: more than 16% of the roles in the                 sented. It incorporates strong dependencies within
+annotated material lack of a clear grammatical sta-            a comprehensive statistical joint model with a rich
+tus.                                                           set of features over multiple argument phrases.
+   The limited level of linguistic generalization              This approach effectively introduces a new step
+outlined above is still an open research problem.              in SRL, also called Joint Re-ranking, (RR), e.g.
+Existing solutions have been proposed in litera-               (Toutanova et al., 2008) or (Moschitti et al., 2008).
+ture along different lines. Learning from richer               First local models are applied to produce role
+linguistic descriptions of more complex structures             labels over individual arguments, then the joint
+is proposed in (Toutanova et al., 2008). Limit-                model is used to decide the entire argument se-
+ing the cost required for developing large domain-             quence among the set of the n-best competing
+specific training data sets has been also studied,             solutions. While these approaches increase the
+e.g., (Fürstenau and Lapata, 2009). Finally, the ap-          expressive power of the models to capture more
+plication of semi-supervised learning is attempted             general linguistic properties, they rely on com-
+to increase the lexical expressiveness of the model,           plex feature sets, are more demanding about the
+e.g. (Goldberg and Elhadad, 2009).                             amount of training information and increase the
+   In this paper, this last direction is pursued. A            overall exposure to overfitting effects.
+semi-supervised statistical model exploiting use-                 In (Johansson and Nugues, 2008b) the impact of
+ful lexical information from unlabeled corpora is              different grammatical representations on the task
+proposed. The model adopts a simple feature                    of frame-based shallow semantic parsing is stud-
+space by relying on a limited set of grammati-                 ied and the poor lexical generalization problem
+cal properties, thus reducing its learning capac-              is outlined. An argument classification accuracy
+ity. Moreover, it generalizes lexical information              of 89.9% over the FrameNet (i.e. BNC) dataset
+about the annotated examples by applying a ge-                 is shown to decrease to 71.1% when a different
+ometrical model, in a Latent Semantic Analysis                 test domain is evaluated (i.e. the Nuclear Threat
+style, inspired by a distributional paradigm (Pado             Initiative corpus). The argument classification
+
+
+                                                         238
+
+
+component is thus shown to be heavily domain-                proposes an embedding of lexical information us-
+dependent whereas the inclusion of grammatical               ing Wikipedia as source, and exploiting the result-
+function features is just able to mitigate this sen-         ing language model within the multitask learning
+sitivity. In line with (Pradhan et al., 2008), it is         process. The idea of (Collobert and Weston, 2008)
+suggested that lexical features are domain specific          to obtain an embedding of lexical information by
+and their suitable generalization is not achieved.           acquiring a language model from unlabeled data is
+   The lack of suitable lexical information is also          an interesting approach to the problem of perfor-
+discussed in (Fürstenau and Lapata, 2009) through           mance degradation in out-of-domain tests, as al-
+an approach aiming to support the creation of                ready pursued by (Deschacht and Moens, 2009).
+novel annotated resources. Accordingly a semi-               The extensive use of unlabeled texts allows to
+supervised approach for reducing the costs of the            achieve a significant level of lexical generalization
+manual annotation effort is proposed. Through a              that seems better capitalize the smaller annotated
+graph alignment algorithm triggered by annotated             data sets.
+resources, the method acquires training instances
+from an unlabeled corpus also for verbs not listed
+                                                             3    A Distributional Model for Argument
+as existing FrameNet predicates.                                  Classification
+                                                             High quality lexical information is crucial for ro-
+2.1   The role of Lexical Semantic Information               bust open-domain SRL, as semantic generaliza-
+                                                             tion highly depends on lexical information. For
+It is widely accepted that lexical information (as
+                                                             example, the following two sentences evoke the
+features directly derived from word forms) is cru-
+                                                             S TATEMENT frame, through the LUs say and
+cial for training accurate systems in a number of
+                                                             state, where the FEs, S PEAKER and M EDIUM, are
+NLP tasks. Indeed, all the best systems in the
+                                                             shown.
+CoNLL shared task competitions (e.g. Chunk-
+ing (Tjong Kim Sang and Buchholz, 2000)) make
+                                                             [President Kennedy] S PEAKER said to an astronaut, ”Man
+extensive use of lexical information. Also lexi-
+                                                                      is still the most extraordinary computer of all.”   (1)
+cal features are beneficial in SRL usually either
+                                                              [The report] M EDIUM stated, that some problems needed
+for systems on Propbank as well as for FrameNet-                                                          to be solved.   (2)
+based annotation.
+   In (Goldberg and Elhadad, 2009), a different
+strategy to incorporate lexical features into clas-             In sentence (1), for example, President Kennedy
+sification models is proposed. A more expres-                is the grammatical subject of the verb say and
+sive training algorithm (i.e. anchored SVM) cou-             this justifies its role of S PEAKER. However, syn-
+pled with an aggressive feature pruning strategy             tax does not entirely characterize argument seman-
+is shown to achieve high accuracy over a chunk-              tics. In (1) and (2), the same syntactic relation is
+ing and named entity recognition task. The sug-              observed. It is the semantics of the grammatical
+gested perspective here is that effective semantic           heads, i.e. report and Kennedy, the main respon-
+knowledge can be collected from sources exter-               sible for the difference between the two resulting
+nal to the annotated corpora (very large unanno-             proto-agentive roles, S PEAKER and M EDIUM.
+tated corpora or on manually constructed lexical                In this work we explore two different aspects.
+resources) rather than learned from the raw lexi-            First, we propose a model that does not depend
+cal counts of the annotated corpus. Notice how               on complex syntactic information in order to min-
+this is also the strategy pursued in recent work on          imize the risk of overfitting. Second, we improve
+deep learning approaches to NLP tasks. In (Col-              the lexical semantic information available to the
+lobert and Weston, 2008) a unified architecture              learning algorithm. The proposed ”minimalistic”
+for Natural Language Processing that learns fea-             approach will consider only two independent fea-
+tures relevant to the tasks at hand given very lim-          tures:
+ited prior knowledge is presented. It embodies the               • the semantic head (h) of a role, as it can
+idea that a multitask learning architecture coupled                be observed in the grammatical structure. In
+with semi-supervised learning can be effectively                   sentence (2), for example, the M EDIUM FE is
+applied even to complex linguistic tasks such as                   realized as the logical subject, whose head is
+SRL. In particular, (Collobert and Weston, 2008)                   report.
+
+                                                       239
+
+
+  • the dependency relation (r) connecting the                     Role, F E k   Clusters of semantic heads
+                                                                                 c1 : {article, report, statement}
+    semantic head to the predicate words. In (2),                  M EDIUM
+                                                                                 c2 : {constitution, decree, rule}
+    the semantic head report is connected to the                                 c3 : {brother, father, mother, sister }
+    LU stated through the subject (SBJ) relation.                                c4 : {biographer, philosopher, ....}
+                                                                   S PEAKER
+                                                                                 c5 : {he, she, we, you}
+   In the rest of the section the distributional model                           c6 : {friend}
+                                                                                 c7 : {privilege, unresponsiveness}
+for the argument classification step is presented.                 T OPIC
+                                                                                 c8 : {pattern}
+A lexicalized model for individual semantic roles
+is first defined in order to achieve robust seman-             Table 1: Clusters of semantic heads in the Subj
+tic classification local to each argument. Then a              position for the frame S TATEMENT with σ = 0.5
+Hidden Markov Model is introduced in order to
+exploit the local probability estimators, sensitive
+to lexical similarity, as well as the global informa-          space acquired from the unlabeled texts. More-
+tion on the entire argument sequence.                          over, given F E k , a model for each individual syn-
+                                                               tactic relation r (i.e. that links h labeled as F E k
+3.1   Distributional Local Models                              to their corresponding predicates) is a partition of
+                                                                               k                k
+As the classification of semantic roles is strictly            the set H F E called HrF E , i.e. the subset of
+                                                                     k
+related to the lexical meaning of argument heads,              H F E produced by examples of the relation r (e.g.
+we adopt a distributional perspective, where the               Subj). Given the annotated sentence (2), we have
+meaning is described by the set of textual con-                that report ∈ HSBJ  M EDIUM .
+
+texts in which words appear. In distributional                                             →
+                                                                                           −
+                                                                  As the LSA vectors h are available for the se-
+models, words are thus represented through vec-                                                            −−→
+                                                               mantic heads h, a vector representation F E k for
+tors built over these observable contexts: similar             the role F E k can be obtained from the annotated
+vectors suggest semantic relatedness as a func-                data. However, one single vector is a too simplis-
+tion of the distance between two words, capturing              tic representation given the rich nature of seman-
+paradigmatic (e.g. synonymy) or syntagmatic re-                tic roles F E k . In order to better represent F E k ,
+                                →
+                                −
+lations (Pado, 2007). Vectors h are described by               multiple regions in the semantic space are used.
+an adjacency matrix M , whose rows describe tar-               They are obtained by a clustering process applied
+                                                                                 k
+get words (h) and whose columns describe their                 to the set HrF E according to the Quality Thresh-
+corpus contexts. Latent Semantic Analysis (LSA)                old (QT) algorithm (Heyer et al., 1999). QT is a
+(Landauer and Dumais, 1997), is then applied to                generalization of k-mean where a variable number
+                                           →
+                                           −
+M to acquire meaningful representations h . LSA                of clusters can be obtained. This number depends
+exploits the linear transformation called Singular             on the minimal value of intra-cluster similarity ac-
+Value Decomposition (SVD) and produces an ap-                  cepted by the algorithm and controlled by a pa-
+proximation of the original matrix M , capturing               rameter, σ: lower values of σ correspond to more
+(semantic) dependencies between context vectors.               heterogeneous (i.e. larger grain) clusters, while
+M is replaced by a lower dimensional matrix Ml ,               values close to 1 characterize stricter policies and
+capturing the same statistical information in a new            more fine-grained results. Given a syntactic rela-
+                                                                             k
+l-dimensional space, where each dimension is a                 tion r, CrF E denotes the clusters derived by QT
+                                                                                         k                         k
+linear combination of some of the original fea-                clustering over HrF E . Each cluster c ∈ CrF E
+tures (i.e. contexts). These derived features may                                               →
+                                                                                                −
+                                                               is represented by a vector c , computed as the
+be thought as artificial concepts, each one repre-             geometric centroid of its semantic heads h ∈ c.
+senting an emerging meaning component, as the                  For a frame F , clusters define a geometric model
+linear combination of many different words.                    of every frame elements F E k : it consists of cen-
+   In the argument classification task, the similar-           troids →−c with c ⊆ H F E k . Each c represents F E k
+                                                                                        r
+ity between two argument heads h1 and h2 ob-                   through a set of similar heads, as role fillers ob-
+                                             −
+                                             →
+served in FrameNet can be computed over h1 and                 served in FrameNet. Table 1 represents clusters
+−
+→                                                                                 F E k of the S TATEMENT frame.
+h2 . The model for a given frame element F E k                 for the heads HSubj
+is built around the semantic heads h observed in                  In argument classification we assume that the
+                                                  k
+the role F E k : they form a set denoted by H F E .            evoking predicate word for the frame F in an
+                      →
+                      −
+These LSA vectors h express the individual an-                 input sentence s is known. A sentence s can
+notated examples as they are immerse in the LSA                be seen as a sequence of role-relation pairs:
+
+
+                                                         240
+
+
+s = {(r1 , h1 ), ..., (rn , hn )} where the heads hi                       1. If the head h has never been met in the un-
+are in the syntactic relation ri with the underlying                          labeled corpus or the high grammatical am-
+lexical unit of F .                                                           biguity of the sentence does not allow to
+                                       →
+                                       −
+   For every head h in s, the vector h can be then                            locate it reliably, Eq. 4 (or 5) should be
+used to estimate its similarity with the different                            backed off to a purely syntactic model, that
+candidate roles F E k . Given the syntactic relation                          is prob(F E k |r)
+                             k
+r, the clusters c ∈ CrF E whose centroid vector ~c
+                                                                           2. If the relation r can not be properly located
+is closer to ~h are selected. Dr,h is the set of the
+                                                                              in s, h is also unknown: the prior probability
+representations semantically related to h:
+                                                                              of individual arguments, i.e. prob(F E k ), is
+                               k
+           [
+   Dr,h = {ckj ∈ CrF E |sim(h, ckj ) ≥ τ } (3)                                here employed.
+           k                                                             Both prob(F E k |r) and prob(F E k ) can be esti-
+where the similarity between the j-th cluster for                        mated from the training set and smoothing can be
+                            k
+the F E k , i.e. ckj ∈ CrF E , and h is the usual                        also applied1 . A more robust argument preference
+                                               −
+                                               →−                        function for all arguments (ri , hi ) ∈ s of the frame
+                                               h ·→c kj
+cosine similarity: simcos (h, ckj ) =        −
+                                             → −
+                                            k h k k→c kj k               F is thus given by:
+   Then, through a k-nearest neighbours (k-NN)
+strategy within Dr,h , the m clusters ckj most simi-                     prob(F E k |ri , hi ) = λ1 prob(F E k |ri , hi ) +
+                                  (m)
+lar to h are retained in the set Dr,h . A probabilis-                                 λ2 prob(F E k |ri ) + λ3 prob(F E k ) (6)
+tic preference for the role F E k is estimated for h                     where weights λ1 , λ2 , λ3 can be heuristically as-
+through a cluster-based voting scheme,                                   signed or estimated from the training set2 . The
+                                  k            (m)
+                                                                         resulting model is hereafter called Backoff model:
+                 k
+                            |CrF E ∩ Dr,h |                              although simply based on a single feature (i.e. the
+       prob(F E |r, h) =              (m)
+                                                             (4)
+                                 |Dr,h |                                 syntactic relation r), it accounts for information at
+                                                                         different reliability degrees.
+                                                         (m)
+or, alternatively, an instance-based one over Dr,h :                     3.2    A Joint Model for Argument
+                           P                                                    Classification
+                                          (m) |c|
+                             c∈CrF E k ∩Dr,h
+     prob(F E k |r, h) =      P                   (5)                    Eq. 6 defines roles preferences local to individual
+                                      (m) |c|
+                                c∈D   r,h                                arguments (ri , hi ). However, an argument frame
+                                                                         is a joint structure, with strong dependencies be-
+   In Fig. 1 the preference estimation for the                           tween arguments. We thus propose to model the
+incoming head h = prof essor connected to                                reranking phase (RR) as a HMM sequence label-
+a LU by the Subj relation is shown. Clus-                                ing task. It defines a stochastic inference over
+ters for the heads in Table 1 are also reported.                         multiple (locally justified) alternative sequences
+First, in the set of clusters whose similarity                           through a Hidden Markov Model (HMM). It in-
+with prof essor is higher than a threshold τ the                         fers the best sequence F E (k1 ,...,kn ) over all the
+m = 5 most similar clusters are selected. Ac-                            possible hidden state sequences (i.e. made by the
+cordingly, the preferences given by Eq. 4 are                            target F E ki ) given the observable emissions, i.e.
+prob(S PEAKER|SBJ, h) = 3/5, prob(M EDIUM|SBJ, h) =
+                                                                         the arguments (ri , hi ). Viterbi inference is applied
+2/5 and prob(T OPIC|SBJ, h) = 0. The strategy mod-
+                                                                         to build the best (role) interpretation for the input
+eled by Eq. 5 amplifies the role of larger                               sentence.
+clusters, e.g. prob(S PEAKER|SBJ, h) = 9/14 and                             Once Eq. 6 is available, the best frame element
+prob(M EDIUM|SBJ, h) = 5/14. We call Distribu-
+                                                                         sequence F E (θ(1),...,θ(n)) for the entire sentence s
+tional, the model that applies Eq. 5 to the source                       can be selected by defining the function θ(·) that
+(r, h) arguments, by rejecting cases only when no                        maps arguments (ri , hi ) ∈ s to frame elements
+information about the head h is available from the                       F Ek:
+unlabeled corpus or no example of relation r for                                       θ(i) = k s.t. F E k ∈ F              (7)
+the role F E k is available from the annotated cor-
+                                                                            1
+pus. Eq. 4 and 5 in fact do not cover all possible                            Lindstone smoothing was applied with δ = 1.
+                                                                            2
+                                                                              In each test discussed hereafter, λ1 , λ2 , λ3 were assigned
+cases. Often the incoming head h or the relation r                       to .9,.09 and .01, in order to impose a strict priority to the
+may be unavailable:                                                      model contributions.
+
+
+                                                                   241
+
+
+                                                                                                decree         rule
+                   SPEAKER
+                                                                         statement                                       president
+                   TOPIC
+                                       manifesto      report                                             constitution
+                   MEDIUM                                              article
+                                                                                                                                      king
+                                                             review
+                   target head
+                                                                                                                          privilege
+                                           survey
+                  you                                                                     brother
+                                                    philosopher professor
+                             she
+                                         translator                                         sister
+                     we                                                                                        unresponsiveness
+                                 he
+                                                                                 father
+                                                               archaeologist              mother               pattern
+                                           biographer
+
+                                                                     friend
+
+
+
+                  Figure 1: A k-NN approach to the role classification for hi = prof essor
+
+
+   Notice that different transfer functions θ(·)                               The transition probability, estimated through
+are usually possible. By computing their prob-                                                     
+ability we can solve the SRL task by select-                                      P θ(1) . . . θ(n) ≈
+ing the most likely interpretation, θ(·), via                                     n
+                                       b
+                                                                                  Y
+                                                                                     P F E θ(i) |F E θ(i−1) , F E θ(i−2)
+                                                                                                                         
+argmaxθ P θ(·) | s , as follows:                                                                                                             (12)
+                                                                                  i=1
+                                  
+         θ(·)
+         b = argmax P s|θ(·) P θ(·)                            (8)
+                        θ                                                  accounts FEs sequence via a 3-gram model3 .
+                                                         
+                                  P s|θ(·) and
+In Eq. 8, the emission probability
+                                                                           4     Empirical Analysis
+the transition probability P θ(·) are explicit. No-
+tice that the emission probability corresponds to                          The aim of the evaluation is to measure the reach-
+an argument interpretation (e.g. Eq. 5) and it is                          able accuracy of the simple model proposed and
+assigned independently from the rest of the sen-                           to compare its impact over in-domain and out-of-
+tence. On the other hand, transition probabilities                         domain semantic role labeling tasks. In particular,
+model role sequences and support the expectations                          we will evaluate the argument classification (AC)
+about argument frames of a sentence.                                       task in Section 4.2.
+   The emission probability is approximated as:
+                                                                              Experimental Set-Up. The in-domain test has
+                        Yn                                                been run over the FrameNet annotated corpus, de-
+  P s | θ(1) . . . θ(n) ≈   P (ri , hi | F E θ(i) )                        rived from the British National Corpus (BNC).
+                                 i=1                                       The splitting between train and test set is 90%-
+                                               (9)
+                                                                           10% according to the same data set of (Johans-
+as it is made independent from previous states in
+                                                                           son and Nugues, 2008b). In all experiments,
+a Viterbi path. Again the emission probability can
+                                                                           the FrameNet 1.3 version and the dependency-
+be rewritten as:
+                                                                           based system using the LTH parser (Johansson
+                        P (F E θ(i) |ri , hi ) P (ri , hi )                and Nugues, 2008a) have been employed. Out-
+ P (ri , hi |F E θ(i) ) =                                                  of-domain tests are run over the two training cor-
+                                   P (F E θ(i) )
+                                                       (10)                pora as made available by the Semeval 2007 Task
+  Since P (ri , hi ) does not depend on the role la-                       194 (Baker et al., 2007): the Nuclear Threat Ini-
+beling, maximizing Eq. 10 corresponds to maxi-                             tiative (NTI) and the American National Corpus
+mize:                                                                         3
+                  P (F E θ(i) |ri , hi )                                        Two empty states are added at the beginning of any se-
+                                                       (11)                quence. Moreover, Laplace smoothing was also applied to
+                      P (F E θ(i) )                                        each estimator.
+                                                                              4
+                                                                                The NTI and ANC annotated collections are download-
+whereas P (F E θ(i) |ri , hi ) is thus estimated                           able at:
+through Eq. 6.                                                             nlp.cs.swarthmore.edu/semeval/tasks/task19/data/train.tar.gz
+
+
+
+
+                                                                     242
+
+
+                     Corpus     Predicates   Arguments                           Frames with a number of annotated examples
+ training           FN-BNC       134,697      271,560                Eq. - σ    >0    >100 >500 >1K >3K >5K
+ test                                                               (5) - .85   86.3   86.5     87.2    88.3    85.9   82.0
+   in-domain        FN-BNC        14,952       30,173                (4) - .5   85.1   85.5     85.8    87.2    83.5   79.4
+                                                                     (4) - .1   84.5   84.8     85.1    86.5    83.0   78.7
+                      NTI          8,208       14,422
+   out-of-domain
+                      ANC           760         1,389
+                                                                   Table 3: Accuracy on Arg classification tasks wrt
+      Table 2: Training and Testing data sets                      different clustering policies
+
+
+(ANC)5 . Table 2 shows the predicates and argu-                    σ ≈ 1 then many singleton clusters are promoted
+ments in each data set. All null-instantiated ar-                  (i.e. one cluster for each example). By varying the
+guments were removed from the training and test                    threshold σ we thus account for prototype-based
+sets.                                                              as well exemplar-based strategies, as discussed in
+   Vectors ~h representing semantic heads have                     (Erk, 2009).
+been computed according to the ”dependency-                           We measured the performance on the argument
+based” vector space discussed in (Pado and La-                     classification tasks of different models obtained by
+pata, 2007). The entire BNC corpus has been                        combing different choices of σ with Eq. (4) or (5).
+parsed and the dependency graphs derived from                      Results are reported in Table 3. The leftmost col-
+individual sentences provided the basic observ-                    umn reports the different clustering settings, while
+able contexts: every co-occurrence is thus syntac-                 in the remaining columns we see performances
+tically justified by a dependency arc. The most                    over test sentences related to different frames: we
+frequent 30,000 basic features, i.e. (syntactic re-                selected frames for which an increasing number of
+lation,lemma) pairs, have been used to build the                   annotated examples are available: from all frames
+matrix M , vector components corresponding to                      (for more than 0 examples) to the only frame (i.e.
+point-wise mutual information scores. Finally, the                 S ELF MOTION) that has more than 5,000 exam-
+final space is obtained by applying the SVD reduc-                 ples in our training data set.
+tion over M , with a dimensionality cut of l = 250.                   The reported accuracies suggest that Eq. (5),
+   In the evaluation of the AC task, accuracy is                   promoting an example driven strategy, better cap-
+computed over the nodes of the dependency graph,                   tures the role preference, as it always outperforms
+in line with (Johansson and Nugues, 2008b) or                      alternative settings (i.e. more prototype oriented
+(Coppola et al., 2009). Accordingly, also recall,                  methods). It limits overgeneralization and pro-
+precision and F-measure are reported on a per                      motes fine grained clusters. An interesting result is
+node basis, against the binary BD task or for the                  that a per-node accuracy of 86.3 (i.e. only 3 points
+full BD + AC chain.                                                under the state of-the art on the same data set,
+                                                                   (Johansson and Nugues, 2008b)) is achieved. All
+4.1   The Role of Lexical Clustering                               the remaining tests have been run with the clus-
+The first study aims at detecting the impact of dif-               tering configuration characterized by Eq. (5) and
+ferent clustering policies on the resulting AC ac-                 σ = 0.85.
+curacy. Clustering, as discussed in Section 3.1,
+allows to generalize lexical information: similar                  4.2   Argument Classification Accuracy
+heads within the latent semantic space are built                   In these experiments we evaluate the quality of
+from the annotated examples and they allow to                      the argument classification step against the lexi-
+predict the behavior of new unseen words as found                  cal knowledge acquired from unlabeled texts and
+in the test sentences. The system performances                     the reranking step. The accuracy reachable on the
+have been here measured under different cluster-                   gold standard argument boundaries has been com-
+ing conditions, i.e. grains at which the clustering                pared across several experimental settings. Two
+of annotated examples is applied. This grain is de-                baseline systems have been obtained. The Local
+termined by the parameter σ of the applied Quality                 Prior model outputs the sequence that maximizes
+Threshold algorithm (Heyer et al., 1999). Notice                   the prior probability locally to individual argu-
+that small values of σ imply large clusters, while if              ments. The Global Prior model is obtained by ap-
+   5
+     Sentences whose arguments were not represented in the         plying re-ranking (Section 3.2) to the best n = 10
+FrameNet training material were removed from all tests.            candidates provided by the Local Prior model. Fi-
+
+
+                                                             243
+
+
+                   Model                                      FN-BNC                   NTI             ANC
+                   Local Prior                                  43.9                   50.9             50.4
+                   Global Prior                            67.7 (+54.2%)          75.9 (+49.0%)    68.8 (+36.4%)
+                   Distributional                          81.1 (+19.8%)           82.3 (+8.4%)    69.7 (+1.3%)
+                   Backoff                                  84.6 (+4.3%)           87.2 (+6.0%)    76.2 (+9.3%)
+                   Backoff+HMMRR                            86.3 (+2.0%)           90.5 (+3.8%)    79.9 (+5.0%)
+                   (Johansson&Nugues, 2008)                     89.9                   71.1               -
+
+
+Table 4: Accuracy of the Argument Classification task over the different corpora. In parenthesis the
+relative increment with respect to the immediately simpler model, previous row
+
+
+nally, the application of the backoff strategies (as                       4.3    Discussion
+in Eq. 6) and the HMM-based reranking character-                           The above empirical findings are relevant if com-
+ize the final two configurations. Table 4 reports the                      pared with the outcome of a similar test on the NTI
+accuracy results obtained over the three corpora                           collection, discussed in (Johansson and Nugues,
+(defined as in Table 2): the accuracy scores are av-                       2008b)6 . There, under the same training condi-
+eraged over different values of m in Eq. 5, ranging                        tions, a performance drop of about -19% is re-
+from 3 to 30. In the in-domain scenario, i.e. the                          ported (from 89.9 to 71.1%) over gold standard
+FN-BNC dataset reported in column 2, it is worth                           argument boundaries. The model proposed in this
+noticing that the proposed model, with backoff and                         paper exhibits no such drop in any collection (NTI
+global reranking, is quite effective with respect to                       and ANC). This seems to confirm the hypothesis
+the state-of-the-art.                                                      that the model is able to properly generalize the
+                                                                           required lexical information across different do-
+   Although results on the FN-BNC do not outper-
+                                                                           mains.
+form the state-of-the-art for the FrameNet corpus,
+                                                                              It is interesting to outline that the individual
+we still need to study the generalization capabil-
+                                                                           stages of the proposed model play different roles
+ity of our SRL model in out-of-domain conditions.
+                                                                           in the different domains, as Table 4 suggests. Al-
+In a further experiment, we applied the same sys-
+                                                                           though the positive contributions of the individual
+tem, as trained over the FN-BNC data, to the other
+                                                                           processing stages are uniformly confirmed, some
+corpora, i.e. NTI and ANC, used entirely as test
+                                                                           differences can be outlined:
+sets. Results, reported in column 3 and 4 of Ta-
+ble 4 and shown in Figure 2, confirm that no ma-                              • The beneficial impact of the lexical informa-
+jor drop in performance is observed. Notice how                                 tion (i.e. the distributional model) applies dif-
+the positive impact of the backoff models and the                               ferently across the different domains. The
+HMM reranking policy is similarly reflected by all                              ANC domain seems not to significantly ben-
+the collections. Moreover, the results on the NTI                               efit when the distributional model (Eq. 5) is
+corpus are even better than those obtained on the                               applied. Notice how Eq. 5 depends both from
+BNC, with a resulting 90.5% accuracy on the AC                                  the evidence gathered in the corpus about lex-
+task.                                                                           ical heads h as well as about the relation r. In
+                                                                                ANC the percentage of times that the Eq. 5 is
+                                                                                backed off against test instances (as h or r are
+100,0%                                                                          not available from the training data) is twice
+                                                             90,5%
+ 90,0%
+                                                             86,3%
+                                                                                as high as in the BNC-FN or in the NTI do-
+ 80,0%                                                       79,9%              main (i.e. 15.5 vs. 7.2 or 8.7, respectively).
+ 70,0%
+                                                     FN-BNC                     The different syntactic style of ANC seems
+ 60,0%
+ 50,0%
+                                                     NTI                        thus the main responsible of the poor impact
+                                                     ANC
+ 40,0%
+                                                                                of distributional information, as it is often un-
+         Local   Global   Distributional   Backoff    Backoff                   applicable to ANC test cases.
+         Prior   Prior                               +HMMRR
+                                                                              • The complexity of the three test sets is dif-
+Figure 2: Accuracy of the AC task over different                                ferent, as the three plots show. The NTI col-
+corpora                                                                       6
+                                                                                Notice that in this paper only the training portion of the
+                                                                           NTI data set is employed as reported in Table 2 and results are
+                                                                           not directly comparable to (Johansson and Nugues, 2008b).
+
+
+                                                                     244
+
+
+     lections seems characterized by a lower level                   Corpus   Eval. Setting   Recall   Precision    F1
+                                                                                  BD           72.6      85.1      78.4
+     of complexity (see for example the accuracy                     BNC
+                                                                              BD+AC+RR         62.6      74.5      68.0
+     of the Local prior model, that is about 51%                                  BD           63.9      80.0      71.0
+                                                                      NTI
+     as for the ANC). It then gets benefits from                              BD+AC+RR         56.7      72.1      63.5
+                                                                                  BD           64.0      81.5      71.7
+     all the analysis stages, in particular the final                ANC
+                                                                              BD+AC+RR         47.4      62.5      53.9
+     HMM reranking. The BNC-FN test collec-
+     tion seems the most complex one, and the im-
+                                                                 Table 5: Accuracy of the full cascade of the SRL
+     pact of the lexical information brought by the
+                                                                 system over three domain
+     distributional model is here maximal. This
+     is mainly due to the coherence between the
+     distributions of lexical and grammatical phe-               the same as the time needed for applying the en-
+     nomena in the test and training data.                       tire BD + AC + RR chain, i.e. 6.21 sentence per
+                                                                 second.
+  • The role of HMM reranking is an effective
+    way to compensate errors in the local argu-
+    ment classifications for all the three domains.              5    Conclusions
+    However, it is particularly effective for the
+    outside domain cases, while, in the BNC cor-                 In this paper, a distributional approach for acquir-
+    pus, it produces just a small improvement in-                ing a semi-supervised model of argument classi-
+    stead (i.e. +2%, as shown in Table 4 ). It is                fication (AC) preferences has been proposed. It
+    worth noticing that the average length of the                aims at improving the generalization capability of
+    sentences in the BNC test collection is about                the inductive SRL approach by reducing the com-
+    23 words per sentence, while it is higher for                plexity of the employed grammatical features and
+    the NTI and ANC data sets (i.e. 34 and 31,                   through a distributional representation of lexical
+    respectively). It seems that the HMM model                   features. The obtained results are close to the
+    well captures some information on the global                 state-of-art in FrameNet semantic parsing. State
+    semantic structure of a sentence: this is help-              of the art accuracy is obtained instead in out-of-
+    ful in cases where errors in the grammati-                   domain experiments. The model seems to cap-
+    cal recognition (of individual arguments or                  italize from simple methods of lexical modeling
+    at sentence level) are more frequent and af-                 (i.e. the estimation of lexico-grammatical pref-
+    flict the local distributional model. The more               erences through distributional analysis over unla-
+    complex is the syntax of a corpus (e.g. in the               beled data), estimation (through syntactic or lexi-
+    NTI and ANC data sets), the higher seems the                 cal back-off where necessary) and reranking. The
+    impact of the reranking phase.                               result is an accurate and highly portable SRL cas-
+                                                                 cade. Experiments on the integrated SRL archi-
+   The significant performance of the AC model                   tecture (i.e. BD + AC + RR chain) show that
+here presented suggest to test it when integrated                state-of-art accuracy (i.e. 68%) can be obtained
+within a full SRL architecture. Table 5 reports the              on raw texts. This result is also very significant
+results of the processing cascade over three col-                as for the achieved efficiency. The system is able
+lections. Results on the Boundary Detection BD                   to apply the entire BD + AC + RR chain at a
+task are obtained by training an SVM model on                    speed of 6.21 sentences per second. This signif-
+the same feature set presented in (Johansson and                 icant efficiency confirms the applicability of the
+Nugues, 2008b) and are slightly below the state-                 SRL approach proposed here in large scale NLP
+of-the art BD accuracy reported in (Coppola et                   applications. Future work will study the appli-
+al., 2009). However, the accuracy of the complete                cation of the flexible SRL method proposed to
+BD + AC + RR chain (i.e. 68%) improves the                       other languages, for which less resources are avail-
+corresponding results of (Coppola et al., 2009).                 able and worst training conditions are the norm.
+Given the relatively simple feature set adopted                  Moreover, dimensionality reduction methods al-
+here, this result is very significant as for its result-         ternative to LSA, as currently studied on semi-
+ing efficiency. The overall BD recognition pro-                  supervised spectral learning (Johnson and Zhang,
+cess is, on a standard architecture, performed at                2008), will be experimented.
+about 6.74 sentences per second, that is basically
+
+
+                                                           245
+
+
+References                                                      Richard Johansson and Pierre Nugues.        2008a.
+                                                                  Dependency-based syntactic-semantic analysis with
+Collin F. Baker, Charles J. Fillmore, and John B. Lowe.           propbank and nombank. In Proceedings of CoNLL-
+  1998. The Berkeley FrameNet project. In Proc. of                2008, Manchester, UK, August 16-17.
+  COLING-ACL, Montreal, Canada.
+Collin Baker, Michael Ellsworth, and Katrin Erk.                Richard Johansson and Pierre Nugues. 2008b. The
+  2007. Semeval-2007 task 19: Frame semantic struc-               effect of syntactic representation on semantic role
+  ture extraction. In Proceedings of SemEval-2007,                labeling. In Proceedings of COLING, Manchester,
+  pages 99–104, Prague, Czech Republic, June. Asso-               UK, August 18-22.
+  ciation for Computational Linguistics.                        Rie Johnson and Tong Zhang. 2008. Graph-based
+Xavier Carreras and Lluı́s Màrquez. 2005. Intro-                 semi-supervised learning and spectral kernel de-
+  duction to the CoNLL-2005 Shared Task: Seman-                   sign. IEEE Transactions on Information Theory,
+  tic Role Labeling. In Proc. of CoNLL-2005, pages                54(1):275–288.
+  152–164, Ann Arbor, Michigan, June.
+                                                                Tom Landauer and Sue Dumais. 1997. A solution to
+Ronan Collobert and Jason Weston. 2008. A unified                 plato’s problem: The latent semantic analysis the-
+  architecture for natural language processing: deep              ory of acquisition, induction and representation of
+  neural networks with multitask learning. In In Pro-             knowledge. Psychological Review, 104.
+  ceedings of ICML ’08, pages 160–167, New York,
+  NY, USA. ACM.                                                 A. Moschitti, D. Pighin, and R. Basili. 2008. Tree
+                                                                  kernels for semantic role labeling. Computational
+Bonaventura Coppola, Alessandro Moschitti, and                    Linguistics, 34.
+  Giuseppe Riccardi. 2009. Shallow semantic parsing
+  for spoken language understanding. In Proceedings             Sebastian Pado and Mirella Lapata.            2007.
+  of NAACL ’09, pages 85–88, Morristown, NJ, USA.                 Dependency-based construction of semantic
+                                                                  space models. Computational Linguistics, 33(2).
+Koen Deschacht and Marie-Francine Moens. 2009.
+  Semi-supervised semantic role labeling using the la-          Sebastian Pado. 2007. Cross-Lingual Annotation
+  tent words language model. In EMNLP ’09: Pro-                   Projection Models for Role-Semantic Information.
+  ceedings of the 2009 Conference on Empirical Meth-              Ph.D. thesis, Saarland University.
+  ods in Natural Language Processing, pages 21–29,
+  Morristown, NJ, USA. Association for Computa-                 Martha Palmer, Dan Gildea, and Paul Kingsbury. 2005.
+  tional Linguistics.                                            The proposition bank: A corpus annotated with
+                                                                 semantic roles. Computational Linguistics, 31(1),
+Katrin Erk and Sebastian Pado. 2006. Shalmaneser -               March.
+  a flexible toolbox for semantic role assignment. In
+  Proceedings of LREC 2006, Genoa, Italy.                       Sameer S. Pradhan, Wayne Ward, and James H. Mar-
+                                                                  tin. 2008. Towards robust semantic role labeling.
+Katrin Erk. 2009. Representing words as regions                   Comput. Linguist., 34(2):289–310.
+  in vector space. In In Proceedings of CoNLL ’09,
+  pages 57–65, Morristown, NJ, USA. Association for             Erik F. Tjong Kim Sang and Sabine Buchholz. 2000.
+  Computational Linguistics.                                       Introduction to the conll-2000 shared task: chunk-
+                                                                   ing. In Proceedings of the 2nd workshop on Learn-
+Charles J. Fillmore. 1985. Frames and the semantics of             ing language in logic and the 4th conference on
+  understanding. Quaderni di Semantica, 4(2):222–                  Computational natural language learning, pages
+  254.                                                             127–132, Morristown, NJ, USA. Association for
+Hagen Fürstenau and Mirella Lapata. 2009. Graph                   Computational Linguistics.
+  alignment for semi-supervised semantic role label-            Kristina Toutanova, Aria Haghighi, and Christopher D.
+  ing. In In Proceedings of EMNLP ’09, pages 11–20,               Manning. 2008. A global joint model for semantic
+  Morristown, NJ, USA.                                            role labeling. Comput. Linguist., 34(2):161–191.
+Daniel Gildea and Daniel Jurafsky. 2002. Automatic
+  Labeling of Semantic Roles. Computational Lin-
+  guistics, 28(3):245–288.
+Yoav Goldberg and Michael Elhadad. 2009. On the
+  role of lexical features in sequence labeling. In In
+  Proceedings of EMNLP ’09, pages 1142–1151, Sin-
+  gapore, August. Association for Computational Lin-
+  guistics.
+L.J. Heyer, S. Kruglyak, and S. Yooseph. 1999. Ex-
+   ploring expression data: Identification and analysis
+   of coexpressed genes. Genome Research, (9):1106–
+   1115.
+
+
+                                                          246
+

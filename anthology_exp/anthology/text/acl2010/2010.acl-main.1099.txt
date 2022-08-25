@@ -1,0 +1,661 @@
+      Open-Domain Semantic Role Labeling by Modeling Word Spans
+
+                    Fei Huang                                            Alexander Yates
+                 Temple University                                       Temple University
+                 1805 N. Broad St.                                       1805 N. Broad St.
+                 Wachman Hall 318                                       Wachman Hall 303A
+             fei.huang@temple.edu                                      yates@temple.edu
+
+
+                      Abstract                                 roles for the subset of language contained in the
+                                                               training data, but are not yet good at generalizing
+    Most supervised language processing sys-                   to language that has not been seen before.
+    tems show a significant drop-off in per-                      We aim to build an open-domain supervised
+    formance when they are tested on text                      SRL system; that is, one whose performance on
+    that comes from a domain significantly                     out-of-domain tests approaches the same level of
+    different from the domain of the training                  performance as that of state-of-the-art systems on
+    data. Semantic role labeling techniques                    in-domain tests. Importantly, an open-domain sys-
+    are typically trained on newswire text, and                tem must not use any new labeled data beyond
+    in tests their performance on fiction is                   what is included in the original training text when
+    as much as 19% worse than their perfor-                    running on a new domain. This allows the sys-
+    mance on newswire text. We investigate                     tem to be ported to any new domain without any
+    techniques for building open-domain se-                    manual effort. In particular, it ought to apply to
+    mantic role labeling systems that approach                 arbitrary Web documents, which are drawn from a
+    the ideal of a train-once, use-anywhere                    huge variety of domains.
+    system. We leverage recently-developed                        Recent theoretical and empirical evidence sug-
+    techniques for learning representations of                 gests that the fault for poor performance on out-of-
+    text using latent-variable language mod-                   domain tests lies with the representations, or sets
+    els, and extend these techniques to ones                   of features, traditionally used in supervised NLP.
+    that provide the kinds of features that are                Building on recent efforts in domain adaptation,
+    useful for semantic role labeling. In exper-               we develop unsupervised techniques for learning
+    iments, our novel system reduces error by                  new representations of text. Using latent-variable
+    16% relative to the previous state of the art              language models, we learn representations of texts
+    on out-of-domain text.                                     that provide novel kinds of features to our su-
+                                                               pervised learning algorithms. Similar represen-
+1   Introduction
+                                                               tations have proven useful in domain-adaptation
+In recent semantic role labeling (SRL) competi-                for part-of-speech tagging and phrase chunking
+tions such as the shared tasks of CoNLL 2005 and               (Huang and Yates, 2009). We demonstrate how
+CoNLL 2008, supervised SRL systems have been                   to learn representations that are effective for SRL.
+trained on newswire text, and then tested on both              Experiments on out-of-domain test sets show that
+an in-domain test set (Wall Street Journal text)               our learned representations can dramatically im-
+and an out-of-domain test set (fiction). All sys-              prove out-of-domain performance, and narrow the
+tems tested on these datasets to date have exhib-              gap between in-domain and out-of-domain perfor-
+ited a significant drop-off in performance on the              mance by half.
+out-of-domain tests, often performing 15% worse                   The next section provides background informa-
+or more on the fiction test sets. Yet the baseline             tion on learning representations for NLP tasks us-
+from CoNLL 2005 suggests that the fiction texts                ing latent-variable language models. Section 3
+are actually easier than the newswire texts. Such              presents our experimental setup for testing open-
+observations expose a weakness of current super-               domain SRL. Sections 4, 5, 6 describe our SRL
+vised natural language processing (NLP) technol-               system: first, how we identify predicates in open-
+ogy for SRL: systems learn to identify semantic                domain text, then how our baseline technique
+
+
+                                                         968
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 968–978,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+identifies and classifies arguments, and finally how         show how to build systems that learn new rep-
+we learn representations for improving argument              resentations for open-domain NLP using latent-
+identification and classification on out-of-domain           variable language models like Hidden Markov
+text. Section 7 presents previous work, and Sec-             Models (HMMs). An HMM is a generative prob-
+tion 8 concludes and outlines directions for future          abilistic model that generates each word xi in the
+work.                                                        corpus conditioned on a latent variable Yi . Each
+                                                             Yi in the model takes on integral values from 1 to
+2   Open-Domain Representations Using                        K, and each one is generated by the latent variable
+    Latent-Variable Language Models                          for the preceding word, Yi−1 . The distribution for
+                                                             a corpus x = (x1 , . . . , xN ) and a set of state vec-
+Let X be an instance set for a learning problem;             tors s = (s1 , . . . , sN ) is given by:
+for SRL, this is the set of all (sentence,predicate)
+                                                                                     Y
+pairs. Let Y be the space of possible labels for an                   P (x, s) =         P (xi |si )P (si |si−1 )
+instance, and let f : X → Y be the target func-                                    i
+tion to be learned. A representation is a func-
+tion R: X → Z, for some suitable feature space               Using Expectation-Maximization (Dempster et
+Z (such as Rd ). A domain is defined as a dis-               al., 1977), it is possible to estimate the distribu-
+tribution D over the instance set X . An open-               tions for P (xi |si ) and P (si |si−1 ) from unlabeled
+domain system observes a set of training examples            data. The Viterbi algorithm (Rabiner, 1989) can
+(R(x), f (x)), where instances x ∈ X are drawn               then be used to produce the optimal sequence of
+from a source domain, to learn a hypothesis for              latent states si for a given instance x. The output
+classifying examples drawn from a separate target            of this process is an integer (ranging from 1 to K)
+domain.                                                      for every word xi in the corpus. We use the inte-
+   Previous work by Ben-David et al. (2007; 2009)            ger value of si as a new feature for every xi in the
+uses Vapnik-Chervonenkis (VC) theory to prove                sentence.
+theoretical bounds on an open-domain learning                   In POS-tagging and chunking experiments,
+machine’s performance. Their analysis shows that             these learned representations have proven to meet
+the choice of representation is crucial to open-             both of Ben-David et al.’s criteria for open-domain
+domain learning. As is customary in VC the-                  representations: first, they are useful in making
+ory, a good choice of representation must allow              predictions on the training text because the HMM
+a learning machine to achieve low error rates dur-           latent states categorize tokens according to dis-
+ing training. Just as important, however, is that            tributional similarity. And second, it would be
+the representation must simultaneously make the              difficult to tell two domains apart based on their
+source and target domains look as similar to one             HMM labels, since the same HMM state can gen-
+another as possible.                                         erate similar words from a variety of domains.
+   For open-domain SRL, then, the traditional rep-           In what follows, we adapt these representation-
+resentations are problematic. Typical represen-              learning concepts to open-domain SRL.
+tations in SRL and NLP use features of the lo-
+                                                             3 Experimental Setup
+cal context to produce a representation. For in-
+stance, one dimension of a traditional represen-             We test our open-domain semantic role labeling
+tation R might be +1 if the instance contains the            system using data from the CoNLL 2005 shared
+word “bank” as the head of a noun-phrase chunk               task (Carreras and Màrquez, 2005). We use the
+that occurs before the predicate in the sentence,            standard training set, consisting of sections 02-21
+and 0 otherwise. Although many previous studies              of the Wall Street Journal (WSJ) portion of the
+have shown that these features allow learning sys-           Penn Treebank, labeled with PropBank (Palmer
+tems to achieve impressively low error rates dur-            et al., 2005) annotations for predicates and argu-
+ing training, they also make texts from different            ments. We perform our tests on the Brown corpus
+domains look very dissimilar. For instance, a fea-           (Kucera and Francis, 1967) test data from CoNLL
+ture based on the word “bank” or “CEO” may be                2005, consisting of 3 sections (ck01-ck03) of
+common in a domain of newswire text, but scarce              propbanked Brown corpus data. This test set con-
+or nonexistent in, say, biomedical literature.               sists of 426 sentences containing 7,159 tokens,
+   In our recent work (Huang and Yates, 2009) we             804 propositions, and 2,177 arguments. While the
+
+
+                                                       969
+
+
+training data contains newswire text, the test sen-                               Baseline                   HMM
+tences are drawn from the domain of “general fic-              Freq          P       R     F1          P      R            F1
+tion,” and contain an entirely different style (or
+                                                                 0         89.1     80.4    84.5     93.5     84.3     88.7
+styles) of English. The data also includes a sec-
+                                                                0-2        87.4     84.7    86.0     91.6     88.8     90.2
+ond test set of in-domain text (section 23 of the
+                                                                all        87.8     92.5    90.1     90.8     96.3     93.5
+Treebank), which we refer to as the WSJ test set
+and use as a reference point.                                 Table 1: Using HMM features in predicate iden-
+   Every sentence in the dataset is automatically             tification reduces error in out-of-domain tests by
+annotated with a number of NLP pipeline systems,              34.3% overall, and by 27.1% for OOV predicates.
+including part-of-speech (POS) tags, phrase chunk             “Freq” refers to frequency in the training data.
+labels (Carreras and Màrquez, 2003), named-                  There were 831 predicates in total; 51 never ap-
+entity tags, and full parse information by multiple           peared in training and 98 appeared at most twice.
+parsers. These pipeline systems are important for
+generating features for SRL, and one key reason
+for the poor performance of SRL systems on the                as predicates in training may not be predicates in
+Brown corpus is that the pipeline systems them-               the test set. In an open-domain setting, therefore,
+selves perform worse. The Charniak parser, for                we cannot rely solely on a catalog of predicates
+instance, drops from an F1 of 88.25 on the WSJ                from the training data.
+test to a F1 of 80.84 on the Brown corpus. For                   To address the task of open-domain predicate
+the chunker and POS tagger, the drop-offs are less            identification, we construct a Conditional Random
+severe: 94.89 to 91.73, and 97.36 to 94.73.                   Field (CRF) (Lafferty et al., 2001) model with tar-
+   Toutanova et al. (2008) currently have the best-           get labels of B-Pred, I-Pred, and O-Pred (for the
+performing SRL system on the Brown corpus test                beginning, interior, and outside of a predicate).
+set with an F1 score of 68.81 (80.8 for the WSJ               We use an open source CRF software package to
+test). They use a discriminative reranking ap-                implement our CRF models.1 We use words, POS
+proach to jointly predict the best set of argu-               tags, chunk labels, and the predicate label at the
+ment boundaries and the best set of argument la-              preceding and following nodes as features for our
+bels for a predicate. Like the best systems from              Baseline system. To learn an open-domain repre-
+the CoNLL 2005 shared task (Punyakanok et al.,                sentation, we then trained an 80 state HMM on the
+2008; Pradhan et al., 2005), they also use features           unlabeled texts of the training and Brown test data,
+from multiple parses to remain robust in the face             and used the Viterbi optimum states of each word
+of parser error. Owing to the established difficulty          as categorical features.
+of the Brown test set and the different domains of               The results of our Baseline and HMM systems
+the Brown test and WSJ training data, this dataset            appear in Table 1. For predicates that never or
+makes for an excellent testbed for open-domain                rarely appear in training, the HMM features in-
+semantic role labeling.                                       crease F1 by 4.2, and they increase the overall F1
+                                                              of the system by 3.5 to 93.5, which approaches
+4   Predicate Identification                                  the F1 of 94.7 that the Baseline system achieves
+                                                              on the in-domain WSJ test set. Based on these re-
+In order to perform true open-domain SRL, we                  sults, we were satisfied that our system could find
+must first consider a task which is not formally              predicates in open-domain text. In all subsequent
+part of the CoNLL shared task: the task of iden-              experiments, we fall back on the standard evalua-
+tifying predicates in a given sentence. While this            tion in which it is assumed that the boundaries of
+task is almost trivial in the WSJ test set, where             the predicate are given. This allows us to compare
+all but two out of over 5000 predicates can be ob-            with previous work.
+served in the training data, it is significantly more
+difficult in an open-domain setting. In the Brown             5 Semantic Role Labeling with
+test set, 6.1% of the predicates do not appear in the           HMM-based Representations
+training data, and 11.8% of the predicates appear
+                                                              Following standard practice, we divide the SRL
+at most twice in the training data (c.f. 1.5% of the
+                                                              task into two parts: argument identification and
+WSJ test predicates that appear at most twice in
+                                                                 1
+training). In addition, many words which appear                      Available from http://sourceforge.net/projects/crf/
+
+
+                                                        970
+
+
+argument classification. We treat both sub-tasks               •   Transition: for prediction node Ai , we use
+as sequence-labeling problems. During argument                     Ai−1 and Ai+1 as features
+identification, the system must label each token              For argument classification, we add the features
+with labels that indicate either the beginning or in-         below to those listed above:
+terior of an argument (B-Arg or I-Arg), or a label              • arg ID: the labels Ai produced by arg.
+that indicates the token is not part of an argument                identification (B-Arg, I-Arg, or O)
+(O-Arg). During argument classification, the sys-               • combination: predicate + first argument
+tem labels each token that is part of an argument                  word, predicate+ last argument word,
+with a class label, such as Arg0 or ArgM. Follow-                  predicate + first argument POS, predicate
+ing argument classification, multi-word arguments                  + last argument POS
+may have different classification labels for each to-           • head distance: the number of tokens
+ken. We post-process the labels by changing them                   between the first token of the argument
+to match the label of the first token. We use CRFs                 phrase and the target predicate
+as our models for both tasks (Cohn and Blunsom,                 • neighbors: the words immediately before
+2005).                                                             and after the argument.
+                                                              We refer to the CRF model with these features as
+   Most previous approaches to SRL have relied                our Baseline SRL system; in what follows we ex-
+heavily on parsers, and especially constituency               tend the Baseline model with more sophisticated
+parsers. Indeed, when SRL systems use gold stan-              features.
+dard parses, they tend to perform extremely well
+(Toutanova et al., 2008). However, as several pre-            5.1 Incorporating HMM-based
+vious studies have noted (Gildea, 2001; Pradhan                   Representations
+et al., 2007), using parsers can cause problems for           As a first step towards an open-domain representa-
+open-domain SRL. The parsers themselves may                   tion, we use an HMM with 80 latent state values,
+not port well to new domains, or the features they            trained on the unlabeled text of the training and
+generate for SRL may not be stable across do-                 test sets, to produce Viterbi-optimal state values
+mains, and therefore may cause sparse data prob-              si for every token in the corpus. We then add the
+lems on new domains. Our first step is therefore              following features to our CRFs for both argument
+to build an SRL system that relies on partial pars-           identification and classification:
+ing, as was done in CoNLL 2004 (Carreras and                    • HMM states: HMM state values si , si−1 ,
+Màrquez, 2004). We then gradually add in less-                     and si+1
+sparse alternatives for the syntactic features that             • HMM states before, after predicate: the
+previous systems derive from parse trees.                           state value of the tokens immediately
+   During argument identification we use the fea-                   preceding and following the predicate
+tures below to predict the label Ai for token wi :            We call the resulting model our Baseline+HMM
+  • words: wi , wi−1 , and wi+1                               system.
+  • parts of speech (POS): POS tags ti , ti−1 ,
+                                                              5.2 Path Features
+      and ti+1
+  • chunk labels: (e.g., B-NP, I-VP, or O)                    Despite all of the features above, the SRL sys-
+      chunk tags ci , ci−1 , and ci+1                         tem has very little information to help it determine
+  • combinations: ci ti , ti wi , ci ti wi                    the syntactic relationship between a target predi-
+  • NE: the named entity type ni of wi                        cate and a potential argument. For instance, these
+  • position: whether the word occurs before                  baseline features provide only crude distance in-
+      or after the predicate                                  formation to distinguish between multiple argu-
+  • distance: the number of intervening                       ments that follow a predicate, and they make it
+      tokens between wi and the target predicate              difficult to correctly identify clause arguments or
+  • POS before, after predicate: the POS tag                  arguments that appear far from the predicate. Our
+      of the tokens immediately preceding and                 system needs features that can help distinguish
+      following the predicate                                 between different syntactic relationships, without
+  • Chunk before, after predicate: the chunk                  being overly sensitive to the domain.
+      type of the tokens immediately preceding                   As a step in this direction, we introduce path
+      and following the predicate                             features: features for the sequence of tokens be-
+
+
+                                                        971
+
+
+                                                               Y1    Y2      Y3       Y4              Y5          Y6     Y7   Y8
+  System                        P      R      F1
+  Baseline                    63.9    59.7    61.7
+  Baseline+HMM                68.5    62.7    65.5            The   HIV   infection   rate   is   expected   to   peak   in   2010
+  Baseline+HMM+Paths          70.0    65.6    67.7
+  Toutanova et al. (2008)     NR      NR      68.8
+                                                              Figure 1: The Span-HMM over the sentence. It
+Table 2: Naı̈ve path features improve our base-
+                                                              shows the span of length 3.
+line, but not enough to match the state-of-the-art.
+Toutanova et al. do not report (NR) separate val-
+ues for precision and recall on this dataset. Dif-            6 Representations for Word Spans
+ferences in both precision and recall between the
+                                                              Despite partial success in improving our baseline
+baseline and the other systems are statistically sig-
+                                                              SRL system with path features, these features still
+nificant at p < 0.01 using the two-tailed Fisher’s
+                                                              suffer from data sparsity — many paths in the
+exact test.
+                                                              test set are never or very rarely observed during
+                                                              training, so the CRF model has little or no data
+tween a predicate and a potential argument. In                points from which to estimate accurate parameters
+standard SRL systems, these path features usually             for these features. In response, we introduce la-
+consist of a sequence of constituent parse nodes              tent variable models of word spans, or sequences
+representing the shortest path through the parse              of words. As with the HMM models above, the
+tree between a word and the predicate (Gildea and             latent states for word spans can be thought of as
+Jurafsky, 2002). We substitute paths that do not              probabilistic categories for the spans. And like the
+depend on parse trees. We use four types of paths:            HMM models, we can turn the word span models
+word paths, POS paths, chunk paths, and HMM                   into representations by using the state value for a
+state paths. Given an input sentence labeled with             span as a feature in our supervised SRL system.
+POS tags, and chunks, we construct path features              Unlike path features, the features from our models
+for a token wi by concatenating words (or tags or             of word spans consist of a single latent state value
+chunk labels) between wi and the predicate. For               rather than a concatenation of state values, and as
+example, in the sentence “The HIV infection rate              a consequence they tend to be much less sparse in
+is expected to peak in 2010,” the word path be-               the training data.
+tween “rate” and predicate “peak” would be “is
+expected to”, and the POS path would be “VBZ                  6.1 Span-HMM Representations
+VBD TO.”                                                      We build our latent-variable models of word spans
+   Since word, POS, and chunk paths are all sub-              using variations of Hidden Markov Models, which
+ject to data sparsity for arguments that are far from         we call Span-HMMs. Figure 1 shows a graphi-
+the predicate, we build less-sparse path features by          cal model of a Span-HMM. Each Span-HMM be-
+using paths of HMM states. If we use a reason-                haves just like a regular HMM, except that it in-
+able number of HMM states, each category label                cludes one node, called a span node, that can gen-
+is much more common in the training data than                 erate an entire span rather than a single word. For
+the average word, and paths containing the HMM                instance, in the Span-HMM of Figure 1, node y5 is
+states should be much less sparse than word paths,            a span node that generates a span of length 3: “is
+and even chunk paths. In our experiments, we use              expected to.”
+80-state HMMs.                                                   Span-HMMs can be used to provide a single
+   We call the result of adding path features to              categorical value for any span of a sentence us-
+our feature set the Baseline+HMM+Paths sys-                   ing the usual Viterbi algorithm for HMMs. That
+tem((BL). Table 2 shows the performance of our                is, at test time, we generate a Span-HMM feature
+three baseline systems. In this open-domain SRL               for word wj by constructing a Span-HMM that has
+experiment, path features improve over the Base-              a span node for the sequence of words between wj
+line’s F1 by 6 points, and by 2.2 points over                 and the predicate. We determine the Viterbi opti-
+Baseline+HMM, although the improvement is not                 mal state of this span node, and use that state as the
+enough to match the state-of-the-art system by                value of the new feature. In our example in Figure
+Toutanova et al.                                              1, the value of span node y5 is used as a feature for
+
+
+                                                        972
+
+
+the token “rate”, since y5 generates the sequence            6.3 Memory Considerations
+of words between “rate” and the predicate “peak.”
+                                                             Memory usage is a major issue for our Span-
+   Notice that by using Span-HMMs to provide                 HMM models. We represent emission distribu-
+these features, we have condensed all paths in our           tions as multinomials over discrete observations.
+data into a small number of categorical values.              Since there are millions of different spans in our
+Whereas there are a huge number of variations to             data, a straightforward implementation would re-
+the spans themselves, we can constrain the number            quire millions of parameters for each latent state
+of categories for the Span-HMM states to a rea-              of the Span-HMM.
+sonable number such that each category is likely to             We use two related techniques to get around this
+appear often in the training data. The value of each         problem. In both cases, we use a second HMM
+Span-HMM state then represents a cluster of spans            model, which we call the base HMM to distin-
+with similar delimiting words; some clusters will            guish from our Span-HMM, to back-off from the
+correlate with spans between predicates and argu-            explicit word sequence. We use the largest num-
+ments, and others with spans that do not connect             ber of states for HMMs that can be fit into mem-
+predicates and arguments. As a result, Span-HMM              ory. Let S be a sentence, and let ŝ be the sequence
+features are not sparse, and they correlate with the         of optimal latent state values for S produced by
+target function, making them useful in learning an           our base HMM. Our first approach trains the Span-
+SRL model.                                                   HMM on Spans(ŝ), rather than Spans(S). If
+                                                             we use a small enough number of latent states in
+6.2 Parameter Estimation                                     the base HMM (in experiments, we use 10 latent
+We use a variant of the Baum-Welch algorithm to              states), we drastically reduce the number of differ-
+train our Span-HMMs on unlabeled text. In order              ent spans in the data set, and therefore the num-
+for this to work, we need to provide Baum-Welch              ber of parameters required for our model. We call
+with a modified view of the data so that span nodes          this representation Span-HMM-Base10. As with
+can generate multiple consecutive words in a sen-            our other HMM-based models, we use the largest
+tence. First, we take every sentence S in our train-         number of latent states that will allow the result-
+ing data and generate the set Spans(S) of all valid          ing model to fit in our machine’s memory — our
+spans in the sentence. For efficiency’s sake, we use         previous experiments on representations for part-
+only spans of length less than 15; approximately             of-speech tagging suggest that more latent states
+95% of the arguments in our dataset were within              are usually better.
+15 words of the predicate, so even with this re-                While our first technique solves the memory is-
+striction we are able to supply features for nearly          sue, it also loses some of the power of our orig-
+all valid arguments. The second step of our train-           inal Span-HMM model by using a very coarse-
+ing procedure is to create a separate data point for         grained base HMM clustering of the text into 10
+each span of S. For each span t ∈ Spans(S), we               categories. Our second approach trains a separate
+construct a Span-HMM with a regular node gen-                Span-HMM model for spans of different lengths.
+erating each element of S, except that a span node           Since we need only one model in memory at a
+generates all of t. Thus, our training data contains         time, this allows each one to consume more mem-
+many different copies of each sentence S, with a             ory. We therefore use base HMM models with
+different Span-HMM generating each copy.                     more latent states (up to 20) to annotate our sen-
+   Intuitively, running Baum-Welch over this data            tences, and then train on the resulting Spans(ŝ)
+means that a span node with state k will be likely           as before. With this technique, we produce fea-
+to generate two spans t1 and t2 if t1 and t2 tend to         tures that are combinations of the state value for
+appear in similar contexts. That is, they should             span nodes and the length of the span, in order
+appear between words that are also likely to be              to indicate which of our Span-HMM models the
+generated by the same latent state. Thus, certain            state value came from. We call this representation
+values of k will tend to appear for spans between            Span-HMM-BaseByLength.
+predicates and arguments, and others will tend
+                                                             6.4 Combining Multiple Span-HMMs
+to appear between predicates and non-arguments.
+This makes the value k informative for both argu-            So far, our Span-HMM models produce one new
+ment identification and argument classification.             feature for every token during argument identifi-
+
+
+                                                       973
+
+
+ System                           P      R      F1            System                       WSJ     Brown     Diff
+ Baseline+HMM+Paths              70.0   65.6   67.7           Multi-Span-HMM               79.2     73.8      5.4
+ Toutanova et al.                NR     NR     68.8           Toutanova et al. (2008)      80.8     68.8     12.0
+ Span-HMM-Base10                 74.5   69.3   71.8           Pradhan et al. (2005)        78.6     68.4     10.2
+ Span-HMM-BaseByLength           76.3   70.2   73.1           Punyakanok et al. (2008)     79.4     67.8     11.6
+ Multi-Span-HMM                  77.0   70.9   73.8
+                                                             Table 4: Multi-Span-HMM has a much smaller
+Table 3: Span-HMM features significantly im-                 drop-off in F1 than comparable systems on out-
+prove over state-of-the-art results in out-of-               of-domain test data vs in-domain test data.
+domain SRL. Differences in both precision and re-
+call between the baseline and the Span-HMM sys-              were not statistically significant, except that the
+tems are statistically significant at p < 0.01 using         difference in precision between the Multi-Span-
+the two-tailed Fisher’s exact test.                          HMM and the Span-HMM-Base10 is significant
+                                                             at p < .1.
+cation and classification. While these new fea-                 Table 4 shows the performance drop-off for top
+tures may be very helpful, ideally we would like             SRL systems when applied to WSJ test data and
+our learned representations to produce multiple              Brown corpus test data. The Multi-Span-HMM
+useful features for the CRF model, so that the               model performs near the state-of-the-art on the
+CRF can combine the signals from each feature                WSJ test set, and its F1 on out-of-domain data
+to learn a sophisticated model. Towards this goal,           drops only about half as much as comparable sys-
+we train N independent versions of our Span-                 tems. Note that several of the techniques used
+HMM-BaseByLength models, each with a ran-                    by other systems, such as using features from k-
+dom initialization for the Baum-Welch algorithm.             best parses or jointly modeling the dependencies
+Since Baum-Welch is a hill-climbing algorithm,               among arguments, are complementary to our tech-
+it should find local, but not necessarily global,            niques, and may boost the performance of our sys-
+optima for the parameters of each Span-HMM-                  tem further.
+BaseByLength model. When we decode each of                      Table 5 breaks our results down by argument
+the models on training and test texts, we will ob-           type. Most of our improvement over the Baseline
+tain N different sequences of latent states, one             system comes from the core arguments A0 and
+for each locally-optimized model. Thus we obtain             A1, but also from a few adjunct types like AM-
+N different, independent sources of features. We             TMP and AM-LOC. Figure 2 shows that when the
+call the CRF model with these N Span-HMM fea-                argument is close to the predicate, both systems
+tures the Multi-Span-HMM model(MSH); in ex-                  perform well, but as the distance from the predi-
+periments we use N = 5.                                      cate grows, our Multi-Span-HMM system is bet-
+                                                             ter able to identify and classify arguments than the
+6.5 Results and Discussion                                   Baseline+HMM+Paths system.
+Results for the Span-HMM models on the CoNLL                    Table 6 provides results for argument identifi-
+2005 Brown corpus are shown in Table 3. All three            cation and classification separately. As Pradhan et
+versions of the Span-HMM outperform Toutanova                al.previously showed (Pradhan et al., 2007), SRL
+et al.’s system on the Brown corpus, with the                systems tend to have an easier time with porting
+Multi-Span-HMM gaining 5 points in F1. The                   argument identification to new domains, but are
+Multi-Span-HMM model improves over the Base-                 less strong at argument classification on new do-
+line+HMM+Paths model by 7 points in precision,               mains. Our baseline system decreases in F-score
+and 5.3 points in recall. Among the Span-HMM                 from 81.5 to 78.9 for argument identification, but
+models, the use of more states in the Span-HMM-              suffers a much larger 8% drop in argument classi-
+BaseByLength model evidently outweighed the                  fication. The Multi-Span-HMM model improves
+cost of splitting the model into separate versions           over the Baseline in both tasks and on both test
+for different length spans. Using multiple in-               sets, but the largest improvement (6%) is in argu-
+dependent copies of the Span-HMMs provides a                 ment classification on the Brown test set.
+small (0.7) gain in precision and recall. Dif-                  To help explain the success of the Span-HMM
+ferences among the different Span-HMM models                 techniques, we measured the sparsity of our path
+
+
+                                                       974
+
+
+              Overall A0 A1 A2 A3 A4 ADV DIR DIS LOC MNR MOD NEG PNC TMP R-A0 R-A1
+Num 2177 566 676 147 12 15 143 53 22 85 110 91 50 17 112 25 21
+BL  67.7 76.2 70.6 64.8 59.0 71.2 52.7 54.8 71.9 67.5 58.3 90.9 90.0 50.0 76.5 76.5 71.3
+MSH 73.8 82.5 73.6 63.9 60.3 73.3 50.8 52.9 70.0 70.3 52.7 94.2 92.9 51.6 81.6 84.4 75.7
+
+Table 5: SRL results (F1) on the Brown test corpus broken down by role type. BL is the Base-
+line+HMM+Paths model, MSH is the Multi-Span-HMM model. Column 8 to 16 are all adjuncts (AM-).
+We omit roles with ten or fewer examples.
+
+             90                                                                                         0.9
+
+
+
+
+                                                                        Fraction of Feature Values in
+             85                                                                                         0.8     Occurs 1x
+             80                                                                                                 in WSJ
+                                                                                                        0.7
+  F1 score
+
+
+
+
+             75
+
+
+
+
+                                                                               Brown Corpus
+                                                                                                        0.6
+             70                                                                                         0.5     Occurs 2x
+             65                                                                                         0.4     in WSJ
+                                                         MSH
+             60                                                                                         0.3
+                                                         BL
+             55                                                                                         0.2     Occurs 3x
+             50                                                                                         0.1     or more in
+                                                                                                                WSJ
+                                                                                                          0
+
+
+                  Words between predicate and argument
+
+
+Figure 2: The Multi-Span-HMM (MSH) model
+is better able to identify and classify arguments                    Figure 3: HMM path and Span-HMM features are
+that are far from the predicate than the Base-                       far more likely to appear often in training data than
+line+HMM+Paths (BL) model.                                           the word, POS, and chunk path features. Over
+                                                                     70% of Span-HMM-Base10 features in the Brown
+                          Test    Id.F1   Accuracy                   corpus appear at least three times during training;
+                                                                     in contrast, fewer than 33% of chunk path features
+                  BL     WSJ       81.5      93.7                    in the Brown corpus appear at all during training.
+                        Brown      78.9      85.8
+                  MSH    WSJ       83.9      94.4
+                        Brown      80.3      91.9                    HMMs derive their power as representations for
+                                                                     open-domain SRL from the fact that they provide
+Table 6: Baseline (BL) and Multi-Span-HMM
+                                                                     features that are mostly the same across domains;
+(MSH) performance on argument identification
+                                                                     80% of the features of our Span-HMM-Base10 in
+(Id.F1) and argument classification.
+                                                                     the Brown corpus were observed at least once in
+                                                                     the training data.
+and Span-HMM features. Figure 3 shows the per-                          Table 7 shows examples of spans that were
+centage of feature values in the Brown corpus that                   clustered into the same Span-HMM state, along
+appear more than twice, exactly twice, or exactly                    with word to either side. All four examples
+once in the training data. While word path fea-                      are cases where the Span-HMM-Base10 model
+tures can be highly valuable when there is train-                    correctly tagged the following argument, but the
+ing data available for them, only about 11% of the                   Baseline+HMM+Paths model did not. We can see
+word paths in the Brown test set also appeared at                    that the paths of these four examples are com-
+all in the training data. POS and chunk paths fared                  pletely different, but the words surrounding them
+a bit better (22% and 33% respectively), but even                    are very similar. The emission from a span node
+then nearly 70% of all feature values had no avail-                  are very sparse, so the Span-HMM has unsurpris-
+able training data. HMM and Span-HMM-Base10                          ingly learned to cluster spans according to the
+paths achieved far better success in this respect.                   HMM states that precede and follow the span
+Importantly, the improvement is mostly due to fea-                   node. This is by design, as this kind of distri-
+tures that are seen often in training, rather than fea-              butional clustering is helpful for identifying and
+tures that were seen just once or twice. Thus Span-                  classifying arguments. One potentially interesting
+
+
+                                                               975
+
+
+    Predicate            Span             B-Arg                 The disparity in performance between in-
+                                                             domain and out-of-domain tests is by no means
+    picked           the things up         from
+                                                             restricted to SRL. Past research in a variety of
+    passed      through the barbed wire      at
+                                                             NLP tasks has shown that parsers (Gildea, 2001),
+    come          down from Sundays          to
+                                                             chunkers (Huang and Yates, 2009), part-of-speech
+    sat           over his second rock       in
+                                                             taggers (Blitzer et al., 2006), named-entity tag-
+Table 7: Example spans labeled with the same                 gers (Downey et al., 2007a), and word sense dis-
+Span-HMM state. The examples are taken from                  ambiguation systems (Escudero et al., 2000) all
+sentences where the Span-HMM-Base10 model                    suffer from a similar drop-off in performance on
+correctly identified the argument on the right, but          out-of-domain tests. Numerous domain adapta-
+the Baseline+HMM+Paths model did not.                        tion techniques have been developed to address
+                                                             this problem, including self-training (McClosky et
+                                                             al., 2006) and instance weighting (Bacchiani et al.,
+question for future work is whether a less sparse
+                                                             2006) for parser adaptation and structural corre-
+model of the spans themselves, such as a Naı̈ve
+                                                             spondence learning for POS tagging (Blitzer et al.,
+Bayes model for the span node, would yield a bet-
+                                                             2006). Of these techniques, structural correspon-
+ter clustering for producing features for semantic
+                                                             dence learning is closest to our technique in that it
+role labeling.
+                                                             is a form of representation learning, but it does not
+7    Previous Work                                           learn features for word spans. None of these tech-
+                                                             niques have been successfully applied to SRL.
+Deschact and Moens (2009) use a latent-variable
+language model to provide features for an SRL
+system, and they show on CoNLL 2008 data that                8 Conclusion and Future Work
+they can significantly improve performance when
+little labeled training data is available. They do           We have presented novel representation-learning
+not report on out-of-domain tests. They use HMM              techniques for building an open-domain SRL sys-
+language models trained on unlabeled text, much              tem. By incorporating learned features from
+like we use in our baseline systems, but they do not         HMMs and Span-HMMs trained on unlabeled
+consider models of word spans, which we found to             text, our SRL system is able to correctly iden-
+be most beneficial. Downey et al. (2007b) also in-           tify predicates in out-of-domain text with an F1
+corporate HMM-based representations into a sys-              of 93.5, and it can identify and classify argu-
+tem for the related task of Web information extrac-          ments to predicates with an F1 of 73.8, out-
+tion, and are able to show that the system improves          performing comparable state-of-the-art systems.
+performance on rare terms.                                   Our successes so far on out-of-domain tests bring
+    Fürstenau and Lapata (2009b; 2009a) use semi-           hope that supervised NLP systems may eventually
+supervised techniques to automatically annotate              achieve the ideal where they no longer need new
+data for previously unseen predicates with seman-            manually-labeled training data for every new do-
+tic role information. This task differs from ours            main. There are several potential avenues for fur-
+in that it focuses on previously unseen predicates,          ther progress towards this goal, including the de-
+which may or may not be part of text from a new              velopment of more portable SRL pipeline systems,
+domain. Their techniques also result in relatively           and especially parsers. Developing techniques that
+lower performance (F1 between 15 and 25), al-                can incrementally adapt to new domains without
+though their tests are on a more difficult and very          the computational expense of retraining the CRF
+different corpus. Weston et al. (2008) use deep              model every time would help make open-domain
+learning techniques based on semi-supervised em-             SRL more practical.
+beddings to improve an SRL system, though their
+tests are on in-domain data. Unsupervised SRL
+systems (Swier and Stevenson, 2004; Grenager                 Acknowledgments
+and Manning, 2006; Abend et al., 2009) can natu-
+rally be ported to new domains with little trouble,          We wish to thank the anonymous reviewers for
+but their accuracy thus far falls short of state-of-         their helpful comments and suggestions.
+the-art supervised and semi-supervised systems.
+
+
+                                                       976
+
+
+References                                                       Hagen Fürstenau and Mirella Lapata. 2009a. Graph
+                                                                   alignment for semi-supervised semantic role label-
+Omri Abend, Roi Reichart, and Ari Rappoport. 2009.                 ing. In Proceedings of the Conference on Em-
+ Unsupervised argument identification for semantic                 pirical Methods in Natural Language Processing
+ role labeling. In Proceedings of the ACL.                         (EMNLP), pages 11–20.
+Michiel Bacchiani, Michael Riley, Brian Roark, and
+                                                                 Hagen Fürstenau and Mirella Lapata. 2009b. Semi-
+  Richard Sproat. 2006. MAP adaptation of stochas-
+                                                                   supervised semantic role labeling. In Proceedings
+  tic grammars. Computer Speech and Language,
+                                                                   of the 12th Conference of the European Chapter of
+  20(1):41–68.
+                                                                   the ACL, pages 220–228.
+Shai Ben-David, John Blitzer, Koby Crammer, and Fer-
+  nando Pereira. 2007. Analysis of representations               Daniel Gildea and Daniel Jurafsky. 2002. Automatic
+  for domain adaptation. In Advances in Neural In-                 labeling of semantic roles. Computational Linguis-
+  formation Processing Systems 20, Cambridge, MA.                  tics, 28(3):245–288.
+  MIT Press.
+                                                                 Daniel Gildea. 2001. Corpus Variation and Parser Per-
+Shai Ben-David, John Blitzer, Koby Crammer, Alex                   formance. In Conference on Empirical Methods in
+  Kulesza, Fernando Pereira, and Jenn Wortman.                     Natural Language Processing.
+  2009. A theory of learning from different domains.
+  Machine Learning, (to appear).                                 Trond Grenager and Christopher D Manning. 2006.
+                                                                   Unsupervised discovery of a statistical verb lexi-
+John Blitzer, Ryan McDonald, and Fernando Pereira.                 con. In Proceedings of the Conference on Empirical
+  2006. Domain adaptation with structural correspon-               Methods in Natural Language Processing.
+  dence learning. In EMNLP.
+                                                                 Fei Huang and Alexander Yates. 2009. Distributional
+Xavier Carreras and Lluı́s Màrquez. 2003. Phrase                  representations for handling sparsity in supervised
+  recognition by filtering and ranking with percep-                sequence labeling. In Proceedings of the Annual
+  trons. In Proceedings of RANLP-2003.                             Meeting of the Association for Computational Lin-
+                                                                   guistics.
+Xavier Carreras and Lluı́s Màrquez. 2004. Introduc-
+  tion to the CoNLL-2004 shared task: Semantic role              H. Kucera and W.N. Francis. 1967. Computational
+  labeling. In Proceedings of the Conference on Nat-               Analysis of Present-Day American English. Brown
+  ural Language Learning (CoNLL).                                  University Press.
+Xavier Carreras and Lluı́s Màrquez. 2005. Introduc-             J. Lafferty, Andrew McCallum, and Fernando Pereira.
+  tion to the CoNLL-2005 shared task: Semantic role                 2001. Conditional random fields: Probabilistic
+  labeling. In Proceedings of the Conference on Nat-                models for segmenting and labeling sequence data.
+  ural Language Learning (CoNLL).                                   In Proceedings of the International Conference on
+                                                                    Machine Learning.
+Trevor Cohn and Phil Blunsom. 2005. Semantic role
+  labelling with tree conditional random fields. In              David McClosky, Eugene Charniak, and Mark John-
+  Proceedings of CoNLL.                                            son. 2006. Reranking and self-training for parser
+Arthur Dempster, Nan Laird, and Donald Rubin. 1977.                adaptation. In Proceedings of the 21st International
+  Likelihood from incomplete data via the EM algo-                 Conference on Computational Linguistics and 44th
+  rithm. Journal of the Royal Statistical Society, Se-             Annual Meeting of the ACL, pages 337–344.
+  ries B, 39(1):1–38.                                            Martha Palmer, Dan Gildea, and Paul Kingsbury. 2005.
+Koen Deschacht and Marie-Francine Moens. 2009.                    The Proposition Bank: A corpus annotated with se-
+  Semi-supervised semantic role labeling using the la-            mantic roles. Computational Linguistics Journal,
+  tent words language model. In Proceedings of the                31(1).
+  Conference on Empirical Methods in Natural Lan-
+                                                                 Sameer Pradhan, Kadri Hacioglu, Wayne Ward,
+  guage Processing (EMNLP).
+                                                                   James H. Martin, and Daniel Jurafsky. 2005. Se-
+D. Downey, M. Broadhead, and O. Etzioni. 2007a. Lo-                mantic role chunking combining complementary
+   cating complex named entities in web text. In Procs.            syntactic views. In Proc. of the Annual Confer-
+   of the 20th International Joint Conference on Artifi-           ence on Computational Natural Language Learning
+   cial Intelligence (IJCAI 2007).                                 (CoNLL).
+
+Doug Downey, Stefan Schoenmackers, and Oren Et-                  Sameer Pradhan, Wayne Ward, and James H. Martin.
+  zioni. 2007b. Sparse information extraction: Unsu-               2007. Towards robust semantic role labeling. In
+  pervised language models to the rescue. In ACL.                  Proceedings of NAACL-HLT, pages 556–563.
+
+G. Escudero, L. Márquez, and G. Rigau. 2000. An                 Vasin Punyakanok, Dan Roth, and Wen-tau Yih. 2008.
+  empirical study of the domain dependence of su-                  The importance of syntactic parsing and inference in
+  pervised word sense disambiguation systems. In                   semantic role labeling. Computational Linguistics,
+  EMNLP/VLC.                                                       34(2):257–287.
+
+
+                                                           977
+
+
+Lawrence R. Rabiner. 1989. A tutorial on hidden
+  Markov models and selected applications in speech
+  recognition. Proceedings of the IEEE, 77(2):257–
+  285.
+
+Robert S. Swier and Suzanne Stevenson. 2004. Unsu-
+  pervised semantic role labelling. In Proceedings of
+  the 2004 Conference on Empirical Methods in Nat-
+  ural Language Processing, pages 95–102.
+
+Kristina Toutanova, Aria Haghighi, and Christopher D.
+  Manning. 2008. A global joint model for se-
+  mantic role labeling. Computational Linguistics,
+  34(2):161–191.
+
+Jason Weston, Frederic Ratle, and Ronan Collobert.
+   2008. Deep learning via semi-supervised embed-
+   ding. In Proceedings of the 25th International Con-
+   ference on Machine Learning.
+
+
+
+
+                                                         978
+

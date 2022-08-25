@@ -1,0 +1,604 @@
+               Rebanking CCGbank for improved NP interpretation
+
+     Matthew Honnibal and James R. Curran                                 Johan Bos
+       School of Information Technologies                           University of Groningen
+              University of Sydney                                     The Netherlands
+              NSW 2006, Australia                                bos@meaningfactory.com
+     {mhonn,james}@it.usyd.edu.au
+
+
+                      Abstract                                 mation from existing resources. We chose to work
+                                                               on CCGbank (Hockenmaier and Steedman, 2007),
+    Once released, treebanks tend to remain                    a Combinatory Categorial Grammar (Steedman,
+    unchanged despite any shortcomings in                      2000) treebank acquired from the Penn Treebank
+    their depth of linguistic analysis or cover-               (Marcus et al., 1993). This work is equally ap-
+    age of specific phenomena. Instead, sepa-                  plicable to the corpora described by Miyao et al.
+    rate resources are created to address such                 (2004), Shen et al. (2008) or Cahill et al. (2008).
+    problems. In this paper we show how to                        Our first changes integrate four previously sug-
+    improve the quality of a treebank, by in-                  gested improvements to CCGbank. We then de-
+    tegrating resources and implementing im-                   scribe a novel CCG analysis of NP predicate-
+    proved analyses for specific constructions.                argument structure, which we implement using
+    We demonstrate this rebanking process                      NomBank (Meyers et al., 2004). Our analysis al-
+    by creating an updated version of CCG-                     lows the distinction between core and peripheral
+    bank that includes the predicate-argument                  arguments to be represented for predicate nouns.
+    structure of both verbs and nouns, base-                      With this distinction, an entailment recognition
+    NP brackets, verb-particle constructions,                  system could recognise that Google’s acquisition
+    and restrictive and non-restrictive nominal                of YouTube entailed Google acquired YouTube, be-
+    modifiers; and evaluate the impact of these                cause equivalent predicate-argument structures are
+    changes on a statistical parser.                           built for both. Our analysis also recovers non-
+                                                               local dependencies mediated by nominal predi-
+1   Introduction                                               cates; for instance, Google is the agent of acquire
+Progress in natural language processing relies on              in Google’s decision to acquire YouTube.
+direct comparison on shared data, discouraging                    The rebanked corpus extends CCGbank with:
+improvements to the evaluation data. This means                  1. NP brackets from Vadas and Curran (2008);
+that we often spend years competing to reproduce
+partially incorrect annotations. It also encourages              2. Restored and normalised punctuation;
+us to approach related problems as discrete tasks,               3. Propbank-derived verb subcategorisation;
+when a new data set that adds deeper information                 4. Verb particle structure drawn from Propbank;
+establishes a new incompatible evaluation.
+   Direct comparison has been central to progress                5. Restrictive and non-restrictive adnominals;
+in statistical parsing, but it has also caused prob-             6. Reanalyses to promote better head-finding;
+lems. Treebanking is a difficult engineering task:               7. Nombank-derived noun subcategorisation.
+coverage, cost, consistency and granularity are all
+competing concerns that must be balanced against               Together, these changes modify 30% of the la-
+each other when the annotation scheme is devel-                belled dependencies in CCGbank, demonstrating
+oped. The difficulty of the task means that we                 how multiple resources can be brought together in
+ought to view treebanking as an ongoing process                a single, richly annotated corpus. We then train
+akin to grammar development, such as the many                  and evaluate a parser for these changes, to investi-
+years of work on the ERG (Flickinger, 2000).                   gate their impact on the accuracy of a state-of-the-
+   This paper demonstrates how a treebank can be               art statistical CCG parser.
+rebanked to incorporate novel analyses and infor-
+
+
+                                                         207
+        Proceedings of the 48th Annual Meeting of the Association for Computational Linguistics, pages 207–215,
+                 Uppsala, Sweden, 11-16 July 2010. c 2010 Association for Computational Linguistics
+
+
+2   Background and motivation                                 2.1    Combinatory Categorial Grammar
+Formalisms like HPSG (Pollard and Sag, 1994),                 Combinatory Categorial Grammar (CCG; Steed-
+LFG (Kaplan and Bresnan, 1982), and CCG (Steed-               man, 2000) is a lexicalised grammar, which means
+man, 2000) are linguistically motivated in the                that all grammatical dependencies are specified
+sense that they attempt to explain and predict                in the lexical entries and that the production of
+the limited variation found in the grammars of                derivations is governed by a small set of rules.
+natural languages. They also attempt to spec-                    Lexical categories are either atomic (S , NP ,
+ify how grammars construct semantic representa-               PP , N ), or a functor consisting of a result, direc-
+tions from surface strings, which is why they are             tional slash, and argument. For instance, in might
+sometimes referred to as deep grammars. Anal-                 head a PP -typed constituent with one NP -typed
+yses produced by these formalisms can be more                 argument, written as PP /NP .
+detailed than those produced by skeletal phrase-                 A category can have a functor as its result, so
+structure parsers, because they produce fully spec-           that a word can have a complex valency structure.
+ified predicate-argument structures.                          For instance, a verb phrase is represented by the
+   Unfortunately, statistical parsers do not take ad-         category S \NP : it is a function from a leftward
+vantage of this potential detail. Statistical parsers         NP (a subject) to a sentence. A transitive verb
+induce their grammars from corpora, and the                   requires an object to become a verb phrase, pro-
+corpora for linguistically motivated formalisms               ducing the category (S \NP )/NP .
+currently do not contain high quality predicate-                 A CCG grammar consists of a small number of
+argument annotation, because they were derived                schematic rules, called combinators. CCG extends
+from the Penn Treebank (PTB Marcus et al., 1993).             the basic application rules of pure categorial gram-
+Manually written grammars for these formalisms,               mar with (generalised) composition rules and type
+such as the ERG HPSG grammar (Flickinger, 2000)               raising. The most common rules are:
+and the XLE LFG grammar (Butt et al., 2006)                         X /Y    Y ⇒    X               (>)
+produce far more detailed and linguistically cor-                      Y X \Y ⇒    X               (<)
+rect analyses than any English statistical parser,                  X /Y Y /Z ⇒ X /Z              (>B)
+due to the comparatively coarse-grained annota-                     Y \Z X \Y ⇒ X \Z             (< B)
+tion schemes of the corpora statistical parsers are                 Y /Z X \Y ⇒ X /Z            (< B×)
+trained on. While rule-based parsers use gram-
+                                                                 CCGbank (Hockenmaier and Steedman, 2007)
+mars that are carefully engineered (e.g. Oepen
+                                                              extends this compact set of combinatory rules with
+et al., 2004), and can be updated to reflect the best
+                                                              a set of type-changing rules, designed to strike a
+linguistic analyses, statistical parsers have so far
+                                                              better balance between sparsity in the category set
+had to take what they are given.
+                                                              and ambiguity in the grammar. We mark type-
+   What we suggest in this paper is that a tree-
+                                                              changing rules TC in our derivations.
+bank’s grammar need not last its lifetime. For a
+                                                                 In wide-coverage descriptions, categories are
+start, there have been many annotations of the PTB
+                                                              generally modelled as typed-feature structures
+that add much of the extra information needed to
+                                                              (Shieber, 1986), rather than atomic symbols. This
+produce very high quality analyses for a linguis-
+                                                              allows the grammar to include a notion of headed-
+tically motivated grammar. There are also other
+                                                              ness, and to unify under-specified features.
+transformations which can be made with no addi-
+                                                                 We occasionally must refer to these additional
+tional information. That is, sometimes the existing
+                                                              details, for which we employ the following no-
+trees allow transformation rules to be written that
+                                                              tation. Features are annotated in square-brackets,
+improve the quality of the grammar.
+                                                              e.g. S [dcl ]. Head-finding indices are annotated on
+   Linguistic theories are constantly changing,
+                                                              categories in subscripts, e.g. (NPy \NPy )/NPz .
+which means that there is a substantial lag between
+                                                              The index of the word the category is assigned to
+what we (think we) understand of grammar and
+                                                              is left implicit. We will sometimes also annotate
+the annotations in our corpora. The grammar en-
+                                                              derivations with the heads of categories as they are
+gineering process we describe, which we dub re-
+                                                              being built, to help the reader keep track of what
+banking, is intended to reduce this gap, tightening
+                                                              lexemes have been bound to which categories.
+the feedback loop between formal and computa-
+tional linguistics.
+
+
+                                                        208
+
+
+3     Combining CCGbank corrections                          3.3   Verb predicate-argument corrections
+There have been a few papers describing correc-              Semantic role descriptions generally recognise a
+tions to CCGbank. We bring these corrections to-             distinction between core arguments, whose role
+gether for the first time, before building on them           comes from a set specific to the predicate, and pe-
+with our further changes.                                    ripheral arguments, who have a role drawn from a
+                                                             small, generic set. This distinction is represented
+3.1    Compound noun brackets                                in the surface syntax in CCG, because the category
+Compound noun phrases can nest inside each                   of a verb must specify its argument structure. In
+other, creating bracketing ambiguities:                      (3) as a director is annotated as a complement; in
+                                                             (4) it is an adjunct:
+(1) (crude oil) prices
+                                                             (3) He joined      as a director
+(2) crude (oil prices)                                           NP (S \NP )/PP PP
+   The structure of such compound noun phrases               (4) He joined as a director
+is left underspecified in the Penn Treebank (PTB),               NP S \NP (S \NP )\(S \NP )
+because the annotation procedure involved stitch-
+ing together partial parses produced by the Fid-                CCGbank contains noisy complement and ad-
+ditch parser (Hindle, 1983), which produced flat             junct distinctions, because they were drawn from
+brackets for these constructions. The bracketing             PTB function labels which imperfectly represent
+decision was also a source of annotator disagree-            the distinction. In our previous work we used
+ment (Bies et al., 1995).                                    Propbank (Palmer et al., 2005) to convert 1,543
+   When Hockenmaier and Steedman (2002) went                 complements to adjuncts and 13,256 adjuncts to
+to acquire a CCG treebank from the PTB, this posed           complements (Honnibal and Curran, 2007). If a
+a problem. There is no equivalent way to leave               constituent such as as a director received an ad-
+these structures under-specified in CCG, because             junct category, but was labelled as a core argu-
+derivations must be binary branching. They there-            ment in Propbank, we changed it to a comple-
+fore employed a simple heuristic: assume all such            ment, using its head’s part-of-speech tag to infer
+structures branch to the right. Under this analysis,         its constituent type. We performed the equivalent
+crude oil is not a constituent, producing an incor-          transformation to ensure all peripheral arguments
+rect analysis as in (1).                                     of verbs were analysed as adjuncts.
+   Vadas and Curran (2007) addressed this by
+                                                             3.4   Verb-particle constructions
+manually annotating all of the ambiguous noun
+phrases in the PTB, and went on to use this infor-           Propbank also offers reliable annotation of verb-
+mation to correct 20,409 dependencies (1.95%) in             particle constructions. This was not available in
+CCGbank (Vadas and Curran, 2008). Our changes                the PTB, so Hockenmaier and Steedman (2007)
+build on this corrected corpus.                              annotated all intransitive prepositions as adjuncts:
+
+3.2    Punctuation corrections                               (5) He woke up
+                                                                 NP S \NP (S \NP )\(S \NP )
+The syntactic analysis of punctuation is noto-
+riously difficult, and punctuation is not always               We follow Constable and Curran (2009) in ex-
+treated consistently in the Penn Treebank (Bies              ploiting the Propbank annotations to add verb-
+et al., 1995). Hockenmaier (2003) determined                 particle distinctions to CCGbank, by introducing a
+that quotation marks were particularly problem-              new atomic category PT for particles, and chang-
+atic, and therefore removed them from CCGbank                ing their status from adjuncts to complements:
+altogether. We use the process described by Tse
+and Curran (2008) to restore the quotation marks             (6) He woke        up
+and shift commas so that they always attach to the               NP (S \NP )/PT PT
+constituent to their left. This allows a grammar
+                                                                This analysis could be improved by adding extra
+rule to be removed, preventing a great deal of spu-
+                                                             head-finding logic to the verbal category, to recog-
+rious ambiguity and improving the speed of the
+                                                             nise the multi-word expression as the head.
+C & C parser (Clark and Curran, 2007) by 37%.
+
+
+
+                                                       209
+
+
+                  Rome           0s                gift               of     peace       to     Europe
+                   NP    (NP /(N /PP ))\NP (N /PP )/PP )/PP PP /NP              NP     PP /NP      NP
+                                          <                                        >                     >
+                          N /(N /PP )                                      PP                 PP
+                                                                                   >
+                                                          (N /PP )/PP
+                                                                                                         >
+                                                                      N /PP
+                                                                                                         >
+                                                          NP
+
+              Figure 1: Deverbal noun predicate with agent, patient and beneficiary arguments.
+4   Noun predicate-argument structure                  4.1 CCG analysis
+Many common nouns in English can receive                       We designed our analysis for transparency be-
+optional complements and adjuncts, realised by                 tween the syntax and the predicate-argument
+prepositional phrases, genitive determiners, com-              structure, by stipulating that all and only the core
+pound nouns, relative clauses, and for some nouns,             arguments should be syntactic arguments of the
+complementised clauses. For example, deverbal                  predicate’s category. This is fairly straightforward
+nouns generally have argument structures similar               for arguments introduced by prepositions:
+to the verbs they are derived from:                                   destruction             of         Carthage
+(7) Rome’s destruction of Carthage                                         N /PPy       PPy /NPy             NP
+                                                                                                                  >
+(8) Rome destroyed Carthage                                                                     PPCarthage
+                                                                                                                  >
+The semantic roles of Rome and Carthage are the                                    Ndestruction
+same in (7) and (8), but the noun cannot case-                    In our analysis, the head of of Carthage is
+mark them directly, so of and the genitive clitic              Carthage, as of is assumed to be a semantically
+are pressed into service. The semantic role de-                transparent case-marker. We apply this analysis
+pends on both the predicate and subcategorisation              to prepositional phrases that provide arguments to
+frame:                                                         verbs as well — a departure from CCGbank.
+                                                                  Prepositional phrases that introduce peripheral
+(9) Carthage’sp destructionPred.                               arguments are analysed as syntactic adjuncts:
+(10) Rome’sa destructionPred. of Carthagep                           The         war            in           149 B.C.
+(11) Rome’sa giftPred.                                            NPy /Ny N             (Ny \Ny )/NPz            NP
+                                                                                                                      >
+(12) Rome’sa giftPred. of peacep to Europeb                                                        (Ny \Ny )in
+                                                                                                                      <
+   In (9), the genitive introduces the patient, but                                                Nwar
+                                                                                                                      >
+when the patient is supplied by the PP, it instead                                     NPwar
+introduces the agent. The mapping differs for gift,               Adjunct prepositional phrases remain headed by
+where the genitive introduces the agent.                       the preposition, as it is the preposition’s semantics
+   Peripheral arguments, which supply generically              that determines whether they function as temporal,
+available modifiers of time, place, cause, quality             causal, spatial etc. arguments. We follow Hocken-
+etc, can be realised by pre- and post-modifiers:               maier and Steedman (2007) in our analysis of gen-
+(13) The portrait in the Louvre                                itives which realise peripheral arguments, such as
+                                                               the literal possessive:
+(14) The fine portrait                                                                   0s
+                                                                     Rome                                aqueducts
+(15) The Louvre’s portraits
+                                                                      NP        (NPy /Ny )\NPz               N
+These are distinct from core arguments because                                                       <
+                                                                                (NPy /Ny )0 s
+their interpretation does not depend on the pred-                                                                 >
+icate. The ambiguity can be seen in an NP such as                                  NPaqueducts
+The nobleman’s portrait, where the genitive could                 Arguments introduced by possessives are a lit-
+mark possession (peripheral), or it could introduce            tle trickier, because the genitive also functions as
+the patient (core). The distinction between core               a determiner. We achieve this by having the noun
+and peripheral arguments is particularly difficult             subcategorise for the argument, which we type
+for compound nouns, as pre-modification is very                PP , and having the possessive subcategorise for
+productive in English.                                         the unsaturated noun to ultimately produce an NP :
+
+
+                                                      210
+
+
+ Google               0s                        decision                       to                       buy       YouTube
+   NP     (NPy /(Ny /PPz )y )\NPz (N /PPy )/(S [to]z \NPy )z (S [to]y \NPz )y /(S [b]y \NPz )y (S [b]\NPy )/NPz       NP
+                                   <                                                                                       >
+        NPy /(Ny /PPGoogle )y                                                                             S [b]\NPy
+                                                              >B                                                           >
+                 NPdecision /(S [to]y \NPGoogle )y                                     S [to]buy \NPy
+                                                                                                                           >
+                                                                  NP
+
+Figure 2: The coindexing on decision’s category allows the hard-to-reach agent of buy to be recovered. A non-normal form
+derivation is shown so that instantiated variables can be seen.
+                                                                    arguments because of the productivity of noun-
+Carthage                     0s                 destruction         noun compounding in English, which makes these
+   NP         (NPy /(Ny /PPz )y )\NPz                N /PPy         argument structures very difficult to recover.
+                                            <                          We currently do not have an analysis that allows
+      (NPy /(Ny /PPCarthage )y )0 s                                 support verbs to supply noun arguments, so we
+                                                              >
+                      NPdestruction                                 do not recover any of the long-range dependency
+   In this analysis, we regard the genitive clitic as a             structures described by Meyers et al. (2004).
+case-marker that performs a movement operation
+roughly analogous to WH-extraction. Its category                    4.2   Implementation and statistics
+is therefore similar to the one used in object ex-                  Our analysis requires semantic role labels for each
+traction, (N \N )/(S /NP ). Figure 1 shows an ex-                   argument of the nominal predicates in the Penn
+ample with multiple core arguments.                                 Treebank — precisely what NomBank (Meyers
+   This analysis allows recovery of verbal argu-                    et al., 2004) provides. We can therefore draw our
+ments of nominalised raising and control verbs, a                   distinctions using the process described in our pre-
+construction which both Gildea and Hockenmaier                      vious work, Honnibal and Curran (2007).
+(2003) and Boxwell and White (2008) identify as a                      NomBank follows the same format as Prop-
+problem case when aligning Propbank and CCG-                        bank, so the procedure is exactly the same. First,
+bank. Our analysis accommodates this construc-                      we align CCGbank and the Penn Treebank, and
+tion effortlessly, as shown in Figure 2. The cate-                  produce a version of NomBank that refers to CCG-
+gory assigned to decision can coindex the missing                   bank nodes. We then assume that any preposi-
+NP argument of buy with its own PP argument.                        tional phrase or genitive determiner annotated as
+When that argument is supplied by the genitive,                     a core argument in NomBank should be analysed
+it is also supplied to the verb, buy, filling its de-               as a complement, while peripheral arguments and
+pendency with its agent, Google. This argument                      adnominals that receive no semantic role label at
+would be quite difficult to recover using a shallow                 all are analysed as adjuncts.
+syntactic analysis, as the path would be quite long.                   We converted 34,345 adnominal prepositional
+There are 494 such verb arguments mediated by                       phrases to complements, leaving 18,919 as ad-
+nominal predicates in Sections 02-21.                               juncts. The most common preposition converted
+   These analyses allow us to draw comple-                          was of, which was labelled as a core argument
+ment/adjunct distinctions for nominal predicates,                   99.1% of the 19,283 times it occurred as an ad-
+so that the surface syntax takes us very close to                   nominal. The most common adjunct preposition
+a full predicate-argument analysis. The only in-                    was in, which realised a peripheral argument in
+formation we are not specifying in the syntac-                      59.1% of its 7,725 occurrences.
+tic analysis are the role labels assigned to each                      The frequent prepositions were more skewed to-
+of the syntactic arguments. We could go further                     wards core arguments. 73% of the occurrences of
+and express these labels in the syntax, produc-                     the 5 most frequent prepositions (of, in, for, on and
+ing categories like (N /PP {0 }y )/PP {1 }z and                     to) realised peripheral arguments, compared with
+(N /PP {1 }y )/PP {0 }z , but we expect that this                   53% for other prepositions.
+would cause sparse data problems given the lim-                        Core arguments were also more common than
+ited size of the corpus. This experiment would be                   peripheral arguments for possessives. There are
+an interesting subject of future work.                              20,250 possessives in the corpus, of which 75%
+   The only local core arguments that we do not                     were converted to complements. The percentage
+annotate as syntactic complements are compound                      was similar for both personal pronouns (such as
+nouns, such as decision makers. We avoided these                    his) and genitive phrases (such as the boy’s).
+
+
+
+                                                              211
+
+
+5     Adding restrictivity distinctions                       6    Reanalysing partitive constructions
+Adnominals can have either a restrictive or a non-            True partitive constructions consist of a quantifier
+restrictive (appositional) interpretation, determin-          (16), a cardinal (17) or demonstrative (18) applied
+ing the potential reference of the noun phrase                to an NP via of. There are similar constructions
+it modifies. This ambiguity manifests itself in               headed by common nouns, as in (19):
+whether prepositional phrases, relative clauses and
+other adnominals are analysed as modifiers of                 (16) Some of us
+either N or NP, yielding a restrictive or non-                (17) Four of our members
+restrictive interpretation respectively.                      (18) Those of us who smoke
+   In CCGbank, all adnominals attach to NP s,
+producing non-restrictive interpretations.       We           (19) A glass of wine
+therefore move restrictive adnominals to N nodes:             We regard the common noun partitives as headed
+    All   staff       on       casual contracts               by the initial noun, such as glass, because this
+ NP /N      N     (N \N )/NP N /N           N                 noun usually controls the number agreement. We
+                                                >             therefore analyse these cases as nouns with prepo-
+                                       N
+                                                TC            sitional arguments. In (19), glass would be as-
+                                       NP                     signed the category N /PP .
+                                                >
+                               N \N                              True partitive constructions are different, how-
+                                                <
+                             N                                ever: they are always headed by the head of the NP
+                                                >             supplied by of. The construction is quite common,
+                        NP
+                                                              because it provides a way to quantify or apply two
+   This corrects the previous interpretation, which           different determiners.
+stated that there were no permanent staff.                       Partitive constructions are not given special
+5.1    Implementation and statistics                          treatment in the PTB, and were analysed as noun
+                                                              phrases with a PP modifier in CCGbank:
+The Wall Street Journal’s style guide mandates
+that this attachment ambiguity be managed by                   Four           of                our     members
+bracketing non-restrictive relatives with commas                  NP (NPy \NPy )/NPz NPy /Ny               N
+(Martin, 2002, p. 82), as in casual staff, who have                                                            >
+                                                                                                  NPmembers
+no health insurance, support it. We thus use punc-                                                             >
+tuation to make the attachment decision.                                                (NPy \NPy )of
+                                                                                                               <
+   All NP \NP modifiers that are not preceded by                                   NPFour
+punctuation were moved to the lowest N node                      This analysis does not yield the correct seman-
+possible and relabelled N \N . We select the low-             tics, and may even hurt parser performance, be-
+est (i.e. closest to leaf) N node because some ad-            cause the head of the phrase is incorrectly as-
+jectives, such as present or former, require scope            signed. We correct this with the following anal-
+over the qualified noun, making it safer to attach            ysis, which takes the head from the NP argument
+the adnominal first.                                          of the PP:
+   Some adnominals in CCGbank are created by
+                                                                    Four           of          our      members
+the S \NP → NP \NP unary type-changing rule,
+which transforms reduced relative clauses. We in-                 NPy /PPy PPy /NPy NPy /Ny               N
+                                                                                                               >
+troduce a S \NP → N \N in its place, and add a                                                   NPmembers
+                                                                                                               >
+binary rule cued by punctuation to handle the rela-                                         PPmembers
+tively rare non-restrictive reduced relative clauses.                                                          >
+                                                                                 NPmembers
+   The rebanked corpus contains 34,134 N \N re-
+                                                                 The cardinal is given the category NP /PP ,
+strictive modifiers, and 9,784 non-restrictive mod-
+                                                              in analogy with the standard determiner category
+ifiers. Most (61%) of the non-restrictive modifiers
+                                                              which is a function from a noun to a noun phrase
+were relative clauses.
+                                                              (NP /N ).
+
+
+
+
+                                                        212
+
+
+       Corpus         L. D EPS U. D EPS C ATS                            Corpus         C ATS Cats ≥ 10 C ATS /W ORD
+       +NP brackets       97.2     97.7  98.5                            CCGbank         1286       425           8.6
+       +Quotes            97.2     97.7  98.5                            +NP brackets    1298       429           8.9
+       +Propbank          93.0     94.9  96.7                            +Quotes         1300       431           8.8
+       +Particles         92.5     94.8  96.2                            +Propbank       1342       433           8.9
+       +Restrictivity     79.5     94.4  90.6                            +Particles      1405       458           9.1
+       +Part. Gen.        76.1     90.1  90.4                            +Restrictivity  1447       471           9.3
+       +NP Pred-Arg       70.6     83.3  84.8                            +Part. Gen.     1455       474           9.5
+                                                                         +NP Pred-Arg 1574          511          10.1
+Table 1: Effect of the changes on CCGbank, by percentage
+of dependencies and categories left unchanged in Section 00.         Table 2: Effect of the changes on the size of the lexicon.
+6.1    Implementation and Statistics                                 of lexical categories (Cats), the number of lexical
+We detect this construction by identifying NPs                       categories that occur at least 10 times in Sections
+post-modified by an of PP. The NP’s head must                        02-21 (Cats ≥ 10), and the average number of cat-
+either have the POS tag CD, or be one of the follow-                 egories available for assignment to each token in
+ing words, determined through manual inspection                      Section 00 (Cats/Word). We followed Clark and
+of Sections 02-21:                                                   Curran’s (2007) process to determine the set of
+      all, another, average, both, each, another, any,               categories a word could receive, which includes
+      anything, both, certain, each, either, enough, few,            a part-of-speech back-off for infrequent words.
+      little, most, much, neither, nothing, other, part,                The lexicon steadily grew with each set of
+      plenty, several, some, something, that, those.
+                                                                     changes, because each added information to the
+Having identified the construction, we simply rela-                  corpus. The addition of quotes only added two cat-
+bel the NP to NP /PP , and the NP \NP adnom-                         egories (LQU and RQU ), and the addition of the
+inal to PP . We identified and reanalysed 3,010                      quote tokens slightly decreased the average cate-
+partitive genitives in CCGbank.                                      gories per word. The Propbank and verb-particle
+7     Similarity to CCGbank                                          changes both introduced rare categories for com-
+                                                                     plicated, infrequent argument structures.
+Table 1 shows the percentage of labelled depen-                         The NP predicate-argument structure modifica-
+dencies (L. Deps), unlabelled dependencies (U.                       tions added the most information. Head nouns
+Deps) and lexical categories (Cats) that remained                    were previously guaranteed the category N in
+the same after each set of changes.                                  CCGbank; possessive clitics always received the
+    A labelled dependency is a 4-tuple consisting of                 category (NP /N )\NP ; and possessive personal
+the head, the argument, the lexical category of the                  pronouns were always NP /N . Our changes in-
+head, and the argument slot that the dependency                      troduce new categories for these frequent tokens,
+fills. For instance, the subject fills slot 1 and the                which meant a substantial increase in the number
+object fills slot 2 on the transitive verb category                  of possible categories per word.
+(S \NP )/NP . There are more changes to labelled
+dependencies than lexical categories because one                     9   Parsing Evaluation
+lexical category change alters all of the dependen-
+                                                                     Some of the changes we have made correct prob-
+cies headed by a predicate, as they all depend on
+                                                                     lems that have caused the performance of a sta-
+its lexical category. Unlabelled dependencies con-
+                                                                     tistical CCG parser to be over-estimated. Other
+sist of only the head and argument.
+                                                                     changes introduce new distinctions, which a parser
+    The biggest changes were those described in
+                                                                     may or may not find difficult to reproduce. To in-
+Sections 4 and 5. After the addition of nominal
+                                                                     vestigate these issues, we trained and evaluated the
+predicate-argument structure, over 50% of the la-
+                                                                     C & C CCG parser on our rebanked corpora.
+belled dependencies were changed. Many of these
+                                                                        The experiments were set up as follows. We
+changes involved changing an adjunct to a com-
+                                                                     used the highest scoring configuration described
+plement, which affects the unlabelled dependen-
+                                                                     by Clark and Curran (2007), the hybrid depen-
+cies because the head and argument are inverted.
+                                                                     dency model, using gold-standard POS tags. We
+8     Lexicon statistics                                             followed Clark and Curran in excluding sentences
+                                                                     that could not be parsed from the evaluation. All
+Our changes make the grammar sensitive to new                        models obtained similar coverage, between 99.0
+distinctions, which increases the number of lexi-                    and 99.3%. The parser was evaluated using depen-
+cal categories required. Table 2 shows the number
+
+
+                                                               213
+
+
+                          WSJ 00                 WSJ 23                pendencies. The parser’s performance remained
+  Corpus            LF      UF     C AT    LF      UF     C AT
+  CCGbank          87.2    92.9    94.1   87.7    93.0    94.4
+                                                                       fairly stable on the dependencies left unchanged.
+  +NP brackets     86.9    92.8    93.8   87.3    92.8    93.9            The rebanked parser performed 0.8% worse
+  +Quotes          86.8    92.7    93.9   87.1    92.6    94.0         than the CCGbank parser on the intersection de-
+  +Propbank        86.7    92.6    94.0   87.0    92.6    94.0
+  +Particles       86.4    92.5    93.8   86.8    92.6    93.8         pendencies, suggesting that the fine-grained dis-
+  All Rebanking    84.2    91.2    91.9   84.7    91.3    92.2         tinctions we introduced did cause some sparse data
+                                                                       problems. However, we did not change any of
+   Table 3: Parser evaluation on the rebanked corpora.                 the parser’s maximum entropy features or hyper-
+       Corpus              Rebanked        CCGbank
+                            LF      UF      LF       UF
+                                                                       parameters, which are tuned for CCGbank.
+       +NP brackets       86.45   92.36   86.52    92.35
+       +Quotes            86.57   92.40   86.52    92.35               10         Conclusion
+       +Propbank          87.76   92.96   87.74    92.99
+       +Particles         87.50   92.77   87.67    92.93               Research in natural language understanding is
+       All Rebanking      87.23   92.71   88.02    93.51               driven by the datasets that we have available. The
+                                                                       most cited computational linguistics work to date
+Table 4: Comparison of parsers trained on CCGbank and
+the rebanked corpora, using dependencies that occur in both.           is the Penn Treebank (Marcus et al., 1993)1 . Prop-
+                                                                       bank (Palmer et al., 2005) has also been very
+dencies generated from the gold-standard deriva-                       influential since its release, and NomBank has
+tions (Boxwell, p.c., 2010).                                           been used for semantic dependency parsing in the
+   Table 3 shows the accuracy of the parser on Sec-                    CoNLL 2008 and 2009 shared tasks.
+tions 00 and 23. The parser scored slightly lower                         This paper has described how these resources
+as the NP brackets, Quotes, Propbank and Parti-                        can be jointly exploited using a linguistically moti-
+cles corrections were added. This apparent decline                     vated theory of syntax and semantics. The seman-
+in performance is at least partially an artefact of                    tic annotations provided by Propbank and Nom-
+the evaluation. CCGbank contains some depen-                           Bank allowed us to build a corpus that takes much
+dencies that are trivial to recover, because Hock-                     greater advantage of the semantic transparency
+enmaier and Steedman (2007) was forced to adopt                        of a deep grammar, using careful analyses and
+a strictly right-branching analysis for NP brackets.                   phenomenon-specific conversion rules.
+   There was a larger drop in accuracy on the                             The major areas of CCGbank’s grammar left to
+fully rebanked corpus, which included our anal-                        be improved are the analysis of comparatives, and
+yses of restrictivity, partitive constructions and                     the analysis of named entities. English compar-
+noun predicate-argument structure. This might                          atives are diverse and difficult to analyse. Even
+also be explained by the evaluation, as the re-                        the XTAG grammar (Doran et al., 1994), which
+banked corpus includes much more fine-grained                          deals with the major constructions of English in
+distinctions. The labelled dependencies evaluation                     enviable detail, does not offer a full analysis of
+is particularly sensitive to this, as a single category                these phenomena. Named entities are also difficult
+change affects multiple dependencies. This can be                      to analyse, as many entity types obey their own
+seen in the smaller gap in category accuracy.                          specific grammars. This is another example of a
+   We investigated whether the differences in per-                     phenomenon that could be analysed much better
+formance were due to the different evaluation data                     in CCGbank using an existing resource, the BBN
+by comparing the parsers’ performance against the                      named entity corpus.
+original parser on the dependencies they agreed                           Our rebanking has substantially improved
+upon, to allow direct comparison. To do this, we                       CCGbank, by increasing the granularity and lin-
+extracted the CCGbank intersection of each cor-                        guistic fidelity of its analyses. We achieved this
+pus’s Section 00 dependencies.                                         by exploiting existing resources and crafting novel
+   Table 4 compares the labelled and unlabelled re-                    analyses. The process we have demonstrated can
+call of the rebanked parsers we trained against the                    be used to train a parser that returns dependencies
+CCGbank parser on these intersections. Note that                       that abstract away as much surface syntactic vari-
+each row refers to a different intersection, so re-                    ation as possible — including, now, even whether
+sults are not comparable between rows. This com-                       the predicate and arguments are expressed in a
+parison shows that the declines in accuracy seen in                    noun phrase or a full clause.
+Table 3 were largely confined to the corrected de-                          1
+                                                                                http://clair.si.umich.edu/clair/anthology/rankings.cgi
+
+
+
+                                                                 214
+
+
+Acknowledgments                                                           In Proceedings of the Third Conference on Language Re-
+                                                                          sources and Evaluation Conference, pages 1974–1981.
+James Curran was supported by Australian Re-                              Las Palmas, Spain.
+search Council Discovery grant DP1097291 and                           Julia Hockenmaier and Mark Steedman. 2007. CCGbank: a
+the Capital Markets Cooperative Research Centre.                          corpus of CCG derivations and dependency structures ex-
+                                                                          tracted from the Penn Treebank. Computational Linguis-
+   The parsing evaluation for this paper would                            tics, 33(3):355–396.
+have been much more difficult without the assis-                       Matthew Honnibal and James R. Curran. 2007. Improving the
+tance of Stephen Boxwell, who helped generate                            complement/adjunct distinction in CCGBank. In Proceed-
+                                                                         ings of the Conference of the Pacific Association for Com-
+the gold-standard dependencies with his software.                        putational Linguistics, pages 210–217. Melbourne, Aus-
+   We are also grateful to the members of the CCG                        tralia.
+technicians mailing list for their help crafting the                   Ronald M. Kaplan and Joan Bresnan. 1982. Lexical-
+analyses, particularly Michael White, Mark Steed-                        Functional Grammar: A formal system for grammatical
+                                                                         representation. In Joan Bresnan, editor, The mental repre-
+man and Dennis Mehay.                                                    sentation of grammatical relations, pages 173–281. MIT
+                                                                         Press, Cambridge, MA, USA.
+References                                                             Mitchell Marcus,       Beatrice Santorini,   and Mary
+Ann Bies, Mark Ferguson, Karen Katz, and Robert MacIn-                   Marcinkiewicz. 1993.        Building a large annotated
+  tyre. 1995. Bracketing guidelines for Treebank II style                corpus of English: The Penn Treebank. Computational
+  Penn Treebank project. Technical report, MS-CIS-95-06,                 Linguistics, 19(2):313–330.
+  University of Pennsylvania, Philadelphia, PA, USA.                   Paul Martin. 2002. The Wall Street Journal Guide to Business
+Stephen Boxwell and Michael White. 2008. Projecting prop-                Style and Usage. Free Press, New York.
+   bank roles onto the CCGbank. In Proceedings of the                  Adam Meyers, Ruth Reeves, Catherine Macleod, Rachel
+   Sixth International Language Resources and Evaluation                 Szekely, Veronika Zielinska, Brian Young, and Ralph Gr-
+   (LREC’08), pages 3112–3117. European Language Re-                     ishman. 2004. The NomBank project: An interim report.
+   sources Association (ELRA), Marrakech, Morocco.                       In Frontiers in Corpus Annotation: Proceedings of the
+Miriam Butt, Mary Dalrymple, and Tracy H. King, editors.                 Workshop, pages 24–31. Boston, MA, USA.
+  2006. Lexical Semantics in LFG. CSLI Publications, Stan-             Yusuke Miyao, Takashi Ninomiya, and Jun’ichi Tsujii. 2004.
+  ford, CA.                                                              Corpus-oriented grammar development for acquiring a
+Aoife Cahill, Michael Burke, Ruth O’Donovan, Stefan Rie-                 head-driven phrase structure grammar from the Penn Tree-
+  zler, Josef van Genabith, and Andy Way. 2008. Wide-                    bank. In Proceedings of the First International Joint Con-
+  coverage deep statistical parsing using automatic depen-               ference on Natural Language Processing (IJCNLP-04),
+  dency structure annotation. Computational Linguistics,                 pages 684–693. Hainan Island, China.
+  34(1):81–124.                                                        Stepan Oepen, Daniel Flickenger, Kristina Toutanova, and
+Stephen Clark and James R. Curran. 2007. Wide-coverage ef-                Christopher D. Manning. 2004. LinGO Redwoods. a rich
+   ficient statistical parsing with CCG and log-linear models.            and dynamic treebank for HPSG. Research on Language
+   Computational Linguistics, 33(4):493–552.                              and Computation, 2(4):575–596.
+James Constable and James Curran. 2009. Integrating verb-              Martha Palmer, Daniel Gildea, and Paul Kingsbury. 2005.
+  particle constructions into CCG parsing. In Proceedings of             The proposition bank: An annotated corpus of semantic
+  the Australasian Language Technology Association Work-                 roles. Computational Linguistics, 31(1):71–106.
+  shop 2009, pages 114–118. Sydney, Australia.                         Carl Pollard and Ivan Sag. 1994. Head-Driven Phrase Struc-
+Christy Doran, Dania Egedi, Beth Ann Hockey, B. Srinivas,                ture Grammar. The University of Chicago Press, Chicago.
+  and Martin Zaidel. 1994. Xtag system: a wide coverage                Libin Shen, Lucas Champollion, and Aravind K. Joshi. 2008.
+  grammar for english. In Proceedings of the 15th confer-                 LTAG-spinal and the treebank: A new resource for incre-
+  ence on Computational linguistics, pages 922–928. ACL,                  mental, dependency and semantic parsing. Language Re-
+  Morristown, NJ, USA.                                                    sources and Evaluation, 42(1):1–19.
+Dan Flickinger. 2000. On building a more efficient gram-               Stuart M. Shieber. 1986. An Introduction to Unification-
+  mar by exploiting types. Natural Language Engineering,                  Based Approaches to Grammar, volume 4 of CSLI Lecture
+  6(1):15–28.                                                             Notes. CSLI Publications, Stanford, CA.
+Daniel Gildea and Julia Hockenmaier. 2003. Identifying se-             Mark Steedman. 2000. The Syntactic Process. The MIT
+  mantic roles using combinatory categorial grammar. In                  Press, Cambridge, MA, USA.
+  Proceedings of the 2003 conference on Empirical meth-
+                                                                       Daniel Tse and James R. Curran. 2008. Punctuation normali-
+  ods in natural language processing, pages 57–64. ACL,
+                                                                         sation for cleaner treebanks and parsers. In Proceedings of
+  Morristown, NJ, USA.
+                                                                         the Australian Language Technology Workshop, volume 6,
+Donald Hindle. 1983. User manual for fidditch, a determin-               pages 151–159. ALTW, Hobart, Australia.
+  istic parser. Technical Memorandum 7590-142, Naval Re-
+                                                                       David Vadas and James Curran. 2007. Adding noun phrase
+  search Laboratory.
+                                                                         structure to the Penn Treebank. In Proceedings of the 45th
+Julia Hockenmaier. 2003. Data and Models for Statistical                 Annual Meeting of the Association of Computational Lin-
+   Parsing with Combinatory Categorial Grammar. Ph.D.                    guistics, pages 240–247. ACL, Prague, Czech Republic.
+   thesis, University of Edinburgh, Edinburgh, UK.
+                                                                       David Vadas and James R. Curran. 2008. Parsing noun phrase
+Julia Hockenmaier and Mark Steedman. 2002. Acquiring                     structure with CCG. In Proceedings of the 46th Annual
+   compact lexicalized grammars from a cleaner treebank.                 Meeting of the Association for Computational Linguistics,
+                                                                         pages 335–343. ACL, Columbus, Ohio, USA.
+
+
+
+                                                                 215
+
