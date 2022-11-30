@@ -5,28 +5,30 @@ from matplotlib.patches import Rectangle
 from matplotlib.cm import get_cmap
 from collections import defaultdict
 from scipy.special import expit
-from matplotlib.colors import ListedColormap,LinearSegmentedColormap
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 import constants
 
-plt.rc('font', family='serif')
-plt.rc('xtick', labelsize='x-small')
-plt.rc('ytick', labelsize='x-small')
+plt.rc("font", family="serif")
+plt.rc("xtick", labelsize="x-small")
+plt.rc("ytick", labelsize="x-small")
 
 
 def gini(populations, accuracy):
-    assert(len(populations) == len(accuracy))
+    assert len(populations) == len(accuracy)
     N = len(populations)
     sum_nom = 0
     sum_denom = 0
     for i in range(N):
         for j in range(N):
-            sum_nom += populations[i] * populations[j] * np.abs(accuracy[i]-accuracy[j])
-        sum_denom += populations[i]*accuracy[i]
-    return sum_nom/(2*np.sum(populations)*sum_denom)
+            sum_nom += (
+                populations[i] * populations[j] * np.abs(accuracy[i] - accuracy[j])
+            )
+        sum_denom += populations[i] * accuracy[i]
+    return sum_nom / (2 * np.sum(populations) * sum_denom)
 
 
 plt.rcParams["font.family"] = "sans-serif"
-#print(plt.rcParams.keys())
+# print(plt.rcParams.keys())
 plt.rcParams["font.sans-serif"] = "Avant Garde"
 
 
@@ -36,12 +38,12 @@ languages = constants.get_all_languages()
 
 languages = [l for l in languages if l in all_populations]
 populations = [all_populations[l] for l in languages]
-counterfactual_accuracy_eng = [0 if (l != 'eng') else 1 for l in languages]
-counterfactual_accuracy_cmn = [0 if (l != 'cmn') else 1 for l in languages]
-counterfactual_accuracy_spa = [0 if (l != 'spa') else 1 for l in languages]
-counterfactual_accuracy_fra = [0 if (l != 'fra') else 1 for l in languages]
+counterfactual_accuracy_eng = [0 if (l != "eng") else 1 for l in languages]
+counterfactual_accuracy_cmn = [0 if (l != "cmn") else 1 for l in languages]
+counterfactual_accuracy_spa = [0 if (l != "spa") else 1 for l in languages]
+counterfactual_accuracy_fra = [0 if (l != "fra") else 1 for l in languages]
 
-'''
+"""
 print(len(languages))
 print(len(populations))
 print(len(counterfactual_accuracy_eng))
@@ -52,12 +54,12 @@ print(len(counterfactual_accuracy_spa))
 print(sum(counterfactual_accuracy_spa))
 print(len(counterfactual_accuracy_fra))
 print(sum(counterfactual_accuracy_fra))
-'''
+"""
 
 inds = np.flip(np.argsort(populations))
 ordered_populations = [populations[i] for i in inds]
 
-'''
+"""
 counterfactual_accuracy_linpop = np.linspace(0, 1, num=len(languages))
 
 
@@ -202,29 +204,25 @@ for temperature in [1,0.1]:
     print(f"\tSimple macro-averaged accuracy: {np.average(accuracy)}")
     gini_coeff = gini(np.array(populations)*N, accuracy)
     print(f"\tGini Coefficient: {gini_coeff}")
-'''
+"""
 
 N = np.sum(ordered_populations)
 TOTAL_LANGS = 6500
-TOTAL_POPULATION = constants.TOTAL_POPULATION/1000000
+TOTAL_POPULATION = constants.TOTAL_POPULATION / 1000000
 remaining_langs = TOTAL_LANGS - len(languages)
-remaining_pop =  TOTAL_POPULATION - N
+remaining_pop = TOTAL_POPULATION - N
 print(remaining_langs, remaining_pop)
-old_ordered_populations = [0] + [p/N for p in ordered_populations]
+old_ordered_populations = [0] + [p / N for p in ordered_populations]
 xs = np.cumsum(old_ordered_populations)
-ys = np.linspace(0, 1, num=len(languages)+1, endpoint=True)
+ys = np.linspace(0, 1, num=len(languages) + 1, endpoint=True)
 print(len(xs), len(ys))
-with open("curve1.tsv", 'w') as op:
+with open("curve1.tsv", "w") as op:
     for i in range(len(xs)):
         op.write(f"{xs[i]}\t{ys[i]}\n")
-with open("curve2.tsv", 'w') as op:
+with open("curve2.tsv", "w") as op:
     for i in range(len(xs)):
         op.write(f"{ys[i]}\t{xs[i]}\n")
 
-plt.plot(xs,ys)
-plt.plot(ys,xs)
+plt.plot(xs, ys)
+plt.plot(ys, xs)
 plt.show()
-
-
-
-
